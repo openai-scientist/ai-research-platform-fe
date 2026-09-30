@@ -6,10 +6,10 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
-import {
-  type FileManagerFile,
-  type FileManagerFolder,
-  type FileManagerView,
+import type {
+  FileManagerFile,
+  FileManagerFolder,
+  FileManagerView,
 } from "../../dashboard/file-manager/_components/data";
 import { FileGridView } from "../../dashboard/file-manager/_components/file-grid-view";
 import { FileListView } from "../../dashboard/file-manager/_components/file-list-view";

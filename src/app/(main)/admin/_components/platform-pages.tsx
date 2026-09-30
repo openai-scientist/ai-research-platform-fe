@@ -11,6 +11,7 @@ import {
   ShieldCheck,
   type LucideIcon,
 } from "lucide-react";
+import { useId } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -149,6 +150,10 @@ const providerLoadTabs: TrafficSourceTab[] = [
 ];
 
 function ProviderConfigurationCards() {
+  const apiKeyId = useId();
+  const timeoutId = useId();
+  const retryLimitId = useId();
+
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       <Card>
@@ -157,21 +162,21 @@ function ProviderConfigurationCards() {
           <CardDescription>Defaults applied to every model invocation.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <label className="flex flex-col gap-1.5 text-sm">
+          <label htmlFor={apiKeyId} className="flex flex-col gap-1.5 text-sm">
             <span className="font-medium">Provider API key</span>
             <div className="relative">
               <KeyRound className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input className="pl-9" value="sk-••••••••••••••1234" readOnly />
+              <Input id={apiKeyId} className="pl-9" value="sk-••••••••••••••1234" readOnly />
             </div>
           </label>
           <div className="grid gap-4 sm:grid-cols-2">
-            <label className="flex flex-col gap-1.5 text-sm">
+            <label htmlFor={timeoutId} className="flex flex-col gap-1.5 text-sm">
               <span className="font-medium">Timeout</span>
-              <Input value="30 seconds" readOnly />
+              <Input id={timeoutId} value="30 seconds" readOnly />
             </label>
-            <label className="flex flex-col gap-1.5 text-sm">
+            <label htmlFor={retryLimitId} className="flex flex-col gap-1.5 text-sm">
               <span className="font-medium">Retry limit</span>
-              <Input value="3 retries" readOnly />
+              <Input id={retryLimitId} value="3 retries" readOnly />
             </label>
           </div>
           <Button size="sm">Save configuration</Button>

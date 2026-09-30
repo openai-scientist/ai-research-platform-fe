@@ -268,6 +268,84 @@ export interface PerformanceOverviewProps {
   title?: string;
 }
 
+function renderSeries({ singleSeries, stacked }: { singleSeries: boolean; stacked: boolean }) {
+  if (singleSeries) {
+    return (
+      <Area
+        dataKey="newCustomers"
+        type="natural"
+        fill="url(#fillNewCustomers)"
+        stroke="var(--color-newCustomers)"
+        strokeWidth={1.6}
+        dot={false}
+        fillOpacity={1}
+      />
+    );
+  }
+
+  if (stacked) {
+    return (
+      <>
+        <Area
+          dataKey="newCustomers"
+          stackId="decision-outcomes"
+          type="monotone"
+          fill="var(--color-newCustomers)"
+          stroke="var(--color-newCustomers)"
+          strokeWidth={1.25}
+          fillOpacity={0.72}
+        />
+        <Area
+          dataKey="activeAccounts"
+          stackId="decision-outcomes"
+          type="monotone"
+          fill="var(--color-activeAccounts)"
+          stroke="var(--color-activeAccounts)"
+          strokeWidth={1.25}
+          fillOpacity={0.72}
+        />
+        <Area
+          dataKey="returningUsers"
+          stackId="decision-outcomes"
+          type="monotone"
+          fill="var(--color-returningUsers)"
+          stroke="var(--color-returningUsers)"
+          strokeWidth={1.25}
+          fillOpacity={0.72}
+        />
+      </>
+    );
+  }
+
+  return (
+    <>
+      <Area
+        dataKey="newCustomers"
+        type="natural"
+        fill="url(#fillNewCustomers)"
+        stroke="var(--color-newCustomers)"
+        strokeWidth={1.25}
+        dot={false}
+        fillOpacity={1}
+      />
+      <Line
+        dataKey="activeAccounts"
+        type="natural"
+        stroke="var(--color-activeAccounts)"
+        strokeWidth={1.4}
+        dot={false}
+      />
+      <Line
+        dataKey="returningUsers"
+        type="natural"
+        stroke="var(--color-returningUsers)"
+        strokeWidth={1.2}
+        dot={false}
+      />
+    </>
+  );
+}
+
 export function PerformanceOverview({
   actionLabel = "View report",
   headerBadge,
@@ -300,7 +378,7 @@ export function PerformanceOverview({
       <CardHeader>
         <CardTitle className="leading-none">{title}</CardTitle>
         <CardDescription>{description}</CardDescription>
-        {(showControls || headerBadge) && (
+        {(Boolean(showControls) || Boolean(headerBadge)) && (
           <CardAction className="flex items-center gap-2">
             {showControls && (
               <>
@@ -391,73 +469,7 @@ export function PerformanceOverview({
               <ChartLegend verticalAlign="top" content={<ChartLegendContent className="mb-5 justify-end" />} />
             )}
 
-            {singleSeries ? (
-              <Area
-                dataKey="newCustomers"
-                type="natural"
-                fill="url(#fillNewCustomers)"
-                stroke="var(--color-newCustomers)"
-                strokeWidth={1.6}
-                dot={false}
-                fillOpacity={1}
-              />
-            ) : stacked ? (
-              <>
-                <Area
-                  dataKey="newCustomers"
-                  stackId="decision-outcomes"
-                  type="monotone"
-                  fill="var(--color-newCustomers)"
-                  stroke="var(--color-newCustomers)"
-                  strokeWidth={1.25}
-                  fillOpacity={0.72}
-                />
-                <Area
-                  dataKey="activeAccounts"
-                  stackId="decision-outcomes"
-                  type="monotone"
-                  fill="var(--color-activeAccounts)"
-                  stroke="var(--color-activeAccounts)"
-                  strokeWidth={1.25}
-                  fillOpacity={0.72}
-                />
-                <Area
-                  dataKey="returningUsers"
-                  stackId="decision-outcomes"
-                  type="monotone"
-                  fill="var(--color-returningUsers)"
-                  stroke="var(--color-returningUsers)"
-                  strokeWidth={1.25}
-                  fillOpacity={0.72}
-                />
-              </>
-            ) : (
-              <>
-                <Area
-                  dataKey="newCustomers"
-                  type="natural"
-                  fill="url(#fillNewCustomers)"
-                  stroke="var(--color-newCustomers)"
-                  strokeWidth={1.25}
-                  dot={false}
-                  fillOpacity={1}
-                />
-                <Line
-                  dataKey="activeAccounts"
-                  type="natural"
-                  stroke="var(--color-activeAccounts)"
-                  strokeWidth={1.4}
-                  dot={false}
-                />
-                <Line
-                  dataKey="returningUsers"
-                  type="natural"
-                  stroke="var(--color-returningUsers)"
-                  strokeWidth={1.2}
-                  dot={false}
-                />
-              </>
-            )}
+            {renderSeries({ singleSeries, stacked })}
           </ComposedChart>
         </ChartContainer>
       </CardContent>

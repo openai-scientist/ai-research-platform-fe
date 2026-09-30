@@ -192,19 +192,37 @@ const dashboards: Record<string, Omit<ProjectDashboard, "experimentStats" | "out
   },
 };
 
+function getFallbackRunPhase(status: WorkspaceProject["status"]): RunPhase {
+  if (status === "Completed") {
+    return "Completed";
+  }
+  if (status === "Needs Review") {
+    return "Assessing";
+  }
+  return "Exploring";
+}
+
+function getFallbackReport(
+  status: WorkspaceProject["status"],
+  baseReport: ProjectDashboard["report"],
+): ProjectDashboard["report"] {
+  if (status === "Completed") {
+    return { status: "Published", detail: "Final research report published", sectionsDone: 6, sectionsTotal: 6 };
+  }
+  if (status === "Data Ready") {
+    return { status: "Not started", detail: "No confirmation outcomes yet", sectionsDone: 0, sectionsTotal: 6 };
+  }
+  return baseReport;
+}
+
 function buildFallbackDashboard(project: WorkspaceProject): Omit<ProjectDashboard, "experimentStats" | "outcomes"> {
   const base = dashboards["protein-folding-study"];
 
   return {
     ...base,
     objective: project.description,
-    runPhase: project.status === "Completed" ? "Completed" : project.status === "Needs Review" ? "Assessing" : "Exploring",
-    report:
-      project.status === "Completed"
-        ? { status: "Published", detail: "Final research report published", sectionsDone: 6, sectionsTotal: 6 }
-        : project.status === "Data Ready"
-          ? { status: "Not started", detail: "No confirmation outcomes yet", sectionsDone: 0, sectionsTotal: 6 }
-          : base.report,
+    runPhase: getFallbackRunPhase(project.status),
+    report: getFallbackReport(project.status, base.report),
   };
 }
 

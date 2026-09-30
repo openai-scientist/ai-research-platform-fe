@@ -1,4 +1,4 @@
-import { MoreHorizontal, Plus, Search } from "lucide-react";
+import { Plus, Search } from "lucide-react";
 import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 import { projects } from "./admin-data";
-import { AdminPageHeader, SectionCard, StatusBadge } from "./admin-primitives";
+import { AdminPageHeader, SectionCard } from "./admin-primitives";
 
 function toSlug(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, "-");

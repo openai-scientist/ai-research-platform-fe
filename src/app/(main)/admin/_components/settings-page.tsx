@@ -9,6 +9,7 @@ import {
   ShieldCheck,
   type LucideIcon,
 } from "lucide-react";
+import { useId } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -175,10 +176,12 @@ function SettingsGrid({ children }: { readonly children: React.ReactNode }) {
 }
 
 function SettingsField({ label, value }: { readonly label: string; readonly value: string }) {
+  const inputId = useId();
+
   return (
-    <label className="space-y-1.5 text-sm">
+    <label htmlFor={inputId} className="space-y-1.5 text-sm">
       <span className="font-medium">{label}</span>
-      <Input value={value} readOnly />
+      <Input id={inputId} value={value} readOnly />
     </label>
   );
 }

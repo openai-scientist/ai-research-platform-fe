@@ -13,6 +13,26 @@ const RUN_STAGES: { label: string; phases: RunPhase[] }[] = [
   { label: "Report", phases: ["Reporting", "Completed"] },
 ];
 
+function getStageDetail({
+  currentPhase,
+  isCurrent,
+  isDone,
+  stepCount,
+}: {
+  readonly currentPhase: RunPhase;
+  readonly isCurrent: boolean;
+  readonly isDone: boolean;
+  readonly stepCount: number;
+}) {
+  if (isCurrent) {
+    return currentPhase;
+  }
+  if (isDone) {
+    return "Completed";
+  }
+  return `${stepCount} ${stepCount === 1 ? "step" : "steps"}`;
+}
+
 function StageStepper({ currentPhase }: { readonly currentPhase: RunPhase }) {
   const currentIndex = RUN_PHASES.indexOf(currentPhase);
 
@@ -23,11 +43,7 @@ function StageStepper({ currentPhase }: { readonly currentPhase: RunPhase }) {
         const isCurrent = phaseIndexes.includes(currentIndex);
         const isDone = phaseIndexes.every((index) => index < currentIndex);
         const isLast = stageIndex === RUN_STAGES.length - 1;
-        const detail = isCurrent
-          ? currentPhase
-          : isDone
-            ? "Completed"
-            : `${stage.phases.length} ${stage.phases.length === 1 ? "step" : "steps"}`;
+        const detail = getStageDetail({ currentPhase, isCurrent, isDone, stepCount: stage.phases.length });
 
         return (
           <li
