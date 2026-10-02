@@ -35,6 +35,7 @@
       "**",
       "!.github",
       "!.husky",
+      "!.kilo",
       "!node_modules",
       "!.next",
       "!dist",

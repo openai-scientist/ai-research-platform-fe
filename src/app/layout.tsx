@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 import type { Metadata } from "next";
 
+import Providers from "@/app/providers";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { APP_CONFIG } from "@/config/app-config";
@@ -41,12 +42,14 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
         <ThemeBootScript />
       </head>
       <body className={`${fontVars} min-h-screen antialiased`} suppressHydrationWarning>
-        <TooltipProvider>
-          <PreferencesStoreProvider initialValues={PREFERENCE_DEFAULTS}>
-            {children}
-            <Toaster />
-          </PreferencesStoreProvider>
-        </TooltipProvider>
+        <Providers>
+          <TooltipProvider>
+            <PreferencesStoreProvider initialValues={PREFERENCE_DEFAULTS}>
+              {children}
+              <Toaster />
+            </PreferencesStoreProvider>
+          </TooltipProvider>
+        </Providers>
       </body>
     </html>
   );
