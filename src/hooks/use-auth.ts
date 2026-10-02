@@ -2,66 +2,82 @@
 
 import { useRouter } from "next/navigation";
 
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
+import apiService from "@/lib/api/core";
+import { fetchAuth, type LoginRequest, type RegisterRequest } from "@/lib/api/services/fetch-auth";
+import { LOGIN_PATH, SESSION_INVALID_CODES } from "@/lib/auth/auth-config";
+import { broadcastAuthChange } from "@/lib/auth/session-events";
+import type { ProjectRole, SessionResult } from "@/lib/auth/types";
 import { useAppDispatch, useAppSelector } from "@/lib/redux/hooks";
-import { loginAsync, logoutAsync, selectAuth, selectUser, setupAutoRefresh } from "@/lib/redux/slices/auth-slice";
-import { ROLE_ADMIN, ROLE_PROJECT_MANAGER, ROLE_RESEARCHER, ROLE_REVIEWER, ROLE_SYSTEM_ADMIN } from "@/lib/types/roles";
+import { logout as clearSession, restoreSession, selectAuth, setSession } from "@/lib/redux/slices/auth-slice";
+import { ApiError } from "@/types/api";
 
-export function useAuth() {
+function destination(result: SessionResult) {
+  const fallback = result.user.platform_role === "platform_admin" ? "/admin" : "/projects";
+  const next = new URLSearchParams(window.location.search).get("next");
+  if (!next || !next.startsWith("/") || next.startsWith("//") || next.includes("\\")) return fallback;
+  const target = new URL(next, window.location.origin);
+  if (target.origin !== window.location.origin) return fallback;
+  const paths =
+    result.user.platform_role === "platform_admin"
+      ? ["/admin", "/projects", "/dashboard", "/reviews"]
+      : ["/projects", "/dashboard", "/reviews"];
+  return paths.some((path) => target.pathname === path || target.pathname.startsWith(`${path}/`))
+    ? `${target.pathname}${target.search}${target.hash}`
+    : fallback;
+}
+
+export function useAuth(projectId?: string) {
   const dispatch = useAppDispatch();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const auth = useAppSelector(selectAuth);
-  const user = useAppSelector(selectUser);
+  const projectRole: ProjectRole | undefined = auth.memberships.find((item) => item.project_id === projectId)?.role;
+  const isAdmin = auth.user?.platform_role === "platform_admin";
 
-  const roles = user?.role ?? [];
-  const isAdmin = roles.includes(ROLE_ADMIN) || roles.includes(ROLE_SYSTEM_ADMIN);
-  const isProjectManager = roles.includes(ROLE_PROJECT_MANAGER);
-  const isResearcher = roles.includes(ROLE_RESEARCHER);
-  const isReviewer = roles.includes(ROLE_REVIEWER);
-
-  const login = async (credentials: { email: string; password: string }) => {
-    try {
-      const result = await dispatch(loginAsync(credentials)).unwrap();
-
-      if (result.token) setupAutoRefresh(result.token, dispatch);
-
-      toast.success("Đăng nhập thành công");
-
-      if (roles.includes(ROLE_ADMIN) || roles.includes(ROLE_SYSTEM_ADMIN)) {
-        router.push("/admin");
-      } else if (roles.includes(ROLE_REVIEWER)) {
-        router.push("/reviews");
-      } else {
-        router.push("/projects");
-      }
-
-      return result;
-    } catch (error: unknown) {
-      const message = typeof error === "string" ? error : "Đăng nhập thất bại";
-      toast.error(message);
-      throw error;
-    }
+  const completeLogin = async (result: SessionResult) => {
+    queryClient.clear();
+    dispatch(setSession({ user: result.user, session: result.session, memberships: [] }));
+    broadcastAuthChange("signed-in");
+    // Login/register already established a valid session. A temporary /me failure must not undo it.
+    await dispatch(restoreSession());
+    router.replace(destination(result));
+    router.refresh();
+    return result;
   };
-
-  const logout = async () => {
+  const login = async (credentials: LoginRequest) => completeLogin(await fetchAuth.login(credentials));
+  const register = async (credentials: RegisterRequest) => completeLogin(await fetchAuth.register(credentials));
+  const logout = async (allDevices = false) => {
     try {
-      await dispatch(logoutAsync()).unwrap();
-      toast.success("Đăng xuất thành công");
-      router.push("/auth/v1/login");
-    } catch {
-      toast.error("Có lỗi xảy ra khi đăng xuất");
+      await fetchAuth.logout(allDevices);
+    } catch (error) {
+      if (!(error instanceof ApiError) || !SESSION_INVALID_CODES.includes(error.code)) throw error;
     }
+    apiService.setCsrfToken(null);
+    dispatch(clearSession());
+    queryClient.clear();
+    broadcastAuthChange("signed-out");
+    router.replace(LOGIN_PATH);
+    router.refresh();
+    toast.success(allDevices ? "Signed out of all devices." : "Signed out successfully.");
   };
-
+  const changePassword = async (data: { current_password: string; new_password: string }) => {
+    await fetchAuth.changePassword(data);
+    broadcastAuthChange("password-changed");
+    toast.success("Password changed. Other devices have been signed out.");
+  };
   return {
     ...auth,
-    user,
     isAdmin,
-    isProjectManager,
-    isResearcher,
-    isReviewer,
+    projectRole,
+    isProjectManager: isAdmin || projectRole === "project_manager",
+    isResearcher: projectRole === "researcher",
+    isReviewer: projectRole === "reviewer",
     login,
+    register,
     logout,
+    changePassword,
   };
 }

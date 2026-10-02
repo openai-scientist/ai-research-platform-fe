@@ -30,10 +30,8 @@ const PUBLIC_ROUTES = [
   "/dashboard/profile",
   "/dashboard/users",
   "/dashboard/roles",
-  "/auth/v1/login",
-  "/auth/v2/login",
-  "/auth/v1/register",
-  "/auth/v2/register",
+  "/auth/login",
+  "/auth/register",
   "/chat",
   "/mail",
 ] as const;

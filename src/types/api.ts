@@ -1,19 +1,34 @@
-// API Response - shape của response từ backend
-export interface ApiResponse<T> {
-  isSuccess: boolean;
-  message: string;
-  data: T;
-  metadata?: unknown;
+export interface Pagination {
+  total: number;
+  limit: number;
+  offset: number;
 }
-
-export interface ApiError {
-  code?: number;
+export interface ValidationDetail {
+  field: string;
   message: string;
-  status: boolean;
-  data?: unknown;
 }
+export type ApiResponse<T> =
+  | { success: true; message: string; data: T; meta: { request_id: string; pagination: Pagination | null } }
+  | {
+      success: false;
+      message: string;
+      error: { code: string; details: ValidationDetail[] };
+      meta: { request_id: string };
+    };
 
-// Request params chung
+export class ApiError extends Error {
+  constructor(
+    public readonly status: number,
+    public readonly code: string,
+    message: string,
+    public readonly details: ValidationDetail[] = [],
+    public readonly requestId: string | null = null,
+    public readonly retryAfter: number | null = null,
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
 export interface RequestParams {
   [key: string]: string | number | boolean | undefined | null | string[];
 }

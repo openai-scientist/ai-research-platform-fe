@@ -18,7 +18,7 @@ export default async function Page() {
   const user = await getAuthenticatedUser();
 
   if (!user) {
-    redirect("/auth/v2/login");
+    redirect("/auth/login");
   }
 
   return (

@@ -14,10 +14,11 @@ export const metadata: Metadata = {
 };
 
 export default async function Page({ params }: { params: Promise<{ projectId: string }> }) {
-  const [{ projectId }, user] = await Promise.all([params, getAuthenticatedUser()]);
+  const { projectId } = await params;
+  const user = await getAuthenticatedUser(projectId);
 
   if (!user) {
-    redirect("/auth/v2/login");
+    redirect("/auth/login");
   }
 
   const project = findProjectForUser(projectId, user.email);
@@ -27,7 +28,7 @@ export default async function Page({ params }: { params: Promise<{ projectId: st
   }
 
   // A new project has no research state yet, so everyone gets the onboarding overview first.
-  if (user.role === "PROJECT_MANAGER" && project.experiments > 0) {
+  if ((user.role === "PROJECT_MANAGER" || user.role === "SYSTEM_ADMIN") && project.experiments > 0) {
     return <ManagerOverview project={project} />;
   }
 

@@ -23,7 +23,7 @@ export function getProjectSidebarItems(projectId: string, role: UserRole): NavGr
       label: "PROJECT",
       items: [
         { id: "project-members", title: "Members", url: `${baseUrl}/members`, icon: Users },
-        ...(role === "PROJECT_MANAGER"
+        ...(role === "PROJECT_MANAGER" || role === "SYSTEM_ADMIN"
           ? [{ id: "project-settings", title: "Settings", url: `${baseUrl}/settings`, icon: Settings }]
           : []),
       ],

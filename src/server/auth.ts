@@ -1,13 +1,32 @@
+import { cache } from "react";
+
 import { cookies } from "next/headers";
 
-import { AUTH_COOKIE_NAME, findUserByEmail, type AuthUser } from "@/lib/auth/auth-config";
+import { getServerApiBaseUrl } from "@/lib/api/config";
+import { AUTH_COOKIE_NAME, type AuthUser, SESSION_INVALID_CODES, toAuthUser } from "@/lib/auth/auth-config";
+import type { CurrentUser } from "@/lib/auth/types";
+import { ApiError, type ApiResponse } from "@/types/api";
 
-export async function getAuthenticatedUser(): Promise<AuthUser | null> {
-  const sessionEmail = (await cookies()).get(AUTH_COOKIE_NAME)?.value;
+export const getCurrentSession = cache(async (): Promise<CurrentUser | null> => {
+  const session = (await cookies()).get(AUTH_COOKIE_NAME)?.value;
+  if (!session) return null;
 
-  if (!sessionEmail) {
-    return null;
+  const response = await fetch(`${getServerApiBaseUrl()}/auth/me`, {
+    headers: { Cookie: `${AUTH_COOKIE_NAME}=${session}` },
+    credentials: "include",
+    cache: "no-store",
+    signal: AbortSignal.timeout(15000),
+  });
+  const body: ApiResponse<CurrentUser> = await response.json();
+  if (!body.success) {
+    if (SESSION_INVALID_CODES.includes(body.error.code)) return null;
+    throw new ApiError(response.status, body.error.code, body.message, body.error.details, body.meta.request_id);
   }
+  if (!response.ok) throw new Error("Unable to validate session");
+  return body.data;
+});
 
-  return findUserByEmail(sessionEmail) ?? null;
+export async function getAuthenticatedUser(projectId?: string): Promise<AuthUser | null> {
+  const current = await getCurrentSession();
+  return current ? toAuthUser(current, projectId) : null;
 }

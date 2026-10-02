@@ -8,7 +8,6 @@ import { cn } from "cn";
 import { AppSidebar } from "@/app/(main)/dashboard/_components/sidebar/app-sidebar";
 import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { users } from "@/data/users";
 import { getAuthenticatedUser } from "@/server/auth";
 import { getPreference } from "@/server/server-actions";
 
@@ -27,7 +26,7 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
   ]);
 
   if (!authenticatedUser) {
-    redirect("/auth/v2/login");
+    redirect("/auth/login");
   }
 
   return (
@@ -39,7 +38,7 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
         } as React.CSSProperties
       }
     >
-      <AppSidebar variant={variant} collapsible={collapsible} />
+      <AppSidebar user={{ ...authenticatedUser, avatar: "" }} variant={variant} collapsible={collapsible} />
       <SidebarInset
         className={cn(
           "[html[data-content-layout=centered]_&>*]:mx-auto",
@@ -69,7 +68,17 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
             <div className="flex items-center gap-2">
               <LayoutControls />
               <ThemeSwitcher />
-              <AccountSwitcher users={users} />
+              <AccountSwitcher
+                users={[
+                  {
+                    id: authenticatedUser.id,
+                    name: authenticatedUser.name,
+                    email: authenticatedUser.email,
+                    avatar: "",
+                    role: authenticatedUser.role,
+                  },
+                ]}
+              />
             </div>
           </div>
         </header>

@@ -88,6 +88,14 @@ Keep a component inside its route until it is reused by another feature. Do not 
 - Avoid unnecessary dependencies.
 - Keep changes focused and do not refactor unrelated files.
 
+## Product language and error feedback
+
+- This is an English-language platform. All user-facing application copy must be in English, including labels, buttons, loading states, empty states, accessibility text, and toast notifications.
+- Display errors only through the existing Sonner toast system. Do not render inline error messages, error banners, or error panels in forms or screens. This also applies to frontend validation errors.
+- For API errors, prefer the backend response's `message` as the error toast text. Preserve this message rather than translating it. Use an English fallback when no API message is available or a network error occurs.
+- Branch on `error.code` for error handling; do not branch on the message text. Respect `Retry-After` for rate-limited requests.
+- Preserve the project's existing design system. Reuse local components, their built-in variants, and semantic theme tokens; do not introduce a separate visual style.
+
 ## Contributions
 
 - Use conventional commit prefixes such as `feat:`, `fix:`, `refactor:`, `docs:`, and `chore:`.

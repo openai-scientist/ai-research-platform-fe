@@ -26,7 +26,7 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
   ]);
 
   if (!authenticatedUser) {
-    redirect("/auth/v2/login");
+    redirect("/auth/login");
   }
 
   if (authenticatedUser.role !== "SYSTEM_ADMIN") {

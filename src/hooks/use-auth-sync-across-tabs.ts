@@ -2,19 +2,83 @@
 
 import { useEffect } from "react";
 
-import { useAppDispatch } from "@/lib/redux/hooks";
-import { logout } from "@/lib/redux/slices/auth-slice";
+import { usePathname, useRouter } from "next/navigation";
 
-/**
- * Lắng nghe sự kiện logout từ các tab khác.
- * Khi tab A logout → dispatch event → tab B/C/D cũng logout.
- */
+import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+
+import apiService from "@/lib/api/core";
+import { LOGIN_PATH, SESSION_INVALID_CODES } from "@/lib/auth/auth-config";
+import { AUTH_CHANNEL, broadcastAuthChange } from "@/lib/auth/session-events";
+import { useAppDispatch } from "@/lib/redux/hooks";
+import { logout, restoreSession } from "@/lib/redux/slices/auth-slice";
+
 export function useAuthSyncAcrossTabs() {
   const dispatch = useAppDispatch();
+  const router = useRouter();
+  const pathname = usePathname();
+  const queryClient = useQueryClient();
+  const shouldRestoreSession = ["/admin", "/projects", "/reviews", "/dashboard"].some(
+    (path) => pathname === path || pathname.startsWith(`${path}/`),
+  );
 
   useEffect(() => {
-    const handleLogout = () => dispatch(logout());
-    window.addEventListener("logout", handleLogout);
-    return () => window.removeEventListener("logout", handleLogout);
-  }, [dispatch]);
+    const restore = () => {
+      const pending = dispatch(restoreSession());
+      void pending.then((action) => {
+        if (
+          restoreSession.rejected.match(action) &&
+          !action.meta.aborted &&
+          action.payload &&
+          !SESSION_INVALID_CODES.includes(action.payload.code)
+        ) {
+          toast.error(action.payload.message);
+        }
+      });
+      return pending;
+    };
+    let request = shouldRestoreSession ? restore() : null;
+    const stopRestoring = () => request?.abort();
+    const refresh = () => {
+      if (!shouldRestoreSession) return;
+      request?.abort();
+      request = restore();
+    };
+    const clearSession = () => {
+      request?.abort();
+      apiService.setCsrfToken(null);
+      dispatch(logout());
+      queryClient.clear();
+      if (![LOGIN_PATH, "/auth/register"].includes(window.location.pathname)) {
+        router.replace(LOGIN_PATH);
+        router.refresh();
+      }
+    };
+    const expire = () => {
+      clearSession();
+      broadcastAuthChange("signed-out");
+    };
+    const channel = typeof BroadcastChannel === "undefined" ? null : new BroadcastChannel(AUTH_CHANNEL);
+    if (channel) {
+      channel.onmessage = ({ data }: MessageEvent<unknown>) => {
+        if (data === "signed-out") clearSession();
+        if (data === "signed-in" || data === "password-changed") {
+          apiService.setCsrfToken(null);
+          queryClient.clear();
+          refresh();
+          router.refresh();
+        }
+      };
+    }
+    window.addEventListener("auth:expired", expire);
+    window.addEventListener("auth:authenticating", stopRestoring);
+    window.addEventListener("focus", refresh);
+    return () => {
+      request?.abort();
+      channel?.close();
+      window.removeEventListener("auth:expired", expire);
+      window.removeEventListener("auth:authenticating", stopRestoring);
+      window.removeEventListener("focus", refresh);
+    };
+  }, [dispatch, queryClient, router, shouldRestoreSession]);
 }

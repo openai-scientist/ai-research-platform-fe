@@ -22,15 +22,15 @@ export default async function Layout({
 }: Readonly<{ children: ReactNode; params: Promise<{ projectId: string }> }>) {
   const cookieStore = await cookies();
   const defaultOpen = cookieStore.get("sidebar_state")?.value !== "false";
-  const [{ projectId }, user, variant, collapsible] = await Promise.all([
-    params,
-    getAuthenticatedUser(),
+  const { projectId } = await params;
+  const [user, variant, collapsible] = await Promise.all([
+    getAuthenticatedUser(projectId),
     getPreference("sidebar_variant"),
     getPreference("sidebar_collapsible"),
   ]);
 
   if (!user) {
-    redirect("/auth/v2/login");
+    redirect("/auth/login");
   }
 
   const project = findProjectForUser(projectId, user.email);

@@ -1,190 +1,116 @@
 import axios, { type AxiosInstance, type AxiosRequestConfig, type AxiosResponse } from "axios";
-import { deleteCookie, getCookie, setCookie } from "cookies-next";
 
-import type { ApiError, RequestParams } from "@/types/api";
-import { getAuthCookieConfig } from "@/utils/cookie-config";
+import { SESSION_INVALID_CODES } from "@/lib/auth/auth-config";
+import { ApiError, type ApiResponse, type RequestParams } from "@/types/api";
+
+import { getApiBaseUrl } from "./config";
 
 class ApiService {
-  private client: AxiosInstance;
-  private authToken: string | null = null;
-  private refreshTokenVal: string | null = null;
-  private isRefreshing: boolean;
-  private onUnauthorizedCallback: (() => void) | null = null;
-  // Queue: lưu các request 401 để retry sau khi refresh token thành công
-  private failedQueue: Array<{
-    resolve: (token: string) => void;
-    reject: (error: unknown) => void;
-  }> = [];
+  private readonly client: AxiosInstance;
+  private csrfToken: string | null = null;
+  private csrfRequest: Promise<string> | null = null;
 
-  constructor(baseURL: string, timeout = 60000) {
-    this.isRefreshing = false;
-    this.client = axios.create({
-      baseURL,
-      timeout,
-      headers: { "Content-Type": "application/json" },
+  constructor() {
+    this.client = axios.create({ baseURL: getApiBaseUrl(), timeout: 30000, withCredentials: true });
+    this.client.interceptors.request.use(async (config) => {
+      const path = (config.url ?? "").replace(/^\/?api\/v1\//, "/");
+      config.url = path;
+      const method = (config.method ?? "get").toUpperCase();
+      if (["POST", "PUT", "PATCH", "DELETE"].includes(method) && path !== "/auth/login" && path !== "/auth/register") {
+        config.headers.set("X-CSRF-Token", await this.getCsrfToken());
+      }
+      if (typeof FormData !== "undefined" && config.data instanceof FormData) {
+        config.headers.delete("Content-Type");
+      }
+      return config;
     });
-    this.setupInterceptors();
-  }
-
-  private processQueue(error: unknown, token: string | null = null) {
-    for (const prom of this.failedQueue) {
-      if (error) prom.reject(error);
-      else prom.resolve(token as string);
-    }
-    this.failedQueue = [];
-  }
-
-  private setupInterceptors() {
-    // Request Interceptor: tự động đính Bearer token
-    this.client.interceptors.request.use(
-      (config) => {
-        const token = this.authToken ?? (getCookie("authToken") as string | undefined);
-        if (token) config.headers.Authorization = `Bearer ${token}`;
-        // FormData: bỏ Content-Type để browser tự set boundary
-        if (config.data instanceof FormData) delete config.headers["Content-Type"];
-        return config;
-      },
-      (error) => Promise.reject(error),
-    );
-
-    // Response Interceptor: xử lý 401 — refresh token rồi retry
     this.client.interceptors.response.use(
-      (response) => response,
-      async (error) => {
-        const originalRequest = error.config;
-
-        if (error.response?.status === 401 && !originalRequest._retry) {
-          if (this.isRefreshing) {
-            return new Promise<string>((resolve, reject) => {
-              this.failedQueue.push({ resolve, reject });
-            })
-              .then((token) => {
-                originalRequest.headers.Authorization = `Bearer ${token}`;
-                return this.client(originalRequest);
-              })
-              .catch((err) => Promise.reject(err));
-          }
-
-          originalRequest._retry = true;
-          this.isRefreshing = true;
-
-          try {
-            const refreshToken = this.refreshTokenVal ?? (getCookie("refreshToken") as string | undefined);
-            if (!refreshToken) throw new Error("No refresh token");
-
-            const response = await axios.post(
-              `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:6789/"}api/v1/auth/refresh-token`,
-              { refreshToken },
-              { headers: { "Content-Type": "application/json" } },
-            );
-
-            if (response.data?.data?.accessToken) {
-              const { accessToken, refreshToken: newRefreshToken } = response.data.data;
-
-              void setCookie("authToken", accessToken, getAuthCookieConfig());
-              if (newRefreshToken) {
-                void setCookie("refreshToken", newRefreshToken, getAuthCookieConfig());
-                this.refreshTokenVal = newRefreshToken;
-              }
-              this.setAuthToken(accessToken);
-
-              this.processQueue(null, accessToken);
-              this.isRefreshing = false;
-
-              originalRequest.headers.Authorization = `Bearer ${accessToken}`;
-              return this.client(originalRequest);
-            }
-
-            throw new Error("Invalid refresh response");
-          } catch (refreshError) {
-            this.isRefreshing = false;
-            this.processQueue(refreshError, null);
-
-            void deleteCookie("authToken", { path: "/" });
-            void deleteCookie("refreshToken", { path: "/" });
-            this.setAuthToken(null);
-            this.refreshTokenVal = null;
-
-            this.onUnauthorizedCallback?.();
-
-            if (typeof window !== "undefined") {
-              window.dispatchEvent(new Event("logout"));
-            }
-
-            return Promise.reject({
-              code: 401,
-              message: "Session expired. Please login again.",
-              status: false,
-            } as ApiError);
-          }
+      (response) => {
+        if (response.data?.success === false) throw this.responseError(response);
+        return response;
+      },
+      (error: unknown) => {
+        if (error instanceof ApiError) return Promise.reject(error);
+        if (!axios.isAxiosError(error)) return Promise.reject(error);
+        const apiError = error.response
+          ? this.responseError(error.response)
+          : new ApiError(0, "NETWORK_ERROR", "Unable to connect to the server. Please try again.");
+        if (apiError.code === "CSRF_INVALID") this.setCsrfToken(null);
+        if (apiError.status === 401 && SESSION_INVALID_CODES.includes(apiError.code)) {
+          this.setCsrfToken(null);
+          if (typeof window !== "undefined") window.dispatchEvent(new Event("auth:expired"));
         }
-
-        const apiError: ApiError = {
-          code: error.response?.status,
-          message: error.response?.data?.message ?? error.message ?? "Có lỗi xảy ra",
-          status: false,
-          data: error.response?.data,
-        };
-
         return Promise.reject(apiError);
       },
     );
   }
 
-  setAuthToken(token: string | null) {
-    this.authToken = token;
+  private responseError(response: AxiosResponse<unknown>): ApiError {
+    const body = response.data as Partial<Extract<ApiResponse<never>, { success: false }>> | undefined;
+    const retryHeader = response.headers["retry-after"];
+    const retrySeconds = retryHeader == null ? NaN : Number(retryHeader);
+    const retryDate = retryHeader == null ? NaN : Date.parse(String(retryHeader));
+    const retryAfter = Number.isFinite(retrySeconds)
+      ? Math.max(0, Math.ceil(retrySeconds))
+      : Number.isFinite(retryDate)
+        ? Math.max(0, Math.ceil((retryDate - Date.now()) / 1000))
+        : null;
+    return new ApiError(
+      response.status,
+      body?.error?.code ?? "HTTP_ERROR",
+      body?.message ?? "The server encountered an error. Please try again.",
+      body?.error?.details ?? [],
+      body?.meta?.request_id ?? response.headers["x-request-id"] ?? null,
+      retryAfter,
+    );
   }
 
-  setRefreshToken(token: string | null) {
-    this.refreshTokenVal = token;
+  setCsrfToken(token: string | null) {
+    this.csrfToken = token;
   }
 
-  setOnUnauthorized(callback: () => void) {
-    this.onUnauthorizedCallback = callback;
+  private async getCsrfToken(): Promise<string> {
+    if (this.csrfToken) return this.csrfToken;
+    this.csrfRequest ??= this.get<ApiResponse<{ csrf_token: string }>>("/auth/csrf-token")
+      .then(({ data }) => {
+        if (!data.success) throw new Error("Unable to obtain CSRF token");
+        this.csrfToken = data.data.csrf_token;
+        return this.csrfToken;
+      })
+      .finally(() => {
+        this.csrfRequest = null;
+      });
+    return this.csrfRequest;
   }
 
-  getAuthToken(): string | null {
-    return this.authToken ?? (getCookie("authToken") as string | null);
-  }
-
-  async request<T>(config: AxiosRequestConfig): Promise<AxiosResponse<T>> {
+  request<T>(config: AxiosRequestConfig): Promise<AxiosResponse<T>> {
     return this.client.request<T>(config);
   }
-
-  async get<T>(url: string, params?: RequestParams): Promise<AxiosResponse<T>> {
+  get<T>(url: string, params?: RequestParams): Promise<AxiosResponse<T>> {
     return this.request<T>({ method: "GET", url, params });
   }
-
-  async post<T, D = unknown>(url: string, data?: D): Promise<AxiosResponse<T>> {
+  post<T, D = unknown>(url: string, data?: D): Promise<AxiosResponse<T>> {
     return this.request<T>({ method: "POST", url, data });
   }
-
-  async put<T, D = unknown>(url: string, data?: D): Promise<AxiosResponse<T>> {
+  put<T, D = unknown>(url: string, data?: D): Promise<AxiosResponse<T>> {
     return this.request<T>({ method: "PUT", url, data });
   }
-
-  async patch<T, D = unknown>(url: string, data?: D): Promise<AxiosResponse<T>> {
+  patch<T, D = unknown>(url: string, data?: D): Promise<AxiosResponse<T>> {
     return this.request<T>({ method: "PATCH", url, data });
   }
-
-  async delete<T>(url: string): Promise<AxiosResponse<T>> {
+  delete<T>(url: string): Promise<AxiosResponse<T>> {
     return this.request<T>({ method: "DELETE", url });
   }
-
-  async upload<T>(url: string, formData: FormData, onProgress?: (progress: number) => void): Promise<AxiosResponse<T>> {
+  upload<T>(url: string, data: FormData, onProgress?: (progress: number) => void): Promise<AxiosResponse<T>> {
     return this.request<T>({
       method: "POST",
       url,
-      data: formData,
-      onUploadProgress: (e) => {
-        if (onProgress && e.total) {
-          onProgress(Math.round((e.loaded * 100) / e.total));
-        }
+      data,
+      onUploadProgress: ({ loaded, total }) => {
+        if (total) onProgress?.(Math.round((loaded * 100) / total));
       },
     });
   }
 }
-
-const apiService = new ApiService(process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:6789/");
-
+const apiService = new ApiService();
 export default apiService;

@@ -1,105 +1,91 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Controller, useForm } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { toast } from "sonner";
-import { z } from "zod";
+import type { z } from "zod";
 
+import { AuthTextField } from "@/components/auth/auth-text-field";
 import { Button } from "@/components/ui/button";
-import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
+import { FieldGroup } from "@/components/ui/field";
+import { useAuth } from "@/hooks/use-auth";
+import { notifyAuthError, notifyValidationError } from "@/lib/auth/form-errors";
+import { registerSchema } from "@/lib/auth/schemas";
 
-const formSchema = z
-  .object({
-    email: z.email({ message: "Please enter a valid email address." }),
-    password: z.string().min(6, { message: "Password must be at least 6 characters." }),
-    confirmPassword: z.string().min(6, { message: "Confirm Password must be at least 6 characters." }),
-  })
-  .refine((data) => data.password === data.confirmPassword, {
-    message: "Passwords do not match.",
-    path: ["confirmPassword"],
-  });
-
-function onSubmit(data: z.infer<typeof formSchema>) {
-  toast("You submitted the following values", {
-    description: (
-      <pre className="mt-2 w-[320px] rounded-md bg-neutral-950 p-4">
-        <code className="text-white">{JSON.stringify(data, null, 2)}</code>
-      </pre>
-    ),
-  });
-}
+import { useAuthCooldown } from "./use-auth-cooldown";
 
 export function RegisterForm() {
-  const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
-      email: "",
-      password: "",
-      confirmPassword: "",
-    },
+  const { register } = useAuth();
+  const { remaining, setRemaining } = useAuthCooldown();
+  const form = useForm<z.infer<typeof registerSchema>>({
+    resolver: zodResolver(registerSchema),
+    defaultValues: { email: "", display_name: "", password: "", confirmPassword: "" },
   });
-
+  const busy = form.formState.isSubmitting;
+  async function onSubmit(data: z.infer<typeof registerSchema>) {
+    if (remaining > 0) return;
+    form.clearErrors();
+    try {
+      await register({
+        email: data.email,
+        password: data.password,
+        ...(data.display_name ? { display_name: data.display_name } : {}),
+      });
+      toast.success("Account created successfully.");
+    } catch (error) {
+      const cooldown = notifyAuthError(error);
+      if (cooldown !== null) setRemaining(cooldown);
+    }
+  }
   return (
-    <form noValidate onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-4">
+    <form
+      noValidate
+      onSubmit={form.handleSubmit(onSubmit, notifyValidationError)}
+      className="flex flex-col gap-4"
+      aria-busy={busy}
+    >
       <FieldGroup className="gap-4">
-        <Controller
+        <AuthTextField
+          control={form.control}
+          name="display_name"
+          id="register-name"
+          label="Display Name (optional)"
+          autoComplete="name"
+          disabled={busy}
+        />
+        <AuthTextField
           control={form.control}
           name="email"
-          render={({ field, fieldState }) => (
-            <Field className="gap-1.5" data-invalid={fieldState.invalid}>
-              <FieldLabel htmlFor="register-email">Email Address</FieldLabel>
-              <Input
-                {...field}
-                id="register-email"
-                type="email"
-                placeholder="you@example.com"
-                autoComplete="email"
-                aria-invalid={fieldState.invalid}
-              />
-              {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-            </Field>
-          )}
+          id="register-email"
+          label="Email Address"
+          type="email"
+          autoComplete="email"
+          placeholder="you@example.com"
+          disabled={busy}
         />
-        <Controller
+        <AuthTextField
           control={form.control}
           name="password"
-          render={({ field, fieldState }) => (
-            <Field className="gap-1.5" data-invalid={fieldState.invalid}>
-              <FieldLabel htmlFor="register-password">Password</FieldLabel>
-              <Input
-                {...field}
-                id="register-password"
-                type="password"
-                placeholder="••••••••"
-                autoComplete="new-password"
-                aria-invalid={fieldState.invalid}
-              />
-              {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-            </Field>
-          )}
+          id="register-password"
+          label="Password"
+          type="password"
+          autoComplete="new-password"
+          placeholder="••••••••"
+          disabled={busy}
         />
-        <Controller
+        <AuthTextField
           control={form.control}
           name="confirmPassword"
-          render={({ field, fieldState }) => (
-            <Field className="gap-1.5" data-invalid={fieldState.invalid}>
-              <FieldLabel htmlFor="register-confirm-password">Confirm Password</FieldLabel>
-              <Input
-                {...field}
-                id="register-confirm-password"
-                type="password"
-                placeholder="••••••••"
-                autoComplete="new-password"
-                aria-invalid={fieldState.invalid}
-              />
-              {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-            </Field>
-          )}
+          id="register-confirm-password"
+          label="Confirm Password"
+          type="password"
+          autoComplete="new-password"
+          placeholder="••••••••"
+          disabled={busy}
         />
       </FieldGroup>
-      <Button className="w-full" type="submit">
-        Register
+      <Button className="w-full" type="submit" disabled={busy || remaining > 0}>
+        {busy ? "Creating account..." : remaining > 0 ? `Try again in ${remaining}s` : "Register"}
       </Button>
     </form>
   );

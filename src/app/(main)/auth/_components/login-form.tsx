@@ -1,114 +1,69 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useRouter } from "next/navigation";
-import { Controller, useForm } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { toast } from "sonner";
-import { z } from "zod";
+import type { z } from "zod";
 
+import { AuthTextField } from "@/components/auth/auth-text-field";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Field, FieldContent, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
-import { loginWithCredentials } from "@/server/auth-actions";
+import { FieldGroup } from "@/components/ui/field";
+import { useAuth } from "@/hooks/use-auth";
+import { notifyAuthError, notifyValidationError } from "@/lib/auth/form-errors";
+import { loginSchema } from "@/lib/auth/schemas";
 
-const formSchema = z.object({
-  email: z.email({ message: "Please enter a valid email address." }),
-  password: z.string().min(6, { message: "Password must be at least 6 characters." }),
-  remember: z.boolean().optional(),
-});
+import { useAuthCooldown } from "./use-auth-cooldown";
 
 export function LoginForm() {
-  const router = useRouter();
-  const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
-      email: "",
-      password: "",
-      remember: false,
-    },
+  const { login } = useAuth();
+  const { remaining, setRemaining } = useAuthCooldown();
+  const form = useForm<z.infer<typeof loginSchema>>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: { email: "", password: "" },
   });
-
-  async function onSubmit(data: z.infer<typeof formSchema>) {
-    form.clearErrors("root");
-
-    const result = await loginWithCredentials(data.email, data.password, Boolean(data.remember));
-
-    if (!result.success) {
-      form.setError("root", { type: "server", message: result.error });
-      toast.error(result.error);
-      return;
+  const busy = form.formState.isSubmitting;
+  async function onSubmit(data: z.infer<typeof loginSchema>) {
+    if (remaining > 0) return;
+    form.clearErrors();
+    try {
+      await login(data);
+      toast.success("Signed in successfully.");
+    } catch (error) {
+      const cooldown = notifyAuthError(error);
+      if (cooldown !== null) setRemaining(cooldown);
     }
-
-    toast.success(`Đăng nhập thành công với vai trò ${result.role}.`);
-    router.replace(result.redirectTo);
-    router.refresh();
   }
-
   return (
-    <form noValidate onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-4">
+    <form
+      noValidate
+      onSubmit={form.handleSubmit(onSubmit, notifyValidationError)}
+      className="flex flex-col gap-4"
+      aria-busy={busy}
+    >
       <FieldGroup className="gap-4">
-        <Controller
+        <AuthTextField
           control={form.control}
           name="email"
-          render={({ field, fieldState }) => (
-            <Field className="gap-1.5" data-invalid={fieldState.invalid}>
-              <FieldLabel htmlFor="login-email">Email Address</FieldLabel>
-              <Input
-                {...field}
-                id="login-email"
-                type="email"
-                placeholder="you@example.com"
-                autoComplete="email"
-                aria-invalid={fieldState.invalid}
-              />
-              {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-            </Field>
-          )}
+          id="login-email"
+          label="Email Address"
+          type="email"
+          autoComplete="email"
+          placeholder="you@example.com"
+          disabled={busy}
         />
-        <Controller
+        <AuthTextField
           control={form.control}
           name="password"
-          render={({ field, fieldState }) => (
-            <Field className="gap-1.5" data-invalid={fieldState.invalid}>
-              <FieldLabel htmlFor="login-password">Password</FieldLabel>
-              <Input
-                {...field}
-                id="login-password"
-                type="password"
-                placeholder="••••••••"
-                autoComplete="current-password"
-                aria-invalid={fieldState.invalid}
-              />
-              {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-            </Field>
-          )}
-        />
-        <Controller
-          control={form.control}
-          name="remember"
-          render={({ field, fieldState }) => (
-            <Field orientation="horizontal" data-invalid={fieldState.invalid}>
-              <Checkbox
-                id="login-remember"
-                name={field.name}
-                checked={field.value}
-                onCheckedChange={(checked) => field.onChange(Boolean(checked))}
-                aria-invalid={fieldState.invalid}
-              />
-              <FieldContent>
-                <FieldLabel htmlFor="login-remember" className="font-normal">
-                  Remember me for 30 days
-                </FieldLabel>
-                {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-              </FieldContent>
-            </Field>
-          )}
+          id="login-password"
+          label="Password"
+          type="password"
+          autoComplete="current-password"
+          placeholder="••••••••"
+          disabled={busy}
         />
       </FieldGroup>
-      {form.formState.errors.root && <FieldError errors={[form.formState.errors.root]} />}
-      <Button className="w-full" type="submit" disabled={form.formState.isSubmitting}>
-        {form.formState.isSubmitting ? "Đang đăng nhập..." : "Login"}
+      <Button className="w-full" type="submit" disabled={busy || remaining > 0}>
+        {busy ? "Signing in..." : remaining > 0 ? `Try again in ${remaining}s` : "Login"}
       </Button>
     </form>
   );

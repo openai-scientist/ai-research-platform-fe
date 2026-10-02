@@ -38,10 +38,11 @@ const sections: Record<string, { title: string; description: string; icon: Lucid
 };
 
 export default async function Page({ params }: { params: Promise<{ projectId: string; section: string }> }) {
-  const [{ projectId, section }, user] = await Promise.all([params, getAuthenticatedUser()]);
+  const { projectId, section } = await params;
+  const user = await getAuthenticatedUser(projectId);
 
   if (!user) {
-    redirect("/auth/v2/login");
+    redirect("/auth/login");
   }
 
   const project = findProjectForUser(projectId, user.email);
@@ -51,7 +52,7 @@ export default async function Page({ params }: { params: Promise<{ projectId: st
     notFound();
   }
 
-  if (config.managerOnly && user.role !== "PROJECT_MANAGER") {
+  if (config.managerOnly && user.role !== "PROJECT_MANAGER" && user.role !== "SYSTEM_ADMIN") {
     redirect(`/projects/${project.id}`);
   }
 

@@ -17,10 +17,13 @@ export default async function Page() {
   const user = await getAuthenticatedUser();
 
   if (!user) {
-    redirect("/auth/v2/login");
+    redirect("/auth/login");
   }
 
-  if (user.role !== "REVIEWER") {
+  if (
+    user.platform_role !== "platform_admin" &&
+    !user.memberships.some((membership) => membership.role === "reviewer")
+  ) {
     redirect(getRoleHomePath(user.role));
   }
 

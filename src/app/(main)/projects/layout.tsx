@@ -9,7 +9,7 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
   const user = await getAuthenticatedUser();
 
   if (!user) {
-    redirect("/auth/v2/login");
+    redirect("/auth/login");
   }
 
   if (!canAccessProjects(user.role)) {

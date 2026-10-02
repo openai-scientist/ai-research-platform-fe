@@ -5,7 +5,7 @@ import { Command } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { APP_CONFIG } from "@/config/app-config";
 
-export default function Layout({ children }: Readonly<{ children: ReactNode }>) {
+export default function AuthShell({ children }: Readonly<{ children: ReactNode }>) {
   return (
     <main>
       <div className="grid h-dvh justify-center p-2 lg:grid-cols-2">

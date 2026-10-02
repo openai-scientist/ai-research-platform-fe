@@ -1,7 +1,5 @@
 import { type HubConnection, HubConnectionBuilder, HubConnectionState, LogLevel } from "@microsoft/signalr";
 
-import { store } from "@/lib/redux/store";
-
 export type SignalRStatus = HubConnectionState;
 
 let connection: HubConnection | null = null;
@@ -15,20 +13,12 @@ export function getHubUrl(): string {
   return new URL("/hubs/app", getBaseUrl()).toString();
 }
 
-function getAccessToken(): string | null {
-  try {
-    return store.getState().auth.token;
-  } catch {
-    return null;
-  }
-}
-
 export function getHubConnection(): HubConnection {
   if (typeof window === "undefined") throw new Error("SignalR chỉ chạy trên browser");
   if (connection) return connection;
 
   connection = new HubConnectionBuilder()
-    .withUrl(getHubUrl(), { accessTokenFactory: () => getAccessToken() ?? "" })
+    .withUrl(getHubUrl(), { withCredentials: true })
     .withAutomaticReconnect()
     .configureLogging(process.env.NODE_ENV === "development" ? LogLevel.Information : LogLevel.Warning)
     .build();

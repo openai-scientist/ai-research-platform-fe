@@ -1,264 +1,97 @@
 import { createAsyncThunk, createSlice, type PayloadAction } from "@reduxjs/toolkit";
-import { deleteCookie, setCookie } from "cookies-next";
-import { jwtDecode } from "jwt-decode";
 
-import apiService from "@/lib/api/core";
 import { fetchAuth } from "@/lib/api/services/fetch-auth";
-import type { DecodedToken, User } from "@/types/models";
-import { getAuthCookieConfig } from "@/utils/cookie-config";
+import { SESSION_INVALID_CODES } from "@/lib/auth/auth-config";
+import type { CurrentUser } from "@/lib/auth/types";
+import { ApiError } from "@/types/api";
 
-import type { AppDispatch, RootState } from "../store";
+import type { RootState } from "../store";
 
 interface AuthState {
-  user: User | null;
-  token: string | null;
-  refreshToken: string | null;
+  user: CurrentUser["user"] | null;
+  session: CurrentUser["session"] | null;
+  memberships: CurrentUser["memberships"];
   isAuthenticated: boolean;
   isLoading: boolean;
+  initialized: boolean;
   error: string | null;
+  requestId: string | null;
 }
-
-let refreshTimer: NodeJS.Timeout | null = null;
-
 const initialState: AuthState = {
   user: null,
-  token: null,
-  refreshToken: null,
+  session: null,
+  memberships: [],
   isAuthenticated: false,
   isLoading: false,
+  initialized: false,
   error: null,
+  requestId: null,
 };
 
-export const decodeToken = (token: string): User | null => {
+export const restoreSession = createAsyncThunk("auth/restoreSession", async (_, { rejectWithValue, signal }) => {
   try {
-    const decoded = jwtDecode<Record<string, unknown>>(token);
-    let roles: string[] = [];
-    if (decoded.role) {
-      roles = Array.isArray(decoded.role) ? (decoded.role as string[]) : [String(decoded.role)];
-    } else if (decoded.roles) {
-      roles = Array.isArray(decoded.roles) ? (decoded.roles as string[]) : [String(decoded.roles)];
-    }
-    return {
-      id: (decoded.id ?? decoded.sub ?? "") as string,
-      email: (decoded.email ?? "") as string,
-      userName: (decoded.userName ?? decoded.userNname ?? decoded.name ?? "") as string,
-      role: roles,
-      avatarUrl: (decoded.avatarUrl ?? "") as string,
-    };
-  } catch {
-    return null;
-  }
-};
-
-export const decodeTokenWithExpiry = (token: string): DecodedToken | null => {
-  try {
-    const decoded = jwtDecode<Record<string, unknown>>(token);
-    let roles: string[] = [];
-    if (decoded.role) {
-      roles = Array.isArray(decoded.role) ? (decoded.role as string[]) : [String(decoded.role)];
-    } else if (decoded.roles) {
-      roles = Array.isArray(decoded.roles) ? (decoded.roles as string[]) : [String(decoded.roles)];
-    }
-    return {
-      id: (decoded.id ?? decoded.sub ?? "") as string,
-      email: (decoded.email ?? "") as string,
-      userName: (decoded.userName ?? decoded.userNname ?? decoded.name ?? "") as string,
-      role: roles,
-      avatarUrl: (decoded.avatarUrl ?? "") as string,
-      exp: typeof decoded.exp === "number" ? decoded.exp : undefined,
-      iat: typeof decoded.iat === "number" ? decoded.iat : undefined,
-      nbf: typeof decoded.nbf === "number" ? decoded.nbf : undefined,
-    };
-  } catch {
-    return null;
-  }
-};
-
-export const setupAutoRefresh = (token: string, dispatch: AppDispatch) => {
-  if (refreshTimer) {
-    clearTimeout(refreshTimer);
-    refreshTimer = null;
-  }
-
-  const decoded = decodeTokenWithExpiry(token);
-  if (!decoded?.exp) return;
-
-  const refreshTime = decoded.exp * 1000 - Date.now() - 2 * 60 * 1000;
-
-  if (refreshTime <= 0) {
-    void dispatch(refreshTokenAsync());
-    return;
-  }
-
-  refreshTimer = setTimeout(() => void dispatch(refreshTokenAsync()), refreshTime);
-};
-
-export const clearAutoRefresh = () => {
-  if (refreshTimer) {
-    clearTimeout(refreshTimer);
-    refreshTimer = null;
-  }
-};
-
-export const loginAsync = createAsyncThunk(
-  "auth/login",
-  async (credentials: { email: string; password: string }, { rejectWithValue }) => {
-    try {
-      const response = await fetchAuth.login(credentials);
-
-      if (response.isSuccess && response.data.accessToken) {
-        const { accessToken, refreshToken } = response.data;
-        const user = decodeToken(accessToken);
-
-        void setCookie("authToken", accessToken, getAuthCookieConfig());
-        if (refreshToken) {
-          void setCookie("refreshToken", refreshToken, getAuthCookieConfig());
-        }
-        apiService.setAuthToken(accessToken);
-        apiService.setRefreshToken(refreshToken);
-
-        return { token: accessToken, refreshToken, user };
-      }
-
-      return rejectWithValue(response.message);
-    } catch (error: unknown) {
-      const err = error as { message?: string };
-      return rejectWithValue(err.message ?? "Login failed");
-    }
-  },
-);
-
-export const logoutAsync = createAsyncThunk("auth/logout", async (_, { rejectWithValue }) => {
-  try {
-    await apiService.post("/api/v1/auth/logout");
-    void deleteCookie("authToken", { path: "/" });
-    void deleteCookie("refreshToken", { path: "/" });
-    apiService.setAuthToken(null);
-    apiService.setRefreshToken(null);
-    clearAutoRefresh();
-    return true;
-  } catch (error: unknown) {
-    const err = error as { message?: string };
-    return rejectWithValue(err.message ?? "Logout failed");
+    return await fetchAuth.me(signal);
+  } catch (error) {
+    return rejectWithValue({
+      code: error instanceof ApiError ? error.code : "NETWORK_ERROR",
+      message: error instanceof Error ? error.message : "Unable to load your session.",
+    });
   }
 });
-
-export const refreshTokenAsync = createAsyncThunk(
-  "auth/refreshToken",
-  async (_, { rejectWithValue, dispatch, getState }) => {
-    try {
-      const state = getState() as RootState;
-      const { refreshToken } = state.auth;
-      if (!refreshToken) return rejectWithValue("No refresh token");
-
-      const response = await apiService.post<{
-        isSuccess: boolean;
-        data: { accessToken: string; refreshToken: string };
-      }>("/api/v1/auth/refresh-token", { refreshToken });
-
-      if (response.data?.isSuccess && response.data.data.accessToken) {
-        const { accessToken, refreshToken: newRefreshToken } = response.data.data;
-        const user = decodeToken(accessToken);
-
-        void setCookie("authToken", accessToken, getAuthCookieConfig());
-        if (newRefreshToken) {
-          void setCookie("refreshToken", newRefreshToken, getAuthCookieConfig());
-        }
-        apiService.setAuthToken(accessToken);
-        apiService.setRefreshToken(newRefreshToken);
-
-        setupAutoRefresh(accessToken, dispatch as AppDispatch);
-
-        return { token: accessToken, refreshToken: newRefreshToken, user };
-      }
-
-      return rejectWithValue("Refresh failed");
-    } catch (error: unknown) {
-      const err = error as { message?: string };
-      return rejectWithValue(err.message ?? "Refresh failed");
-    }
-  },
-);
 
 const authSlice = createSlice({
   name: "auth",
   initialState,
   reducers: {
-    setTokenWithRefresh: (state, action: PayloadAction<{ accessToken: string; refreshToken: string }>) => {
-      state.token = action.payload.accessToken;
-      state.refreshToken = action.payload.refreshToken;
-      apiService.setAuthToken(action.payload.accessToken);
-      apiService.setRefreshToken(action.payload.refreshToken);
-      const user = decodeToken(action.payload.accessToken);
-      if (user) {
-        state.user = user;
-        state.isAuthenticated = true;
-      }
-    },
-    logout: (state) => {
-      state.user = null;
-      state.token = null;
-      state.refreshToken = null;
-      state.isAuthenticated = false;
+    setSession: (state, action: PayloadAction<CurrentUser>) => {
+      state.user = action.payload.user;
+      state.session = action.payload.session;
+      state.memberships = action.payload.memberships;
+      state.isAuthenticated = true;
+      state.isLoading = false;
+      state.initialized = true;
       state.error = null;
-      void deleteCookie("authToken", { path: "/" });
-      void deleteCookie("refreshToken", { path: "/" });
-      apiService.setAuthToken(null);
-      apiService.setRefreshToken(null);
-      clearAutoRefresh();
+      state.requestId = null;
     },
-    clearError: (state) => {
-      state.error = null;
-    },
+    logout: () => ({ ...initialState, initialized: true }),
   },
   extraReducers: (builder) => {
     builder
-      .addCase(loginAsync.pending, (state) => {
+      .addCase(restoreSession.pending, (state, action) => {
         state.isLoading = true;
+        state.requestId = action.meta.requestId;
         state.error = null;
       })
-      .addCase(loginAsync.fulfilled, (state, action) => {
-        state.isLoading = false;
-        state.token = action.payload.token;
-        state.refreshToken = action.payload.refreshToken ?? null;
+      .addCase(restoreSession.fulfilled, (state, action) => {
+        if (state.requestId !== action.meta.requestId) return;
         state.user = action.payload.user;
+        state.session = action.payload.session;
+        state.memberships = action.payload.memberships;
         state.isAuthenticated = true;
-        state.error = null;
-      })
-      .addCase(loginAsync.rejected, (state, action) => {
+        state.initialized = true;
         state.isLoading = false;
-        state.error = action.payload as string;
-      });
-
-    builder.addCase(logoutAsync.fulfilled, (state) => {
-      state.user = null;
-      state.token = null;
-      state.refreshToken = null;
-      state.isAuthenticated = false;
-      state.isLoading = false;
-      state.error = null;
-    });
-
-    builder
-      .addCase(refreshTokenAsync.fulfilled, (state, action) => {
-        state.token = action.payload.token;
-        state.refreshToken = action.payload.refreshToken;
-        state.user = action.payload.user;
+        state.requestId = null;
       })
-      .addCase(refreshTokenAsync.rejected, (state) => {
-        state.user = null;
-        state.token = null;
-        state.refreshToken = null;
-        state.isAuthenticated = false;
+      .addCase(restoreSession.rejected, (state, action) => {
+        if (state.requestId !== action.meta.requestId) return;
+        state.isLoading = false;
+        state.initialized = true;
+        state.requestId = null;
+        if (action.meta.aborted) return;
+        if (action.payload && SESSION_INVALID_CODES.includes(action.payload.code)) {
+          state.user = null;
+          state.session = null;
+          state.memberships = [];
+          state.isAuthenticated = false;
+        } else {
+          state.error = action.payload?.message ?? "Unable to load your session.";
+        }
       });
   },
 });
 
-export const { setTokenWithRefresh, logout, clearError } = authSlice.actions;
-
+export const { setSession, logout } = authSlice.actions;
+export default authSlice.reducer;
 export const selectAuth = (state: RootState) => state.auth;
 export const selectUser = (state: RootState) => state.auth.user;
 export const selectIsAuthenticated = (state: RootState) => state.auth.isAuthenticated;
-export const selectAuthToken = (state: RootState) => state.auth.token;
-
-export default authSlice.reducer;
