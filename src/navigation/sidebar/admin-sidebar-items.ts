@@ -79,7 +79,7 @@ export const adminSidebarItems: NavGroup[] = [
       },
       {
         id: "admin-logs",
-        title: "Logs & Monitoring",
+        title: "Audit Log",
         url: "/admin/logs",
         icon: ScrollText,
       },

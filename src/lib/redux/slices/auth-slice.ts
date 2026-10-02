@@ -28,16 +28,19 @@ const initialState: AuthState = {
   requestId: null,
 };
 
-export const restoreSession = createAsyncThunk("auth/restoreSession", async (_, { rejectWithValue, signal }) => {
-  try {
-    return await fetchAuth.me(signal);
-  } catch (error) {
-    return rejectWithValue({
-      code: error instanceof ApiError ? error.code : "NETWORK_ERROR",
-      message: error instanceof Error ? error.message : "Unable to load your session.",
-    });
-  }
-});
+export const restoreSession = createAsyncThunk<CurrentUser, void, { rejectValue: { code: string; message: string } }>(
+  "auth/restoreSession",
+  async (_, { rejectWithValue, signal }) => {
+    try {
+      return await fetchAuth.me(signal);
+    } catch (error) {
+      return rejectWithValue({
+        code: error instanceof ApiError ? error.code : "NETWORK_ERROR",
+        message: error instanceof Error ? error.message : "Unable to load your session.",
+      });
+    }
+  },
+);
 
 const authSlice = createSlice({
   name: "auth",

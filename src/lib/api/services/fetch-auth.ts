@@ -33,6 +33,13 @@ export const fetchAuth = {
     }),
   me: async (signal?: AbortSignal): Promise<CurrentUser> =>
     unwrap((await apiService.request<ApiResponse<CurrentUser>>({ url: "/auth/me", signal })).data),
+  csrfToken: async (signal?: AbortSignal): Promise<{ csrf_token: string }> => {
+    const result = unwrap(
+      (await apiService.request<ApiResponse<{ csrf_token: string }>>({ url: "/auth/csrf-token", signal })).data,
+    );
+    apiService.setCsrfToken(result.csrf_token);
+    return result;
+  },
   changePassword: async (data: { current_password: string; new_password: string }): Promise<void> => {
     await apiService.post<ApiResponse<null>>("/auth/change-password", data);
   },

@@ -9,6 +9,8 @@ class ApiService {
   private readonly client: AxiosInstance;
   private csrfToken: string | null = null;
   private csrfRequest: Promise<string> | null = null;
+  private authRetryAt = 0;
+  private authRateLimit: ApiError | null = null;
 
   constructor() {
     this.client = axios.create({ baseURL: getApiBaseUrl(), timeout: 30000, withCredentials: true });
@@ -16,6 +18,16 @@ class ApiService {
       const path = (config.url ?? "").replace(/^\/?api\/v1\//, "/");
       config.url = path;
       const method = (config.method ?? "get").toUpperCase();
+      if ((path === "/auth/login" || path === "/auth/register") && Date.now() < this.authRetryAt) {
+        throw new ApiError(
+          429,
+          "RATE_LIMITED",
+          this.authRateLimit?.message ?? "Please wait before trying again.",
+          this.authRateLimit?.details,
+          this.authRateLimit?.requestId,
+          Math.ceil((this.authRetryAt - Date.now()) / 1000),
+        );
+      }
       if (["POST", "PUT", "PATCH", "DELETE"].includes(method) && path !== "/auth/login" && path !== "/auth/register") {
         config.headers.set("X-CSRF-Token", await this.getCsrfToken());
       }
@@ -29,12 +41,27 @@ class ApiService {
         if (response.data?.success === false) throw this.responseError(response);
         return response;
       },
-      (error: unknown) => {
+      async (error: unknown) => {
         if (error instanceof ApiError) return Promise.reject(error);
+        if (axios.isCancel(error)) return Promise.reject(error);
         if (!axios.isAxiosError(error)) return Promise.reject(error);
+        if (error.response && typeof Blob !== "undefined" && error.response.data instanceof Blob) {
+          try {
+            error.response.data = JSON.parse(await error.response.data.text());
+          } catch {
+            error.response.data = null;
+          }
+        }
         const apiError = error.response
           ? this.responseError(error.response)
           : new ApiError(0, "NETWORK_ERROR", "Unable to connect to the server. Please try again.");
+        if (apiError.code === "RATE_LIMITED" && apiError.retryAfter !== null) {
+          const path = error.config?.url;
+          if (path === "/auth/login" || path === "/auth/register") {
+            this.authRetryAt = Date.now() + apiError.retryAfter * 1000;
+            this.authRateLimit = apiError;
+          }
+        }
         if (apiError.code === "CSRF_INVALID") this.setCsrfToken(null);
         if (apiError.status === 401 && SESSION_INVALID_CODES.includes(apiError.code)) {
           this.setCsrfToken(null);
@@ -50,11 +77,12 @@ class ApiService {
     const retryHeader = response.headers["retry-after"];
     const retrySeconds = retryHeader == null ? NaN : Number(retryHeader);
     const retryDate = retryHeader == null ? NaN : Date.parse(String(retryHeader));
-    const retryAfter = Number.isFinite(retrySeconds)
-      ? Math.max(0, Math.ceil(retrySeconds))
-      : Number.isFinite(retryDate)
-        ? Math.max(0, Math.ceil((retryDate - Date.now()) / 1000))
-        : null;
+    let retryAfter: number | null = null;
+    if (Number.isFinite(retrySeconds)) {
+      retryAfter = Math.max(0, Math.ceil(retrySeconds));
+    } else if (Number.isFinite(retryDate)) {
+      retryAfter = Math.max(0, Math.ceil((retryDate - Date.now()) / 1000));
+    }
     return new ApiError(
       response.status,
       body?.error?.code ?? "HTTP_ERROR",
@@ -83,8 +111,15 @@ class ApiService {
     return this.csrfRequest;
   }
 
-  request<T>(config: AxiosRequestConfig): Promise<AxiosResponse<T>> {
-    return this.client.request<T>(config);
+  async request<T>(config: AxiosRequestConfig): Promise<AxiosResponse<T>> {
+    try {
+      return await this.client.request<T>(config);
+    } catch (error) {
+      if (!(error instanceof ApiError) || error.code !== "CSRF_INVALID" || config.signal?.aborted) throw error;
+      // Only retry an explicitly rejected CSRF request, once. Never replay other mutations.
+      this.setCsrfToken(null);
+      return this.client.request<T>(config);
+    }
   }
   get<T>(url: string, params?: RequestParams): Promise<AxiosResponse<T>> {
     return this.request<T>({ method: "GET", url, params });

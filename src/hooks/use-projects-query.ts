@@ -1,57 +1,38 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
+import { adminKeys, authKeys, projectKeys } from "@/lib/api/query-keys";
+import type { ApiResult } from "@/lib/api/request";
+import { fetchProject } from "@/lib/api/services/fetch-project";
+import type { ProjectCreate, ProjectItem, ProjectListParams, ProjectPatch } from "@/lib/api/types";
 
-import { fetchProject, type Project } from "@/lib/api/services/fetch-project";
+import { type ApiQueryOptions, useApiMutation, useApiQuery } from "./use-api";
 
-export const projectKeys = {
-  all: ["projects"] as const,
-  lists: () => [...projectKeys.all, "list"] as const,
-  list: (params?: { search?: string; page?: number; limit?: number }) => [...projectKeys.lists(), params] as const,
-  details: () => [...projectKeys.all, "detail"] as const,
-  detail: (id: string) => [...projectKeys.details(), id] as const,
-};
-
-export function useProjectsQuery(params?: { search?: string; page?: number; limit?: number }) {
-  return useQuery({
-    queryKey: projectKeys.list(params),
-    queryFn: () => fetchProject.getList(params),
+export { projectKeys } from "@/lib/api/query-keys";
+export function useProjectsQuery(params?: ProjectListParams, options?: ApiQueryOptions<ApiResult<ProjectItem[]>>) {
+  return useApiQuery(projectKeys.list(params), (signal) => fetchProject.getList(params, signal), options);
+}
+export function useProjectDetailQuery(id: string, options?: ApiQueryOptions<ApiResult<ProjectItem>>) {
+  return useApiQuery(projectKeys.detail(id), (signal) => fetchProject.getById(id, signal), {
+    ...options,
+    enabled: Boolean(id) && (options?.enabled ?? true),
   });
 }
-
-export function useProjectDetailQuery(id: string) {
-  return useQuery({
-    queryKey: projectKeys.detail(id),
-    queryFn: () => fetchProject.getById(id),
-    enabled: Boolean(id),
-  });
-}
-
+const invalidation = [projectKeys.all, authKeys.me, adminKeys.all];
 export function useCreateProjectMutation() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (data: Partial<Project>) => fetchProject.create(data),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: projectKeys.all });
-      toast.success("Tạo dự án thành công!");
-    },
-    onError: () => {
-      toast.error("Không thể tạo dự án. Vui lòng thử lại!");
-    },
-  });
+  return useApiMutation((data: ProjectCreate) => fetchProject.create(data), invalidation);
 }
-
-export function useDeleteProjectMutation() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (id: string) => fetchProject.delete(id),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: projectKeys.all });
-      toast.success("Xóa dự án thành công!");
-    },
-    onError: () => {
-      toast.error("Không thể xóa dự án.");
-    },
-  });
+export function useUpdateProjectMutation(id: string) {
+  return useApiMutation((data: ProjectPatch) => fetchProject.update(id, data), invalidation);
+}
+export function useArchiveProjectMutation() {
+  return useApiMutation((id: string) => fetchProject.archive(id), invalidation);
+}
+export function useRestoreProjectMutation() {
+  return useApiMutation((id: string) => fetchProject.restore(id), invalidation);
+}
+export function useCompleteProjectMutation() {
+  return useApiMutation((id: string) => fetchProject.complete(id), invalidation);
+}
+export function useReopenProjectMutation() {
+  return useApiMutation((id: string) => fetchProject.reopen(id), invalidation);
 }
