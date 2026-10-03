@@ -18,9 +18,10 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { useUpdatePlatformRoleMutation, useUpdateUserStatusMutation } from "@/hooks/use-admin-query";
-import type { UserAdminItem } from "@/lib/api/types";
+import type { UserAdminItem } from "@/lib/api/services/fetch-admin";
 import { useAppDispatch } from "@/lib/redux/hooks";
 import { restoreSession } from "@/lib/redux/slices/auth-slice";
+import { PlatformRole, UserStatus } from "@/types/enums";
 
 export function AdminUserActions({
   user,
@@ -37,8 +38,8 @@ export function AdminUserActions({
   const router = useRouter();
   const dispatch = useAppDispatch();
   const busy = statusMutation.isPending || roleMutation.isPending;
-  const active = user.status === "active";
-  const admin = user.platform_role === "platform_admin";
+  const active = user.status === UserStatus.Active;
+  const admin = user.platform_role === PlatformRole.PlatformAdmin;
   const statusLabel = active ? "Suspend" : "Activate";
   const roleLabel = admin ? "Remove admin" : "Grant admin";
   const self = user.id === currentUserId;
@@ -58,9 +59,12 @@ export function AdminUserActions({
   };
   const confirm = () => {
     if (action === "status")
-      statusMutation.mutate({ userId: user.id, status: active ? "suspended" : "active" }, { onSuccess });
+      statusMutation.mutate(
+        { userId: user.id, status: active ? UserStatus.Suspended : UserStatus.Active },
+        { onSuccess },
+      );
     if (action === "role")
-      roleMutation.mutate({ userId: user.id, role: admin ? null : "platform_admin" }, { onSuccess });
+      roleMutation.mutate({ userId: user.id, role: admin ? null : PlatformRole.PlatformAdmin }, { onSuccess });
   };
   return (
     <>
@@ -69,7 +73,7 @@ export function AdminUserActions({
           size="sm"
           variant="outline"
           aria-label={`${statusLabel} ${user.email}`}
-          disabled={!enabled || busy || !["active", "suspended"].includes(user.status)}
+          disabled={!enabled || busy || ![UserStatus.Active, UserStatus.Suspended].includes(user.status)}
           onClick={() => setAction("status")}
         >
           {statusLabel}

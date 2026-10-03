@@ -7,14 +7,21 @@ export interface ValidationDetail {
   field: string;
   message: string;
 }
-export type ApiResponse<T> =
-  | { success: true; message: string; data: T; meta: { request_id: string; pagination: Pagination | null } }
-  | {
-      success: false;
-      message: string;
-      error: { code: string; details: ValidationDetail[] };
-      meta: { request_id: string };
-    };
+export interface ApiResult<T> {
+  success: true;
+  message: string;
+  data: T;
+  meta: { request_id: string; pagination: Pagination | null };
+}
+
+export interface ApiFailure {
+  success: false;
+  message: string;
+  error: { code: string; details: ValidationDetail[] };
+  meta: { request_id: string };
+}
+
+export type ApiResponse<T> = ApiResult<T> | ApiFailure;
 
 export class ApiError extends Error {
   constructor(

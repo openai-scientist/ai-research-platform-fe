@@ -41,6 +41,8 @@ Available commands:
 
 ```bash
 npm run build
+npm test
+npm run test:api
 npm run lint
 npm run format
 npm run check
@@ -48,7 +50,7 @@ npm run check:fix
 npm run generate:presets
 ```
 
-There is currently no automated test command. Run build, lint, check, or other validation commands only when the user explicitly requests that validation.
+Vitest tests run with `npm test`; live backend checks run separately with `npm run test:api`. Run tests, build, lint, check, or other validation commands only when the user explicitly requests that validation.
 
 ## Co-location-based structure
 

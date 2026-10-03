@@ -1,4 +1,6 @@
-import type { CurrentUser, ProjectRole } from "./types";
+import { PlatformRole, ProjectRole } from "@/types/enums";
+
+import type { CurrentUser } from "./types";
 
 export const AUTH_COOKIE_NAME = "platform_session";
 export const LOGIN_PATH = "/auth/login";
@@ -17,12 +19,12 @@ export type AuthUser = CurrentUser["user"] & {
 export function toAuthUser(current: CurrentUser, projectId?: string): AuthUser {
   const projectRole = current.memberships.find((membership) => membership.project_id === projectId)?.role;
   const roles: Record<ProjectRole, UserRole> = {
-    project_manager: "PROJECT_MANAGER",
-    researcher: "RESEARCHER",
-    reviewer: "REVIEWER",
+    [ProjectRole.ProjectManager]: "PROJECT_MANAGER",
+    [ProjectRole.Researcher]: "RESEARCHER",
+    [ProjectRole.Reviewer]: "REVIEWER",
   };
   let role: UserRole = "RESEARCHER";
-  if (current.user.platform_role === "platform_admin") role = "SYSTEM_ADMIN";
+  if (current.user.platform_role === PlatformRole.PlatformAdmin) role = "SYSTEM_ADMIN";
   else if (projectRole) role = roles[projectRole];
   return {
     ...current.user,

@@ -1,12 +1,9 @@
-import type {
-  AuditListParams,
-  CommentListParams,
-  ListParams,
-  NotificationListParams,
-  ProjectListParams,
-  TimeRangeParams,
-  UserListParams,
-} from "./types";
+import type { AuditListParams, UserListParams } from "@/lib/api/services/fetch-admin";
+import type { CommentListParams } from "@/lib/api/services/fetch-comments";
+import type { NotificationListParams } from "@/lib/api/services/fetch-notifications";
+import type { ProjectListParams } from "@/lib/api/services/fetch-project";
+
+import type { ListParams, TimeRangeParams } from "./types";
 
 export const authKeys = { all: ["auth"] as const, me: ["auth", "me"] as const, csrf: ["auth", "csrf"] as const };
 export const projectKeys = {

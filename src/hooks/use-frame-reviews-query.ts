@@ -1,16 +1,19 @@
 "use client";
 
 import { adminKeys, projectKeys } from "@/lib/api/query-keys";
-import type { ApiResult } from "@/lib/api/request";
-import { fetchFrameReviews } from "@/lib/api/services/fetch-frame-reviews";
-import type { FrameReviewItem, FrameReviewSubmit } from "@/lib/api/types";
+import {
+  type FrameReviewDetailResponse,
+  type FrameReviewListResponse,
+  fetchFrameReviews,
+  type SubmitFrameReviewRequest,
+} from "@/lib/api/services/fetch-frame-reviews";
 
 import { type ApiQueryOptions, useApiMutation, useApiQuery } from "./use-api";
 
 export function useFrameReviewQuery(
   projectId: string,
   runId: string,
-  options?: ApiQueryOptions<ApiResult<FrameReviewItem>>,
+  options?: ApiQueryOptions<FrameReviewDetailResponse>,
 ) {
   return useApiQuery(
     projectKeys.frameReview(projectId, runId),
@@ -25,7 +28,7 @@ export function useFrameReviewQuery(
 export function useFrameReviewHistoryQuery(
   projectId: string,
   runId: string,
-  options?: ApiQueryOptions<ApiResult<FrameReviewItem[]>>,
+  options?: ApiQueryOptions<FrameReviewListResponse>,
 ) {
   return useApiQuery(
     projectKeys.frameReviews(projectId, runId),
@@ -35,7 +38,7 @@ export function useFrameReviewHistoryQuery(
 }
 export function useSubmitFrameReviewMutation(projectId: string, runId: string) {
   return useApiMutation(
-    (data: FrameReviewSubmit) => fetchFrameReviews.submit(projectId, runId, data),
+    (data: SubmitFrameReviewRequest) => fetchFrameReviews.submit(projectId, runId, data),
     [projectKeys.detail(projectId), projectKeys.lists(), adminKeys.all],
   );
 }

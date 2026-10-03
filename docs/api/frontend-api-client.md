@@ -5,14 +5,35 @@ Triển khai theo [frontend-api-handoff.md](frontend-api-handoff.md), bao phủ 
 ## Vị trí và hợp đồng
 
 - `src/lib/api/core.ts`: Axios client hiện có, cookie, CSRF, chuẩn hoá `ApiError`, xử lý lỗi JSON khi tải Blob.
-- `src/lib/api/request.ts`: request JSON, download Blob và dựng đường dẫn có encode ID.
-- `src/lib/api/types.ts`: request/response DTO; dùng lại role và auth types hiện có.
-- `src/lib/api/services/fetch-*.ts`: các hàm gọi API theo nhóm nghiệp vụ.
+- `src/types/api.ts`: interface envelope thành công/thất bại, `ApiError` và params chung.
+- `src/types/enums.ts`: string enum dùng chung cho status, role, review signal, artifact và notification.
+- `src/lib/api/request.ts`: download Blob và dựng đường dẫn có encode ID.
+- `src/lib/api/types.ts`: kiểu chung cho phân trang, khoảng thời gian và download.
+- `src/lib/api/services/fetch-*.ts`: interface dữ liệu/request, kiểu response có tên và các hàm API của từng nghiệp vụ.
 - `src/lib/api/query-keys.ts`: cache keys dùng chung.
 - `src/hooks/use-*-query.ts`: React Query hooks cho GET và mutation hooks cho thao tác ghi/download.
 - `src/hooks/use-api.ts`: query/mutation helpers, retry và toast lỗi.
+- `src/hooks/use-infinity-scroll.ts`: hook infinite scroll theo `limit/offset`; các hook nghiệp vụ có thêm `useInfinite...`. Xem [infinite-scroll.md](infinite-scroll.md) để tích hợp UI.
 
 Fetch ở đây là tầng gọi API theo convention `fetchAuth`/`fetchProject` của repo; transport vẫn dùng Axios, không thêm dependency.
+
+Service gọi trực tiếp `apiService.get/post/put/patch/delete/upload`, khai báo `async` với `Promise<ResponseType>` và trả `response.data`, theo cách viết ở `E:\TVu\git-repo\research-hub-client`. Core xử lý lỗi tập trung; không còn wrapper `requestApi` hoặc `unwrap` kiểm tra lỗi lặp lại ở service.
+
+Mỗi service đặt interface dữ liệu và request cạnh hàm gọi API. Tên request thể hiện thao tác (`CreateProjectRequest`, `UpdateProjectRequest`), tên response thể hiện kết quả (`ProjectListResponse`, `ProjectDetailResponse`). Response dùng alias của `ApiResult<T>` để tái sử dụng envelope, không khai báo lặp các trường `success/message/meta`. Params kế thừa `ListParams` và `RequestParams`. Hooks import các kiểu từ service tương ứng.
+
+```ts
+import { fetchAdmin } from "@/lib/api/services/fetch-admin";
+import { fetchProject, type ProjectListResponse } from "@/lib/api/services/fetch-project";
+import { ProjectStatus, UserStatus } from "@/types/enums";
+
+const response: ProjectListResponse = await fetchProject.getList({ limit: 20, offset: 0 });
+const completedProjects = response.data.filter((project) => project.status === ProjectStatus.Completed);
+
+// Service nhận request object; hook giữ payload có userId để xác định người dùng.
+await fetchAdmin.updateUserStatus(userId, { status: UserStatus.Suspended });
+```
+
+Enum giữ nguyên giá trị chuỗi backend (`completed`, `suspended`, ...). UI lấy nhãn project từ `PROJECT_STATUS_LABELS` ở `src/lib/projects/project-status.ts` để giữ nhãn đọc được và tái sử dụng giữa các màn hình. Cookie session và CSRF vẫn là cơ chế xác thực; không dùng Bearer JWT hoặc token refresh của repo tham khảo.
 
 Các service mới và project trả `ApiResult<T>`: `{ success: true, message, data, meta }`. Đọc danh sách qua `result.data`, phân trang qua `result.meta.pagination`, request ID qua `result.meta.request_id`.
 
@@ -81,7 +102,7 @@ Mutation thành công invalidate cache liên quan, gồm danh sách/detail, auth
 - Không tự retry lỗi HTTP 4xx. Login/register bị RATE_LIMITED sẽ bị chặn gửi lại trong thời gian Retry-After, giữ message backend.
 - `RESEARCH_CONTEXT_NOT_FOUND` và `FRAME_REVIEW_NOT_FOUND` không toast mặc định; query vẫn giữ error để UI biểu diễn trạng thái chưa có dữ liệu.
 - Khi `RESEARCH_CONTEXT_CONFLICT`, UI dùng query refetch rồi cho người dùng gộp thay đổi; không tự ghi đè. Khi `REVIEW_NOT_PENDING`, refetch frame và run. Không tự gửi lại quyết định khi Popper chưa xác nhận.
-- Query truyền AbortSignal xuống Axios. Client phát sự kiện `auth:expired` theo luồng sẵn có khi nhận mã phiên không hợp lệ.
+- Query truyền AbortSignal xuống Axios qua request options của core. Client phát sự kiện `auth:expired` khi nhận mã phiên không hợp lệ; cùng một luồng xử lý áp dụng cho lỗi HTTP và envelope `success: false`. CSRF request cũ không ghi đè token sau khi phiên được thay thế.
 - Hooks auth mới chỉ phụ trách API và cache. `useAuth` hiện tại vẫn phụ trách Redux, điều hướng và đồng bộ tab. Khi nối màn hình auth nên tiếp tục dùng luồng này hoặc ghép đầy đủ các trách nhiệm đó; không gọi đồng thời cả hai mutation cho cùng thao tác.
 - Không bổ sung WebSocket/SSE, health/internal API, quên mật khẩu hoặc xác minh email vì ngoài hợp đồng frontend.
 
@@ -89,4 +110,4 @@ Mutation thành công invalidate cache liên quan, gồm danh sách/detail, auth
 
 `NEXT_PUBLIC_API_URL` nhận origin backend hoặc URL kết thúc bằng `/api/v1`; mặc định `http://localhost:8000`. Backend phải cho phép origin frontend trong CORS. Các service dùng cookie trình duyệt; không dùng singleton client này để chia sẻ phiên giữa các request server.
 
-Đã đọc và đối chiếu mã nguồn với handoff, định dạng các file TypeScript bằng Biome formatter. Chưa chạy build/lint/check/typecheck hoặc kiểm thử HTTP vì AGENTS.md yêu cầu người dùng chỉ định việc validation. Các thao tác Popper vẫn phụ thuộc backend và có thể trả `POPPER_NOT_CONFIGURED` như handoff mô tả.
+Đã bổ sung Vitest theo yêu cầu validation của người dùng: `npm test` có 84 test core/service/download; `npm run test:api` có 6 test HTTP thực tế trên backend cấu hình, gồm đăng nhập/đọc dữ liệu/đăng xuất 4 tài khoản seed và kiểm tra CORS, quyền admin. Build production và TypeScript đã chạy thành công. Biome check cho core và các file test/config đã pass; chưa khẳng định toàn bộ repo sạch lint hoặc UI đã được kiểm thử bằng trình duyệt. Các thao tác ghi nghiệp vụ, upload thật và Popper chưa được xác minh bằng HTTP trong lần này; test service của chúng dùng transport mô phỏng. Xem [auth-login-test.md](../auth-login-test.md) để đăng nhập và chạy lại kiểm tra.

@@ -8,6 +8,7 @@ import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { TableCell, TableRow } from "@/components/ui/table";
 import { useUsersQuery } from "@/hooks/use-admin-query";
+import { PlatformRole, UserStatus } from "@/types/enums";
 
 import { AdminApiPagination, AdminApiTable, AdminRefresh } from "../../_components/admin-api-table";
 import { ADMIN_PAGE_SIZE, formatTimestamp } from "../../_components/admin-api-utils";
@@ -90,11 +91,11 @@ export function AdminUsersScreen() {
                   </div>
                 </TableCell>
                 <TableCell>
-                  <Badge variant={user.status === "active" ? "secondary" : "outline"}>{user.status}</Badge>
+                  <Badge variant={user.status === UserStatus.Active ? "secondary" : "outline"}>{user.status}</Badge>
                 </TableCell>
                 <TableCell>
                   <Badge variant="outline">
-                    {user.platform_role === "platform_admin" ? "Platform Admin" : "Standard user"}
+                    {user.platform_role === PlatformRole.PlatformAdmin ? "Platform Admin" : "Standard user"}
                   </Badge>
                 </TableCell>
                 <TableCell>{formatTimestamp(user.created_at)}</TableCell>

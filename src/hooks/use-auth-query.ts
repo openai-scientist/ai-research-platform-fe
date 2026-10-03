@@ -3,7 +3,13 @@
 import { useQueryClient } from "@tanstack/react-query";
 
 import { authKeys } from "@/lib/api/query-keys";
-import { fetchAuth, type LoginRequest, type RegisterRequest } from "@/lib/api/services/fetch-auth";
+import {
+  type ChangePasswordRequest,
+  type CsrfToken,
+  fetchAuth,
+  type LoginRequest,
+  type RegisterRequest,
+} from "@/lib/api/services/fetch-auth";
 import type { CurrentUser } from "@/lib/auth/types";
 
 import { type ApiQueryOptions, useApiMutation, useApiQuery } from "./use-api";
@@ -12,7 +18,7 @@ import { type ApiQueryOptions, useApiMutation, useApiQuery } from "./use-api";
 export function useCurrentUserQuery(options?: ApiQueryOptions<CurrentUser>) {
   return useApiQuery(authKeys.me, (signal) => fetchAuth.me(signal), { ...options, retry: false });
 }
-export function useCsrfTokenQuery(options?: ApiQueryOptions<{ csrf_token: string }>) {
+export function useCsrfTokenQuery(options?: ApiQueryOptions<CsrfToken>) {
   return useApiQuery(authKeys.csrf, (signal) => fetchAuth.csrfToken(signal), {
     staleTime: 0,
     ...options,
@@ -36,10 +42,7 @@ export function useRegisterMutation() {
   });
 }
 export function useChangePasswordMutation() {
-  return useApiMutation(
-    (data: { current_password: string; new_password: string }) => fetchAuth.changePassword(data),
-    [authKeys.all],
-  );
+  return useApiMutation((data: ChangePasswordRequest) => fetchAuth.changePassword(data), [authKeys.all]);
 }
 export function useLogoutMutation() {
   const client = useQueryClient();

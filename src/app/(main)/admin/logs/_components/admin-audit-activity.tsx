@@ -8,9 +8,10 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/u
 import { Skeleton } from "@/components/ui/skeleton";
 import { useUsersQuery } from "@/hooks/use-admin-query";
 import { useProjectsQuery } from "@/hooks/use-projects-query";
-import type { AuditItem } from "@/lib/api/types";
+import type { AuditItem } from "@/lib/api/services/fetch-admin";
 import { useAppSelector } from "@/lib/redux/hooks";
 import { selectUser } from "@/lib/redux/slices/auth-slice";
+import { UserStatus } from "@/types/enums";
 
 import { AuditDetails } from "./audit-details";
 import { auditTitle, auditTransition, dateParts, readableValue } from "./audit-presentation";
@@ -25,9 +26,11 @@ export function AuditChange({ item }: { item: AuditItem }) {
         <Badge variant="outline">{readableValue(change.before)}</Badge>
         <ArrowRight className="size-3 text-muted-foreground" aria-label="changed to" />
         <Badge
-          variant={change.after === "suspended" || change.after === "Removed" ? "destructive" : "secondary"}
+          variant={change.after === UserStatus.Suspended || change.after === "Removed" ? "destructive" : "secondary"}
           className={
-            change.after === "suspended" || change.after === "Removed" ? "text-red-700 dark:text-red-300" : undefined
+            change.after === UserStatus.Suspended || change.after === "Removed"
+              ? "text-red-700 dark:text-red-300"
+              : undefined
           }
         >
           {readableValue(change.after)}

@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from "@/components/ui/sidebar";
 import type { ProjectSummary } from "@/lib/projects/project-data";
+import { PROJECT_STATUS_LABELS } from "@/lib/projects/project-status";
 import { getInitials } from "@/lib/utils";
 
 import { CreateProjectDialog } from "../../_components/create-project-dialog";
@@ -55,7 +56,9 @@ export function ProjectSwitcher({
                 <ProjectAvatar name={activeProject.name} />
                 <div className="grid flex-1 text-left text-sm leading-tight">
                   <span className="truncate font-medium">{activeProject.name}</span>
-                  <span className="truncate text-muted-foreground text-xs">{activeProject.status} project</span>
+                  <span className="truncate text-muted-foreground text-xs">
+                    {PROJECT_STATUS_LABELS[activeProject.status]} project
+                  </span>
                 </div>
                 <ChevronsUpDown className="ml-auto" />
               </SidebarMenuButton>

@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 
 import { getRoleHomePath } from "@/lib/auth/auth-config";
 import { getAuthenticatedUser } from "@/server/auth";
+import { PlatformRole, ProjectRole } from "@/types/enums";
 
 import { TopBarShell } from "../_components/top-bar-shell";
 import { ReviewQueue } from "./_components/review-queue";
@@ -21,8 +22,8 @@ export default async function Page() {
   }
 
   if (
-    user.platform_role !== "platform_admin" &&
-    !user.memberships.some((membership) => membership.role === "reviewer")
+    user.platform_role !== PlatformRole.PlatformAdmin &&
+    !user.memberships.some((membership) => membership.role === ProjectRole.Reviewer)
   ) {
     redirect(getRoleHomePath(user.role));
   }

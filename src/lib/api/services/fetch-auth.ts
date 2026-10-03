@@ -1,5 +1,5 @@
 import type { CurrentUser, SessionResult } from "@/lib/auth/types";
-import { ApiError, type ApiResponse } from "@/types/api";
+import type { ApiResult } from "@/types/api";
 
 import apiService from "../core";
 
@@ -11,40 +11,49 @@ export interface RegisterRequest extends LoginRequest {
   display_name?: string;
 }
 
-function unwrap<T>(response: ApiResponse<T>): T {
-  if (!response.success) {
-    throw new ApiError(0, response.error.code, response.message, response.error.details, response.meta.request_id);
-  }
-  return response.data;
+export interface ChangePasswordRequest {
+  current_password: string;
+  new_password: string;
 }
+
+export interface CsrfToken {
+  csrf_token: string;
+}
+
+export type SessionResponse = ApiResult<SessionResult>;
+export type CurrentUserResponse = ApiResult<CurrentUser>;
+export type CsrfTokenResponse = ApiResult<CsrfToken>;
+export type AuthMutationResponse = ApiResult<null>;
+
 async function authenticate(path: string, credentials: RegisterRequest): Promise<SessionResult> {
   if (typeof window !== "undefined") window.dispatchEvent(new Event("auth:authenticating"));
-  const result = unwrap((await apiService.post<ApiResponse<SessionResult>>(path, credentials)).data);
+  const response = await apiService.post<SessionResponse>(path, credentials);
+  const result = response.data.data;
   apiService.setCsrfToken(result.csrf_token);
   return result;
 }
 export const fetchAuth = {
-  login: (data: LoginRequest) => authenticate("/auth/login", data),
-  register: ({ email, password, display_name }: RegisterRequest) =>
-    authenticate("/auth/register", {
-      email,
-      password,
-      ...(display_name !== undefined ? { display_name } : {}),
-    }),
-  me: async (signal?: AbortSignal): Promise<CurrentUser> =>
-    unwrap((await apiService.request<ApiResponse<CurrentUser>>({ url: "/auth/me", signal })).data),
-  csrfToken: async (signal?: AbortSignal): Promise<{ csrf_token: string }> => {
-    const result = unwrap(
-      (await apiService.request<ApiResponse<{ csrf_token: string }>>({ url: "/auth/csrf-token", signal })).data,
-    );
+  login: async (data: LoginRequest): Promise<SessionResult> => {
+    return authenticate("/auth/login", data);
+  },
+  register: async (data: RegisterRequest): Promise<SessionResult> => {
+    return authenticate("/auth/register", data);
+  },
+  me: async (signal?: AbortSignal): Promise<CurrentUser> => {
+    const response = await apiService.get<CurrentUserResponse>("/auth/me", undefined, { signal });
+    return response.data.data;
+  },
+  csrfToken: async (signal?: AbortSignal): Promise<CsrfToken> => {
+    const response = await apiService.get<CsrfTokenResponse>("/auth/csrf-token", undefined, { signal });
+    const result = response.data.data;
     apiService.setCsrfToken(result.csrf_token);
     return result;
   },
-  changePassword: async (data: { current_password: string; new_password: string }): Promise<void> => {
-    await apiService.post<ApiResponse<null>>("/auth/change-password", data);
+  changePassword: async (data: ChangePasswordRequest): Promise<void> => {
+    await apiService.post<AuthMutationResponse>("/auth/change-password", data);
   },
   logout: async (allDevices = false): Promise<void> => {
-    await apiService.post<ApiResponse<null>>(allDevices ? "/auth/logout-all" : "/auth/logout");
+    await apiService.post<AuthMutationResponse>(allDevices ? "/auth/logout-all" : "/auth/logout");
     apiService.setCsrfToken(null);
   },
 };

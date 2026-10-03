@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import type { FileManagerFile } from "@/app/(main)/dashboard/file-manager/_components/data";
 import type { WorkspaceProject } from "@/lib/projects/project-data";
+import { PROJECT_STATUS_LABELS } from "@/lib/projects/project-status";
 import { getInitials } from "@/lib/utils";
 
 import { AdminProjects, projectActions } from "../../admin/_components/admin-projects";
@@ -12,12 +13,12 @@ import { CreateProjectDialog } from "./create-project-dialog";
 function toProjectFile(project: WorkspaceProject): FileManagerFile {
   return {
     actionLabels: projectActions,
-    badgeLabel: project.status,
+    badgeLabel: PROJECT_STATUS_LABELS[project.status],
     href: `/projects/${project.id}`,
     icon: "project",
     id: project.id,
     kind: "document",
-    kindLabel: project.status,
+    kindLabel: PROJECT_STATUS_LABELS[project.status],
     modifiedAt: project.updatedAt,
     name: project.name,
     owner: project.ownerName,

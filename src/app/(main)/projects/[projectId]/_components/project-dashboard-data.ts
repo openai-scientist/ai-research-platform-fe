@@ -1,4 +1,5 @@
 import type { WorkspaceProject } from "@/lib/projects/project-data";
+import { ProjectStatus } from "@/types/enums";
 
 // Run lifecycle per PRD §40.8, condensed to the phases shown on the dashboard.
 export const RUN_PHASES = [
@@ -193,10 +194,10 @@ const dashboards: Record<string, Omit<ProjectDashboard, "experimentStats" | "out
 };
 
 function getFallbackRunPhase(status: WorkspaceProject["status"]): RunPhase {
-  if (status === "Completed") {
+  if (status === ProjectStatus.Completed) {
     return "Completed";
   }
-  if (status === "Needs Review") {
+  if (status === ProjectStatus.NeedsReview) {
     return "Assessing";
   }
   return "Exploring";
@@ -206,10 +207,10 @@ function getFallbackReport(
   status: WorkspaceProject["status"],
   baseReport: ProjectDashboard["report"],
 ): ProjectDashboard["report"] {
-  if (status === "Completed") {
+  if (status === ProjectStatus.Completed) {
     return { status: "Published", detail: "Final research report published", sectionsDone: 6, sectionsTotal: 6 };
   }
-  if (status === "Data Ready") {
+  if (status === ProjectStatus.DataReady) {
     return { status: "Not started", detail: "No confirmation outcomes yet", sectionsDone: 0, sectionsTotal: 6 };
   }
   return baseReport;
@@ -230,7 +231,7 @@ export function getProjectDashboard(project: WorkspaceProject): ProjectDashboard
   const dashboard = dashboards[project.id] ?? buildFallbackDashboard(project);
   const failed = Math.round(project.experiments * 0.12);
   const needsReview = Math.round(project.experiments * 0.08);
-  const running = project.status === "Completed" || project.status === "Archived" ? 0 : 2;
+  const running = project.status === ProjectStatus.Completed || project.status === ProjectStatus.Archived ? 0 : 2;
   const negative = Math.round(project.findings * 0.3);
   const inconclusive = Math.round(project.findings * 0.2);
 

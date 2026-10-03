@@ -1,16 +1,49 @@
 "use client";
 
 import { adminKeys, projectKeys } from "@/lib/api/query-keys";
-import type { ApiResult } from "@/lib/api/request";
-import { fetchDatasets } from "@/lib/api/services/fetch-datasets";
-import type { DatasetCreate, DatasetItem, DatasetPatch, DatasetVersionItem, ListParams } from "@/lib/api/types";
+import {
+  type CreateDatasetRequest,
+  type DatasetDetailResponse,
+  type DatasetItem,
+  type DatasetListResponse,
+  type DatasetVersionItem,
+  type DatasetVersionListResponse,
+  fetchDatasets,
+  type UpdateDatasetRequest,
+} from "@/lib/api/services/fetch-datasets";
+import type { ListParams } from "@/lib/api/types";
 
 import { type ApiQueryOptions, useApiMutation, useApiQuery } from "./use-api";
+import { type InfiniteQueryOptions, useInfinityScroll } from "./use-infinity-scroll";
+
+export function useInfiniteDatasets(projectId: string, options?: InfiniteQueryOptions<DatasetItem>) {
+  const query = useInfinityScroll<DatasetItem, ListParams>({
+    ...options,
+    queryKey: projectKeys.datasets(projectId),
+    fetchPage: (params, signal) => fetchDatasets.getList(projectId, params, signal),
+    enabled: Boolean(projectId) && (options?.enabled ?? true),
+  });
+  return { ...query, datasets: query.items };
+}
+
+export function useInfiniteDatasetVersions(
+  projectId: string,
+  datasetId: string,
+  options?: InfiniteQueryOptions<DatasetVersionItem>,
+) {
+  const query = useInfinityScroll<DatasetVersionItem, ListParams>({
+    ...options,
+    queryKey: projectKeys.datasetVersions(projectId, datasetId),
+    fetchPage: (params, signal) => fetchDatasets.getVersions(projectId, datasetId, params, signal),
+    enabled: Boolean(projectId && datasetId) && (options?.enabled ?? true),
+  });
+  return { ...query, versions: query.items };
+}
 
 export function useDatasetsQuery(
   projectId: string,
   params?: ListParams,
-  options?: ApiQueryOptions<ApiResult<DatasetItem[]>>,
+  options?: ApiQueryOptions<DatasetListResponse>,
 ) {
   return useApiQuery(
     projectKeys.datasets(projectId, params),
@@ -21,7 +54,7 @@ export function useDatasetsQuery(
 export function useDatasetDetailQuery(
   projectId: string,
   datasetId: string,
-  options?: ApiQueryOptions<ApiResult<DatasetItem>>,
+  options?: ApiQueryOptions<DatasetDetailResponse>,
 ) {
   return useApiQuery(
     projectKeys.dataset(projectId, datasetId),
@@ -33,7 +66,7 @@ export function useDatasetVersionsQuery(
   projectId: string,
   datasetId: string,
   params?: ListParams,
-  options?: ApiQueryOptions<ApiResult<DatasetVersionItem[]>>,
+  options?: ApiQueryOptions<DatasetVersionListResponse>,
 ) {
   return useApiQuery(
     projectKeys.datasetVersions(projectId, datasetId, params),
@@ -43,13 +76,13 @@ export function useDatasetVersionsQuery(
 }
 export function useCreateDatasetMutation(projectId: string, onProgress?: (progress: number) => void) {
   return useApiMutation(
-    (data: DatasetCreate) => fetchDatasets.create(projectId, data, onProgress),
+    (data: CreateDatasetRequest) => fetchDatasets.create(projectId, data, onProgress),
     [projectKeys.detail(projectId), projectKeys.lists(), adminKeys.all],
   );
 }
 export function useUpdateDatasetMutation(projectId: string, datasetId: string) {
   return useApiMutation(
-    (data: DatasetPatch) => fetchDatasets.update(projectId, datasetId, data),
+    (data: UpdateDatasetRequest) => fetchDatasets.update(projectId, datasetId, data),
     [projectKeys.detail(projectId), adminKeys.all],
   );
 }

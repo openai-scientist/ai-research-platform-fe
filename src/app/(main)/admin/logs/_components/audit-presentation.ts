@@ -1,4 +1,5 @@
-import type { AuditItem } from "@/lib/api/types";
+import type { AuditItem } from "@/lib/api/services/fetch-admin";
+import { UserStatus } from "@/types/enums";
 
 export const actionLabels: Record<string, string> = {
   "user.status_changed": "Account status changed",
@@ -26,9 +27,9 @@ export const actionLabels: Record<string, string> = {
 };
 
 export function auditSummary(item: AuditItem, actor: string, subject: string) {
-  if (item.action === "user.status_changed" && item.details.after === "active")
+  if (item.action === "user.status_changed" && item.details.after === UserStatus.Active)
     return `${actor} activated the account for ${subject}.`;
-  if (item.action === "user.status_changed" && item.details.after === "suspended")
+  if (item.action === "user.status_changed" && item.details.after === UserStatus.Suspended)
     return `${actor} suspended the account for ${subject}.`;
   if (item.action === "user.registered") return `${subject} registered an account.`;
   if (item.action === "platform_admin.role_granted") return `${actor} granted platform admin access to ${subject}.`;
@@ -44,8 +45,8 @@ export function readableValue(value: string) {
 
 export function auditTitle(item: AuditItem) {
   if (item.action === "user.status_changed") {
-    if (item.details.after === "active") return "Account activated";
-    if (item.details.after === "suspended") return "Account suspended";
+    if (item.details.after === UserStatus.Active) return "Account activated";
+    if (item.details.after === UserStatus.Suspended) return "Account suspended";
     return "Account status changed";
   }
   return actionLabels[item.action] ?? readableValue(item.action);

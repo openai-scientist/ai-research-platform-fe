@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuditQuery } from "@/hooks/use-admin-query";
-import type { AuditListParams } from "@/lib/api/types";
+import type { AuditListParams } from "@/lib/api/services/fetch-admin";
 
 import { AdminApiPagination, AdminRefresh } from "../../_components/admin-api-table";
 import { ADMIN_PAGE_SIZE, toTimeRange } from "../../_components/admin-api-utils";

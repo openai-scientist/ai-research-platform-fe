@@ -6,22 +6,28 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import apiService from "@/lib/api/core";
-import { fetchAuth, type LoginRequest, type RegisterRequest } from "@/lib/api/services/fetch-auth";
+import {
+  type ChangePasswordRequest,
+  fetchAuth,
+  type LoginRequest,
+  type RegisterRequest,
+} from "@/lib/api/services/fetch-auth";
 import { LOGIN_PATH, SESSION_INVALID_CODES } from "@/lib/auth/auth-config";
 import { broadcastAuthChange } from "@/lib/auth/session-events";
-import type { ProjectRole, SessionResult } from "@/lib/auth/types";
+import type { SessionResult } from "@/lib/auth/types";
 import { useAppDispatch, useAppSelector } from "@/lib/redux/hooks";
 import { logout as clearSession, restoreSession, selectAuth, setSession } from "@/lib/redux/slices/auth-slice";
 import { ApiError } from "@/types/api";
+import { PlatformRole, ProjectRole } from "@/types/enums";
 
 function destination(result: SessionResult) {
-  const fallback = result.user.platform_role === "platform_admin" ? "/admin" : "/projects";
+  const fallback = result.user.platform_role === PlatformRole.PlatformAdmin ? "/admin" : "/projects";
   const next = new URLSearchParams(window.location.search).get("next");
-  if (!next || !next.startsWith("/") || next.startsWith("//") || next.includes("\\")) return fallback;
+  if (!next?.startsWith("/") || next.startsWith("//") || next.includes("\\")) return fallback;
   const target = new URL(next, window.location.origin);
   if (target.origin !== window.location.origin) return fallback;
   const paths =
-    result.user.platform_role === "platform_admin"
+    result.user.platform_role === PlatformRole.PlatformAdmin
       ? ["/admin", "/projects", "/dashboard", "/reviews"]
       : ["/projects", "/dashboard", "/reviews"];
   return paths.some((path) => target.pathname === path || target.pathname.startsWith(`${path}/`))
@@ -35,7 +41,7 @@ export function useAuth(projectId?: string) {
   const queryClient = useQueryClient();
   const auth = useAppSelector(selectAuth);
   const projectRole: ProjectRole | undefined = auth.memberships.find((item) => item.project_id === projectId)?.role;
-  const isAdmin = auth.user?.platform_role === "platform_admin";
+  const isAdmin = auth.user?.platform_role === PlatformRole.PlatformAdmin;
 
   const completeLogin = async (result: SessionResult) => {
     queryClient.clear();
@@ -63,7 +69,7 @@ export function useAuth(projectId?: string) {
     router.refresh();
     toast.success(allDevices ? "Signed out of all devices." : "Signed out successfully.");
   };
-  const changePassword = async (data: { current_password: string; new_password: string }) => {
+  const changePassword = async (data: ChangePasswordRequest) => {
     await fetchAuth.changePassword(data);
     broadcastAuthChange("password-changed");
     toast.success("Password changed. Other devices have been signed out.");
@@ -72,9 +78,9 @@ export function useAuth(projectId?: string) {
     ...auth,
     isAdmin,
     projectRole,
-    isProjectManager: isAdmin || projectRole === "project_manager",
-    isResearcher: projectRole === "researcher",
-    isReviewer: projectRole === "reviewer",
+    isProjectManager: isAdmin || projectRole === ProjectRole.ProjectManager,
+    isResearcher: projectRole === ProjectRole.Researcher,
+    isReviewer: projectRole === ProjectRole.Reviewer,
     login,
     register,
     logout,

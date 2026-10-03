@@ -32,4 +32,4 @@ Google sign-in, password reset, and email verification are not exposed because t
 
 ## Validation status
 
-Build, lint, type checking, browser screenshots, and live backend authentication have not been run. Repository instructions require an explicit request before validation commands.
+Production build and TypeScript passed. Vitest covers the API client and service contracts; live HTTP tests passed for the four seed accounts, including session login, CSRF, role permissions, project reads, and logout. These checks do not establish browser UI behavior or all business mutations. See [the login test guide](auth-login-test.md) for credentials, steps, and commands.

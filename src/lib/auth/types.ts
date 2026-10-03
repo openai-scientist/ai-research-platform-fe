@@ -1,10 +1,11 @@
-export type ProjectRole = "project_manager" | "researcher" | "reviewer";
-export type PlatformRole = "platform_admin";
+import type { PlatformRole, ProjectRole, UserStatus } from "@/types/enums";
+
+export { PlatformRole, ProjectRole } from "@/types/enums";
 export interface UserProfile {
   id: string;
   email: string;
   display_name: string | null;
-  status: "active" | "suspended";
+  status: UserStatus;
   platform_role: PlatformRole | null;
   created_at: string;
 }

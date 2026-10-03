@@ -13,7 +13,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import type { AuditItem } from "@/lib/api/types";
+import type { AuditItem } from "@/lib/api/services/fetch-admin";
 
 import { formatTimestamp } from "../../_components/admin-api-utils";
 import { auditSummary, auditTitle, auditTransition, readableValue } from "./audit-presentation";

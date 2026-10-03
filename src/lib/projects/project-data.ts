@@ -1,7 +1,10 @@
+import { ProjectStatus } from "@/types/enums";
+
+export { ProjectStatus } from "@/types/enums";
+
 export const LAST_PROJECT_COOKIE_NAME = "research_platform_last_project";
 
 // Project states per PRD FR-PROJ-03.
-export type ProjectStatus = "Draft" | "Data Ready" | "Researching" | "Needs Review" | "Completed" | "Archived";
 
 export type WorkspaceProject = {
   id: string;
@@ -24,7 +27,7 @@ const projects: WorkspaceProject[] = [
     id: "protein-folding-study",
     name: "Protein Folding Study",
     description: "Benchmarking structure prediction agents against curated wet-lab folding results.",
-    status: "Researching",
+    status: ProjectStatus.Researching,
     ownerName: "Project Manager",
     memberEmails: ["manager@gmail.com", "researcher@gmail.com"],
     datasets: 14,
@@ -36,7 +39,7 @@ const projects: WorkspaceProject[] = [
     id: "clinical-trial-signals",
     name: "Clinical Trial Signals",
     description: "Detecting early efficacy and safety signals across multi-site clinical trial reports.",
-    status: "Needs Review",
+    status: ProjectStatus.NeedsReview,
     ownerName: "Project Manager",
     memberEmails: ["manager@gmail.com", "researcher@gmail.com"],
     datasets: 22,
@@ -48,7 +51,7 @@ const projects: WorkspaceProject[] = [
     id: "climate-risk-model",
     name: "Climate Risk Model",
     description: "Scenario-based regional climate risk scoring with retrieval over IPCC assessment reports.",
-    status: "Data Ready",
+    status: ProjectStatus.DataReady,
     ownerName: "Project Manager",
     memberEmails: ["manager@gmail.com"],
     datasets: 8,
@@ -60,7 +63,7 @@ const projects: WorkspaceProject[] = [
     id: "retrieval-quality",
     name: "Retrieval Quality",
     description: "Measuring citation precision and recall of literature retrieval pipelines.",
-    status: "Completed",
+    status: ProjectStatus.Completed,
     ownerName: "Noah Williams",
     memberEmails: ["researcher@gmail.com"],
     datasets: 6,
@@ -72,7 +75,7 @@ const projects: WorkspaceProject[] = [
     id: "materials-discovery",
     name: "Materials Discovery",
     description: "Screening candidate battery materials with generative models and simulation feedback.",
-    status: "Archived",
+    status: ProjectStatus.Archived,
     ownerName: "Project Manager",
     memberEmails: ["manager@gmail.com", "researcher@gmail.com"],
     datasets: 5,
@@ -120,7 +123,7 @@ export function addProject(input: { name: string; description: string; ownerEmai
     id: createUniqueProjectId(input.name),
     name: input.name,
     description: input.description,
-    status: "Draft",
+    status: ProjectStatus.Draft,
     ownerName: input.ownerName,
     memberEmails: [input.ownerEmail],
     datasets: 0,
