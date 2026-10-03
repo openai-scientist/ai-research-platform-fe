@@ -3,14 +3,17 @@
 import { useState } from "react";
 
 import type { FileManagerFile } from "@/app/(main)/dashboard/file-manager/_components/data";
-import type { WorkspaceProject } from "@/lib/projects/project-data";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useInfiniteProjects } from "@/hooks/use-projects-query";
+import type { ProjectItem } from "@/lib/api/services/fetch-project";
 import { PROJECT_STATUS_LABELS } from "@/lib/projects/project-status";
 import { getInitials } from "@/lib/utils";
 
 import { AdminProjects, projectActions } from "../../admin/_components/admin-projects";
 import { CreateProjectDialog } from "./create-project-dialog";
 
-function toProjectFile(project: WorkspaceProject): FileManagerFile {
+function toProjectFile(project: ProjectItem): FileManagerFile {
   return {
     actionLabels: projectActions,
     badgeLabel: PROJECT_STATUS_LABELS[project.status],
@@ -19,32 +22,40 @@ function toProjectFile(project: WorkspaceProject): FileManagerFile {
     id: project.id,
     kind: "document",
     kindLabel: PROJECT_STATUS_LABELS[project.status],
-    modifiedAt: project.updatedAt,
+    modifiedAt: new Date(project.updated_at).toLocaleDateString("en-US"),
     name: project.name,
-    owner: project.ownerName,
-    ownerInitials: getInitials(project.ownerName),
-    shared: project.memberEmails.length > 1,
-    size: `${project.experiments} runs`,
+    owner: "Project workspace",
+    ownerInitials: getInitials(project.name),
+    shared: false,
+    size: PROJECT_STATUS_LABELS[project.status],
     starred: false,
   };
 }
 
-export function WorkspaceProjects({
-  canCreate,
-  projects,
-}: {
-  readonly canCreate: boolean;
-  readonly projects: readonly WorkspaceProject[];
-}) {
+export function WorkspaceProjects({ canCreate }: { readonly canCreate: boolean }) {
   const [createOpen, setCreateOpen] = useState(false);
+  const query = useInfiniteProjects({ include_archived: true });
 
   return (
     <>
-      <AdminProjects
-        canCreateProject={canCreate}
-        onCreateProject={() => setCreateOpen(true)}
-        projects={projects.map(toProjectFile)}
-      />
+      {query.isPending ? (
+        <Skeleton className="h-64 w-full" aria-label="Loading projects" />
+      ) : (
+        <AdminProjects
+          canCreateProject={canCreate}
+          onCreateProject={() => setCreateOpen(true)}
+          projects={query.projects.map(toProjectFile)}
+        />
+      )}
+      {(query.hasNextPage || query.isError) && (
+        <Button
+          variant="outline"
+          disabled={query.isFetching}
+          onClick={() => void (query.isError && !query.data ? query.refetch() : query.loadMore())}
+        >
+          {query.isError ? "Retry" : "Load more projects"}
+        </Button>
+      )}
       {canCreate && <CreateProjectDialog open={createOpen} onOpenChange={setCreateOpen} />}
     </>
   );

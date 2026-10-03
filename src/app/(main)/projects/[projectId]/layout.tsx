@@ -1,13 +1,13 @@
 import type { ReactNode } from "react";
 
 import { cookies } from "next/headers";
-import { notFound, redirect } from "next/navigation";
+import { redirect } from "next/navigation";
 
 import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { canCreateProject } from "@/lib/auth/auth-config";
-import { findProjectForUser, getProjectsForUser, toProjectSummary } from "@/lib/projects/project-data";
 import { getAuthenticatedUser } from "@/server/auth";
+import { getWorkspaceProject, getWorkspaceProjects } from "@/server/projects";
 import { getPreference } from "@/server/server-actions";
 
 import { AccountSwitcher } from "../../dashboard/_components/header/account-switcher";
@@ -33,14 +33,11 @@ export default async function Layout({
     redirect("/auth/login");
   }
 
-  const project = findProjectForUser(projectId, user.email);
-
-  if (!project) {
-    notFound();
-  }
+  const [project, projects] = await Promise.all([getWorkspaceProject(projectId), getWorkspaceProjects()]);
 
   return (
     <SidebarProvider
+      className="management-surface"
       defaultOpen={defaultOpen}
       style={
         {
@@ -50,9 +47,9 @@ export default async function Layout({
     >
       <RememberLastProject projectId={project.id} />
       <ProjectSidebar
-        activeProject={toProjectSummary(project)}
+        activeProject={project}
         canCreate={canCreateProject(user.role)}
-        projects={getProjectsForUser(user.email).map(toProjectSummary)}
+        projects={projects}
         user={user}
         variant={variant}
         collapsible={collapsible}

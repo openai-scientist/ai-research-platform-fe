@@ -58,6 +58,11 @@ export function useResearchContextVersionQuery(
 export function useSaveResearchContextMutation(projectId: string) {
   return useApiMutation(
     (data: SaveResearchContextRequest) => fetchResearchContext.save(projectId, data),
-    [projectKeys.context(projectId), projectKeys.contextVersions(projectId), adminKeys.all],
+    [
+      projectKeys.context(projectId),
+      projectKeys.contextVersions(projectId),
+      projectKeys.managerResearch(projectId),
+      adminKeys.all,
+    ],
   );
 }

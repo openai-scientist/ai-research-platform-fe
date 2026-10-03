@@ -1,8 +1,10 @@
+"use client";
+
 import { cn } from "cn";
 import { CalendarClock, CircleCheck, ClipboardCheck } from "lucide-react";
 
+import { DataTable } from "@/components/data-table";
 import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 import { MetricCard, SectionCard } from "../../admin/_components/admin-primitives";
 import { type ReviewPriority, reviewQueue, reviewStats } from "./review-data";
@@ -28,37 +30,55 @@ export function ReviewQueue() {
       </div>
 
       <SectionCard title="Pending findings" description="Sorted by due date." contentClassName="px-0 pt-0">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="pl-4">Finding</TableHead>
-              <TableHead>Project</TableHead>
-              <TableHead>Submitted by</TableHead>
-              <TableHead>Priority</TableHead>
-              <TableHead className="pr-4 text-right">Due</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {reviewQueue.map((item) => (
-              <TableRow key={item.id}>
-                <TableCell className="max-w-md pl-4">
+        <DataTable
+          rows={reviewQueue ?? []}
+          getRowId={(item) => item.id}
+          columns={[
+            {
+              id: "Finding",
+              label: "Finding",
+              hideable: false,
+              cellClassName: "max-w-md pl-4",
+              cell: (item) => (
+                <>
                   <p className="truncate font-medium">{item.title}</p>
                   <p className="text-muted-foreground text-xs">
                     {item.id} · {item.submittedAt}
                   </p>
-                </TableCell>
-                <TableCell className="text-muted-foreground">{item.projectName}</TableCell>
-                <TableCell className="text-muted-foreground">{item.submittedBy}</TableCell>
-                <TableCell>
+                </>
+              ),
+            },
+            {
+              id: "Project",
+              label: "Project",
+              cellClassName: "text-muted-foreground",
+              cell: (item) => <>{item.projectName}</>,
+            },
+            {
+              id: "Submitted by",
+              label: "Submitted by",
+              cellClassName: "text-muted-foreground",
+              cell: (item) => <>{item.submittedBy}</>,
+            },
+            {
+              id: "Priority",
+              label: "Priority",
+              cell: (item) => (
+                <>
                   <Badge variant="outline" className={cn("border-transparent", priorityClassNames[item.priority])}>
                     {item.priority}
                   </Badge>
-                </TableCell>
-                <TableCell className="pr-4 text-right tabular-nums">{item.dueIn}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+                </>
+              ),
+            },
+            {
+              id: "Due",
+              label: "Due",
+              cellClassName: "pr-4 text-right tabular-nums",
+              cell: (item) => <>{item.dueIn}</>,
+            },
+          ]}
+        />
       </SectionCard>
     </div>
   );

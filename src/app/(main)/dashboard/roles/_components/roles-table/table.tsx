@@ -4,16 +4,8 @@ import { useMemo } from "react";
 import { FlexRender, type ReactTable } from "@tanstack/react-table";
 import { cn } from "cn";
 
+import { TanStackDataTableFooter } from "@/components/tanstack-data-table-footer";
 import { Badge } from "@/components/ui/badge";
-import {
-  Pagination,
-  PaginationContent,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
-} from "@/components/ui/pagination";
-import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { DataTableFeatures } from "@/lib/data-table-features";
 
@@ -40,7 +32,6 @@ function groupRowsByRoleGroup(rows: RoleTableRow[]) {
 }
 
 export function RolesTable({ table }: { table: ReactTable<DataTableFeatures, Role> }) {
-  const { pageIndex, pageSize } = table.state.pagination;
   const pageRows = table.getRowModel().rows;
   const filteredRows = table.getFilteredRowModel().rows;
 
@@ -51,8 +42,6 @@ export function RolesTable({ table }: { table: ReactTable<DataTableFeatures, Rol
     [filteredGroups],
   );
 
-  const start = filteredRows.length === 0 ? 0 : pageIndex * pageSize + 1;
-  const end = filteredRows.length === 0 ? 0 : start + pageRows.length - 1;
   const colCount = table.getVisibleLeafColumns().length;
 
   return (
@@ -93,75 +82,7 @@ export function RolesTable({ table }: { table: ReactTable<DataTableFeatures, Rol
         </TableBody>
       </Table>
 
-      <div className="flex items-center border-border/70 border-t p-4">
-        <div className="text-muted-foreground text-sm">
-          Showing {start} to {end} of {filteredRows.length} roles
-        </div>
-
-        <div className="mx-auto">
-          <Pagination className="mx-0 w-auto justify-center">
-            <PaginationContent>
-              <PaginationItem>
-                <PaginationPrevious
-                  size="sm"
-                  href="#"
-                  text=""
-                  className={!table.getCanPreviousPage() ? "pointer-events-none opacity-50" : ""}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    table.previousPage();
-                  }}
-                />
-              </PaginationItem>
-              <PaginationItem>
-                <PaginationLink
-                  size="sm"
-                  href="#"
-                  isActive
-                  onClick={(e) => {
-                    e.preventDefault();
-                  }}
-                >
-                  {pageIndex + 1}
-                </PaginationLink>
-              </PaginationItem>
-              <PaginationItem>
-                <PaginationNext
-                  size="sm"
-                  href="#"
-                  text=""
-                  className={!table.getCanNextPage() ? "pointer-events-none opacity-50" : ""}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    table.nextPage();
-                  }}
-                />
-              </PaginationItem>
-            </PaginationContent>
-          </Pagination>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <span className="text-muted-foreground text-sm">Rows per page</span>
-          <Select
-            value={`${pageSize}`}
-            onValueChange={(v) => {
-              table.setPageSize(Number(v));
-            }}
-          >
-            <SelectTrigger size="sm" className="w-32">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent align="end" side="top">
-              <SelectGroup>
-                <SelectItem value="12">12</SelectItem>
-                <SelectItem value="24">24</SelectItem>
-                <SelectItem value="48">48</SelectItem>
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
+      <TanStackDataTableFooter table={table} selectable={false} />
     </>
   );
 }

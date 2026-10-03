@@ -1,23 +1,28 @@
+"use client";
+
 import Link from "next/link";
 
 import { ArrowRight, Database, FlaskConical, Lightbulb, Users } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import type { WorkspaceProject } from "@/lib/projects/project-data";
+import { useDatasetsQuery } from "@/hooks/use-datasets-query";
+import { useMembersQuery } from "@/hooks/use-members-query";
+import { useRunsQuery } from "@/hooks/use-runs-query";
+import type { ProjectItem } from "@/lib/api/services/fetch-project";
+import { ProjectRole, ProjectStatus } from "@/types/enums";
 
 import { MetricCard, SectionCard } from "../../../admin/_components/admin-primitives";
 import { ProjectStatusBadge } from "../../_components/project-status-badge";
 
-const recentActivity = [
-  { actor: "Research Agent", event: "completed experiment", target: "EXP-2048", time: "12 min ago" },
-  { actor: "Researcher", event: "uploaded dataset", target: "assay-results-v3.csv", time: "38 min ago" },
-  { actor: "Finding Agent", event: "generated finding", target: "FND-881", time: "1 hr ago" },
-  { actor: "Project Manager", event: "invited member", target: "reviewer@gmail.com", time: "Yesterday" },
-] as const;
-
-export function ProjectOverview({ project }: { readonly project: WorkspaceProject }) {
+export function ProjectOverview({ project }: { readonly project: ProjectItem }) {
+  const datasets = useDatasetsQuery(project.id, { limit: 1 });
+  const runs = useRunsQuery(project.id, { limit: 1 });
+  const members = useMembersQuery(project.id, { limit: 1 });
+  const count = (query: typeof datasets | typeof runs | typeof members) =>
+    query.data ? String(query.data.meta.pagination?.total ?? query.data.data.length) : "—";
   const baseUrl = `/projects/${project.id}`;
-  const isEmpty = project.datasets === 0 && project.experiments === 0;
+  const isEmpty = datasets.data?.meta.pagination?.total === 0 && runs.data?.meta.pagination?.total === 0;
+  const canWrite = project.my_role !== ProjectRole.Reviewer && project.status !== ProjectStatus.Archived;
   const nextSteps = [
     {
       title: "Upload a dataset",
@@ -48,23 +53,23 @@ export function ProjectOverview({ project }: { readonly project: WorkspaceProjec
             <h1 className="font-heading text-3xl tracking-tight">{project.name}</h1>
             <ProjectStatusBadge status={project.status} />
           </div>
-          <p className="max-w-3xl text-muted-foreground text-sm">
-            {project.description || "No description provided."} · Owned by {project.ownerName}
-          </p>
+          <p className="max-w-3xl text-muted-foreground text-sm">{project.description ?? "No description provided."}</p>
         </div>
-        <Button asChild>
-          <Link prefetch={false} href={`${baseUrl}/experiments`}>
-            <FlaskConical data-icon="inline-start" />
-            New experiment
-          </Link>
-        </Button>
+        {canWrite && (
+          <Button asChild>
+            <Link prefetch={false} href={`${baseUrl}/experiments`}>
+              <FlaskConical data-icon="inline-start" />
+              New experiment
+            </Link>
+          </Button>
+        )}
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard icon={Database} label="Datasets" value={String(project.datasets)} detail="in this workspace" />
-        <MetricCard icon={FlaskConical} label="Experiments" value={String(project.experiments)} detail="all time" />
-        <MetricCard icon={Lightbulb} label="Findings" value={String(project.findings)} detail="generated" />
-        <MetricCard icon={Users} label="Members" value={String(project.memberEmails.length)} detail="collaborators" />
+        <MetricCard icon={Database} label="Datasets" value={count(datasets)} detail="in this workspace" />
+        <MetricCard icon={FlaskConical} label="Experiments" value={count(runs)} detail="all time" />
+        <MetricCard icon={Lightbulb} label="Findings" value="—" detail="Not available yet" />
+        <MetricCard icon={Users} label="Members" value={count(members)} detail="collaborators" />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
@@ -92,22 +97,7 @@ export function ProjectOverview({ project }: { readonly project: WorkspaceProjec
         </SectionCard>
 
         <SectionCard title="Recent activity" description="Latest events in this workspace.">
-          {isEmpty ? (
-            <p className="py-6 text-center text-muted-foreground text-sm">No activity yet.</p>
-          ) : (
-            <ul className="flex flex-col divide-y">
-              {recentActivity.map((item) => (
-                <li key={`${item.target}-${item.time}`} className="flex items-start justify-between gap-4 py-2.5">
-                  <p className="min-w-0 text-sm">
-                    <span className="font-medium">{item.actor}</span>{" "}
-                    <span className="text-muted-foreground">{item.event}</span>{" "}
-                    <span className="font-medium">{item.target}</span>
-                  </p>
-                  <span className="shrink-0 text-muted-foreground text-xs">{item.time}</span>
-                </li>
-              ))}
-            </ul>
-          )}
+          <p className="py-6 text-center text-muted-foreground text-sm">Activity details are not available yet.</p>
         </SectionCard>
       </div>
     </div>

@@ -11,16 +11,9 @@ import {
   type SortingState,
   useTable,
 } from "@tanstack/react-table";
-import {
-  ChevronDownIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  ChevronsLeftIcon,
-  ChevronsRightIcon,
-  PlusIcon,
-  Settings2,
-} from "lucide-react";
+import { ChevronDownIcon, PlusIcon, Settings2 } from "lucide-react";
 
+import { TanStackDataTableFooter } from "@/components/tanstack-data-table-footer";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -210,81 +203,8 @@ export function ProposalSectionsTable({ data: initialData }: { data: ProposalSec
             </Table>
           </DragDropProvider>
         </div>
-        <div className="flex items-center justify-between px-4">
-          <div className="hidden flex-1 text-muted-foreground text-sm lg:flex">
-            {table.getFilteredSelectedRowModel().rows.length} of {table.getFilteredRowModel().rows.length} row(s)
-            selected.
-          </div>
-          <div className="flex w-full items-center gap-8 lg:w-fit">
-            <div className="hidden items-center gap-2 lg:flex">
-              <Label htmlFor="rows-per-page" className="font-medium text-sm">
-                Rows per page
-              </Label>
-              <Select
-                value={`${table.state.pagination.pageSize}`}
-                onValueChange={(value) => {
-                  table.setPageSize(Number(value));
-                }}
-              >
-                <SelectTrigger size="sm" className="w-20" id="rows-per-page">
-                  <SelectValue placeholder={table.state.pagination.pageSize} />
-                </SelectTrigger>
-                <SelectContent side="top">
-                  <SelectGroup>
-                    {[10, 20, 30, 40, 50].map((pageSize) => (
-                      <SelectItem key={pageSize} value={`${pageSize}`}>
-                        {pageSize}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex w-fit items-center justify-center font-medium text-sm">
-              Page {table.state.pagination.pageIndex + 1} of {table.getPageCount()}
-            </div>
-            <div className="ml-auto flex items-center gap-2 lg:ml-0">
-              <Button
-                variant="outline"
-                className="hidden h-8 w-8 p-0 lg:flex"
-                onClick={() => table.setPageIndex(0)}
-                disabled={!table.getCanPreviousPage()}
-              >
-                <span className="sr-only">Go to first page</span>
-                <ChevronsLeftIcon />
-              </Button>
-              <Button
-                variant="outline"
-                className="size-8"
-                size="icon"
-                onClick={() => table.previousPage()}
-                disabled={!table.getCanPreviousPage()}
-              >
-                <span className="sr-only">Go to previous page</span>
-                <ChevronLeftIcon />
-              </Button>
-              <Button
-                variant="outline"
-                className="size-8"
-                size="icon"
-                onClick={() => table.nextPage()}
-                disabled={!table.getCanNextPage()}
-              >
-                <span className="sr-only">Go to next page</span>
-                <ChevronRightIcon />
-              </Button>
-              <Button
-                variant="outline"
-                className="hidden size-8 lg:flex"
-                size="icon"
-                onClick={() => table.setPageIndex(table.getPageCount() - 1)}
-                disabled={!table.getCanNextPage()}
-              >
-                <span className="sr-only">Go to last page</span>
-                <ChevronsRightIcon />
-              </Button>
-            </div>
-          </div>
+        <div className="px-4">
+          <TanStackDataTableFooter table={table} />
         </div>
       </TabsContent>
       <TabsContent value="past-performance" className="flex flex-col px-4 lg:px-6">

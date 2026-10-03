@@ -18,6 +18,8 @@ export type RunPhase = (typeof RUN_PHASES)[number];
 export type WarningSeverity = "Blocking" | "Warning" | "Info";
 
 export type ProjectDashboard = {
+  live?: boolean;
+  sampleInsights?: boolean;
   objective: string;
   datasetVersion: string;
   researchQuestion: string;

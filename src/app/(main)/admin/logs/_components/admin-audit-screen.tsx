@@ -5,14 +5,14 @@ import { type FormEvent, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { Field, FieldLabel } from "@/components/ui/field";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuditQuery } from "@/hooks/use-admin-query";
 import type { AuditListParams } from "@/lib/api/services/fetch-admin";
 
-import { AdminApiPagination, AdminRefresh } from "../../_components/admin-api-table";
+import { AdminRefresh } from "../../_components/admin-api-table";
 import { ADMIN_PAGE_SIZE, toTimeRange } from "../../_components/admin-api-utils";
-import { AdminPageHeader, SectionCard } from "../../_components/admin-primitives";
+import { AdminPageHeader } from "../../_components/admin-primitives";
 import { AdminTimeFilters } from "../../_components/admin-time-filters";
 import { useAdminAccess } from "../../_components/use-admin-access";
 import { AdminAuditActivity } from "./admin-audit-activity";
@@ -24,7 +24,8 @@ export function AdminAuditScreen() {
   const [draft, setDraft] = useState(emptyFilters);
   const [filters, setFilters] = useState<AuditListParams>({});
   const [offset, setOffset] = useState(0);
-  const audit = useAuditQuery({ ...filters, limit: ADMIN_PAGE_SIZE, offset }, { enabled });
+  const [limit, setLimit] = useState(ADMIN_PAGE_SIZE);
+  const audit = useAuditQuery({ ...filters, limit, offset }, { enabled });
   const rows = audit.data?.data ?? [];
   const actionOptions = new Map(Object.entries(actionLabels));
   for (const item of rows) {
@@ -56,21 +57,28 @@ export function AdminAuditScreen() {
           />
         }
       />
-      <SectionCard
-        title="Platform activity"
-        description="Activity grouped by day. All times are shown in your local timezone."
-      >
-        <div className="flex flex-col gap-4">
-          <form onSubmit={apply} noValidate className="flex flex-col gap-3 lg:flex-row lg:items-end">
-            <div className="grid min-w-0 gap-3 sm:grid-cols-2 lg:flex lg:flex-wrap">
-              <Field className="min-w-0 lg:w-64">
-                <FieldLabel htmlFor="audit-action">Activity</FieldLabel>
+      <AdminAuditActivity
+        rows={rows}
+        pending={audit.isPending}
+        failed={audit.isError}
+        enabled={enabled}
+        toolbar={
+          <form onSubmit={apply} noValidate>
+            <FieldGroup className="flex-row flex-wrap items-center gap-3">
+              <Field className="w-full min-w-0 shrink-0 sm:w-64">
+                <FieldLabel className="sr-only" htmlFor="audit-action">
+                  Activity
+                </FieldLabel>
                 <Select
                   value={draft.action || "all"}
                   onValueChange={(value) => setDraft({ ...draft, action: value === "all" ? "" : value })}
                 >
                   <SelectTrigger id="audit-action" className="w-full bg-background">
-                    <SelectValue />
+                    <SelectValue>
+                      {draft.action
+                        ? (actionOptions.get(draft.action) ?? readableValue(draft.action))
+                        : "All activities"}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent position="popper">
                     <SelectGroup>
@@ -86,39 +94,43 @@ export function AdminAuditScreen() {
               </Field>
               <AdminTimeFilters
                 prefix="audit"
+                compact
                 from={draft.from}
                 to={draft.to}
                 onChange={(from, to) => setDraft({ ...draft, from, to })}
               />
-            </div>
-            <div className="flex shrink-0 items-center gap-2">
-              <Button type="submit" variant="outline" disabled={!enabled || audit.isFetching}>
-                Apply
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                disabled={!enabled || audit.isFetching}
-                onClick={() => {
-                  setDraft(emptyFilters);
-                  setFilters({});
-                  setOffset(0);
-                }}
-              >
-                Reset
-              </Button>
-            </div>
+              <div className="ml-auto flex shrink-0 items-center gap-2">
+                <Button type="submit" variant="outline" disabled={!enabled || audit.isFetching}>
+                  Apply filters
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  disabled={!enabled || audit.isFetching}
+                  onClick={() => {
+                    setDraft(emptyFilters);
+                    setFilters({});
+                    setOffset(0);
+                  }}
+                >
+                  Reset
+                </Button>
+              </div>
+            </FieldGroup>
           </form>
-          <AdminAuditActivity rows={rows} pending={audit.isPending} failed={audit.isError} enabled={enabled} />
-          <AdminApiPagination
-            pagination={audit.data?.meta.pagination}
-            offset={offset}
-            limit={ADMIN_PAGE_SIZE}
-            busy={!enabled || audit.isFetching || audit.isError}
-            onPage={setOffset}
-          />
-        </div>
-      </SectionCard>
+        }
+        pagination={{
+          total: audit.data?.meta.pagination?.total,
+          offset,
+          limit,
+          busy: !enabled || audit.isFetching || audit.isError,
+          onPage: setOffset,
+          onLimit: (value) => {
+            setLimit(value);
+            setOffset(0);
+          },
+        }}
+      />
     </div>
   );
 }

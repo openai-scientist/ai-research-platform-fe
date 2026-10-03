@@ -35,6 +35,7 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
 
   return (
     <SidebarProvider
+      className="management-surface"
       defaultOpen={defaultOpen}
       style={
         {

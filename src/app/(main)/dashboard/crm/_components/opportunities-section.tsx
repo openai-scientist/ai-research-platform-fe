@@ -9,6 +9,7 @@ import {
 } from "@tanstack/react-table";
 import { ChevronDownIcon, ListFilter } from "lucide-react";
 
+import { TanStackDataTableFooter } from "@/components/tanstack-data-table-footer";
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -19,15 +20,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import {
-  Pagination,
-  PaginationContent,
-  PaginationEllipsis,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
-} from "@/components/ui/pagination";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { dataTableFeatures } from "@/lib/data-table-features";
 
@@ -38,10 +30,6 @@ import { opportunitiesSchema } from "./opportunities-table/schema";
 const stageOptions = ["all", "Proposal Sent", "Discovery", "Negotiation", "Qualified"] as const;
 const healthOptions = ["all", "On Track", "Needs Review", "At Risk", "On Hold"] as const;
 const opportunities = opportunitiesSchema.parse(opportunitiesData);
-
-function preventPaginationNavigation(event: React.MouseEvent<HTMLAnchorElement>) {
-  event.preventDefault();
-}
 
 export function OpportunitiesSection() {
   const [rowSelection, setRowSelection] = React.useState({});
@@ -75,20 +63,6 @@ export function OpportunitiesSection() {
   const searchQuery = table.state.globalFilter ?? "";
   const stageFilter = (table.getColumn("stage")?.getFilterValue() as string | undefined) ?? "all";
   const healthFilter = (table.getColumn("health")?.getFilterValue() as string | undefined) ?? "all";
-  const currentPage = table.state.pagination.pageIndex + 1;
-  const pageCount = table.getPageCount();
-  const filteredOpportunityCount = table.getFilteredRowModel().rows.length;
-  const visibleOpportunityCount = table.getRowModel().rows.length;
-  const pageNumbers = React.useMemo(() => {
-    if (pageCount <= 3) {
-      return Array.from({ length: pageCount }, (_, index) => index + 1);
-    }
-
-    if (currentPage <= 2) return [1, 2, 3];
-    if (currentPage >= pageCount - 1) return [pageCount - 2, pageCount - 1, pageCount];
-
-    return [currentPage - 1, currentPage, currentPage + 1];
-  }, [currentPage, pageCount]);
 
   return (
     <section>
@@ -195,59 +169,8 @@ export function OpportunitiesSection() {
               </TableBody>
             </Table>
           </div>
-          <div className="flex items-center justify-between gap-4 px-4 pb-1">
-            <p className="text-muted-foreground text-sm">
-              Viewing {visibleOpportunityCount} out of {filteredOpportunityCount.toLocaleString()} opportunities
-            </p>
-
-            <Pagination className="mx-0 w-auto justify-end">
-              <PaginationContent className="gap-1.5">
-                <PaginationItem>
-                  <PaginationPrevious
-                    href="#"
-                    className={!table.getCanPreviousPage() ? "pointer-events-none opacity-50" : undefined}
-                    onClick={(event) => {
-                      preventPaginationNavigation(event);
-                      table.previousPage();
-                    }}
-                  />
-                </PaginationItem>
-                {pageNumbers[0] > 1 ? (
-                  <PaginationItem>
-                    <PaginationEllipsis />
-                  </PaginationItem>
-                ) : null}
-                {pageNumbers.map((pageNumber) => (
-                  <PaginationItem key={`page-${pageNumber}`}>
-                    <PaginationLink
-                      href="#"
-                      isActive={table.state.pagination.pageIndex === pageNumber - 1}
-                      onClick={(event) => {
-                        preventPaginationNavigation(event);
-                        table.setPageIndex(pageNumber - 1);
-                      }}
-                    >
-                      {pageNumber}
-                    </PaginationLink>
-                  </PaginationItem>
-                ))}
-                {pageNumbers[pageNumbers.length - 1] < pageCount ? (
-                  <PaginationItem>
-                    <PaginationEllipsis />
-                  </PaginationItem>
-                ) : null}
-                <PaginationItem>
-                  <PaginationNext
-                    href="#"
-                    className={!table.getCanNextPage() ? "pointer-events-none opacity-50" : undefined}
-                    onClick={(event) => {
-                      preventPaginationNavigation(event);
-                      table.nextPage();
-                    }}
-                  />
-                </PaginationItem>
-              </PaginationContent>
-            </Pagination>
+          <div className="px-4 pb-1">
+            <TanStackDataTableFooter table={table} />
           </div>
         </CardContent>
       </Card>

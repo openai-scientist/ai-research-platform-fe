@@ -1,9 +1,10 @@
-import { notFound, redirect } from "next/navigation";
+import { redirect } from "next/navigation";
 
 import type { Metadata } from "next";
 
-import { findProjectForUser } from "@/lib/projects/project-data";
 import { getAuthenticatedUser } from "@/server/auth";
+import { getWorkspaceProject } from "@/server/projects";
+import { ProjectRole } from "@/types/enums";
 
 import { ManagerOverview } from "./_components/manager-overview";
 import { ProjectOverview } from "./_components/project-overview";
@@ -21,14 +22,9 @@ export default async function Page({ params }: { params: Promise<{ projectId: st
     redirect("/auth/login");
   }
 
-  const project = findProjectForUser(projectId, user.email);
+  const project = await getWorkspaceProject(projectId);
 
-  if (!project) {
-    notFound();
-  }
-
-  // A new project has no research state yet, so everyone gets the onboarding overview first.
-  if ((user.role === "PROJECT_MANAGER" || user.role === "SYSTEM_ADMIN") && project.experiments > 0) {
+  if (project.my_role === ProjectRole.ProjectManager || user.role === "SYSTEM_ADMIN") {
     return <ManagerOverview project={project} />;
   }
 

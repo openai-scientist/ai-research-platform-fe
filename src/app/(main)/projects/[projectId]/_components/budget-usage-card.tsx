@@ -61,10 +61,40 @@ function UnitMeter({
   );
 }
 
-export function BudgetUsageCard({ budgets }: { readonly budgets: ProjectDashboard["budgets"] }) {
+export function BudgetUsageCard({
+  budgets,
+  live,
+}: {
+  readonly budgets: ProjectDashboard["budgets"];
+  readonly live?: boolean;
+}) {
   const { exploration, looks, resources } = budgets;
   const remaining = resources.limit - resources.used;
   const isOverProjected = resources.projected > resources.limit;
+
+  if (live) {
+    return (
+      <SectionCard title="Budget use" description="Latest run" className="h-full">
+        {resources.limit > 0 ? (
+          <div className="flex flex-col gap-3">
+            <div>
+              <p className="text-muted-foreground text-xs">Resources remaining</p>
+              <p className="text-2xl tabular-nums tracking-tight">
+                ${Math.max(0, remaining).toFixed(2)}
+                <span className="ml-1 text-muted-foreground text-sm">of ${resources.limit.toFixed(2)}</span>
+              </p>
+            </div>
+            <p className="text-muted-foreground text-sm">Spent ${resources.used.toFixed(2)}</p>
+            <Badge variant={remaining < 0 ? "destructive" : "secondary"}>
+              {remaining < 0 ? "Budget exceeded" : "Within budget"}
+            </Badge>
+          </div>
+        ) : (
+          <p className="text-muted-foreground text-sm">No run budget yet.</p>
+        )}
+      </SectionCard>
+    );
+  }
 
   return (
     <SectionCard
@@ -86,7 +116,7 @@ export function BudgetUsageCard({ budgets }: { readonly budgets: ProjectDashboar
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-muted-foreground text-xs">Resources remaining</p>
-            <p className="text-2xl leading-tight tracking-tight tabular-nums">
+            <p className="text-2xl tabular-nums leading-tight tracking-tight">
               {formatUsd(remaining)}
               <span className="ml-1 text-muted-foreground text-sm">of {formatUsd(resources.limit)}</span>
             </p>

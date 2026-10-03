@@ -1,7 +1,6 @@
+import { cn } from "cn";
 import type { LucideIcon } from "lucide-react";
 import { ArrowDownRight, ArrowUpRight, CircleCheck, CircleX, Info, TriangleAlert } from "lucide-react";
-
-import { cn } from "cn";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -109,6 +108,8 @@ export function SectionCard({
   description,
   divided = true,
   title,
+  toolbar,
+  compactToolbar = false,
 }: {
   readonly action?: React.ReactNode;
   readonly children: React.ReactNode;
@@ -117,13 +118,22 @@ export function SectionCard({
   readonly description?: string;
   readonly divided?: boolean;
   readonly title: string;
+  readonly toolbar?: React.ReactNode;
+  readonly compactToolbar?: boolean;
 }) {
   return (
     <Card className={className}>
-      <CardHeader className={cn(divided && "border-b")}>
-        <CardTitle>{title}</CardTitle>
+      <CardHeader
+        data-compact-toolbar={compactToolbar ? true : undefined}
+        className={cn(
+          divided && "border-b",
+          toolbar && "flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between",
+        )}
+      >
+        <CardTitle className={cn(toolbar && "shrink-0", compactToolbar && "sr-only")}>{title}</CardTitle>
         {description && <CardDescription>{description}</CardDescription>}
         {action && <CardAction>{action}</CardAction>}
+        {toolbar && <div className="w-full min-w-0 xl:flex-1">{toolbar}</div>}
       </CardHeader>
       <CardContent className={cn("pt-4", contentClassName)}>{children}</CardContent>
     </Card>

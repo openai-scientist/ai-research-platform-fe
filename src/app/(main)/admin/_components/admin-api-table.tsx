@@ -2,8 +2,9 @@
 
 import type { ReactNode } from "react";
 
-import { ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 
+import { DataTableFooter } from "@/components/data-table";
 import { Button } from "@/components/ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -62,16 +63,18 @@ export function AdminApiTable({
     );
   }
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          {columns.map((column) => (
-            <TableHead key={column}>{column}</TableHead>
-          ))}
-        </TableRow>
-      </TableHeader>
-      <TableBody>{content}</TableBody>
-    </Table>
+    <div data-main-table>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            {columns.map((column) => (
+              <TableHead key={column}>{column}</TableHead>
+            ))}
+          </TableRow>
+        </TableHeader>
+        <TableBody>{content}</TableBody>
+      </Table>
+    </div>
   );
 }
 
@@ -81,42 +84,14 @@ export function AdminApiPagination({
   limit,
   busy,
   onPage,
+  onLimit,
 }: {
   pagination: Pagination | null | undefined;
   offset: number;
   limit: number;
   busy: boolean;
   onPage: (offset: number) => void;
+  onLimit?: (limit: number) => void;
 }) {
-  const total = pagination?.total;
-  const start = total ? Math.min(offset + 1, total) : 0;
-  const summary =
-    total === undefined ? "Records not loaded" : `${start}-${Math.min(offset + limit, total)} of ${total} records`;
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
-      <p className="text-muted-foreground text-sm" aria-live="polite">
-        {summary}
-      </p>
-      <div className="flex items-center gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={busy || offset === 0}
-          onClick={() => onPage(Math.max(0, offset - limit))}
-        >
-          <ChevronLeft data-icon="inline-start" />
-          Previous
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={busy || total === undefined || offset + limit >= total}
-          onClick={() => onPage(offset + limit)}
-        >
-          Next
-          <ChevronRight data-icon="inline-end" />
-        </Button>
-      </div>
-    </div>
-  );
+  return <DataTableFooter pagination={{ total: pagination?.total, offset, limit, busy, onPage, onLimit }} />;
 }

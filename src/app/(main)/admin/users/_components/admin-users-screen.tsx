@@ -2,17 +2,20 @@
 
 import { type FormEvent, useState } from "react";
 
+import { Search } from "lucide-react";
+
+import { DataTable } from "@/components/data-table";
+import { ManagementStatusBadge } from "@/components/management-status-badge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
-import { TableCell, TableRow } from "@/components/ui/table";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { useUsersQuery } from "@/hooks/use-admin-query";
-import { PlatformRole, UserStatus } from "@/types/enums";
+import { PlatformRole } from "@/types/enums";
 
-import { AdminApiPagination, AdminApiTable, AdminRefresh } from "../../_components/admin-api-table";
+import { AdminRefresh } from "../../_components/admin-api-table";
 import { ADMIN_PAGE_SIZE, formatTimestamp } from "../../_components/admin-api-utils";
-import { AdminPageHeader, SectionCard } from "../../_components/admin-primitives";
+import { AdminPageHeader } from "../../_components/admin-primitives";
 import { useAdminAccess } from "../../_components/use-admin-access";
 import { AdminUserActions } from "./admin-user-actions";
 
@@ -21,7 +24,8 @@ export function AdminUsersScreen() {
   const [draftEmail, setDraftEmail] = useState("");
   const [email, setEmail] = useState("");
   const [offset, setOffset] = useState(0);
-  const users = useUsersQuery({ email: email || undefined, limit: ADMIN_PAGE_SIZE, offset }, { enabled });
+  const [limit, setLimit] = useState(ADMIN_PAGE_SIZE);
+  const users = useUsersQuery({ email: email || undefined, limit, offset }, { enabled });
   const rows = users.data?.data ?? [];
   const filter = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -42,78 +46,100 @@ export function AdminUsersScreen() {
           />
         }
       />
-      <SectionCard title="Platform accounts" description="Project roles are managed separately within each project.">
-        <div className="flex flex-col gap-4">
+      <DataTable
+        rows={rows}
+        getRowId={(row) => row.id}
+        columns={[
+          {
+            id: "user",
+            label: "User",
+            hideable: false,
+            cell: (user) => (
+              <div className="flex flex-col gap-1">
+                <span className="font-medium">
+                  {user.display_name ?? user.email}
+                  {user.id === currentUserId ? " (you)" : ""}
+                </span>
+                <span className="text-muted-foreground text-xs">{user.email}</span>
+              </div>
+            ),
+          },
+          { id: "status", label: "Status", cell: (user) => <ManagementStatusBadge status={user.status} /> },
+          {
+            id: "role",
+            label: "Platform role",
+            cell: (user) => (
+              <Badge variant="outline">
+                {user.platform_role === PlatformRole.PlatformAdmin ? "Platform Admin" : "Standard user"}
+              </Badge>
+            ),
+          },
+          { id: "created", label: "Created", cell: (user) => formatTimestamp(user.created_at) },
+          {
+            id: "actions",
+            label: "Actions",
+            align: "right",
+            cell: (user) => (
+              <div className="flex justify-end">
+                <AdminUserActions user={user} currentUserId={currentUserId} enabled={enabled && !users.isFetching} />
+              </div>
+            ),
+          },
+        ]}
+        pending={users.isPending}
+        failed={users.isError}
+        toolbar={
           <form onSubmit={filter} noValidate>
-            <FieldGroup className="flex-row flex-wrap items-end">
+            <FieldGroup className="flex-row flex-wrap items-center gap-3">
               <Field className="w-full sm:max-w-sm">
-                <FieldLabel htmlFor="admin-user-email">Email</FieldLabel>
-                <Input
-                  id="admin-user-email"
-                  type="search"
-                  placeholder="Filter by email"
-                  value={draftEmail}
-                  onChange={(event) => setDraftEmail(event.target.value)}
-                />
+                <FieldLabel className="sr-only" htmlFor="admin-user-email">
+                  Email
+                </FieldLabel>
+                <InputGroup>
+                  <InputGroupAddon>
+                    <Search aria-hidden="true" />
+                  </InputGroupAddon>
+                  <InputGroupInput
+                    id="admin-user-email"
+                    type="search"
+                    placeholder="Filter by email"
+                    value={draftEmail}
+                    onChange={(event) => setDraftEmail(event.target.value)}
+                  />
+                </InputGroup>
               </Field>
-              <Button type="submit" variant="outline" disabled={!enabled || users.isFetching}>
-                Apply filters
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                disabled={!enabled || users.isFetching}
-                onClick={() => {
-                  setDraftEmail("");
-                  setEmail("");
-                  setOffset(0);
-                }}
-              >
-                Reset
-              </Button>
+              <div className="ml-auto flex items-center gap-2">
+                <Button type="submit" variant="outline" disabled={!enabled || users.isFetching}>
+                  Apply filters
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  disabled={!enabled || users.isFetching}
+                  onClick={() => {
+                    setDraftEmail("");
+                    setEmail("");
+                    setOffset(0);
+                  }}
+                >
+                  Reset
+                </Button>
+              </div>
             </FieldGroup>
           </form>
-          <AdminApiTable
-            columns={["User", "Status", "Platform role", "Created", "Actions"]}
-            pending={users.isPending}
-            failed={users.isError}
-            empty={rows.length === 0}
-          >
-            {rows.map((user) => (
-              <TableRow key={user.id}>
-                <TableCell>
-                  <div className="flex flex-col gap-1">
-                    <span>
-                      {user.display_name ?? user.email}
-                      {user.id === currentUserId ? " (you)" : ""}
-                    </span>
-                    <span className="text-muted-foreground text-xs">{user.email}</span>
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <Badge variant={user.status === UserStatus.Active ? "secondary" : "outline"}>{user.status}</Badge>
-                </TableCell>
-                <TableCell>
-                  <Badge variant="outline">
-                    {user.platform_role === PlatformRole.PlatformAdmin ? "Platform Admin" : "Standard user"}
-                  </Badge>
-                </TableCell>
-                <TableCell>{formatTimestamp(user.created_at)}</TableCell>
-                <TableCell>
-                  <AdminUserActions user={user} currentUserId={currentUserId} enabled={enabled && !users.isFetching} />
-                </TableCell>
-              </TableRow>
-            ))}
-          </AdminApiTable>
-          <AdminApiPagination
-            pagination={users.data?.meta.pagination}
-            offset={offset}
-            limit={ADMIN_PAGE_SIZE}
-            busy={!enabled || users.isFetching || users.isError}
-            onPage={setOffset}
-          />
-        </div>
-      </SectionCard>
+        }
+        pagination={{
+          total: users.data?.meta.pagination?.total,
+          offset,
+          limit,
+          busy: !enabled || users.isFetching || users.isError,
+          onPage: setOffset,
+          onLimit: (value) => {
+            setLimit(value);
+            setOffset(0);
+          },
+        }}
+      />
     </div>
   );
 }

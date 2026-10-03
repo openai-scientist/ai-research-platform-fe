@@ -11,11 +11,13 @@ export function AdminTimeFilters({
   from,
   to,
   onChange,
+  compact = false,
 }: {
   prefix: string;
   from: string;
   to: string;
   onChange: (from: string, to: string) => void;
+  compact?: boolean;
 }) {
   const range: DateRange | undefined = from ? { from: parseISO(from), to: to ? parseISO(to) : undefined } : undefined;
   const selectRange = (next: DateRange | undefined) => {
@@ -25,7 +27,9 @@ export function AdminTimeFilters({
   };
   return (
     <Field className="w-full min-w-0 sm:w-auto">
-      <FieldLabel htmlFor={`${prefix}-date-range`}>Date range (local time)</FieldLabel>
+      <FieldLabel className={compact ? "sr-only" : undefined} htmlFor={`${prefix}-date-range`}>
+        Date range (local time)
+      </FieldLabel>
       <DateRangePicker
         id={`${prefix}-date-range`}
         value={range}

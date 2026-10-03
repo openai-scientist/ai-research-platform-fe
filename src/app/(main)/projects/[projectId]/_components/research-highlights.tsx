@@ -84,6 +84,7 @@ export function RecentExperimentsCard({
 }) {
   return (
     <SectionCard title="Recent experiments" action={<ViewAllLink href={`${baseUrl}/experiments`} />} className="h-full">
+      {experiments.length === 0 && <p className="text-muted-foreground text-sm">No runs yet.</p>}
       <ul className="divide-y">
         {experiments.slice(0, MAX_ITEMS).map((experiment) => (
           <HighlightRow
@@ -101,12 +102,15 @@ export function RecentExperimentsCard({
 export function RecentFindingsCard({
   baseUrl,
   findings,
+  live,
 }: {
   readonly baseUrl: string;
   readonly findings: ProjectDashboard["recentFindings"];
+  readonly live?: boolean;
 }) {
   return (
     <SectionCard title="Recent findings" action={<ViewAllLink href={`${baseUrl}/findings`} />} className="h-full">
+      {live && <p className="text-muted-foreground text-sm">Finding details are not available yet.</p>}
       <ul className="divide-y">
         {findings.slice(0, MAX_ITEMS).map((finding) => (
           <HighlightRow
@@ -124,9 +128,11 @@ export function RecentFindingsCard({
 export function WarningsCard({
   baseUrl,
   warnings,
+  live,
 }: {
   readonly baseUrl: string;
   readonly warnings: ProjectDashboard["warnings"];
+  readonly live?: boolean;
 }) {
   const sortedWarnings = [...warnings].sort(
     (a, b) => severityOrder.indexOf(a.severity) - severityOrder.indexOf(b.severity),
@@ -135,12 +141,14 @@ export function WarningsCard({
   return (
     <SectionCard
       title="Warnings"
-      description={`${warnings.length} unresolved`}
+      description={live ? undefined : `${warnings.length} unresolved`}
       className="h-full"
       contentClassName="flex flex-1 flex-col"
     >
       {sortedWarnings.length === 0 ? (
-        <p className="m-auto text-muted-foreground text-sm">No unresolved warnings.</p>
+        <p className="m-auto text-muted-foreground text-sm">
+          {live ? "Warning details are not available yet." : "No unresolved warnings."}
+        </p>
       ) : (
         <ul className="-mx-2 flex flex-col gap-1">
           {sortedWarnings.map((warning) => {
