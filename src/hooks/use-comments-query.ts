@@ -44,19 +44,19 @@ export function useCommentsQuery(
 export function useCreateCommentMutation(projectId: string, runId: string) {
   return useApiMutation(
     (data: CreateCommentRequest) => fetchComments.create(projectId, runId, data),
-    [projectKeys.run(projectId, runId), adminKeys.all],
+    [projectKeys.run(projectId, runId), [...projectKeys.detail(projectId), "review-workspace"], adminKeys.all],
   );
 }
 export function useUpdateCommentMutation(projectId: string, runId: string) {
   return useApiMutation(
     (data: { commentId: string; patch: UpdateCommentRequest }) =>
       fetchComments.update(projectId, runId, data.commentId, data.patch),
-    [projectKeys.run(projectId, runId), adminKeys.all],
+    [projectKeys.run(projectId, runId), [...projectKeys.detail(projectId), "review-workspace"], adminKeys.all],
   );
 }
 export function useDeleteCommentMutation(projectId: string, runId: string) {
   return useApiMutation(
     (commentId: string) => fetchComments.remove(projectId, runId, commentId),
-    [projectKeys.run(projectId, runId), adminKeys.all],
+    [projectKeys.run(projectId, runId), [...projectKeys.detail(projectId), "review-workspace"], adminKeys.all],
   );
 }

@@ -60,6 +60,7 @@ export function DataTable<T>({
   const selectedCount = rows.filter((row) => selected.has(getRowId(row))).length;
   const busy = [pending, failed, pagination?.busy].some(Boolean);
   const allSelected = rows.length > 0 && selectedCount === rows.length;
+  const partiallySelected = selectedCount > 0 ? "indeterminate" : false;
   const selectRow = (id: string, checked: boolean) =>
     setSelected((current) => {
       const next = new Set(current);
@@ -116,7 +117,7 @@ export function DataTable<T>({
                 <Checkbox
                   aria-label="Select all rows on this page"
                   disabled={busy || !rows.length}
-                  checked={allSelected ? true : selectedCount > 0 ? "indeterminate" : false}
+                  checked={allSelected ? true : partiallySelected}
                   onCheckedChange={(checked) => setSelected(checked === true ? new Set(rows.map(getRowId)) : new Set())}
                 />
               </TableHead>
@@ -128,7 +129,7 @@ export function DataTable<T>({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {pending ? (
+            {pending && (
               <TableRow>
                 <TableCell colSpan={visible.length + 1}>
                   <div role="status" aria-label="Loading records" className="flex flex-col gap-3 py-4">
@@ -138,7 +139,10 @@ export function DataTable<T>({
                   </div>
                 </TableCell>
               </TableRow>
-            ) : failed ? null : rows.length ? (
+            )}
+            {!pending &&
+              !failed &&
+              rows.length > 0 &&
               rows.map((row, index) => (
                 <TableRow key={getRowId(row)} data-state={selected.has(getRowId(row)) ? "selected" : undefined}>
                   <TableCell>
@@ -158,8 +162,8 @@ export function DataTable<T>({
                     </TableCell>
                   ))}
                 </TableRow>
-              ))
-            ) : (
+              ))}
+            {!pending && !failed && rows.length === 0 && (
               <TableRow>
                 <TableCell colSpan={visible.length + 1} className="h-24 text-center">
                   No results.

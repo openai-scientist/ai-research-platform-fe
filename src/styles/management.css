@@ -21,6 +21,10 @@
     @apply font-semibold;
   }
 
+  .management-surface [data-slot="card-description"] {
+    color: color-mix(in srgb, var(--foreground) 80%, var(--background));
+  }
+
   .management-surface [data-slot="card"] > [data-slot="card-header"][data-compact-toolbar="true"] {
     @apply bg-background py-3;
   }
@@ -28,5 +32,4 @@
   .management-surface [data-slot="empty"] {
     @apply rounded-xl border border-dashed border-border bg-muted/20 py-10;
   }
-
 }

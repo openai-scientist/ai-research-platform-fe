@@ -70,7 +70,7 @@ export function ManagerOverview({ project: initialProject }: { readonly project:
               </Link>
             </Button>
             <Button asChild>
-              <Link prefetch={false} href={`${baseUrl}/experiments#research-context`}>
+              <Link prefetch={false} href={`${baseUrl}/experiments/context#research-context`}>
                 <MessageCircleQuestionMark data-icon="inline-start" />
                 New research question
               </Link>

@@ -2,7 +2,14 @@
 
 import { useEffect } from "react";
 
-import { type QueryKey, type UseQueryOptions, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  type QueryKey,
+  type UseQueryOptions,
+  type UseQueryResult,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { ApiError } from "@/types/api";
@@ -32,7 +39,7 @@ export function useApiQuery<T>(
   queryKey: QueryKey,
   queryFn: (signal: AbortSignal) => Promise<T>,
   options: ApiQueryOptions<T> = {},
-) {
+): UseQueryResult<T, Error> {
   const { silentErrorCodes, ...queryOptions } = options;
   const query = useQuery<T, Error>({
     retry: shouldRetryApiQuery,

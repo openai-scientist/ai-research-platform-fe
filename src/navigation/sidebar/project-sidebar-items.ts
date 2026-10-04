@@ -13,8 +13,20 @@ export function getProjectSidebarItems(projectId: string, role: UserRole): NavGr
       label: "WORKSPACE",
       items: [
         { id: "project-overview", title: "Overview", url: baseUrl, icon: LayoutDashboard },
-        { id: "project-datasets", title: "Datasets", url: `${baseUrl}/datasets`, icon: Database },
-        { id: "project-experiments", title: "Experiments", url: `${baseUrl}/experiments`, icon: FlaskConical },
+        {
+          id: "project-datasets",
+          title: "Datasets",
+          url: `${baseUrl}/datasets`,
+          icon: Database,
+          activeMatch: "prefix",
+        },
+        {
+          id: "project-experiments",
+          title: "Experiments",
+          url: `${baseUrl}/experiments`,
+          icon: FlaskConical,
+          activeMatch: "prefix",
+        },
         { id: "project-findings", title: "Findings", url: `${baseUrl}/findings`, icon: Lightbulb },
       ],
     },

@@ -47,6 +47,7 @@ interface NavItemBase {
 
 export interface NavMainLinkItem extends NavItemBase {
   url: string;
+  activeMatch?: "prefix";
   subItems?: never;
 }
 

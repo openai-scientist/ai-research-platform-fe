@@ -22,6 +22,7 @@ export function WorkspaceFormDialog({
   pending = false,
   disabled = false,
   children,
+  formHeader,
   onSubmit,
   open: controlledOpen,
   onOpenChange,
@@ -37,6 +38,7 @@ export function WorkspaceFormDialog({
   pending?: boolean;
   disabled?: boolean;
   children: ReactNode;
+  formHeader?: ReactNode;
   onSubmit: (event: FormEvent<HTMLFormElement>) => boolean | undefined | Promise<boolean | undefined>;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
@@ -95,6 +97,7 @@ export function WorkspaceFormDialog({
             if (await onSubmit(event)) changeOpen(false);
           }}
         >
+          {formHeader && <div className="shrink-0">{formHeader}</div>}
           <div data-slot="workspace-form-body" className="min-h-0 overflow-y-auto p-1 pb-3">
             <fieldset disabled={pending} className="min-w-0">
               {children}

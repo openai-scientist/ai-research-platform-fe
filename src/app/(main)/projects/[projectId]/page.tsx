@@ -7,7 +7,8 @@ import { getWorkspaceProject } from "@/server/projects";
 import { ProjectRole } from "@/types/enums";
 
 import { ManagerOverview } from "./_components/manager-overview";
-import { ProjectOverview } from "./_components/project-overview";
+import { ResearcherOverview } from "./_components/researcher-overview";
+import { ReviewerOverview } from "./_components/reviewer-overview";
 
 export const metadata: Metadata = {
   title: "Project overview · ResearchLab AI",
@@ -28,5 +29,9 @@ export default async function Page({ params }: { params: Promise<{ projectId: st
     return <ManagerOverview project={project} />;
   }
 
-  return <ProjectOverview project={project} />;
+  return project.my_role === ProjectRole.Reviewer ? (
+    <ReviewerOverview project={project} />
+  ) : (
+    <ResearcherOverview project={project} />
+  );
 }

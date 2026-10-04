@@ -41,11 +41,11 @@ export function AccountSwitcher({
           <button
             type="button"
             aria-label="Open account menu"
-            className="rounded-lg focus-visible:outline-ring focus-visible:outline-2"
+            className="rounded-lg focus-visible:outline-2 focus-visible:outline-ring"
           >
             <Avatar className="size-8 rounded-lg">
               <AvatarImage src={activeUser.avatar || undefined} alt={activeUser.name} />
-              <AvatarFallback>{getInitials(activeUser.name)}</AvatarFallback>
+              <AvatarFallback className="text-foreground">{getInitials(activeUser.name)}</AvatarFallback>
             </Avatar>
           </button>
         </DropdownMenuTrigger>
@@ -60,7 +60,7 @@ export function AccountSwitcher({
                 <div className="flex w-full items-center gap-2 px-1 py-1.5">
                   <Avatar className="size-9 rounded-lg">
                     <AvatarImage src={user.avatar || undefined} alt={user.name} />
-                    <AvatarFallback>{getInitials(user.name)}</AvatarFallback>
+                    <AvatarFallback className="text-foreground">{getInitials(user.name)}</AvatarFallback>
                   </Avatar>
                   <div className="grid min-w-0 flex-1 text-left text-sm leading-tight">
                     <span className="truncate font-semibold">{user.name}</span>
