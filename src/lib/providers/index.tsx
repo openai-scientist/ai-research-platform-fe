@@ -6,9 +6,7 @@ import { useAuthSyncAcrossTabs } from "@/hooks/use-auth-sync-across-tabs";
 
 import { QueryProvider } from "./query-provider";
 import { ReduxProvider } from "./redux-provider";
-
-// Tạm thời tắt SignalR realtime
-// import { SignalRProvider } from "./signalr-provider";
+import { SignalRProvider } from "./signalr-provider";
 
 function AuthSyncProvider({ children }: { children: ReactNode }) {
   useAuthSyncAcrossTabs();
@@ -19,12 +17,9 @@ export function Providers({ children }: { children: ReactNode }) {
   return (
     <ReduxProvider>
       <QueryProvider>
-        {/* Tạm thời comment SignalR realtime
-        <SignalRProvider>
-          <AuthSyncProvider>{children}</AuthSyncProvider>
-        </SignalRProvider>
-        */}
-        <AuthSyncProvider>{children}</AuthSyncProvider>
+        <AuthSyncProvider>
+          <SignalRProvider>{children}</SignalRProvider>
+        </AuthSyncProvider>
       </QueryProvider>
     </ReduxProvider>
   );

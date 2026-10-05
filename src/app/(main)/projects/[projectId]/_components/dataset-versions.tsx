@@ -2,18 +2,10 @@
 
 import { useState } from "react";
 
-import { toast } from "sonner";
-
 import { DataTable } from "@/components/data-table";
 import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  useCreateDatasetVersionMutation,
-  useInfiniteDatasetVersions,
-  useUpdateDatasetMutation,
-} from "@/hooks/use-datasets-query";
+import { useCreateDatasetVersionMutation, useInfiniteDatasetVersions } from "@/hooks/use-datasets-query";
 import { type DatasetItem, fetchDatasets } from "@/lib/api/services/fetch-datasets";
 
 import { CsvFileInput } from "./csv-file-input";
@@ -31,50 +23,12 @@ export function DatasetVersions({
   canWrite: boolean;
 }) {
   const versions = useInfiniteDatasetVersions(projectId, dataset.id);
-  const update = useUpdateDatasetMutation(projectId, dataset.id);
   const upload = useCreateDatasetVersionMutation(projectId, dataset.id);
-  const [name, setName] = useState(dataset.name);
-  const [description, setDescription] = useState(dataset.description ?? "");
   const [file, setFile] = useState<File | null>(null);
   const [fileKey, setFileKey] = useState(0);
 
   const versionActions = canWrite && (
     <div className="flex flex-wrap items-center gap-2">
-      <WorkspaceFormDialog
-        title="Edit dataset"
-        description="Update the dataset name and description."
-        submitLabel="Save dataset"
-        pending={update.isPending}
-        noValidate
-        onSubmit={async (event) => {
-          event.preventDefault();
-          if (!name.trim()) {
-            toast.error("Dataset name is required.");
-            return;
-          }
-          return Boolean(
-            await perform(
-              () => update.mutateAsync({ name: name.trim(), description: description.trim() }),
-              "Dataset saved.",
-            ),
-          );
-        }}
-      >
-        <FieldGroup>
-          <Field>
-            <FieldLabel htmlFor="dataset-edit-name">Name</FieldLabel>
-            <Input id="dataset-edit-name" value={name} onChange={(event) => setName(event.target.value)} />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="dataset-edit-description">Description</FieldLabel>
-            <Textarea
-              id="dataset-edit-description"
-              value={description}
-              onChange={(event) => setDescription(event.target.value)}
-            />
-          </Field>
-        </FieldGroup>
-      </WorkspaceFormDialog>
       <WorkspaceFormDialog
         title="Upload new version"
         description="Add a CSV version while preserving previous versions."

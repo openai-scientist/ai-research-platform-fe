@@ -1,17 +1,16 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { createContext, type ReactNode } from "react";
 
-// Tạm thời comment SignalR hooks vì chưa dùng đến
-// import { useSignalR } from "@/hooks/use-signalr";
-// import { useSignalRNotifications } from "@/hooks/use-signalr-notifications";
+import { useSignalR } from "@/hooks/use-signalr";
+
+export const SignalRNotificationsContext = createContext<ReturnType<typeof useSignalR> | null>(null);
 
 /**
- * Auto-connects SignalR WebSocket khi app load.
- * Đặt cao trong cây component để giữ 1 connection duy nhất.
+ * Reuses the existing provider for the backend's SSE notification transport.
+ * A single owner keeps one authenticated connection per tab.
  */
 export function SignalRProvider({ children }: { children: ReactNode }) {
-  // useSignalR();
-  // useSignalRNotifications();
-  return <>{children}</>;
+  const notifications = useSignalR();
+  return <SignalRNotificationsContext.Provider value={notifications}>{children}</SignalRNotificationsContext.Provider>;
 }

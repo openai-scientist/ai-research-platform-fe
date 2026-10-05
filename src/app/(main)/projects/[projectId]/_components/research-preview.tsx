@@ -5,6 +5,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { DataTable } from "@/components/data-table";
+import { DialogScrollArea } from "@/components/dialog-scroll-area";
 import { ManagementStatusBadge } from "@/components/management-status-badge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -57,7 +58,7 @@ function HypothesisEditor({
         if (await onSave({ ...draft, statement: draft.statement.trim() })) onClose();
       }}
     >
-      <div className="min-h-0 overflow-y-auto p-1">
+      <DialogScrollArea>
         <fieldset disabled={pending} className="min-w-0">
           <FieldGroup>
             <Field>
@@ -114,7 +115,7 @@ function HypothesisEditor({
             </FieldGroup>
           </FieldGroup>
         </fieldset>
-      </div>
+      </DialogScrollArea>
       <div className="flex shrink-0 flex-col-reverse gap-2 sm:flex-row sm:justify-end">
         <Button type="button" variant="secondary" disabled={pending} onClick={onClose}>
           Cancel
@@ -171,7 +172,7 @@ function ResearchPreviewPanel({
           />
         ) : (
           <div className="flex min-h-0 flex-1 flex-col gap-5">
-            <div className="min-h-0 overflow-y-auto p-1">
+            <DialogScrollArea>
               <p className="whitespace-pre-wrap break-words leading-relaxed">{preview.activeHypothesis.statement}</p>
               <dl className="mt-4 grid gap-4 sm:grid-cols-2">
                 <div>
@@ -187,7 +188,7 @@ function ResearchPreviewPanel({
                   </dd>
                 </div>
               </dl>
-            </div>
+            </DialogScrollArea>
             <div className="flex shrink-0 justify-end">
               <Button type="button" variant="secondary" onClick={onClose}>
                 Close
@@ -197,7 +198,7 @@ function ResearchPreviewPanel({
         )}
       </TabsContent>
       <TabsContent value="warnings" className="flex min-h-0 flex-col gap-5">
-        <div className="flex min-h-0 flex-col gap-4 overflow-y-auto p-1">
+        <DialogScrollArea contentClassName="flex flex-col gap-4">
           {!preview.warnings.length && <p className="text-muted-foreground text-sm">No unresolved sample warnings.</p>}
           {preview.warnings.map((warning) => (
             <div key={`${warning.source}:${warning.title}`} className="flex flex-col gap-2 border-b pb-3">
@@ -228,7 +229,7 @@ function ResearchPreviewPanel({
               )}
             </div>
           ))}
-        </div>
+        </DialogScrollArea>
         <div className="flex shrink-0 justify-end">
           <Button type="button" variant="secondary" disabled={query.update.isPending} onClick={onClose}>
             Close
@@ -236,7 +237,7 @@ function ResearchPreviewPanel({
         </div>
       </TabsContent>
       <TabsContent value="report" className="flex min-h-0 flex-col gap-5">
-        <div className="flex min-h-0 flex-col gap-4 overflow-y-auto p-1">
+        <DialogScrollArea contentClassName="flex flex-col gap-4">
           <p className="text-sm">
             {preview.report.sectionsDone}/{preview.report.sectionsTotal} sections complete
           </p>
@@ -273,7 +274,7 @@ function ResearchPreviewPanel({
               </Button>
             </div>
           )}
-        </div>
+        </DialogScrollArea>
         <div className="flex shrink-0 justify-end">
           <Button type="button" variant="secondary" disabled={query.update.isPending} onClick={onClose}>
             Close

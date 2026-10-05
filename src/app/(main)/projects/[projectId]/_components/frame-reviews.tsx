@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import { cn } from "cn";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -37,11 +38,31 @@ function FrameDecision({
   const [note, setNote] = useState("");
   const [decisions, setDecisions] = useState<Record<string, { signal: ReviewSignalKind; value: string }>>({});
   const editable = canWrite && item.status === FrameReviewStatus.Pending;
+  const proposals = Object.entries(item.request.items);
+  const submittedItems = item.decision?.signals ?? item.decision?.items;
+  let itemCount = proposals.length;
+  if (itemCount === 0) {
+    if (Array.isArray(submittedItems)) itemCount = submittedItems.length;
+    else if (isRecord(submittedItems)) itemCount = Object.keys(submittedItems).length;
+  }
   return (
     <WorkspaceFormDialog
       title={`Frame review · sequence ${item.sequence}`}
       triggerLabel={editable ? "Review frame" : "View frame and decision"}
-      description="Inspect the proposed frame and its review decision."
+      description="Review the research structure, proposed variables, questions, hypotheses, and decisions."
+      contentClassName="h-[calc(100dvh-2rem)] sm:max-w-[min(80rem,calc(100%-2rem))]"
+      expandable
+      formHeader={
+        <div className="flex flex-wrap items-center gap-3">
+          <Badge variant="secondary">{dataLabel(item.status)}</Badge>
+          {itemCount > 0 && (
+            <Badge variant="outline">
+              {itemCount} review {itemCount === 1 ? "item" : "items"}
+            </Badge>
+          )}
+          {editable && <p className="text-muted-foreground text-sm">Default decision: Approve.</p>}
+        </div>
+      }
       submitLabel="Submit frame review"
       pending={submit.isPending}
       hideSubmit={!editable}
@@ -72,67 +93,78 @@ function FrameDecision({
       }}
     >
       <FieldGroup>
-        {Object.entries(item.request.items).map(([id, value], index) => {
+        {proposals.map(([id, value], index) => {
           const proposal = isRecord(value) && "value" in value ? value.value : value;
           const description = isRecord(value) && typeof value.description === "string" ? value.description : null;
           const status = isRecord(value) && typeof value.status === "string" ? value.status : null;
           return (
-            <div key={id} className="flex min-w-0 flex-col gap-4 rounded-lg border p-4">
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <h3 className="min-w-0 break-words font-medium text-sm">{dataLabel(id)}</h3>
-                {status && <Badge variant="secondary">{dataLabel(status)}</Badge>}
+            <section
+              key={id}
+              aria-label={dataLabel(id)}
+              className={cn(
+                "grid min-w-0 gap-6 border-b pb-5 last:border-0 last:pb-0",
+                editable && "md:grid-cols-[minmax(0,1fr)_18rem]",
+              )}
+            >
+              <div className="flex min-w-0 flex-col gap-3">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <h3 className="min-w-0 break-words font-medium text-sm">{dataLabel(id)}</h3>
+                  {status && <Badge variant="secondary">{dataLabel(status)}</Badge>}
+                </div>
+                {description && <p className="text-muted-foreground text-sm leading-relaxed">{description}</p>}
+                {id.startsWith("variables.") && id.endsWith(".role") && typeof proposal === "string" ? (
+                  <dl className="flex flex-col gap-2 text-sm">
+                    <dt className="text-muted-foreground">Proposed role</dt>
+                    <dd>
+                      <Badge variant="secondary">{dataLabel(proposal)}</Badge>
+                    </dd>
+                  </dl>
+                ) : (
+                  <StructuredData value={proposal} technical={false} flat />
+                )}
               </div>
-              {description && <p className="text-muted-foreground text-sm leading-relaxed">{description}</p>}
-              {id.startsWith("variables.") && id.endsWith(".role") && typeof proposal === "string" ? (
-                <dl className="flex flex-col gap-2 text-sm">
-                  <dt className="text-muted-foreground">Proposed role</dt>
-                  <dd>
-                    <Badge variant="secondary">{dataLabel(proposal)}</Badge>
-                  </dd>
-                </dl>
-              ) : (
-                <StructuredData value={proposal} technical={false} />
-              )}
               {editable && (
-                <Field>
-                  <FieldLabel htmlFor={`frame-${item.id}-${index}`}>Your decision</FieldLabel>
-                  <Select
-                    value={decisions[id]?.signal ?? ReviewSignalKind.Approve}
-                    onValueChange={(signal) =>
-                      setDecisions((current) => ({
-                        ...current,
-                        [id]: {
-                          signal: signal as ReviewSignalKind,
-                          value: current[id]?.value ?? JSON.stringify(proposal, null, 2),
-                        },
-                      }))
-                    }
-                  >
-                    <SelectTrigger id={`frame-${item.id}-${index}`}>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectGroup>
-                        <SelectItem value={ReviewSignalKind.Approve}>Approve</SelectItem>
-                        <SelectItem value={ReviewSignalKind.Edit}>Edit</SelectItem>
-                        <SelectItem value={ReviewSignalKind.Reject}>Reject</SelectItem>
-                        <SelectItem value={ReviewSignalKind.Unknown}>Not sure</SelectItem>
-                      </SelectGroup>
-                    </SelectContent>
-                  </Select>
-                </Field>
+                <FieldGroup className="min-w-0">
+                  <Field>
+                    <FieldLabel htmlFor={`frame-${item.id}-${index}`}>Your decision</FieldLabel>
+                    <Select
+                      value={decisions[id]?.signal ?? ReviewSignalKind.Approve}
+                      onValueChange={(signal) =>
+                        setDecisions((current) => ({
+                          ...current,
+                          [id]: {
+                            signal: signal as ReviewSignalKind,
+                            value: current[id]?.value ?? JSON.stringify(proposal, null, 2),
+                          },
+                        }))
+                      }
+                    >
+                      <SelectTrigger id={`frame-${item.id}-${index}`}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          <SelectItem value={ReviewSignalKind.Approve}>Approve</SelectItem>
+                          <SelectItem value={ReviewSignalKind.Edit}>Edit</SelectItem>
+                          <SelectItem value={ReviewSignalKind.Reject}>Reject</SelectItem>
+                          <SelectItem value={ReviewSignalKind.Unknown}>Not sure</SelectItem>
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  {decisions[id]?.signal === ReviewSignalKind.Edit && (
+                    <FrameValueEditor
+                      id={id}
+                      proposal={proposal}
+                      serialized={decisions[id].value}
+                      onChange={(next) =>
+                        setDecisions((current) => ({ ...current, [id]: { ...current[id], value: next } }))
+                      }
+                    />
+                  )}
+                </FieldGroup>
               )}
-              {editable && decisions[id]?.signal === ReviewSignalKind.Edit && (
-                <FrameValueEditor
-                  id={id}
-                  proposal={proposal}
-                  serialized={decisions[id].value}
-                  onChange={(next) =>
-                    setDecisions((current) => ({ ...current, [id]: { ...current[id], value: next } }))
-                  }
-                />
-              )}
-            </div>
+            </section>
           );
         })}
         {editable && (
@@ -142,9 +174,9 @@ function FrameDecision({
           </Field>
         )}
         {item.decision && (
-          <section className="flex min-w-0 flex-col gap-4 rounded-lg border p-4" aria-label="Submitted decision">
+          <section className="flex min-w-0 flex-col gap-4" aria-label="Submitted decision">
             <h3 className="font-medium text-sm">Submitted decision</h3>
-            <StructuredData value={item.decision} />
+            <StructuredData value={item.decision} flat />
             <p className="text-muted-foreground text-xs">
               {item.submitted_at ? new Date(item.submitted_at).toLocaleString() : ""}
             </p>

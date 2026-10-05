@@ -1,5 +1,19 @@
 import type { ApiResult } from "@/types/api";
 
+import type { ListParams } from "./types";
+
+// Project-wide aggregates must finish pagination before filtering or selecting runs.
+export async function collectPages<T>(fetchPage: (params: ListParams) => Promise<ApiResult<T[]>>) {
+  const items: T[] = [];
+  let offset = 0;
+  for (;;) {
+    const page = await fetchPage({ limit: 100, offset });
+    items.push(...page.data);
+    offset += page.data.length;
+    if (!page.data.length || offset >= (page.meta.pagination?.total ?? offset)) return items;
+  }
+}
+
 export interface InfinitePageResult<TItem> {
   items: TItem[];
   offset: number;

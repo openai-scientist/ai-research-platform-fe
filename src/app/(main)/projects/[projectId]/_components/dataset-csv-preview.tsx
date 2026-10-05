@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import { DialogScrollArea } from "@/components/dialog-scroll-area";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -68,12 +69,7 @@ export function DatasetCsvPreview({
             retry={query.refetch}
           />
           {rows.length > 0 && (
-            <section
-              aria-label="CSV preview table"
-              // biome-ignore lint/a11y/noNoninteractiveTabindex: The scrollable table region needs keyboard access for horizontal and vertical scrolling.
-              tabIndex={0}
-              className="max-h-[55dvh] min-h-0 overflow-auto rounded-lg border outline-none focus-visible:ring-2 focus-visible:ring-ring [&_[data-slot=table-container]]:overflow-visible"
-            >
+            <DialogScrollArea horizontal contentLabel="CSV preview table" className="max-h-[55dvh]">
               <Table>
                 <TableHeader className="sticky top-0 bg-muted">
                   <TableRow>
@@ -101,7 +97,7 @@ export function DatasetCsvPreview({
                   ))}
                 </TableBody>
               </Table>
-            </section>
+            </DialogScrollArea>
           )}
           <p className="text-muted-foreground text-xs">
             Preview shows up to 100 rows and 50 columns from the start of the file. Download CSV to view the complete

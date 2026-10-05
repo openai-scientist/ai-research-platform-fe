@@ -18,6 +18,13 @@ export interface NotificationItem {
   read_at: string | null;
 }
 
+export interface NotificationSnapshot {
+  items: NotificationItem[];
+  unread_count: number;
+}
+
+export type SessionEndedCode = "SESSION_EXPIRED" | "USER_SUSPENDED" | "UNAUTHENTICATED";
+
 export interface NotificationListParams extends ListParams {
   unread_only?: boolean;
 }

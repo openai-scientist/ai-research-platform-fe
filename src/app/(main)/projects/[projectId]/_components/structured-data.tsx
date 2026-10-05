@@ -1,3 +1,5 @@
+import { cn } from "cn";
+
 import { Badge } from "@/components/ui/badge";
 
 import { ContextDisclosure } from "./context-disclosure";
@@ -57,7 +59,7 @@ function ScalarValue({ value, label }: { value: unknown; label?: string }) {
   return <span className="whitespace-pre-wrap break-words tabular-nums">{String(value)}</span>;
 }
 
-function DataValue({ value, depth = 0 }: { value: unknown; depth?: number }) {
+function DataValue({ value, depth = 0, flat = false }: { value: unknown; depth?: number; flat?: boolean }) {
   if (depth > 7)
     return <p className="text-muted-foreground text-sm">Open technical details to view deeper nested data.</p>;
   if (Array.isArray(value)) {
@@ -78,9 +80,15 @@ function DataValue({ value, depth = 0 }: { value: unknown; depth?: number }) {
     return (
       <div className="flex min-w-0 flex-col gap-3">
         {value.slice(0, 100).map((item, index) => (
-          // biome-ignore lint/suspicious/noArrayIndexKey: Immutable JSON array positions identify each entry.
-          <div key={index} className="min-w-0 rounded-lg border p-3">
-            <DataValue value={item} depth={depth + 1} />
+          <div
+            // biome-ignore lint/suspicious/noArrayIndexKey: Immutable JSON array positions identify each entry.
+            key={index}
+            className={cn(
+              "min-w-0",
+              flat ? "border-b py-4 first:pt-0 last:border-0 last:pb-0" : "rounded-lg border p-3",
+            )}
+          >
+            <DataValue value={item} depth={depth + 1} flat={flat} />
           </div>
         ))}
         {value.length > 100 && <p className="text-muted-foreground text-sm">More items in technical details.</p>}
@@ -99,7 +107,10 @@ function DataValue({ value, depth = 0 }: { value: unknown; depth?: number }) {
           {simple.slice(0, 100).map(([key, item]) => (
             <div
               key={key}
-              className="grid min-w-0 @xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] @xl:gap-6 gap-1 border-b pb-3 last:border-0 last:pb-0"
+              className={cn(
+                "grid min-w-0 @xl:gap-6 gap-1 border-b pb-3 last:border-0 last:pb-0",
+                flat ? "@xl:grid-cols-[minmax(8rem,1fr)_minmax(0,3fr)]" : "@xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]",
+              )}
             >
               <dt className="flex flex-col gap-1 break-words text-muted-foreground">
                 <span>{dataLabel(key)}</span>
@@ -113,9 +124,13 @@ function DataValue({ value, depth = 0 }: { value: unknown; depth?: number }) {
         </dl>
       )}
       {groups.slice(0, 50).map(([key, item]) => (
-        <section key={key} className="flex min-w-0 flex-col gap-3 rounded-lg border p-4" aria-label={dataLabel(key)}>
+        <section
+          key={key}
+          className={cn("flex min-w-0 flex-col gap-3", flat ? "border-t pt-4" : "rounded-lg border p-4")}
+          aria-label={dataLabel(key)}
+        >
           <h3 className="break-words font-medium text-sm">{dataLabel(key)}</h3>
-          <GroupValue name={key} value={item} depth={depth + 1} />
+          <GroupValue name={key} value={item} depth={depth + 1} flat={flat} />
         </section>
       ))}
       {(simple.length > 100 || groups.length > 50) && (
@@ -125,7 +140,7 @@ function DataValue({ value, depth = 0 }: { value: unknown; depth?: number }) {
   );
 }
 
-function GroupValue({ name, value, depth }: { name: string; value: unknown; depth: number }) {
+function GroupValue({ name, value, depth, flat }: { name: string; value: unknown; depth: number; flat: boolean }) {
   if (
     name === "confidence_interval_95" &&
     Array.isArray(value) &&
@@ -145,7 +160,7 @@ function GroupValue({ name, value, depth }: { name: string; value: unknown; dept
   ) {
     return <ImportanceScores values={value as Record<string, number>} />;
   }
-  return <DataValue value={value} depth={depth} />;
+  return <DataValue value={value} depth={depth} flat={flat} />;
 }
 
 function ImportanceScores({ values }: { values: Record<string, number> }) {
@@ -172,10 +187,18 @@ function ImportanceScores({ values }: { values: Record<string, number> }) {
   );
 }
 
-export function StructuredData({ value, technical = true }: { value: unknown; technical?: boolean }) {
+export function StructuredData({
+  value,
+  technical = true,
+  flat = false,
+}: {
+  value: unknown;
+  technical?: boolean;
+  flat?: boolean;
+}) {
   return (
     <div className="flex min-w-0 flex-col gap-5">
-      <DataValue value={value} />
+      <DataValue value={value} flat={flat} />
       {technical && (
         <ContextDisclosure title="Technical details">
           <pre className="whitespace-pre-wrap break-words rounded-lg bg-muted p-3 text-xs">

@@ -9,7 +9,7 @@ import {
   type RunListResponse,
 } from "@/lib/api/services/fetch-runs";
 import type { ListParams } from "@/lib/api/types";
-import { RunStatus } from "@/types/enums";
+import { isActiveRun } from "@/lib/research-workspace";
 
 import { type ApiQueryOptions, useApiMutation, useApiQuery } from "./use-api";
 import { type InfiniteQueryOptions, useInfinityScroll } from "./use-infinity-scroll";
@@ -35,7 +35,7 @@ export function useRunDetailQuery(projectId: string, runId: string, options?: Ap
     refetchInterval: (query) => {
       if (query.state.error) return false;
       const status = query.state.data?.data.status;
-      return status && [RunStatus.Queued, RunStatus.Running, RunStatus.AwaitingReview].includes(status) ? 12000 : false;
+      return status && isActiveRun(status) ? 12000 : false;
     },
     ...options,
     enabled: Boolean(projectId && runId) && (options?.enabled ?? true),

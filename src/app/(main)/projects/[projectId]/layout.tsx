@@ -3,6 +3,8 @@ import type { ReactNode } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { cn } from "cn";
+
 import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { canCreateProject } from "@/lib/auth/auth-config";
@@ -10,6 +12,7 @@ import { getAuthenticatedUser } from "@/server/auth";
 import { getWorkspaceProject, getWorkspaceProjects } from "@/server/projects";
 import { getPreference } from "@/server/server-actions";
 
+import { NotificationBell } from "../../_components/notifications/notification-bell";
 import { AccountSwitcher } from "../../dashboard/_components/header/account-switcher";
 import { LayoutControls } from "../../dashboard/_components/header/layout-controls";
 import { ThemeSwitcher } from "../../dashboard/_components/header/theme-switcher";
@@ -55,11 +58,11 @@ export default async function Layout({
         collapsible={collapsible}
       />
       <SidebarInset
-        className={
-          "min-w-0 overflow-x-clip peer-data-[variant=inset]:border [--dashboard-header-height:--spacing(12)] " +
-          "[html[data-content-layout=centered]_&>*]:mx-auto [html[data-content-layout=centered]_&>*]:w-full " +
-          "[html[data-content-layout=centered]_&>*]:max-w-screen-2xl"
-        }
+        className={cn(
+          "min-w-0 overflow-x-clip [--dashboard-header-height:--spacing(12)] peer-data-[variant=inset]:border",
+          "[html[data-content-layout=centered]_&>*]:mx-auto [html[data-content-layout=centered]_&>*]:w-full",
+          "[html[data-content-layout=centered]_&>*]:max-w-screen-2xl",
+        )}
       >
         <header className="flex h-12 shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
           <div className="flex w-full items-center justify-between gap-2 px-4 lg:px-6">
@@ -73,6 +76,7 @@ export default async function Layout({
             </div>
             <div className="flex items-center gap-2">
               <LayoutControls />
+              <NotificationBell />
               <ThemeSwitcher />
               <AccountSwitcher
                 users={[{ id: user.email, name: user.name, email: user.email, avatar: "", role: user.role }]}

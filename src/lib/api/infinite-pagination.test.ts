@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-import { flattenInfinitePages, normalizePageSize, toInfinitePage } from "./infinite-pagination";
+import { collectPages, flattenInfinitePages, normalizePageSize, toInfinitePage } from "./infinite-pagination";
 import { success } from "./test-utils";
 
 describe("offset-based infinite pagination", () => {
@@ -51,5 +51,52 @@ describe("offset-based infinite pagination", () => {
   it("does not invent a total when pagination is absent", () => {
     expect(toInfinitePage(success([{ id: "1" }]), 0, 20).totalItems).toBeNull();
     expect(flattenInfinitePages()).toEqual([]);
+  });
+});
+
+describe("complete project-wide pagination", () => {
+  it("collects short pages in order until the backend total is reached", async () => {
+    const fetchPage = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ...success(["run-1"]),
+        meta: { request_id: "first", pagination: { total: 3, limit: 100, offset: 0 } },
+      })
+      .mockResolvedValueOnce({
+        ...success(["run-2", "run-3"]),
+        meta: { request_id: "second", pagination: { total: 3, limit: 100, offset: 1 } },
+      });
+
+    expect(await collectPages(fetchPage)).toEqual(["run-1", "run-2", "run-3"]);
+    expect(fetchPage).toHaveBeenNthCalledWith(1, { limit: 100, offset: 0 });
+    expect(fetchPage).toHaveBeenNthCalledWith(2, { limit: 100, offset: 1 });
+    expect(fetchPage).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    { name: "missing pagination", response: success(["run-1"]), expected: ["run-1"] },
+    {
+      name: "empty page with a stale total",
+      response: { ...success([]), meta: { request_id: "empty", pagination: { total: 100, limit: 100, offset: 0 } } },
+      expected: [],
+    },
+  ])("stops fetching for $name", async ({ response, expected }) => {
+    const fetchPage = vi.fn().mockResolvedValue(response);
+    expect(await collectPages(fetchPage)).toEqual(expected);
+    expect(fetchPage).toHaveBeenCalledTimes(1);
+  });
+
+  it("propagates a later-page failure instead of returning an incomplete aggregate", async () => {
+    const error = new Error("The next page could not be loaded.");
+    const fetchPage = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ...success(["run-1"]),
+        meta: { request_id: "first", pagination: { total: 2, limit: 100, offset: 0 } },
+      })
+      .mockRejectedValueOnce(error);
+
+    await expect(collectPages(fetchPage)).rejects.toBe(error);
+    expect(fetchPage).toHaveBeenCalledTimes(2);
   });
 });

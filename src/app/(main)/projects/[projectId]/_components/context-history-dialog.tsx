@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import { History } from "lucide-react";
 
+import { DialogScrollArea } from "@/components/dialog-scroll-area";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -36,7 +37,7 @@ export function ContextHistoryDialog({ projectId }: { projectId: string }) {
           <DialogTitle>Context history</DialogTitle>
           <DialogDescription>Browse saved versions and expand one to view its research context.</DialogDescription>
         </DialogHeader>
-        <div className="min-h-0 overflow-y-auto p-1">{open && <ContextHistory projectId={projectId} />}</div>
+        <DialogScrollArea>{open && <ContextHistory projectId={projectId} />}</DialogScrollArea>
       </DialogContent>
     </Dialog>
   );

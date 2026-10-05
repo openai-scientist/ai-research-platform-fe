@@ -8,6 +8,7 @@ import { FileText, History, type LucideIcon, Microscope, Workflow } from "lucide
 import { toast } from "sonner";
 
 import { DataTable } from "@/components/data-table";
+import { DialogScrollArea } from "@/components/dialog-scroll-area";
 import { ManagementStatusBadge } from "@/components/management-status-badge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -86,7 +87,7 @@ function SettingsDetailDialog({
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
-        <div className="flex min-h-0 flex-col gap-4 overflow-y-auto p-1 pb-3">{children}</div>
+        <DialogScrollArea contentClassName="flex flex-col gap-4">{children}</DialogScrollArea>
       </DialogContent>
     </Dialog>
   );

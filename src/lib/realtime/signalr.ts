@@ -1,63 +1,138 @@
-import { type HubConnection, HubConnectionBuilder, HubConnectionState, LogLevel } from "@microsoft/signalr";
+// Retain the existing realtime module path. The backend handoff now uses SSE.
+import { z } from "zod";
 
-export type SignalRStatus = HubConnectionState;
+import { getApiBaseUrl } from "@/lib/api/config";
+import { fetchAuth } from "@/lib/api/services/fetch-auth";
+import type { NotificationSnapshot, SessionEndedCode } from "@/lib/api/services/fetch-notifications";
+import { SESSION_INVALID_CODES } from "@/lib/auth/auth-config";
+import { ApiError } from "@/types/api";
+import { NotificationKind } from "@/types/enums";
 
-let connection: HubConnection | null = null;
-let startPromise: Promise<void> | null = null;
+export type NotificationConnectionStatus = "connecting" | "connected" | "reconnecting";
 
-function getBaseUrl(): string {
-  return process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:6789/";
+const snapshotSchema = z.object({
+  items: z.array(
+    z.object({
+      id: z.string(),
+      kind: z.enum(NotificationKind),
+      project_id: z.string(),
+      project_name: z.string(),
+      run_id: z.string().nullable(),
+      actor_user_id: z.string().nullable(),
+      actor_display_name: z.string().nullable(),
+      created_at: z.iso.datetime({ offset: true }),
+      read_at: z.iso.datetime({ offset: true }).nullable(),
+    }),
+  ),
+  unread_count: z.number().int().nonnegative(),
+});
+const sessionEndedSchema = z.object({
+  code: z.enum(["SESSION_EXPIRED", "USER_SUSPENDED", "UNAUTHENTICATED"]),
+});
+const reconnectDelays = [1000, 2000, 5000, 10000, 30000];
+
+interface NotificationHandlers {
+  onSnapshot: (snapshot: NotificationSnapshot) => void;
+  onStatus: (status: NotificationConnectionStatus) => void;
+  onSessionEnded: (code: SessionEndedCode) => void;
+  onError: (error: Error) => void;
 }
 
-export function getHubUrl(): string {
-  return new URL("/hubs/app", getBaseUrl()).toString();
-}
+// One owner per tab. Native EventSource reconnects transient network failures;
+// only CLOSED connections need an authenticated recovery attempt.
+export function subscribeNotifications(userId: string, handlers: NotificationHandlers) {
+  let stream: EventSource | null = null;
+  let disposed = false;
+  let attempt = 0;
+  let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+  const controller = new AbortController();
 
-export function getHubConnection(): HubConnection {
-  if (typeof window === "undefined") throw new Error("SignalR chỉ chạy trên browser");
-  if (connection) return connection;
+  const closeStream = () => {
+    if (!stream) return;
+    stream.onopen = null;
+    stream.onerror = null;
+    stream.close();
+    stream = null;
+  };
+  const stop = () => {
+    disposed = true;
+    clearTimeout(reconnectTimer);
+    controller.abort();
+    closeStream();
+  };
+  const endSession = (code: SessionEndedCode) => {
+    stop();
+    handlers.onSessionEnded(code);
+  };
 
-  connection = new HubConnectionBuilder()
-    .withUrl(getHubUrl(), { withCredentials: true })
-    .withAutomaticReconnect()
-    .configureLogging(process.env.NODE_ENV === "development" ? LogLevel.Information : LogLevel.Warning)
-    .build();
+  const scheduleRecovery = (retryAfter = 0) => {
+    if (disposed) return;
+    closeStream();
+    clearTimeout(reconnectTimer);
+    handlers.onStatus("reconnecting");
+    const delay = reconnectDelays[Math.min(attempt++, reconnectDelays.length - 1)];
+    const recover = async () => {
+      if (disposed) return;
+      try {
+        const current = await fetchAuth.me(controller.signal);
+        if (disposed) return;
+        if (current.user.id !== userId) {
+          endSession("UNAUTHENTICATED");
+          return;
+        }
+        connect();
+      } catch (error) {
+        if (disposed) return;
+        if (error instanceof ApiError && SESSION_INVALID_CODES.includes(error.code)) {
+          endSession(error.code as SessionEndedCode);
+          return;
+        }
+        handlers.onError(error instanceof Error ? error : new Error("Unable to reconnect live notifications."));
+        scheduleRecovery(error instanceof ApiError ? (error.retryAfter ?? 0) : 0);
+      }
+    };
+    reconnectTimer = setTimeout(() => void recover(), Math.max(delay, retryAfter * 1000));
+  };
 
-  connection.onreconnecting((err) => console.info("[SignalR] reconnecting...", err));
-  connection.onreconnected((id) => console.info("[SignalR] reconnected:", id));
-  connection.onclose((err) => console.info("[SignalR] closed", err));
+  const connect = () => {
+    if (disposed) return;
+    try {
+      const base = new URL(`${getApiBaseUrl()}/`, window.location.origin);
+      const current = new EventSource(new URL("notifications/stream?limit=50", base), { withCredentials: true });
+      stream = current;
+      current.addEventListener("notifications", (event) => {
+        if (disposed || stream !== current) return;
+        try {
+          const snapshot = snapshotSchema.parse(JSON.parse((event as MessageEvent<string>).data));
+          attempt = 0;
+          handlers.onSnapshot(snapshot);
+          handlers.onStatus("connected");
+        } catch {
+          handlers.onError(new Error("Unable to load live notifications. Reconnecting."));
+          scheduleRecovery();
+        }
+      });
+      current.addEventListener("session-ended", (event) => {
+        if (disposed || stream !== current) return;
+        try {
+          const { code } = sessionEndedSchema.parse(JSON.parse((event as MessageEvent<string>).data));
+          endSession(code);
+        } catch {
+          scheduleRecovery();
+        }
+      });
+      current.onerror = () => {
+        if (disposed || stream !== current) return;
+        handlers.onStatus("reconnecting");
+        if (current.readyState === EventSource.CLOSED) scheduleRecovery();
+      };
+    } catch {
+      handlers.onError(new Error("Unable to connect live notifications. Reconnecting."));
+      scheduleRecovery();
+    }
+  };
 
-  return connection;
-}
-
-export async function startHubConnection(): Promise<HubConnection> {
-  const conn = getHubConnection();
-  if (conn.state === HubConnectionState.Connected) return conn;
-
-  if (conn.state === HubConnectionState.Connecting && startPromise !== null) {
-    await startPromise;
-    return conn;
-  }
-
-  startPromise = conn
-    .start()
-    .then(() => {
-      startPromise = null;
-    })
-    .catch((err) => {
-      startPromise = null;
-      throw err;
-    });
-
-  await startPromise;
-  return conn;
-}
-
-export async function stopHubConnection(): Promise<void> {
-  if (!connection) return;
-  try {
-    await connection.stop();
-  } finally {
-    connection = null;
-  }
+  handlers.onStatus("connecting");
+  connect();
+  return stop;
 }

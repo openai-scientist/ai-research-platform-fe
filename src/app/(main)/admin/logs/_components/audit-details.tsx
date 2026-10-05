@@ -2,6 +2,7 @@
 
 import { ArrowRight, ChevronDown, ChevronRight } from "lucide-react";
 
+import { DialogScrollArea } from "@/components/dialog-scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -56,77 +57,79 @@ export function AuditDetails({
           Details <ChevronRight data-icon="inline-end" />
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-xl">
-        <DialogHeader>
+      <DialogContent className="flex max-h-[85dvh] flex-col overflow-hidden sm:max-w-xl">
+        <DialogHeader className="shrink-0 pr-8">
           <DialogTitle>{auditTitle(item)}</DialogTitle>
           <DialogDescription>{auditSummary(item, actor, subject)}</DialogDescription>
         </DialogHeader>
-        <dl className="grid gap-4 rounded-lg border p-4 sm:grid-cols-2">
-          <div className="min-w-0 space-y-1">
-            <dt className="text-muted-foreground text-xs">Performed by</dt>
-            <dd className="break-words font-medium text-sm">{actor}</dd>
-            {actorEmail && <dd className="break-words text-muted-foreground text-xs">{actorEmail}</dd>}
-          </div>
-          <div className="min-w-0 space-y-1">
-            <dt className="text-muted-foreground text-xs">
-              Affected {readableValue(item.resource_type).toLowerCase()}
-            </dt>
-            <dd className="break-words font-medium text-sm">{subject}</dd>
-            {subjectEmail && <dd className="break-words text-muted-foreground text-xs">{subjectEmail}</dd>}
-          </div>
-          <div className="min-w-0 space-y-1 sm:col-span-2">
-            <dt className="text-muted-foreground text-xs">When (local time)</dt>
-            <dd className="text-sm">{formatTimestamp(item.created_at)}</dd>
-          </div>
-          {project && (
+        <DialogScrollArea contentClassName="flex flex-col gap-4">
+          <dl className="grid gap-4 rounded-lg border p-4 sm:grid-cols-2">
+            <div className="min-w-0 space-y-1">
+              <dt className="text-muted-foreground text-xs">Performed by</dt>
+              <dd className="break-words font-medium text-sm">{actor}</dd>
+              {actorEmail && <dd className="break-words text-muted-foreground text-xs">{actorEmail}</dd>}
+            </div>
+            <div className="min-w-0 space-y-1">
+              <dt className="text-muted-foreground text-xs">
+                Affected {readableValue(item.resource_type).toLowerCase()}
+              </dt>
+              <dd className="break-words font-medium text-sm">{subject}</dd>
+              {subjectEmail && <dd className="break-words text-muted-foreground text-xs">{subjectEmail}</dd>}
+            </div>
             <div className="min-w-0 space-y-1 sm:col-span-2">
-              <dt className="text-muted-foreground text-xs">Project</dt>
-              <dd className="break-words text-sm">{project}</dd>
+              <dt className="text-muted-foreground text-xs">When (local time)</dt>
+              <dd className="text-sm">{formatTimestamp(item.created_at)}</dd>
             </div>
-          )}
-        </dl>
-        {change && (
-          <section className="space-y-3">
-            <h3 className="font-medium text-sm">What changed</h3>
-            <div className="flex items-center gap-3 rounded-lg bg-muted/50 p-3">
-              <div className="min-w-0 flex-1 space-y-2">
-                <p className="text-muted-foreground text-xs">Before</p>
-                <Badge variant="outline">{readableValue(change.before)}</Badge>
+            {project && (
+              <div className="min-w-0 space-y-1 sm:col-span-2">
+                <dt className="text-muted-foreground text-xs">Project</dt>
+                <dd className="break-words text-sm">{project}</dd>
               </div>
-              <ArrowRight className="size-4 shrink-0 text-muted-foreground" aria-label="changed to" />
-              <div className="min-w-0 flex-1 space-y-2">
-                <p className="text-muted-foreground text-xs">After</p>
-                <Badge variant="secondary">{readableValue(change.after)}</Badge>
-              </div>
-            </div>
-            <p className="text-muted-foreground text-xs">
-              {change.label} changed from {readableValue(change.before)} to {readableValue(change.after)}.
-            </p>
-          </section>
-        )}
-        <Collapsible className="border-t pt-3">
-          <CollapsibleTrigger asChild>
-            <Button variant="ghost" className="group w-full justify-between">
-              Technical details <ChevronDown className="group-data-[state=open]:rotate-180" data-icon="inline-end" />
-            </Button>
-          </CollapsibleTrigger>
-          <CollapsibleContent className="space-y-4 pt-3">
-            <p className="text-muted-foreground text-xs">
-              Reference IDs for support. Names above reflect the current directory.
-            </p>
-            <dl className="grid gap-3 text-sm sm:grid-cols-2">
-              {fields.map(([label, value]) => (
-                <div key={label} className="min-w-0 space-y-1">
-                  <dt className="text-muted-foreground text-xs">{label}</dt>
-                  <dd className="break-words font-mono text-xs [overflow-wrap:anywhere]">{value}</dd>
+            )}
+          </dl>
+          {change && (
+            <section className="space-y-3">
+              <h3 className="font-medium text-sm">What changed</h3>
+              <div className="flex items-center gap-3 rounded-lg bg-muted/50 p-3">
+                <div className="min-w-0 flex-1 space-y-2">
+                  <p className="text-muted-foreground text-xs">Before</p>
+                  <Badge variant="outline">{readableValue(change.before)}</Badge>
                 </div>
-              ))}
-            </dl>
-            <pre className="max-h-64 overflow-auto rounded-md bg-muted p-3 text-xs">
-              {JSON.stringify(item.details, null, 2)}
-            </pre>
-          </CollapsibleContent>
-        </Collapsible>
+                <ArrowRight className="size-4 shrink-0 text-muted-foreground" aria-label="changed to" />
+                <div className="min-w-0 flex-1 space-y-2">
+                  <p className="text-muted-foreground text-xs">After</p>
+                  <Badge variant="secondary">{readableValue(change.after)}</Badge>
+                </div>
+              </div>
+              <p className="text-muted-foreground text-xs">
+                {change.label} changed from {readableValue(change.before)} to {readableValue(change.after)}.
+              </p>
+            </section>
+          )}
+          <Collapsible className="border-t pt-3">
+            <CollapsibleTrigger asChild>
+              <Button variant="ghost" className="group w-full justify-between">
+                Technical details <ChevronDown className="group-data-[state=open]:rotate-180" data-icon="inline-end" />
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="space-y-4 pt-3">
+              <p className="text-muted-foreground text-xs">
+                Reference IDs for support. Names above reflect the current directory.
+              </p>
+              <dl className="grid gap-3 text-sm sm:grid-cols-2">
+                {fields.map(([label, value]) => (
+                  <div key={label} className="min-w-0 space-y-1">
+                    <dt className="text-muted-foreground text-xs">{label}</dt>
+                    <dd className="break-words font-mono text-xs [overflow-wrap:anywhere]">{value}</dd>
+                  </div>
+                ))}
+              </dl>
+              <pre className="whitespace-pre-wrap break-words rounded-md bg-muted p-3 text-xs">
+                {JSON.stringify(item.details, null, 2)}
+              </pre>
+            </CollapsibleContent>
+          </Collapsible>
+        </DialogScrollArea>
       </DialogContent>
     </Dialog>
   );

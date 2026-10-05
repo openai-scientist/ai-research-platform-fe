@@ -9,6 +9,7 @@ import type { AuthUser } from "@/lib/auth/auth-config";
 
 import { AccountSwitcher } from "../dashboard/_components/header/account-switcher";
 import { ThemeSwitcher } from "../dashboard/_components/header/theme-switcher";
+import { NotificationBell } from "./notifications/notification-bell";
 
 export function TopBarShell({
   children,
@@ -28,6 +29,7 @@ export function TopBarShell({
             <span className="truncate">{APP_CONFIG.shortName}</span>
           </Link>
           <div className="flex items-center gap-2">
+            <NotificationBell />
             <ThemeSwitcher />
             <AccountSwitcher
               users={[{ id: user.email, name: user.name, email: user.email, avatar: "", role: user.role }]}

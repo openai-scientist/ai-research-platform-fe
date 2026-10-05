@@ -1,34 +1,12 @@
 "use client";
 
-import { useEffect } from "react";
+import { useContext } from "react";
 
-import { toast } from "sonner";
+import { SignalRNotificationsContext } from "@/lib/providers/signalr-provider";
 
-import { getHubConnection } from "@/lib/realtime/signalr";
-import { useAppSelector } from "@/lib/redux/hooks";
-import { selectIsAuthenticated } from "@/lib/redux/slices/auth-slice";
-
-/**
- * Lắng nghe events từ SignalR và hiện toast notification.
- * Tùy chỉnh các event name theo backend.
- */
+/** Reads the shared notification snapshot without opening another connection. */
 export function useSignalRNotifications() {
-  const isAuthenticated = useAppSelector(selectIsAuthenticated);
-
-  useEffect(() => {
-    if (!isAuthenticated) return;
-
-    const connection = getHubConnection();
-
-    // Đăng ký handler cho các event từ server
-    const handleNotification = (message: string, title?: string) => {
-      toast(title ?? "Thông báo", { description: message });
-    };
-
-    connection.on("ReceiveNotification", handleNotification);
-
-    return () => {
-      connection.off("ReceiveNotification", handleNotification);
-    };
-  }, [isAuthenticated]);
+  const notifications = useContext(SignalRNotificationsContext);
+  if (!notifications) throw new Error("useSignalRNotifications must be used within SignalRProvider.");
+  return notifications;
 }

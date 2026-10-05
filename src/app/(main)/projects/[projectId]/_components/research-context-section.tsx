@@ -2,6 +2,7 @@
 
 import { useSearchParams } from "next/navigation";
 
+import { DialogScrollArea } from "@/components/dialog-scroll-area";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useResearchContextQuery, useResearchContextVersionQuery } from "@/hooks/use-research-context-query";
 import { ApiError } from "@/types/api";
@@ -68,7 +69,7 @@ export function ResearchContextSection({
             )}
       </div>
     );
-  if (embedded) return <div className="min-h-0 min-w-0 overflow-y-auto p-1">{content}</div>;
+  if (embedded) return <DialogScrollArea>{content}</DialogScrollArea>;
   return (
     <ExperimentTabs
       value={section}

@@ -1,21 +1,7 @@
-import type { ApiResult } from "@/types/api";
-
-import type { ListParams } from "../types";
+import { collectPages } from "../infinite-pagination";
 import { fetchArtifacts, type RunArtifactItem } from "./fetch-artifacts";
 import { type CommentItem, fetchComments } from "./fetch-comments";
 import { fetchRuns } from "./fetch-runs";
-
-// These endpoints have no project-wide results feed. Follow every page before filtering.
-async function collectPages<T>(fetchPage: (params: ListParams) => Promise<ApiResult<T[]>>) {
-  const items: T[] = [];
-  let offset = 0;
-  for (;;) {
-    const page = await fetchPage({ limit: 100, offset });
-    items.push(...page.data);
-    offset += page.data.length;
-    if (!page.data.length || offset >= (page.meta.pagination?.total ?? offset)) return items;
-  }
-}
 
 export async function fetchReviewWorkspace(projectId: string, withComments: boolean, signal: AbortSignal) {
   const runs = await collectPages((params) => fetchRuns.getList(projectId, params, signal));

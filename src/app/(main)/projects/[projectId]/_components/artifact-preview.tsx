@@ -2,6 +2,12 @@
 
 import { useEffect, useState } from "react";
 
+import dynamic from "next/dynamic";
+
+import { cn } from "cn";
+import { Maximize2, Minimize2 } from "lucide-react";
+
+import { DialogScrollArea } from "@/components/dialog-scroll-area";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -13,9 +19,17 @@ import { ContextDisclosure } from "./context-disclosure";
 import { previewRows } from "./csv-preview";
 import { StructuredData } from "./structured-data";
 
+const ArtifactMarkdown = dynamic(() => import("./artifact-markdown"), {
+  loading: () => <Skeleton className="h-64" />,
+});
+const ArtifactLatex = dynamic(() => import("./artifact-latex"), {
+  loading: () => <Skeleton className="h-64" />,
+});
+
 type Preview =
   | { kind: "image" | "pdf"; url: string }
   | { kind: "text"; text: string }
+  | { kind: "markdown" | "latex"; text: string; truncated: boolean }
   | { kind: "json"; value: unknown }
   | { kind: "unreadable-json"; text: string }
   | { kind: "table"; rows: string[][] }
@@ -26,6 +40,19 @@ type ArtifactPreviewProps = {
   artifact: RunArtifactItem;
   onClose: () => void;
 };
+
+function previewDescription(kind?: Preview["kind"]): string {
+  switch (kind) {
+    case "json":
+      return "Explore the file's information by section. Expand technical details to see the source data.";
+    case "latex":
+      return "LaTeX document preview. Package-specific layouts may differ from the compiled PDF.";
+    case "markdown":
+      return "Formatted Markdown preview, including tables and mathematical expressions.";
+    default:
+      return "File preview. Tables show up to 100 rows and 50 columns; text previews show the first 200 KB.";
+  }
+}
 
 export function ArtifactPreview(props: ArtifactPreviewProps) {
   const [attempt, setAttempt] = useState(0);
@@ -46,6 +73,7 @@ function ArtifactPreviewAttempt({
 }: ArtifactPreviewProps & { onRetry: () => void }) {
   const [preview, setPreview] = useState<Preview | null>(null);
   const [failed, setFailed] = useState(false);
+  const [fullScreen, setFullScreen] = useState(false);
   useEffect(() => {
     const controller = new AbortController();
     let objectUrl: string | undefined;
@@ -63,17 +91,33 @@ function ArtifactPreviewAttempt({
         return;
       }
       const type = (file.contentType || artifact.content_type).split(";")[0].trim().toLowerCase();
+      const declaredType = artifact.content_type.split(";")[0].trim().toLowerCase();
+      const markdown =
+        /\.(md|markdown)$/i.test(artifact.filename) ||
+        [type, declaredType].some((value) => ["text/markdown", "text/x-markdown"].includes(value));
+      const latex =
+        /\.(tex|latex)$/i.test(artifact.filename) ||
+        [type, declaredType].some((value) =>
+          ["application/x-latex", "application/x-tex", "text/x-tex", "text/x-latex"].includes(value),
+        );
       if (["image/png", "image/svg+xml", "image/jpeg", "image/webp", "application/pdf"].includes(type)) {
         objectUrl = URL.createObjectURL(new Blob([file.blob], { type }));
         setPreview({ kind: type === "application/pdf" ? "pdf" : "image", url: objectUrl });
       } else if (
         type.startsWith("text/") ||
         type === "application/json" ||
+        markdown ||
+        latex ||
         /\.(csv|tsv|json|txt|tex)$/i.test(artifact.filename)
       ) {
         const text = await file.blob.slice(0, 200_000).text();
         if (controller.signal.aborted) return;
-        if (/\.(csv|tsv)$/i.test(artifact.filename) || ["text/csv", "text/tab-separated-values"].includes(type)) {
+        if (markdown || latex) {
+          setPreview({ kind: markdown ? "markdown" : "latex", text, truncated: file.blob.size > 200_000 });
+        } else if (
+          /\.(csv|tsv)$/i.test(artifact.filename) ||
+          ["text/csv", "text/tab-separated-values"].includes(type)
+        ) {
           setPreview({
             kind: "table",
             rows: previewRows(
@@ -109,16 +153,40 @@ function ArtifactPreviewAttempt({
         if (!open) onClose();
       }}
     >
-      <DialogContent className="flex max-h-[90dvh] min-w-0 flex-col overflow-hidden sm:max-w-4xl">
-        <DialogHeader className="min-w-0 shrink-0 pr-8">
+      <DialogContent
+        onEscapeKeyDown={(event) => {
+          if (fullScreen) {
+            event.preventDefault();
+            setFullScreen(false);
+          }
+        }}
+        className={cn(
+          "flex max-h-[90dvh] min-w-0 flex-col overflow-hidden sm:max-w-4xl",
+          fullScreen &&
+            "top-0 left-0 h-dvh max-h-dvh max-w-none translate-x-0 translate-y-0 rounded-none sm:max-w-none",
+        )}
+      >
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          className="absolute top-2 right-10"
+          aria-label={fullScreen ? "Exit full screen" : "Enter full screen"}
+          title={fullScreen ? "Exit full screen" : "Enter full screen"}
+          aria-pressed={fullScreen}
+          onClick={() => setFullScreen((value) => !value)}
+        >
+          {fullScreen ? <Minimize2 aria-hidden="true" /> : <Maximize2 aria-hidden="true" />}
+        </Button>
+        <DialogHeader className="min-w-0 shrink-0 pr-16">
           <DialogTitle className="break-words">{artifact.filename}</DialogTitle>
-          <DialogDescription>
-            {preview?.kind === "json"
-              ? "Explore the file's information by section. Expand technical details to see the source data."
-              : "File preview. Tables show up to 100 rows and 50 columns; text previews show the first 200 KB."}
-          </DialogDescription>
+          <DialogDescription>{previewDescription(preview?.kind)}</DialogDescription>
         </DialogHeader>
-        <div className="min-h-0 min-w-0 overflow-auto">
+        <DialogScrollArea
+          contentLabel="Artifact preview"
+          horizontal={["table", "markdown", "latex"].includes(preview?.kind ?? "")}
+          className={fullScreen ? "flex-1" : undefined}
+        >
           {!preview && !failed && <Skeleton className="h-64" />}
           {failed && (
             <Button variant="outline" onClick={onRetry}>
@@ -130,13 +198,24 @@ function ArtifactPreviewAttempt({
             <img
               src={preview.url}
               alt={artifact.filename}
-              className="mx-auto max-h-[65dvh] max-w-full object-contain"
+              className={cn(
+                "mx-auto max-w-full object-contain",
+                fullScreen ? "max-h-[calc(100dvh-12rem)]" : "max-h-[65dvh]",
+              )}
             />
           )}
           {preview?.kind === "pdf" && (
-            <iframe title={artifact.filename} src={preview.url} className="h-[65dvh] w-full" />
+            <iframe
+              title={artifact.filename}
+              src={preview.url}
+              className={cn("w-full", fullScreen ? "h-[calc(100dvh-12rem)]" : "h-[65dvh]")}
+            />
           )}
           {preview?.kind === "text" && <pre className="whitespace-pre-wrap break-words text-xs">{preview.text}</pre>}
+          {preview?.kind === "markdown" && <ArtifactMarkdown source={preview.text} truncated={preview.truncated} />}
+          {preview?.kind === "latex" && (
+            <ArtifactLatex source={preview.text} truncated={preview.truncated} createdAt={artifact.created_at} />
+          )}
           {preview?.kind === "json" && <StructuredData value={preview.value} />}
           {preview?.kind === "unreadable-json" && (
             <div className="flex flex-col gap-4">
@@ -176,7 +255,7 @@ function ArtifactPreviewAttempt({
               Preview is available for images, PDFs and text files up to 10 MB. Download this file to view it.
             </p>
           )}
-        </div>
+        </DialogScrollArea>
         <Button asChild variant="outline" className="shrink-0 self-start">
           <a href={fetchArtifacts.getDownloadUrl(projectId, artifact.run_id, artifact.id)}>Download original</a>
         </Button>
