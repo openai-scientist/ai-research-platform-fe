@@ -18,6 +18,7 @@ import { LayoutControls } from "../../dashboard/_components/header/layout-contro
 import { ThemeSwitcher } from "../../dashboard/_components/header/theme-switcher";
 import { ProjectSidebar } from "./_components/project-sidebar";
 import { RememberLastProject } from "./_components/remember-last-project";
+import { RunWorkspaceHost } from "./_components/run-studio/run-workspace";
 
 export default async function Layout({
   children,
@@ -49,6 +50,7 @@ export default async function Layout({
       }
     >
       <RememberLastProject projectId={project.id} />
+      <RunWorkspaceHost projectId={project.id} />
       <ProjectSidebar
         activeProject={project}
         canCreate={canCreateProject(user.role)}

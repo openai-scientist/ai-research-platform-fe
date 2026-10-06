@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
 
-import { AdminUsersScreen } from "./_components/admin-users-screen";
+import { AdminUsers } from "./_components/admin-users";
 
 export const metadata: Metadata = {
   title: "Users · ResearchLab AI",
-  description: "Manage platform accounts, status, and administrator access.",
+  description: "Manage the fixed ResearchLab AI system accounts and their activity.",
 };
 
 export default function Page() {
-  return <AdminUsersScreen />;
+  return <AdminUsers />;
 }

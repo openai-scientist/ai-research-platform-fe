@@ -25,6 +25,8 @@ import { NavUser } from "./nav-user";
 
 interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   readonly brandLabel?: string;
+  /** Extra sidebar content shown below the main navigation. */
+  readonly extra?: React.ReactNode;
   readonly header?: React.ReactNode;
   readonly homeUrl?: string;
   readonly items?: readonly NavGroup[];
@@ -39,6 +41,7 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
 
 export function AppSidebar({
   brandLabel = APP_CONFIG.shortName,
+  extra,
   header,
   homeUrl = "/dashboard/default",
   items: customItems,
@@ -77,6 +80,7 @@ export function AppSidebar({
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={items} showQuickCreate={showQuickCreate} />
+        {extra}
       </SidebarContent>
       <SidebarFooter>
         <NavUser user={{ ...user, avatar: user.avatar ?? "" }} />

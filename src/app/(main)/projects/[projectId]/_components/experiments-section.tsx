@@ -22,8 +22,12 @@ import { blocksNewRun, isActiveRun, researchRunUrl } from "@/lib/research-worksp
 
 import { ExperimentTabs } from "./experiment-tabs";
 import { ResearchContextSection } from "./research-context-section";
+import { RunStudio } from "./run-studio/run-studio";
 import { WorkspaceFormDialog } from "./workspace-form-dialog";
 import { ListState, LoadMore, perform, type WorkspaceProps } from "./workspace-ui";
+
+// Until the backend streams run events, the runs tab plays a mock run. Set to "api" for the previous table.
+const RUN_STREAM_SOURCE = process.env.NEXT_PUBLIC_RUN_STREAM_SOURCE === "api" ? "api" : "mock";
 
 export function ExperimentsSection(props: WorkspaceProps) {
   const { project, canWrite } = props;
@@ -228,6 +232,8 @@ export function ExperimentsSection(props: WorkspaceProps) {
     >
       {activeTab === "context" ? (
         <ResearchContextSection {...props} embedded />
+      ) : RUN_STREAM_SOURCE === "mock" ? (
+        <RunStudio projectId={project.id} canWrite={canWrite} />
       ) : (
         <div className="flex min-w-0 flex-col gap-4">
           {!runs.runs.length && <div className="flex justify-end">{startAction}</div>}

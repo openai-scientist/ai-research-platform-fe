@@ -16,21 +16,56 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { DataTableFeatures } from "@/lib/data-table-features";
 import { getInitials } from "@/lib/utils";
 
 import { statusMeta, type UserRow } from "./data";
 
-function RoleCell({ role, team }: { role: string; team: string }) {
+function RoleCell({ role, team }: { role: string; team?: string }) {
   return (
     <div className="grid gap-0.5">
       <span className="whitespace-nowrap">{role}</span>
-      <span className="text-muted-foreground text-xs">{team}</span>
+      {team ? <span className="text-muted-foreground text-xs">{team}</span> : null}
     </div>
   );
 }
 
-function StatusBadge({ status }: { status: UserRow["status"] }) {
+export function RoleSelect({
+  user,
+  choices,
+  onChange,
+  className = "w-40",
+}: {
+  user: UserRow;
+  choices: readonly string[];
+  onChange: (user: UserRow, role: string) => void;
+  className?: string;
+}) {
+  return (
+    <Select
+      value={user.role}
+      onValueChange={(value) => {
+        if (value !== user.role) onChange(user, value);
+      }}
+    >
+      <SelectTrigger size="sm" className={className} aria-label={`Role for ${user.name}`}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent position="popper" align="start">
+        <SelectGroup>
+          {choices.map((choice) => (
+            <SelectItem key={choice} value={choice}>
+              {choice}
+            </SelectItem>
+          ))}
+        </SelectGroup>
+      </SelectContent>
+    </Select>
+  );
+}
+
+export function StatusBadge({ status }: { status: UserRow["status"] }) {
   const meta = statusMeta[status];
 
   return (
@@ -41,7 +76,7 @@ function StatusBadge({ status }: { status: UserRow["status"] }) {
   );
 }
 
-function getAvatarTone(name: string) {
+export function getAvatarTone(name: string) {
   const tones = [
     "[&_[data-slot=avatar-fallback]]:bg-amber-100 [&_[data-slot=avatar-fallback]]:text-amber-700 after:border-amber-200 dark:[&_[data-slot=avatar-fallback]]:bg-amber-500/15 dark:[&_[data-slot=avatar-fallback]]:text-amber-300 dark:after:border-amber-500/20",
     "[&_[data-slot=avatar-fallback]]:bg-orange-100 [&_[data-slot=avatar-fallback]]:text-orange-700 after:border-orange-200 dark:[&_[data-slot=avatar-fallback]]:bg-orange-500/15 dark:[&_[data-slot=avatar-fallback]]:text-orange-300 dark:after:border-orange-500/20",
@@ -86,7 +121,7 @@ function getLastActiveBadge(lastActive: number) {
   };
 }
 
-function AvatarCell({ lastActive, name }: { lastActive: number; name: string }) {
+export function AvatarCell({ lastActive, name }: { lastActive: number; name: string }) {
   const badge = getLastActiveBadge(lastActive);
   const BadgeIcon = badge.icon;
 
@@ -116,7 +151,59 @@ function WorkspaceCell({ workspaces }: { workspaces: string[] }) {
   );
 }
 
-export const usersColumns: ColumnDef<DataTableFeatures, UserRow>[] = [
+export function UserActionsMenu({ user, onToggleStatus }: { user: UserRow; onToggleStatus?: (user: UserRow) => void }) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          aria-label={`Open actions for ${user.name}`}
+          className="size-8 rounded-md text-muted-foreground hover:bg-muted/50"
+          size="icon-sm"
+          variant="ghost"
+        >
+          <MoreHorizontal className="size-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem>View profile</DropdownMenuItem>
+        <DropdownMenuItem>Edit user</DropdownMenuItem>
+        <DropdownMenuItem>Manage team</DropdownMenuItem>
+        <DropdownMenuItem>Resend invite</DropdownMenuItem>
+        <DropdownMenuSeparator />
+        {onToggleStatus && user.status !== "Active" ? (
+          <DropdownMenuItem onSelect={() => onToggleStatus(user)}>Activate user</DropdownMenuItem>
+        ) : (
+          <DropdownMenuItem variant="destructive" onSelect={() => onToggleStatus?.(user)}>
+            Deactivate user
+          </DropdownMenuItem>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+const workspaceColumn: ColumnDef<DataTableFeatures, UserRow> = {
+  accessorKey: "workspace",
+  header: "Workspace",
+  filterFn: "arrIncludes",
+  cell: ({ row }) => <WorkspaceCell workspaces={row.original.workspace} />,
+};
+
+export type UsersColumnsOptions = {
+  readonly onChangeRole?: (user: UserRow, role: string) => void;
+  readonly onToggleStatus?: (user: UserRow) => void;
+  readonly roleChoices?: readonly string[];
+  readonly showTeam?: boolean;
+  readonly showWorkspace?: boolean;
+};
+
+export const createUsersColumns = ({
+  onChangeRole,
+  onToggleStatus,
+  roleChoices = [],
+  showTeam = true,
+  showWorkspace = true,
+}: UsersColumnsOptions = {}): ColumnDef<DataTableFeatures, UserRow>[] => [
   {
     id: "select",
     header: ({ table }) => (
@@ -175,9 +262,14 @@ export const usersColumns: ColumnDef<DataTableFeatures, UserRow>[] = [
   },
   {
     accessorKey: "role",
-    header: "Role / Team",
+    header: showTeam ? "Role / Team" : "Role",
     filterFn: "equalsString",
-    cell: ({ row }) => <RoleCell role={row.original.role} team={row.original.team} />,
+    cell: ({ row }) =>
+      onChangeRole && roleChoices.length > 0 ? (
+        <RoleSelect user={row.original} choices={roleChoices} onChange={onChangeRole} />
+      ) : (
+        <RoleCell role={row.original.role} team={showTeam ? row.original.team : undefined} />
+      ),
   },
   {
     accessorKey: "team",
@@ -185,12 +277,7 @@ export const usersColumns: ColumnDef<DataTableFeatures, UserRow>[] = [
     filterFn: "equalsString",
     cell: ({ row }) => <div className="text-sm">{row.original.team}</div>,
   },
-  {
-    accessorKey: "workspace",
-    header: "Workspace",
-    filterFn: "arrIncludes",
-    cell: ({ row }) => <WorkspaceCell workspaces={row.original.workspace} />,
-  },
+  ...(showWorkspace ? [workspaceColumn] : []),
   {
     accessorKey: "status",
     header: "Status",
@@ -208,29 +295,12 @@ export const usersColumns: ColumnDef<DataTableFeatures, UserRow>[] = [
     header: () => <div className="text-right">Actions</div>,
     cell: ({ row }) => (
       <div className="text-right">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              aria-label={`Open actions for ${row.original.name}`}
-              className="size-8 rounded-md text-muted-foreground hover:bg-muted/50"
-              size="icon-sm"
-              variant="ghost"
-            >
-              <MoreHorizontal className="size-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem>View profile</DropdownMenuItem>
-            <DropdownMenuItem>Edit user</DropdownMenuItem>
-            <DropdownMenuItem>Manage team</DropdownMenuItem>
-            <DropdownMenuItem>Resend invite</DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem variant="destructive">Deactivate user</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <UserActionsMenu user={row.original} onToggleStatus={onToggleStatus} />
       </div>
     ),
     enableHiding: false,
     enableSorting: false,
   },
 ];
+
+export const usersColumns = createUsersColumns();

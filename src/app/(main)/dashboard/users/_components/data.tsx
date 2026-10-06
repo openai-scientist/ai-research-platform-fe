@@ -14,6 +14,7 @@ const teamValues = [
 export type UserTeam = (typeof teamValues)[number];
 
 export type UserRow = {
+  id?: string;
   email: string;
   joinedDate: string;
   lastActive: number;
