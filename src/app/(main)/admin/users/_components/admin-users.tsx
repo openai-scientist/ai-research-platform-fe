@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
+import type { PaginationState } from "@tanstack/react-table";
 import { format } from "date-fns";
 import { Download, Plus, UserCheck, UserPlus, Users as UsersIcon, UserX } from "lucide-react";
 import { toast } from "sonner";
@@ -37,7 +38,38 @@ export function AdminUsers() {
   const { enabled, currentUserId } = useAdminAccess();
   const [createOpen, setCreateOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const users = useUsersQuery({ limit: 100 }, { enabled });
+  const [search, setSearch] = useState("");
+  const [query, setQuery] = useState("");
+  const [filters, setFilters] = useState({ role: "All", status: "All", emailVerified: "All" });
+  const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 50 });
+  const validSearch = query.length === 0 || (query.length >= 3 && query.length <= 120);
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const value = search.trim();
+      setQuery(value);
+      setPagination((current) => ({ ...current, pageIndex: 0 }));
+      if (value && (value.length < 3 || value.length > 120)) toast.error("Search must contain 3–120 characters.");
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [search]);
+  const selectedStatus = filters.status === "Active" ? UserStatus.Active : UserStatus.Suspended;
+  const users = useUsersQuery(
+    {
+      q: query || undefined,
+      status: filters.status === "All" ? undefined : selectedStatus,
+      platform_role: filters.role === "All" ? undefined : toPlatformRole(filters.role),
+      email_verified: filters.emailVerified === "All" ? undefined : filters.emailVerified === "Verified",
+      limit: pagination.pageSize,
+      offset: pagination.pageIndex * pagination.pageSize,
+    },
+    { enabled: enabled && validSearch },
+  );
+  const total = users.data?.meta.pagination?.total ?? 0;
+  useEffect(() => {
+    if (!users.data || !validSearch || users.isFetching || users.isError) return;
+    const lastPage = Math.max(0, Math.ceil(total / pagination.pageSize) - 1);
+    if (pagination.pageIndex > lastPage) setPagination((current) => ({ ...current, pageIndex: lastPage }));
+  }, [users.data, users.isFetching, users.isError, validSearch, total, pagination.pageSize, pagination.pageIndex]);
   const statusMutation = useUpdateUserStatusMutation();
   const roleMutation = useUpdatePlatformRoleMutation();
   const editingUser = users.data?.data.find((item) => item.id === editingId);
@@ -108,6 +140,21 @@ export function AdminUsers() {
       </div>
 
       <Users
+        server={{
+          search,
+          roleFilter: filters.role,
+          statusFilter: filters.status,
+          emailVerifiedFilter: filters.emailVerified,
+          pagination,
+          total,
+          busy: !enabled || search.trim() !== query || users.isFetching || (validSearch && users.isPending),
+          onSearchChange: setSearch,
+          onFilterChange: (filter, value) => {
+            setFilters((current) => ({ ...current, [filter]: value }));
+            setPagination((current) => ({ ...current, pageIndex: 0 }));
+          },
+          onPaginationChange: setPagination,
+        }}
         compactToolbar
         description=""
         renderActions={(row) => {
@@ -116,7 +163,7 @@ export function AdminUsers() {
             <AdminUserActions
               user={user}
               currentUserId={currentUserId}
-              enabled={enabled && !users.isFetching}
+              enabled={enabled && search.trim() === query && !users.isFetching}
               onEdit={() => setEditingId(user.id)}
             />
           ) : null;

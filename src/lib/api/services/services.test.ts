@@ -352,6 +352,23 @@ describe("API service contracts", () => {
     apiService.setCsrfToken("csrf");
   });
 
+  it.each([true, false])(
+    "user toolbar forwards all server filters and preserves email_verified=%s",
+    async (verified) => {
+      const params = {
+        q: "dat ngo",
+        status: UserStatus.Active,
+        platform_role: PlatformRole.User,
+        email_verified: verified,
+        limit: 20,
+        offset: 40,
+      };
+      await fetchAdmin.getUsers(params, signal);
+      expect(adapter.mock.calls[0][0]).toMatchObject({ url: "/users", method: "get", params, signal });
+      expect(adapter.mock.calls[0][0].params).not.toHaveProperty("email");
+    },
+  );
+
   it.each(contracts)(
     "$name preserves the backend contract",
     async ({ method, url, call, body, params, signal: expectedSignal }) => {

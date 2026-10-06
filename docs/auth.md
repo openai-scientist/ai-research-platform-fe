@@ -35,7 +35,9 @@ An URL ending in `/api/v1` is also accepted. If Next.js needs a different intern
 - Platform admins land on `/admin`; other users land on `/projects`. Safe protected return paths supplied by `?next=` are supported at login. Project roles are derived from each membership, never from a global JWT role.
 - All frontend-authored copy and toasts are English. API error toasts use the backend message; validation errors also use toasts. `RATE_LIMITED` respects `Retry-After`.
 
-Google sign-in remains unavailable. Project invitations and broader list-filter changes from the handoff are outside this change.
+The admin user toolbar filters through the API: search uses `q` (3–120 characters, with a 350 ms debounce), and dropdowns use `status`, `platform_role`, and `email_verified`. All omits the corresponding parameter; Unverified sends `false`. Rows per page sends `limit` (default 50, options through 100); page navigation sends `offset`. Filtering resets to the first page, and page counts use `meta.pagination.total`. Server results retain backend ordering instead of being filtered or paginated again in the browser.
+
+Google sign-in remains unavailable. Project invitations and list filters for other resources remain outside this change.
 
 ## Validation status
 

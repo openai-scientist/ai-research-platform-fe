@@ -48,6 +48,8 @@ export interface ProjectUsageItem {
 export interface UserListParams extends ListParams {
   q?: string;
   status?: UserStatus;
+  platform_role?: PlatformRole;
+  email_verified?: boolean;
 }
 export interface CreateUserRequest {
   email: string;

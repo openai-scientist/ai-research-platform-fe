@@ -34,14 +34,26 @@ function getPageNumbers(currentPage: number, pageCount: number) {
   return [currentPage - 1, currentPage, currentPage + 1];
 }
 
-export function UsersTable({ grid, table }: { grid?: ReactNode; table: ReactTable<DataTableFeatures, UserRow> }) {
+export function UsersTable({
+  grid,
+  table,
+  busy = false,
+  pageSizes = [10, 20, 30, 40, 50],
+}: {
+  grid?: ReactNode;
+  table: ReactTable<DataTableFeatures, UserRow>;
+  busy?: boolean;
+  pageSizes?: number[];
+}) {
   const pageCount = Math.max(table.getPageCount(), 1);
   const currentPage = Math.min(table.state.pagination.pageIndex + 1, pageCount);
   const pageNumbers = getPageNumbers(currentPage, pageCount);
   const rowsPerPage = `${table.state.pagination.pageSize}`;
+  const previousPageDisabled = busy ? true : !table.getCanPreviousPage();
+  const nextPageDisabled = busy ? true : !table.getCanNextPage();
 
   return (
-    <div className="flex flex-1 flex-col gap-4">
+    <div className="flex flex-1 flex-col gap-4" aria-busy={busy}>
       {grid ?? (
         <div>
           <Table className="**:data-[slot='table-cell']:px-4 **:data-[slot='table-head']:px-4">
@@ -58,27 +70,35 @@ export function UsersTable({ grid, table }: { grid?: ReactNode; table: ReactTabl
             </TableHeader>
 
             <TableBody>
-              {table.getRowModel().rows.length ? (
-                table.getRowModel().rows.map((row) => (
-                  <TableRow
-                    key={row.id}
-                    className="border-border/60 hover:bg-white/2.5"
-                    data-state={table.state.rowSelection[row.id] && "selected"}
-                  >
-                    {row.getVisibleCells().map((cell) => (
-                      <TableCell key={cell.id} className="px-3 py-4 align-middle">
-                        <table.FlexRender cell={cell} />
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                ))
-              ) : (
+              {busy ? (
+                <TableRow>
+                  <TableCell colSpan={table.getVisibleLeafColumns().length} className="h-24 text-center">
+                    Loading users...
+                  </TableCell>
+                </TableRow>
+              ) : null}
+              {!busy && table.getRowModel().rows.length > 0
+                ? table.getRowModel().rows.map((row) => (
+                    <TableRow
+                      key={row.id}
+                      className="border-border/60 hover:bg-white/2.5"
+                      data-state={table.state.rowSelection[row.id] && "selected"}
+                    >
+                      {row.getVisibleCells().map((cell) => (
+                        <TableCell key={cell.id} className="px-3 py-4 align-middle">
+                          <table.FlexRender cell={cell} />
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))
+                : null}
+              {!busy && table.getRowModel().rows.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={table.getVisibleLeafColumns().length} className="h-24 text-center">
                     No results.
                   </TableCell>
                 </TableRow>
-              )}
+              ) : null}
             </TableBody>
           </Table>
         </div>
@@ -86,11 +106,12 @@ export function UsersTable({ grid, table }: { grid?: ReactNode; table: ReactTabl
 
       <Separator />
 
-      <div className="flex items-center justify-between px-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-4">
         <div className="flex items-center gap-4 text-muted-foreground text-sm">
           <div className="flex items-center gap-2">
             <span>Rows per page</span>
             <Select
+              disabled={busy}
               value={`${table.state.pagination.pageSize}`}
               onValueChange={(value) => table.setPageSize(Number(value))}
             >
@@ -99,7 +120,7 @@ export function UsersTable({ grid, table }: { grid?: ReactNode; table: ReactTabl
               </SelectTrigger>
               <SelectContent side="top">
                 <SelectGroup>
-                  {[10, 20, 30, 40, 50].map((pageSize) => (
+                  {pageSizes.map((pageSize) => (
                     <SelectItem key={pageSize} value={`${pageSize}`}>
                       {pageSize}
                     </SelectItem>
@@ -119,10 +140,12 @@ export function UsersTable({ grid, table }: { grid?: ReactNode; table: ReactTabl
               <PaginationPrevious
                 href="#"
                 text=""
-                className={!table.getCanPreviousPage() ? "pointer-events-none opacity-50" : undefined}
+                className={previousPageDisabled ? "pointer-events-none opacity-50" : undefined}
+                aria-disabled={previousPageDisabled}
+                tabIndex={previousPageDisabled ? -1 : undefined}
                 onClick={(event) => {
                   preventPaginationNavigation(event);
-                  table.previousPage();
+                  if (!busy && table.getCanPreviousPage()) table.previousPage();
                 }}
               />
             </PaginationItem>
@@ -136,9 +159,11 @@ export function UsersTable({ grid, table }: { grid?: ReactNode; table: ReactTabl
                 <PaginationLink
                   href="#"
                   isActive={table.state.pagination.pageIndex === pageNumber - 1}
+                  aria-disabled={busy}
+                  tabIndex={busy ? -1 : undefined}
                   onClick={(event) => {
                     preventPaginationNavigation(event);
-                    table.setPageIndex(pageNumber - 1);
+                    if (!busy) table.setPageIndex(pageNumber - 1);
                   }}
                 >
                   {pageNumber}
@@ -154,10 +179,12 @@ export function UsersTable({ grid, table }: { grid?: ReactNode; table: ReactTabl
               <PaginationNext
                 href="#"
                 text=""
-                className={!table.getCanNextPage() ? "pointer-events-none opacity-50" : undefined}
+                className={nextPageDisabled ? "pointer-events-none opacity-50" : undefined}
+                aria-disabled={nextPageDisabled}
+                tabIndex={nextPageDisabled ? -1 : undefined}
                 onClick={(event) => {
                   preventPaginationNavigation(event);
-                  table.nextPage();
+                  if (!busy && table.getCanNextPage()) table.nextPage();
                 }}
               />
             </PaginationItem>
