@@ -8,6 +8,7 @@ import {
   type SortingState,
   useTable,
 } from "@tanstack/react-table";
+import { cn } from "cn";
 import { Cog, Download, Grid, Plus, Rows3, Search, SlidersHorizontal } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -62,6 +63,19 @@ function FilterSelect({
 }
 
 type UsersProps = {
+  readonly server?: {
+    search: string;
+    roleFilter: string;
+    statusFilter: string;
+    emailVerifiedFilter: string;
+    pagination: PaginationState;
+    total: number;
+    busy: boolean;
+    onSearchChange: (value: string) => void;
+    onFilterChange: (filter: "role" | "status" | "emailVerified", value: string) => void;
+    onPaginationChange: (value: PaginationState) => void;
+  };
+  readonly renderActions?: (user: UserRow) => React.ReactNode;
   /** Puts the filters in the card header instead of a row below it. */
   readonly compactToolbar?: boolean;
   readonly description?: string;
@@ -79,6 +93,8 @@ type UsersProps = {
 };
 
 export function Users({
+  server,
+  renderActions,
   compactToolbar = false,
   description = "Manage your organization members and their access.",
   getDetailsHref,
@@ -126,13 +142,14 @@ export function Users({
   const columns = React.useMemo(
     () =>
       createUsersColumns({
+        renderActions,
         onChangeRole,
         onToggleStatus,
         roleChoices,
         showTeam: teamOptions.length > 0,
         showWorkspace: workspaceOptions.length > 0,
       }),
-    [onChangeRole, onToggleStatus, roleChoices, teamOptions.length, workspaceOptions.length],
+    [renderActions, onChangeRole, onToggleStatus, roleChoices, teamOptions.length, workspaceOptions.length],
   );
 
   const table = useTable({
@@ -144,22 +161,51 @@ export function Users({
       sorting,
       columnFilters,
       columnVisibility,
-      pagination,
+      pagination: server?.pagination ?? pagination,
     },
     getRowId: (row) => row.email,
     autoResetPageIndex: false,
+    manualFiltering: Boolean(server),
+    manualPagination: Boolean(server),
+    manualSorting: Boolean(server),
+    enableSorting: !server,
+    rowCount: server?.total,
     enableRowSelection: true,
     onRowSelectionChange: setRowSelection,
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
     onColumnVisibilityChange: setColumnVisibility,
-    onPaginationChange: setPagination,
+    onPaginationChange: (updater) => {
+      const previous = server?.pagination ?? pagination;
+      const next = typeof updater === "function" ? updater(previous) : updater;
+      if (server)
+        server.onPaginationChange({ ...next, pageIndex: next.pageSize !== previous.pageSize ? 0 : next.pageIndex });
+      else setPagination(next);
+    },
   });
 
-  const searchQuery = (table.getColumn("search")?.getFilterValue() as string | undefined) ?? "";
-  const roleFilter = (table.getColumn("role")?.getFilterValue() as string | undefined) ?? roleOptions[0];
+  const selectionScope = JSON.stringify([
+    server?.search,
+    server?.roleFilter,
+    server?.statusFilter,
+    server?.emailVerifiedFilter,
+    server?.pagination.pageIndex,
+    server?.pagination.pageSize,
+  ]);
+  const previousSelectionScope = React.useRef(selectionScope);
+  React.useEffect(() => {
+    if (previousSelectionScope.current !== selectionScope) {
+      previousSelectionScope.current = selectionScope;
+      setRowSelection({});
+    }
+  }, [selectionScope]);
+
+  const searchQuery = server?.search ?? (table.getColumn("search")?.getFilterValue() as string | undefined) ?? "";
+  const roleFilter =
+    server?.roleFilter ?? (table.getColumn("role")?.getFilterValue() as string | undefined) ?? roleOptions[0];
   const teamFilter = (table.getColumn("team")?.getFilterValue() as string | undefined) ?? teamOptions[0];
-  const statusFilter = (table.getColumn("status")?.getFilterValue() as string | undefined) ?? statusOptions[0];
+  const statusFilter =
+    server?.statusFilter ?? (table.getColumn("status")?.getFilterValue() as string | undefined) ?? statusOptions[0];
   const workspaceFilter =
     ((workspaceOptions.length > 0 ? table.getColumn("workspace")?.getFilterValue() : undefined) as
       | string
@@ -167,13 +213,17 @@ export function Users({
   const selectedCount = table.getFilteredSelectedRowModel().rows.length;
 
   function setColumnSelectFilter(columnId: string, value: string) {
+    if (server && (columnId === "role" || columnId === "status")) {
+      server.onFilterChange(columnId, value);
+      return;
+    }
     table.getColumn(columnId)?.setFilterValue(value === "All" ? undefined : value);
     table.setPageIndex(0);
   }
 
   const roleSelect = (
     <FilterSelect
-      label="Role"
+      label={server ? "Platform role" : "Role"}
       value={roleFilter}
       options={roleOptions}
       onChange={(value) => setColumnSelectFilter("role", value)}
@@ -196,6 +246,14 @@ export function Users({
       onChange={(value) => setColumnSelectFilter("status", value)}
     />
   );
+  const verificationSelect = server ? (
+    <FilterSelect
+      label="Email verification"
+      value={server.emailVerifiedFilter}
+      options={["All", "Verified", "Unverified"]}
+      onChange={(value) => server.onFilterChange("emailVerified", value)}
+    />
+  ) : null;
   const workspaceSelect =
     workspaceOptions.length > 0 ? (
       <FilterSelect
@@ -219,17 +277,39 @@ export function Users({
     </Tabs>
   );
 
+  const grid = server?.busy ? (
+    <div className="flex h-24 items-center justify-center text-muted-foreground text-sm" role="status">
+      Loading users...
+    </div>
+  ) : (
+    <UsersGrid
+      renderActions={renderActions}
+      table={table}
+      getDetailsHref={getDetailsHref}
+      onChangeRole={onChangeRole}
+      onToggleStatus={onToggleStatus}
+      roleChoices={roleChoices}
+      showTeam={teamOptions.length > 0}
+    />
+  );
+
   return (
     <Card>
       <CardHeader className="border-b has-data-[slot=card-action]:grid-cols-1 md:has-data-[slot=card-action]:grid-cols-[1fr_auto]">
         <CardTitle className="text-xl leading-none">{title}</CardTitle>
         {description ? <CardDescription className="max-w-sm leading-snug">{description}</CardDescription> : null}
-        <CardAction className="col-start-1 row-start-auto flex w-full flex-wrap justify-start gap-2 justify-self-stretch md:col-start-2 md:row-span-2 md:row-start-1 md:w-auto md:flex-nowrap md:justify-end md:justify-self-end">
+        <CardAction
+          className={cn(
+            "col-start-1 row-start-auto flex w-full flex-wrap justify-start gap-2 justify-self-stretch md:col-start-2 md:row-span-2 md:row-start-1 md:w-auto md:justify-end md:justify-self-end",
+            server ? "md:flex-wrap" : "md:flex-nowrap",
+          )}
+        >
           {compactToolbar ? (
             <>
               {roleSelect}
               {teamSelect}
               {statusSelect}
+              {verificationSelect}
               {workspaceSelect}
             </>
           ) : null}
@@ -239,16 +319,24 @@ export function Users({
             </InputGroupAddon>
             <InputGroupInput
               className="h-7"
-              placeholder="Search users..."
+              placeholder={server ? "Search users (min. 3 characters)..." : "Search users..."}
+              aria-label="Search users by name or email"
+              maxLength={server ? 120 : undefined}
               value={searchQuery}
               onChange={(event) => {
+                if (server) {
+                  server.onSearchChange(event.target.value);
+                  return;
+                }
                 table.getColumn("search")?.setFilterValue(event.target.value || undefined);
                 table.setPageIndex(0);
               }}
             />
-            <InputGroupAddon align="inline-end">
-              <Kbd className="h-4 text-[10px]">⌘K</Kbd>
-            </InputGroupAddon>
+            {server ? null : (
+              <InputGroupAddon align="inline-end">
+                <Kbd className="h-4 text-[10px]">⌘K</Kbd>
+              </InputGroupAddon>
+            )}
           </InputGroup>
           {showViewControls ? (
             <>
@@ -279,6 +367,7 @@ export function Users({
               {roleSelect}
               {teamSelect}
               {statusSelect}
+              {verificationSelect}
             </div>
             {workspaceSelect}
           </div>
@@ -290,19 +379,10 @@ export function Users({
         </div>
 
         <UsersTable
+          busy={server?.busy}
+          pageSizes={server ? [10, 20, 50, 100] : undefined}
           table={table}
-          grid={
-            activeView === "grid" ? (
-              <UsersGrid
-                table={table}
-                getDetailsHref={getDetailsHref}
-                onChangeRole={onChangeRole}
-                onToggleStatus={onToggleStatus}
-                roleChoices={roleChoices}
-                showTeam={teamOptions.length > 0}
-              />
-            ) : undefined
-          }
+          grid={activeView === "grid" ? grid : undefined}
         />
       </CardContent>
     </Card>

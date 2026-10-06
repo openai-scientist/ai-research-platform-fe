@@ -14,6 +14,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { resolveAvatarUrl } from "@/lib/auth/avatar";
 import { getInitials } from "@/lib/utils";
 
 export function AccountSwitcher({
@@ -27,8 +28,13 @@ export function AccountSwitcher({
     readonly role: string;
   }>;
 }) {
-  const activeUser = users[0];
-  const { loggingOut, securityOpen, setSecurityOpen, handleLogout } = useAccountMenu();
+  const { user: account, loggingOut, securityOpen, setSecurityOpen, handleLogout } = useAccountMenu();
+  const displayedUsers = users.map((user) =>
+    account && user.email === account.email
+      ? { ...user, name: account.display_name ?? account.email, avatar: account.avatar_url ?? "" }
+      : user,
+  );
+  const activeUser = displayedUsers[0];
 
   if (!activeUser) {
     return null;
@@ -44,14 +50,18 @@ export function AccountSwitcher({
             className="rounded-lg focus-visible:outline-2 focus-visible:outline-ring"
           >
             <Avatar className="size-8 rounded-lg">
-              <AvatarImage src={activeUser.avatar || undefined} alt={activeUser.name} />
+              <AvatarImage
+                src={resolveAvatarUrl(activeUser.avatar)}
+                alt={activeUser.name}
+                crossOrigin="use-credentials"
+              />
               <AvatarFallback className="text-foreground">{getInitials(activeUser.name)}</AvatarFallback>
             </Avatar>
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent className="min-w-56 space-y-1 rounded-lg" side="bottom" align="end" sideOffset={4}>
           <DropdownMenuGroup>
-            {users.map((user) => (
+            {displayedUsers.map((user) => (
               <DropdownMenuItem
                 key={user.email}
                 className={cn("p-0", user.id === activeUser.id && "bg-accent/50")}
@@ -59,7 +69,7 @@ export function AccountSwitcher({
               >
                 <div className="flex w-full items-center gap-2 px-1 py-1.5">
                   <Avatar className="size-9 rounded-lg">
-                    <AvatarImage src={user.avatar || undefined} alt={user.name} />
+                    <AvatarImage src={resolveAvatarUrl(user.avatar)} alt={user.name} crossOrigin="use-credentials" />
                     <AvatarFallback className="text-foreground">{getInitials(user.name)}</AvatarFallback>
                   </Avatar>
                   <div className="grid min-w-0 flex-1 text-left text-sm leading-tight">

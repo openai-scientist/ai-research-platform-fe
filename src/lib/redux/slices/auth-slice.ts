@@ -46,6 +46,9 @@ const authSlice = createSlice({
   name: "auth",
   initialState,
   reducers: {
+    updateUserProfile: (state, action: PayloadAction<CurrentUser["user"]>) => {
+      if (state.user?.id === action.payload.id) state.user = action.payload;
+    },
     setSession: (state, action: PayloadAction<CurrentUser>) => {
       state.user = action.payload.user;
       state.session = action.payload.session;
@@ -93,7 +96,7 @@ const authSlice = createSlice({
   },
 });
 
-export const { setSession, logout } = authSlice.actions;
+export const { setSession, logout, updateUserProfile } = authSlice.actions;
 export default authSlice.reducer;
 export const selectAuth = (state: RootState) => state.auth;
 export const selectUser = (state: RootState) => state.auth.user;

@@ -31,7 +31,7 @@ export function NotificationBell() {
 
   if (!isAuthenticated) {
     return (
-      <Button variant="ghost" size="icon" disabled aria-label="Notifications">
+      <Button size="icon" disabled aria-label="Notifications">
         <Bell aria-hidden="true" />
       </Button>
     );
@@ -88,7 +88,7 @@ export function NotificationBell() {
       }}
     >
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="icon" aria-label={`Notifications, ${unreadCount} unread`}>
+        <Button size="icon" aria-label={`Notifications, ${unreadCount} unread`}>
           {unreadCount > 0 ? (
             <BellDot aria-hidden="true" className="[&_circle]:fill-current" />
           ) : (

@@ -3,6 +3,7 @@
 import { type FormEvent, useState } from "react";
 
 import { Search } from "lucide-react";
+import { toast } from "sonner";
 
 import { DataTable } from "@/components/data-table";
 import { ManagementStatusBadge } from "@/components/management-status-badge";
@@ -25,10 +26,14 @@ export function AdminUsersScreen() {
   const [email, setEmail] = useState("");
   const [offset, setOffset] = useState(0);
   const [limit, setLimit] = useState(ADMIN_PAGE_SIZE);
-  const users = useUsersQuery({ email: email || undefined, limit, offset }, { enabled });
+  const users = useUsersQuery({ q: email || undefined, limit, offset }, { enabled });
   const rows = users.data?.data ?? [];
   const filter = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (draftEmail.trim().length > 0 && draftEmail.trim().length < 3) {
+      toast.error("Enter at least 3 characters to search.");
+      return;
+    }
     setEmail(draftEmail.trim());
     setOffset(0);
   };
@@ -102,7 +107,7 @@ export function AdminUsersScreen() {
                   <InputGroupInput
                     id="admin-user-email"
                     type="search"
-                    placeholder="Filter by email"
+                    placeholder="Search by name or email"
                     value={draftEmail}
                     onChange={(event) => setDraftEmail(event.target.value)}
                   />

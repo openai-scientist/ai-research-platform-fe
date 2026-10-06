@@ -12,7 +12,13 @@ export interface UserAdminItem {
   email: string;
   display_name: string | null;
   status: UserStatus;
-  platform_role: PlatformRole | null;
+  platform_role: PlatformRole;
+  avatar_url: string | null;
+  email_verified: boolean;
+  must_change_password: boolean;
+  invite_sent_at: string | null;
+  last_login_at: string | null;
+  created_by_user_id: string | null;
   created_at: string;
 }
 
@@ -40,7 +46,19 @@ export interface ProjectUsageItem {
 }
 
 export interface UserListParams extends ListParams {
-  email?: string;
+  q?: string;
+  status?: UserStatus;
+  platform_role?: PlatformRole;
+  email_verified?: boolean;
+}
+export interface CreateUserRequest {
+  email: string;
+  display_name?: string;
+  send_email?: boolean;
+}
+export interface UserCreated extends UserAdminItem {
+  temporary_password: string;
+  invite_email_sent: boolean;
 }
 
 export interface AuditListParams extends TimeRangeParams {
@@ -53,7 +71,7 @@ export interface UpdateUserStatusRequest {
 }
 
 export interface UpdatePlatformRoleRequest {
-  role: PlatformRole | null;
+  role: PlatformRole;
 }
 
 export type UserListResponse = ApiResult<UserAdminItem[]>;
@@ -62,6 +80,28 @@ export type AuditListResponse = ApiResult<AuditItem[]>;
 export type ProjectUsageListResponse = ApiResult<ProjectUsageItem[]>;
 
 export const fetchAdmin = {
+  createUser: async (data: CreateUserRequest): Promise<ApiResult<UserCreated>> => {
+    const response = await apiService.post<ApiResult<UserCreated>>("/users", data);
+    return response.data;
+  },
+  inviteUser: async (userId: string): Promise<ApiResult<UserCreated>> => {
+    const response = await apiService.post<ApiResult<UserCreated>>(`/users/${encodeURIComponent(userId)}/invite`);
+    return response.data;
+  },
+  updateUserProfile: async (userId: string, data: { display_name: string }): Promise<UserDetailResponse> => {
+    const response = await apiService.patch<UserDetailResponse>(`/users/${encodeURIComponent(userId)}`, data);
+    return response.data;
+  },
+  uploadUserAvatar: async (userId: string, file: File): Promise<UserDetailResponse> => {
+    const body = new FormData();
+    body.append("file", file);
+    const response = await apiService.upload<UserDetailResponse>(`/users/${encodeURIComponent(userId)}/avatar`, body);
+    return response.data;
+  },
+  removeUserAvatar: async (userId: string): Promise<UserDetailResponse> => {
+    const response = await apiService.delete<UserDetailResponse>(`/users/${encodeURIComponent(userId)}/avatar`);
+    return response.data;
+  },
   getUsers: async (params?: UserListParams, signal?: AbortSignal): Promise<UserListResponse> => {
     const response = await apiService.get<UserListResponse>("/users", params, { signal });
     return response.data;

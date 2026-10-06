@@ -4,6 +4,16 @@ import type { CurrentUser } from "./types";
 
 export const AUTH_COOKIE_NAME = "platform_session";
 export const LOGIN_PATH = "/auth/login";
+export const CHANGE_PASSWORD_PATH = "/change-password";
+export const PUBLIC_AUTH_PATHS = [
+  "/auth/login",
+  "/auth/register",
+  "/auth/verify-email",
+  "/auth/resend-verification",
+  "/auth/forgot-password",
+  "/auth/verify-reset-password",
+  "/auth/reset-password",
+];
 export const SESSION_INVALID_CODES = ["SESSION_EXPIRED", "UNAUTHENTICATED", "USER_SUSPENDED"];
 export const USER_ROLES = ["SYSTEM_ADMIN", "PROJECT_MANAGER", "RESEARCHER", "REVIEWER"] as const;
 export type UserRole = (typeof USER_ROLES)[number];

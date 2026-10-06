@@ -15,6 +15,7 @@ export type UserTeam = (typeof teamValues)[number];
 
 export type UserRow = {
   id?: string;
+  avatar_url?: string | null;
   email: string;
   joinedDate: string;
   lastActive: number;

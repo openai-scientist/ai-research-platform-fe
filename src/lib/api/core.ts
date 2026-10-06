@@ -1,6 +1,6 @@
 import axios, { type AxiosInstance, type AxiosRequestConfig, type AxiosResponse } from "axios";
 
-import { SESSION_INVALID_CODES } from "@/lib/auth/auth-config";
+import { CHANGE_PASSWORD_PATH, PUBLIC_AUTH_PATHS, SESSION_INVALID_CODES } from "@/lib/auth/auth-config";
 import { ApiError, type ApiFailure, type ApiResult, type RequestParams } from "@/types/api";
 
 import { getApiBaseUrl } from "./config";
@@ -26,7 +26,7 @@ export class ApiService {
     this.client.interceptors.request.use(async (config) => {
       const path = config.url ?? "";
       const method = (config.method ?? "get").toUpperCase();
-      if ((path === "/auth/login" || path === "/auth/register") && Date.now() < this.authRetryAt) {
+      if (PUBLIC_AUTH_PATHS.includes(path) && Date.now() < this.authRetryAt) {
         throw new ApiError(
           429,
           "RATE_LIMITED",
@@ -36,7 +36,7 @@ export class ApiService {
           Math.ceil((this.authRetryAt - Date.now()) / 1000),
         );
       }
-      if (["POST", "PUT", "PATCH", "DELETE"].includes(method) && path !== "/auth/login" && path !== "/auth/register") {
+      if (["POST", "PUT", "PATCH", "DELETE"].includes(method) && !PUBLIC_AUTH_PATHS.includes(path)) {
         config.headers.set("X-CSRF-Token", await this.getCsrfToken());
       }
       if (typeof FormData !== "undefined" && config.data instanceof FormData) {
@@ -75,12 +75,19 @@ export class ApiService {
 
   private handleApiError(error: ApiError, path?: string): void {
     if (error.code === "RATE_LIMITED" && error.retryAfter !== null) {
-      if (path === "/auth/login" || path === "/auth/register") {
+      if (PUBLIC_AUTH_PATHS.includes(path ?? "")) {
         this.authRetryAt = Date.now() + error.retryAfter * 1000;
         this.authRateLimit = error;
       }
     }
     if (error.code === "CSRF_INVALID") this.setCsrfToken(null);
+    if (
+      error.code === "PASSWORD_CHANGE_REQUIRED" &&
+      typeof window !== "undefined" &&
+      window.location.pathname !== CHANGE_PASSWORD_PATH
+    ) {
+      window.location.replace(CHANGE_PASSWORD_PATH);
+    }
     if (SESSION_INVALID_CODES.includes(error.code)) {
       this.setCsrfToken(null);
       if (typeof window !== "undefined") window.dispatchEvent(new Event("auth:expired"));

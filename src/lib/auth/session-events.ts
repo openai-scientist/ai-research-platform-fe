@@ -1,5 +1,5 @@
 export const AUTH_CHANNEL = "platform-auth";
-export type AuthChange = "signed-in" | "signed-out" | "password-changed";
+export type AuthChange = "signed-in" | "signed-out" | "password-changed" | "profile-changed";
 
 // No tokens or personal data are written to browser storage.
 export function broadcastAuthChange(change: AuthChange) {

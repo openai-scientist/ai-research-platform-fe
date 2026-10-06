@@ -1,9 +1,16 @@
 import { cache } from "react";
 
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 
 import { getServerApiBaseUrl } from "@/lib/api/config";
-import { AUTH_COOKIE_NAME, type AuthUser, SESSION_INVALID_CODES, toAuthUser } from "@/lib/auth/auth-config";
+import {
+  AUTH_COOKIE_NAME,
+  type AuthUser,
+  CHANGE_PASSWORD_PATH,
+  SESSION_INVALID_CODES,
+  toAuthUser,
+} from "@/lib/auth/auth-config";
 import type { CurrentUser } from "@/lib/auth/types";
 import { ApiError, type ApiResponse } from "@/types/api";
 
@@ -28,5 +35,6 @@ export const getCurrentSession = cache(async (): Promise<CurrentUser | null> => 
 
 export async function getAuthenticatedUser(projectId?: string): Promise<AuthUser | null> {
   const current = await getCurrentSession();
+  if (current?.user.must_change_password) redirect(CHANGE_PASSWORD_PATH);
   return current ? toAuthUser(current, projectId) : null;
 }
