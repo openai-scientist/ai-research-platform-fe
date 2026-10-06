@@ -10,6 +10,12 @@ export interface ProjectMemberItem {
   user_id: string;
   email: string;
   display_name: string | null;
+  avatar_url: string | null;
+  status: "invited" | "active";
+  invite_sent_at: string | null;
+  invite_expires_at: string | null;
+  invite_expired: boolean;
+  invite_email_sent?: boolean | null;
   role: ProjectRole;
   created_at: string;
 }
@@ -17,6 +23,11 @@ export interface ProjectMemberItem {
 export interface CreateMemberRequest {
   email: string;
   role: ProjectRole;
+}
+export interface MemberListParams extends ListParams {
+  q?: string;
+  role?: ProjectRole;
+  status?: "invited" | "active";
 }
 
 export interface UpdateMemberRequest {
@@ -26,10 +37,38 @@ export interface UpdateMemberRequest {
 export type MemberListResponse = ApiResult<ProjectMemberItem[]>;
 export type MemberDetailResponse = ApiResult<ProjectMemberItem>;
 export type EmptyResponse = ApiResult<null>;
+export interface InviteCandidate {
+  id: string;
+  email: string;
+  display_name: string | null;
+  avatar_url: string | null;
+}
+export interface InviteCandidateParams extends ListParams {
+  q?: string;
+}
+export type InviteCandidatesResponse = ApiResult<InviteCandidate[]>;
 
 const membersPath = (projectId: string) => `${projectPath(projectId)}/members`;
 export const fetchMembers = {
-  getList: async (projectId: string, params?: ListParams, signal?: AbortSignal): Promise<MemberListResponse> => {
+  getInviteCandidates: async (
+    projectId: string,
+    params?: InviteCandidateParams,
+    signal?: AbortSignal,
+  ): Promise<InviteCandidatesResponse> => {
+    const response = await apiService.get<InviteCandidatesResponse>(
+      `${projectPath(projectId)}/invite-candidates`,
+      params,
+      { signal },
+    );
+    return response.data;
+  },
+  resendInvite: async (projectId: string, membershipId: string): Promise<MemberDetailResponse> => {
+    const response = await apiService.post<MemberDetailResponse>(
+      `${membersPath(projectId)}/${encodeURIComponent(membershipId)}/invite`,
+    );
+    return response.data;
+  },
+  getList: async (projectId: string, params?: MemberListParams, signal?: AbortSignal): Promise<MemberListResponse> => {
     const response = await apiService.get<MemberListResponse>(membersPath(projectId), params, { signal });
     return response.data;
   },

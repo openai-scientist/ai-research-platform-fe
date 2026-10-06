@@ -24,6 +24,8 @@ const statusTones: Record<string, keyof typeof tones> = {
   awaiting_review: "attention",
   needs_review: "attention",
   pending: "attention",
+  invited: "attention",
+  expired: "error",
   failed: "error",
   suspended: "error",
   unavailable: "error",

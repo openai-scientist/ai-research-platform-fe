@@ -1,6 +1,6 @@
 "use client";
 
-import type { ComponentType } from "react";
+import type { ComponentType, ReactNode } from "react";
 
 import { useProjectDetailQuery } from "@/hooks/use-projects-query";
 import type { ProjectItem } from "@/lib/api/services/fetch-project";
@@ -33,6 +33,7 @@ export function WorkspaceSection({
   runId,
   datasetId,
   experimentSection,
+  membersHeader,
 }: {
   project: ProjectItem;
   section: string;
@@ -41,6 +42,7 @@ export function WorkspaceSection({
   runId?: string;
   datasetId?: string;
   experimentSection?: RunSection | "current" | "history";
+  membersHeader?: ReactNode;
 }) {
   const query = useProjectDetailQuery(initial.id, { refetchInterval: (state) => (state.state.error ? false : 15_000) });
   const project = query.data?.data ?? initial;
@@ -66,6 +68,7 @@ export function WorkspaceSection({
     );
   if (section === "research-context")
     return <ResearchContextSection {...props} section={experimentSection === "history" ? "history" : "current"} />;
+  if (section === "members") return <MembersSection {...props} header={membersHeader} />;
   if (!Screen || (section === "settings" && !canManage)) return null;
   return <Screen {...props} />;
 }

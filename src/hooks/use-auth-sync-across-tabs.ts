@@ -70,7 +70,12 @@ export function useAuthSyncAcrossTabs() {
     if (channel) {
       channel.onmessage = ({ data }: MessageEvent<unknown>) => {
         if (data === "signed-out") clearSession();
-        if (data === "signed-in" || data === "password-changed" || data === "profile-changed") {
+        if (
+          data === "signed-in" ||
+          data === "password-changed" ||
+          data === "profile-changed" ||
+          data === "memberships-changed"
+        ) {
           apiService.setCsrfToken(null);
           queryClient.clear();
           refresh();

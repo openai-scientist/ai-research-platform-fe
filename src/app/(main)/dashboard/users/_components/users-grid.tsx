@@ -21,6 +21,8 @@ import type { UserRow } from "./data";
 import { getAvatarTone, RoleSelect, StatusBadge } from "./users-columns";
 
 type UsersGridProps = {
+  readonly roleChangeDisabled?: boolean;
+  readonly showActions?: boolean;
   readonly renderActions?: (user: UserRow) => ReactNode;
   readonly getDetailsHref?: (user: UserRow) => string | undefined;
   readonly onChangeRole?: (user: UserRow, role: string) => void;
@@ -40,6 +42,8 @@ async function copyEmail(email: string) {
 }
 
 export function UsersGrid({
+  roleChangeDisabled = false,
+  showActions = true,
   renderActions,
   getDetailsHref,
   onChangeRole,
@@ -71,7 +75,13 @@ export function UsersGrid({
                 <div className="min-w-0 flex-1">
                   <div className="truncate font-medium text-base text-foreground">{user.name}</div>
                   {onChangeRole && roleChoices.length > 0 ? (
-                    <RoleSelect user={user} choices={roleChoices} onChange={onChangeRole} className="mt-1 w-40" />
+                    <RoleSelect
+                      user={user}
+                      choices={roleChoices}
+                      onChange={onChangeRole}
+                      className="mt-1 w-40"
+                      disabled={roleChangeDisabled}
+                    />
                   ) : (
                     <div className="truncate text-muted-foreground text-sm">
                       {showTeam ? `${user.role} · ${user.team}` : user.role}
@@ -93,36 +103,37 @@ export function UsersGrid({
                 </Button>
               </div>
 
-              <Separator />
+              {showActions && <Separator />}
 
-              {renderActions ? (
-                <div className="flex justify-end">{renderActions(user)}</div>
-              ) : (
-                <div className="grid grid-cols-3 gap-2">
-                  {href ? (
-                    <Button asChild variant="outline" size="sm">
-                      <Link href={href}>View profile</Link>
-                    </Button>
-                  ) : (
+              {showActions &&
+                (renderActions ? (
+                  <div className="flex justify-end">{renderActions(user)}</div>
+                ) : (
+                  <div className="grid grid-cols-3 gap-2">
+                    {href ? (
+                      <Button asChild variant="outline" size="sm">
+                        <Link href={href}>View profile</Link>
+                      </Button>
+                    ) : (
+                      <Button variant="outline" size="sm">
+                        View profile
+                      </Button>
+                    )}
+                    {/* Mock: the backend has no invitation flow. */}
                     <Button variant="outline" size="sm">
-                      View profile
+                      Resend invite
                     </Button>
-                  )}
-                  {/* Mock: the backend has no invitation flow. */}
-                  <Button variant="outline" size="sm">
-                    Resend invite
-                  </Button>
-                  {user.status === "Active" ? (
-                    <Button variant="destructive" size="sm" onClick={() => onToggleStatus?.(user)}>
-                      Deactivate
-                    </Button>
-                  ) : (
-                    <Button variant="outline" size="sm" onClick={() => onToggleStatus?.(user)}>
-                      Activate
-                    </Button>
-                  )}
-                </div>
-              )}
+                    {user.status === "Active" ? (
+                      <Button variant="destructive" size="sm" onClick={() => onToggleStatus?.(user)}>
+                        Deactivate
+                      </Button>
+                    ) : (
+                      <Button variant="outline" size="sm" onClick={() => onToggleStatus?.(user)}>
+                        Activate
+                      </Button>
+                    )}
+                  </div>
+                ))}
             </CardContent>
           </Card>
         );

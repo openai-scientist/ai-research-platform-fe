@@ -1,7 +1,5 @@
 "use client";
 
-import { useState } from "react";
-
 import Link from "next/link";
 
 import { cn } from "cn";
@@ -12,17 +10,14 @@ import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle }
 
 import { type FileManagerFile, fileIcons, fileKindLabels } from "./data";
 import { FileActions } from "./file-actions";
+import { useFileStars } from "./use-file-stars";
 
 interface FileGridViewProps {
   files: FileManagerFile[];
 }
 
 export function FileGridView({ files }: FileGridViewProps) {
-  const [gridFiles, setGridFiles] = useState(files);
-
-  function toggleStar(fileId: string) {
-    setGridFiles((current) => current.map((file) => (file.id === fileId ? { ...file, starred: !file.starred } : file)));
-  }
+  const { files: gridFiles, toggleStar } = useFileStars(files);
 
   return (
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

@@ -42,13 +42,13 @@ export function AdminUsers() {
   const [query, setQuery] = useState("");
   const [filters, setFilters] = useState({ role: "All", status: "All", emailVerified: "All" });
   const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 50 });
-  const validSearch = query.length === 0 || (query.length >= 3 && query.length <= 120);
+  const validSearch = query.length <= 120;
   useEffect(() => {
     const timer = window.setTimeout(() => {
       const value = search.trim();
       setQuery(value);
       setPagination((current) => ({ ...current, pageIndex: 0 }));
-      if (value && (value.length < 3 || value.length > 120)) toast.error("Search must contain 3–120 characters.");
+      if (value.length > 120) toast.error("Search must contain at most 120 characters.");
     }, 350);
     return () => window.clearTimeout(timer);
   }, [search]);

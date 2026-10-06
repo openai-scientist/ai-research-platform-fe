@@ -255,6 +255,27 @@ html:has([data-landing-page]) {
   transition: none !important;
 }
 
+/* Keep Sonner's stack positioning; animate the notification's own offset. */
+.notification-toast[data-sonner-toast][data-mounted="true"][data-visible="true"] {
+  translate: 0 var(--notification-toast-offset, 0px);
+  opacity: var(--notification-toast-opacity, 1);
+}
+
+.notification-toast[data-sonner-toast][data-mounted="true"][data-visible="true"][data-removed="true"] {
+  opacity: var(--notification-toast-opacity, 0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .notification-toast[data-sonner-toast][data-mounted="true"][data-visible="true"] {
+    translate: none;
+    opacity: 1;
+  }
+
+  .notification-toast[data-sonner-toast][data-mounted="true"][data-visible="true"][data-removed="true"] {
+    opacity: 0;
+  }
+}
+
 [data-print-root] {
   display: none;
 }

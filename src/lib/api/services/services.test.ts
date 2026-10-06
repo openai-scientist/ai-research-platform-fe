@@ -11,6 +11,7 @@ import { fetchAuth } from "./fetch-auth";
 import { fetchComments } from "./fetch-comments";
 import { fetchDatasets } from "./fetch-datasets";
 import { fetchFrameReviews } from "./fetch-frame-reviews";
+import { fetchInvitations } from "./fetch-invitations";
 import { fetchMembers } from "./fetch-members";
 import { fetchNotifications } from "./fetch-notifications";
 import { fetchProject } from "./fetch-project";
@@ -33,6 +34,48 @@ interface Contract {
   signal?: AbortSignal;
 }
 const contracts: Contract[] = [
+  {
+    name: "invite candidates",
+    method: "get",
+    url: "/projects/project%20%2F1/invite-candidates",
+    call: () => fetchMembers.getInviteCandidates(p, { q: "ngo dat", ...list }, signal),
+    params: { q: "ngo dat", ...list },
+    signal,
+  },
+  {
+    name: "resend project invitation",
+    method: "post",
+    url: "/projects/project%20%2F1/members/member%2F1/invite",
+    call: () => fetchMembers.resendInvite(p, "member/1"),
+  },
+  {
+    name: "list my project invitations",
+    method: "get",
+    url: "/invitations",
+    call: () => fetchInvitations.getList(list, signal),
+    params: list,
+    signal,
+  },
+  {
+    name: "search project invitations before pagination",
+    method: "get",
+    url: "/invitations",
+    call: () => fetchInvitations.getList({ q: "demo manager", ...list }, signal),
+    params: { q: "demo manager", ...list },
+    signal,
+  },
+  {
+    name: "accept project invitation",
+    method: "post",
+    url: "/invitations/member%2F1/accept",
+    call: () => fetchInvitations.answer("member/1", "accept"),
+  },
+  {
+    name: "decline project invitation",
+    method: "post",
+    url: "/invitations/member%2F1/decline",
+    call: () => fetchInvitations.answer("member/1", "decline"),
+  },
   {
     name: "project list",
     method: "get",
@@ -365,6 +408,15 @@ describe("API service contracts", () => {
       };
       await fetchAdmin.getUsers(params, signal);
       expect(adapter.mock.calls[0][0]).toMatchObject({ url: "/users", method: "get", params, signal });
+      expect(adapter.mock.calls[0][0].params).not.toHaveProperty("email");
+    },
+  );
+  it.each(["active", "invited"] as const)(
+    "member toolbar forwards q, role, status=%s and server pagination",
+    async (status) => {
+      const params = { q: "ngo dat", role: ProjectRole.Reviewer, status, limit: 50, offset: 100 };
+      await fetchMembers.getList(p, params, signal);
+      expect(adapter.mock.calls[0][0]).toMatchObject({ method: "get", url: project + "/members", params, signal });
       expect(adapter.mock.calls[0][0].params).not.toHaveProperty("email");
     },
   );

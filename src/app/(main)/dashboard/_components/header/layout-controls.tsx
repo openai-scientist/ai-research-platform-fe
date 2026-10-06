@@ -70,8 +70,8 @@ export function LayoutControls() {
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button size="icon">
-          <Settings />
+        <Button variant="ghost" size="icon" aria-label="Preferences">
+          <Settings className="size-5" />
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end">

@@ -6,6 +6,10 @@ import type { ProjectListParams } from "@/lib/api/services/fetch-project";
 import type { ListParams, TimeRangeParams } from "./types";
 
 export const authKeys = { all: ["auth"] as const, me: ["auth", "me"] as const, csrf: ["auth", "csrf"] as const };
+export const invitationKeys = {
+  all: ["invitations"] as const,
+  list: (params?: ListParams) => ["invitations", params] as const,
+};
 export const projectKeys = {
   all: ["projects"] as const,
   lists: () => ["projects", "list"] as const,
@@ -13,6 +17,7 @@ export const projectKeys = {
   details: () => ["projects", "detail"] as const,
   detail: (id: string) => ["projects", "detail", id] as const,
   managerResearch: (id: string) => ["projects", "detail", id, "manager-research"] as const,
+  memberLists: (id: string) => ["projects", "detail", id, "members"] as const,
   members: (id: string, params?: ListParams) => ["projects", "detail", id, "members", params] as const,
   datasets: (id: string, params?: ListParams) => ["projects", "detail", id, "datasets", "list", params] as const,
   dataset: (id: string, datasetId: string) => ["projects", "detail", id, "datasets", datasetId] as const,
@@ -22,6 +27,7 @@ export const projectKeys = {
   contextVersions: (id: string, params?: ListParams) =>
     ["projects", "detail", id, "context", "versions", params] as const,
   contextVersion: (id: string, version: number) => ["projects", "detail", id, "context", "version", version] as const,
+  runLists: (id: string) => ["projects", "detail", id, "runs", "list"] as const,
   runs: (id: string, params?: ListParams) => ["projects", "detail", id, "runs", "list", params] as const,
   run: (id: string, runId: string) => ["projects", "detail", id, "runs", runId] as const,
   frameReview: (id: string, runId: string) => ["projects", "detail", id, "runs", runId, "frame-review"] as const,
@@ -37,6 +43,8 @@ export const notificationKeys = {
 };
 export const adminKeys = {
   all: ["admin"] as const,
+  auditLists: () => ["admin", "audit"] as const,
+  usageLists: () => ["admin", "usage"] as const,
   users: (params?: UserListParams) => ["admin", "users", params] as const,
   audit: (params?: AuditListParams) => ["admin", "audit", params] as const,
   usage: (params?: TimeRangeParams) => ["admin", "usage", params] as const,

@@ -49,7 +49,7 @@ export default async function Layout({
         } as React.CSSProperties
       }
     >
-      <RememberLastProject projectId={project.id} />
+      <RememberLastProject projectId={project.id} userId={user.id} />
       <RunWorkspaceHost projectId={project.id} />
       <ProjectSidebar
         activeProject={project}

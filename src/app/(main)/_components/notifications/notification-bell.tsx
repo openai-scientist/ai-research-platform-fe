@@ -3,7 +3,7 @@
 import { useId, useState } from "react";
 
 import { cn } from "cn";
-import { Bell, BellDot } from "lucide-react";
+import { Bell } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -31,8 +31,8 @@ export function NotificationBell() {
 
   if (!isAuthenticated) {
     return (
-      <Button size="icon" disabled aria-label="Notifications">
-        <Bell aria-hidden="true" />
+      <Button variant="ghost" size="icon" disabled aria-label="Notifications">
+        <Bell aria-hidden="true" className="size-5" />
       </Button>
     );
   }
@@ -88,11 +88,15 @@ export function NotificationBell() {
       }}
     >
       <PopoverTrigger asChild>
-        <Button size="icon" aria-label={`Notifications, ${unreadCount} unread`}>
-          {unreadCount > 0 ? (
-            <BellDot aria-hidden="true" className="[&_circle]:fill-current" />
-          ) : (
-            <Bell aria-hidden="true" />
+        <Button variant="ghost" size="icon" className="relative" aria-label={`Notifications, ${unreadCount} unread`}>
+          <Bell aria-hidden="true" className="size-5" />
+          {unreadCount > 0 && (
+            <Badge
+              className="absolute -top-0.5 -right-0.5 h-4 min-w-4 px-0.5 py-0 text-[10px] ring-2 ring-background"
+              aria-hidden="true"
+            >
+              {unreadCount > 99 ? "99+" : unreadCount}
+            </Badge>
           )}
         </Button>
       </PopoverTrigger>

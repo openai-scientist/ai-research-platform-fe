@@ -8,6 +8,7 @@ import { APP_CONFIG } from "@/config/app-config";
 import type { AuthUser } from "@/lib/auth/auth-config";
 
 import { AccountSwitcher } from "../dashboard/_components/header/account-switcher";
+import { LayoutControls } from "../dashboard/_components/header/layout-controls";
 import { ThemeSwitcher } from "../dashboard/_components/header/theme-switcher";
 import { NotificationBell } from "./notifications/notification-bell";
 
@@ -30,6 +31,7 @@ export function TopBarShell({
           </Link>
           <div className="flex items-center gap-2">
             <NotificationBell />
+            <LayoutControls />
             <ThemeSwitcher />
             <AccountSwitcher
               users={[{ id: user.email, name: user.name, email: user.email, avatar: "", role: user.role }]}

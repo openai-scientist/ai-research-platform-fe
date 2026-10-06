@@ -54,6 +54,11 @@ export enum ArtifactKind {
 }
 
 export enum NotificationKind {
+  ProjectInvited = "project_invited",
+  InviteAccepted = "invite_accepted",
+  InviteDeclined = "invite_declined",
+  MemberRoleChanged = "member_role_changed",
+  RemovedFromProject = "removed_from_project",
   RunAwaitingReview = "run_awaiting_review",
   RunFinished = "run_finished",
   AddedToProject = "added_to_project",

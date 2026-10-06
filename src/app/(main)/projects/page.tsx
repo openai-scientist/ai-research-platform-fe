@@ -13,7 +13,8 @@ export const metadata: Metadata = {
   description: "Choose a research workspace to continue.",
 };
 
-export default async function Page() {
+export default async function Page({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
+  const params = await searchParams;
   const user = await getAuthenticatedUser();
 
   if (!user) {
@@ -22,7 +23,10 @@ export default async function Page() {
 
   return (
     <TopBarShell homeUrl="/projects" user={user}>
-      <WorkspaceProjects canCreate={canCreateProject(user.role)} />
+      <WorkspaceProjects
+        canCreate={canCreateProject(user.role)}
+        initialInvitationsOpen={params.tab === "invitations"}
+      />
     </TopBarShell>
   );
 }

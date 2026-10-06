@@ -67,7 +67,7 @@ type UsersProps = {
     search: string;
     roleFilter: string;
     statusFilter: string;
-    emailVerifiedFilter: string;
+    emailVerifiedFilter?: string;
     pagination: PaginationState;
     total: number;
     busy: boolean;
@@ -76,6 +76,12 @@ type UsersProps = {
     onPaginationChange: (value: PaginationState) => void;
   };
   readonly renderActions?: (user: UserRow) => React.ReactNode;
+  readonly showActions?: boolean;
+  readonly roleChangeDisabled?: boolean;
+  readonly roleFilterLabel?: string;
+  readonly entityLabel?: string;
+  readonly nameColumnLabel?: string;
+  readonly joinedDateLabel?: string;
   /** Puts the filters in the card header instead of a row below it. */
   readonly compactToolbar?: boolean;
   readonly description?: string;
@@ -94,6 +100,12 @@ type UsersProps = {
 
 export function Users({
   server,
+  showActions = true,
+  roleChangeDisabled = false,
+  roleFilterLabel,
+  entityLabel = "users",
+  nameColumnLabel,
+  joinedDateLabel,
   renderActions,
   compactToolbar = false,
   description = "Manage your organization members and their access.",
@@ -142,6 +154,10 @@ export function Users({
   const columns = React.useMemo(
     () =>
       createUsersColumns({
+        roleChangeDisabled,
+        showActions,
+        nameColumnLabel,
+        joinedDateLabel,
         renderActions,
         onChangeRole,
         onToggleStatus,
@@ -149,7 +165,18 @@ export function Users({
         showTeam: teamOptions.length > 0,
         showWorkspace: workspaceOptions.length > 0,
       }),
-    [renderActions, onChangeRole, onToggleStatus, roleChoices, teamOptions.length, workspaceOptions.length],
+    [
+      roleChangeDisabled,
+      showActions,
+      nameColumnLabel,
+      joinedDateLabel,
+      renderActions,
+      onChangeRole,
+      onToggleStatus,
+      roleChoices,
+      teamOptions.length,
+      workspaceOptions.length,
+    ],
   );
 
   const table = useTable({
@@ -223,7 +250,7 @@ export function Users({
 
   const roleSelect = (
     <FilterSelect
-      label={server ? "Platform role" : "Role"}
+      label={roleFilterLabel ?? (server ? "Platform role" : "Role")}
       value={roleFilter}
       options={roleOptions}
       onChange={(value) => setColumnSelectFilter("role", value)}
@@ -246,14 +273,15 @@ export function Users({
       onChange={(value) => setColumnSelectFilter("status", value)}
     />
   );
-  const verificationSelect = server ? (
-    <FilterSelect
-      label="Email verification"
-      value={server.emailVerifiedFilter}
-      options={["All", "Verified", "Unverified"]}
-      onChange={(value) => server.onFilterChange("emailVerified", value)}
-    />
-  ) : null;
+  const verificationSelect =
+    server?.emailVerifiedFilter !== undefined ? (
+      <FilterSelect
+        label="Email verification"
+        value={server.emailVerifiedFilter}
+        options={["All", "Verified", "Unverified"]}
+        onChange={(value) => server.onFilterChange("emailVerified", value)}
+      />
+    ) : null;
   const workspaceSelect =
     workspaceOptions.length > 0 ? (
       <FilterSelect
@@ -279,10 +307,12 @@ export function Users({
 
   const grid = server?.busy ? (
     <div className="flex h-24 items-center justify-center text-muted-foreground text-sm" role="status">
-      Loading users...
+      Loading {entityLabel}...
     </div>
   ) : (
     <UsersGrid
+      roleChangeDisabled={roleChangeDisabled}
+      showActions={showActions}
       renderActions={renderActions}
       table={table}
       getDetailsHref={getDetailsHref}
@@ -319,8 +349,8 @@ export function Users({
             </InputGroupAddon>
             <InputGroupInput
               className="h-7"
-              placeholder={server ? "Search users (min. 3 characters)..." : "Search users..."}
-              aria-label="Search users by name or email"
+              placeholder={`Search ${entityLabel}...`}
+              aria-label={`Search ${entityLabel} by name or email`}
               maxLength={server ? 120 : undefined}
               value={searchQuery}
               onChange={(event) => {
@@ -379,6 +409,7 @@ export function Users({
         </div>
 
         <UsersTable
+          loadingLabel={"Loading " + entityLabel + "..."}
           busy={server?.busy}
           pageSizes={server ? [10, 20, 50, 100] : undefined}
           table={table}

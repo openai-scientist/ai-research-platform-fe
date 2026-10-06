@@ -4,6 +4,7 @@ import { adminKeys, authKeys, projectKeys } from "@/lib/api/query-keys";
 import {
   type CreateMemberRequest,
   fetchMembers,
+  type MemberListParams,
   type MemberListResponse,
   type ProjectMemberItem,
 } from "@/lib/api/services/fetch-members";
@@ -23,7 +24,11 @@ export function useInfiniteMembers(projectId: string, options?: InfiniteQueryOpt
   return { ...query, members: query.items };
 }
 
-export function useMembersQuery(projectId: string, params?: ListParams, options?: ApiQueryOptions<MemberListResponse>) {
+export function useMembersQuery(
+  projectId: string,
+  params?: MemberListParams,
+  options?: ApiQueryOptions<MemberListResponse>,
+) {
   return useApiQuery(
     projectKeys.members(projectId, params),
     (signal) => fetchMembers.getList(projectId, params, signal),
@@ -43,4 +48,7 @@ export function useUpdateMemberMutation(projectId: string) {
 }
 export function useRemoveMemberMutation(projectId: string) {
   return useApiMutation((membershipId: string) => fetchMembers.remove(projectId, membershipId), invalidation);
+}
+export function useResendProjectInviteMutation(projectId: string) {
+  return useApiMutation((membershipId: string) => fetchMembers.resendInvite(projectId, membershipId), invalidation);
 }

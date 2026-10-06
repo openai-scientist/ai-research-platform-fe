@@ -3,7 +3,6 @@
 import { type FormEvent, useState } from "react";
 
 import { Search } from "lucide-react";
-import { toast } from "sonner";
 
 import { DataTable } from "@/components/data-table";
 import { ManagementStatusBadge } from "@/components/management-status-badge";
@@ -30,10 +29,6 @@ export function AdminUsersScreen() {
   const rows = users.data?.data ?? [];
   const filter = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (draftEmail.trim().length > 0 && draftEmail.trim().length < 3) {
-      toast.error("Enter at least 3 characters to search.");
-      return;
-    }
     setEmail(draftEmail.trim());
     setOffset(0);
   };

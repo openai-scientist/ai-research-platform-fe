@@ -39,11 +39,13 @@ export function UsersTable({
   table,
   busy = false,
   pageSizes = [10, 20, 30, 40, 50],
+  loadingLabel = "Loading users...",
 }: {
   grid?: ReactNode;
   table: ReactTable<DataTableFeatures, UserRow>;
   busy?: boolean;
   pageSizes?: number[];
+  loadingLabel?: string;
 }) {
   const pageCount = Math.max(table.getPageCount(), 1);
   const currentPage = Math.min(table.state.pagination.pageIndex + 1, pageCount);
@@ -73,7 +75,7 @@ export function UsersTable({
               {busy ? (
                 <TableRow>
                   <TableCell colSpan={table.getVisibleLeafColumns().length} className="h-24 text-center">
-                    Loading users...
+                    {loadingLabel}
                   </TableCell>
                 </TableRow>
               ) : null}

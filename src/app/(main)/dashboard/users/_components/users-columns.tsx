@@ -46,14 +46,17 @@ export function RoleSelect({
   choices,
   onChange,
   className = "w-40",
+  disabled = false,
 }: {
   user: UserRow;
   choices: readonly string[];
   onChange: (user: UserRow, role: string) => void;
   className?: string;
+  disabled?: boolean;
 }) {
   return (
     <Select
+      disabled={disabled}
       value={user.role}
       onValueChange={(value) => {
         if (value !== user.role) onChange(user, value);
@@ -136,18 +139,18 @@ export function AvatarCell({
   name,
   avatarUrl,
 }: {
-  lastActive: number;
+  lastActive?: number;
   name: string;
   avatarUrl?: string | null;
 }) {
-  const badge = getLastActiveBadge(lastActive);
-  const BadgeIcon = badge.icon;
+  const badge = lastActive === undefined ? null : getLastActiveBadge(lastActive);
+  const BadgeIcon = badge?.icon;
 
   return (
     <Avatar size="lg" className={cn("font-medium", getAvatarTone(name))}>
       <AvatarImage src={resolveAvatarUrl(avatarUrl)} alt={name} crossOrigin="use-credentials" />
       <AvatarFallback>{getInitials(name)}</AvatarFallback>
-      <AvatarBadge className={badge.className}>{BadgeIcon ? <BadgeIcon /> : null}</AvatarBadge>
+      {badge && <AvatarBadge className={badge.className}>{BadgeIcon ? <BadgeIcon /> : null}</AvatarBadge>}
     </Avatar>
   );
 }
@@ -209,6 +212,10 @@ const workspaceColumn: ColumnDef<DataTableFeatures, UserRow> = {
 };
 
 export type UsersColumnsOptions = {
+  readonly roleChangeDisabled?: boolean;
+  readonly showActions?: boolean;
+  readonly nameColumnLabel?: string;
+  readonly joinedDateLabel?: string;
   readonly renderActions?: (user: UserRow) => ReactNode;
   readonly onChangeRole?: (user: UserRow, role: string) => void;
   readonly onToggleStatus?: (user: UserRow) => void;
@@ -218,6 +225,10 @@ export type UsersColumnsOptions = {
 };
 
 export const createUsersColumns = ({
+  roleChangeDisabled = false,
+  showActions = true,
+  nameColumnLabel = "User",
+  joinedDateLabel = "Joined date",
   renderActions,
   onChangeRole,
   onToggleStatus,
@@ -270,7 +281,7 @@ export const createUsersColumns = ({
   },
   {
     accessorKey: "name",
-    header: "User",
+    header: nameColumnLabel,
     cell: ({ row }) => (
       <div className="flex items-center gap-3">
         <AvatarCell name={row.original.name} lastActive={row.original.lastActive} avatarUrl={row.original.avatar_url} />
@@ -287,7 +298,7 @@ export const createUsersColumns = ({
     filterFn: "equalsString",
     cell: ({ row }) =>
       onChangeRole && roleChoices.length > 0 ? (
-        <RoleSelect user={row.original} choices={roleChoices} onChange={onChangeRole} />
+        <RoleSelect user={row.original} choices={roleChoices} onChange={onChangeRole} disabled={roleChangeDisabled} />
       ) : (
         <RoleCell role={row.original.role} team={showTeam ? row.original.team : undefined} />
       ),
@@ -308,24 +319,28 @@ export const createUsersColumns = ({
   {
     id: "joinedDate",
     accessorFn: (row) => parse(row.joinedDate, "dd MMM yyyy, h:mm a", new Date()).getTime(),
-    header: "Joined date",
+    header: joinedDateLabel,
     cell: ({ row }) => <div className="text-foreground text-sm">{row.original.joinedDate}</div>,
   },
-  {
-    id: "actions",
-    header: () => <div className="text-right">Actions</div>,
-    cell: ({ row }) => (
-      <div className="text-right">
-        {renderActions ? (
-          renderActions(row.original)
-        ) : (
-          <UserActionsMenu user={row.original} onToggleStatus={onToggleStatus} />
-        )}
-      </div>
-    ),
-    enableHiding: false,
-    enableSorting: false,
-  },
+  ...(!showActions
+    ? []
+    : [
+        {
+          id: "actions",
+          header: () => <div className="text-right">Actions</div>,
+          cell: ({ row }) => (
+            <div className="text-right">
+              {renderActions ? (
+                renderActions(row.original)
+              ) : (
+                <UserActionsMenu user={row.original} onToggleStatus={onToggleStatus} />
+              )}
+            </div>
+          ),
+          enableHiding: false,
+          enableSorting: false,
+        } satisfies ColumnDef<DataTableFeatures, UserRow>,
+      ]),
 ];
 
 export const usersColumns = createUsersColumns();
