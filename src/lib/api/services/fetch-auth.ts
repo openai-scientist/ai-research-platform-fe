@@ -1,4 +1,4 @@
-import type { CurrentUser, SessionResult } from "@/lib/auth/types";
+import type { CurrentUser, SessionResult, UserProfile } from "@/lib/auth/types";
 import type { ApiResult } from "@/types/api";
 
 import apiService from "../core";
@@ -54,6 +54,20 @@ async function authenticate(path: string, credentials: LoginRequest | VerifyEmai
   return result;
 }
 export const fetchAuth = {
+  updateProfile: async (data: { display_name: string }): Promise<ApiResult<UserProfile>> => {
+    const response = await apiService.patch<ApiResult<UserProfile>>("/auth/me", data);
+    return response.data;
+  },
+  uploadAvatar: async (file: File): Promise<ApiResult<UserProfile>> => {
+    const body = new FormData();
+    body.append("file", file);
+    const response = await apiService.upload<ApiResult<UserProfile>>("/auth/me/avatar", body);
+    return response.data;
+  },
+  removeAvatar: async (): Promise<ApiResult<UserProfile>> => {
+    const response = await apiService.delete<ApiResult<UserProfile>>("/auth/me/avatar");
+    return response.data;
+  },
   login: async (data: LoginRequest): Promise<SessionResult> => {
     return authenticate("/auth/login", data);
   },

@@ -5,6 +5,7 @@ import {
   type AuditItem,
   type AuditListParams,
   type AuditListResponse,
+  type CreateUserRequest,
   fetchAdmin,
   type ProjectUsageItem,
   type ProjectUsageListResponse,
@@ -74,8 +75,13 @@ export function useUpdateUserStatusMutation() {
 }
 export function useUpdatePlatformRoleMutation() {
   return useApiMutation(
-    (data: { userId: string; role: PlatformRole | null }) =>
-      fetchAdmin.updatePlatformRole(data.userId, { role: data.role }),
+    (data: { userId: string; role: PlatformRole }) => fetchAdmin.updatePlatformRole(data.userId, { role: data.role }),
     [adminKeys.all, authKeys.me, projectKeys.all],
   );
+}
+export function useCreateUserMutation() {
+  return useApiMutation((data: CreateUserRequest) => fetchAdmin.createUser(data), [adminKeys.all]);
+}
+export function useInviteUserMutation() {
+  return useApiMutation((userId: string) => fetchAdmin.inviteUser(userId), [adminKeys.all]);
 }

@@ -11,12 +11,12 @@ import { AuthTextField } from "@/components/auth/auth-text-field";
 import { Button } from "@/components/ui/button";
 import { FieldGroup } from "@/components/ui/field";
 import { useAuth } from "@/hooks/use-auth";
+import { useAuthCooldown } from "@/hooks/use-auth-cooldown";
 import type { LoginRequest, VerificationPending } from "@/lib/api/services/fetch-auth";
 import { notifyAuthError, notifyValidationError } from "@/lib/auth/form-errors";
 import { registerSchema } from "@/lib/auth/schemas";
 
 import { AuthStepHeading } from "./auth-step-heading";
-import { useAuthCooldown } from "./use-auth-cooldown";
 import { VerifyEmailForm } from "./verify-email-form";
 
 export function RegisterForm() {

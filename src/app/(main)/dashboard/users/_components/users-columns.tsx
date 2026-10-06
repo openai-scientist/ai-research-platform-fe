@@ -1,11 +1,20 @@
 "use client";
+import type { ReactNode } from "react";
+
 import type { ColumnDef } from "@tanstack/react-table";
 import { Subscribe } from "@tanstack/react-table";
 import { cn } from "cn";
 import { parse } from "date-fns";
 import { Check, Clock, MoreHorizontal, X } from "lucide-react";
 
-import { Avatar, AvatarBadge, AvatarFallback, AvatarGroup, AvatarGroupCount } from "@/components/ui/avatar";
+import {
+  Avatar,
+  AvatarBadge,
+  AvatarFallback,
+  AvatarGroup,
+  AvatarGroupCount,
+  AvatarImage,
+} from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -17,6 +26,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { resolveAvatarUrl } from "@/lib/auth/avatar";
 import type { DataTableFeatures } from "@/lib/data-table-features";
 import { getInitials } from "@/lib/utils";
 
@@ -121,12 +131,21 @@ function getLastActiveBadge(lastActive: number) {
   };
 }
 
-export function AvatarCell({ lastActive, name }: { lastActive: number; name: string }) {
+export function AvatarCell({
+  lastActive,
+  name,
+  avatarUrl,
+}: {
+  lastActive: number;
+  name: string;
+  avatarUrl?: string | null;
+}) {
   const badge = getLastActiveBadge(lastActive);
   const BadgeIcon = badge.icon;
 
   return (
     <Avatar size="lg" className={cn("font-medium", getAvatarTone(name))}>
+      <AvatarImage src={resolveAvatarUrl(avatarUrl)} alt={name} crossOrigin="use-credentials" />
       <AvatarFallback>{getInitials(name)}</AvatarFallback>
       <AvatarBadge className={badge.className}>{BadgeIcon ? <BadgeIcon /> : null}</AvatarBadge>
     </Avatar>
@@ -190,6 +209,7 @@ const workspaceColumn: ColumnDef<DataTableFeatures, UserRow> = {
 };
 
 export type UsersColumnsOptions = {
+  readonly renderActions?: (user: UserRow) => ReactNode;
   readonly onChangeRole?: (user: UserRow, role: string) => void;
   readonly onToggleStatus?: (user: UserRow) => void;
   readonly roleChoices?: readonly string[];
@@ -198,6 +218,7 @@ export type UsersColumnsOptions = {
 };
 
 export const createUsersColumns = ({
+  renderActions,
   onChangeRole,
   onToggleStatus,
   roleChoices = [],
@@ -252,7 +273,7 @@ export const createUsersColumns = ({
     header: "User",
     cell: ({ row }) => (
       <div className="flex items-center gap-3">
-        <AvatarCell name={row.original.name} lastActive={row.original.lastActive} />
+        <AvatarCell name={row.original.name} lastActive={row.original.lastActive} avatarUrl={row.original.avatar_url} />
         <div className="min-w-0">
           <div className="truncate font-medium text-foreground text-sm">{row.original.name}</div>
           <div className="truncate text-muted-foreground text-sm">{row.original.email}</div>
@@ -295,7 +316,11 @@ export const createUsersColumns = ({
     header: () => <div className="text-right">Actions</div>,
     cell: ({ row }) => (
       <div className="text-right">
-        <UserActionsMenu user={row.original} onToggleStatus={onToggleStatus} />
+        {renderActions ? (
+          renderActions(row.original)
+        ) : (
+          <UserActionsMenu user={row.original} onToggleStatus={onToggleStatus} />
+        )}
       </div>
     ),
     enableHiding: false,

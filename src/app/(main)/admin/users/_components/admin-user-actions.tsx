@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import { useRouter } from "next/navigation";
 
+import { MoreHorizontal } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -17,6 +18,14 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useUpdatePlatformRoleMutation, useUpdateUserStatusMutation } from "@/hooks/use-admin-query";
 import type { UserAdminItem } from "@/lib/api/services/fetch-admin";
 import { useAppDispatch } from "@/lib/redux/hooks";
@@ -27,10 +36,12 @@ export function AdminUserActions({
   user,
   currentUserId,
   enabled,
+  onEdit,
 }: {
   user: UserAdminItem;
   currentUserId?: string;
   enabled: boolean;
+  onEdit?: () => void;
 }) {
   const [action, setAction] = useState<"status" | "role" | null>(null);
   const statusMutation = useUpdateUserStatusMutation();
@@ -43,6 +54,7 @@ export function AdminUserActions({
   const statusLabel = active ? "Suspend" : "Activate";
   const roleLabel = admin ? "Remove admin" : "Grant admin";
   const self = user.id === currentUserId;
+  const canGrantAdmin = admin || (user.email_verified && !user.must_change_password);
   const statusDescription = active
     ? "This user will lose access to the platform."
     : "This user will be able to sign in again.";
@@ -64,30 +76,63 @@ export function AdminUserActions({
         { onSuccess },
       );
     if (action === "role")
-      roleMutation.mutate({ userId: user.id, role: admin ? null : PlatformRole.PlatformAdmin }, { onSuccess });
+      roleMutation.mutate(
+        { userId: user.id, role: admin ? PlatformRole.User : PlatformRole.PlatformAdmin },
+        { onSuccess },
+      );
   };
   return (
     <>
-      <div className="flex items-center gap-2">
-        <Button
-          size="sm"
-          variant="outline"
-          aria-label={`${statusLabel} ${user.email}`}
-          disabled={!enabled || busy || ![UserStatus.Active, UserStatus.Suspended].includes(user.status)}
-          onClick={() => setAction("status")}
-        >
-          {statusLabel}
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          aria-label={`${roleLabel} for ${user.email}`}
-          disabled={!enabled || busy}
-          onClick={() => setAction("role")}
-        >
-          {roleLabel}
-        </Button>
-      </div>
+      {onEdit ? (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              disabled={!enabled || busy}
+              aria-label={`Actions for ${user.email}`}
+            >
+              <MoreHorizontal />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuGroup>
+              <DropdownMenuItem onSelect={onEdit}>Edit profile</DropdownMenuItem>
+              <DropdownMenuItem disabled={!canGrantAdmin} onSelect={() => setAction("role")}>
+                {roleLabel}
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+            <DropdownMenuSeparator />
+            <DropdownMenuGroup>
+              <DropdownMenuItem variant={active ? "destructive" : "default"} onSelect={() => setAction("status")}>
+                {statusLabel}
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ) : (
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            aria-label={`${statusLabel} ${user.email}`}
+            disabled={!enabled || busy || ![UserStatus.Active, UserStatus.Suspended].includes(user.status)}
+            onClick={() => setAction("status")}
+          >
+            {statusLabel}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            aria-label={`${roleLabel} for ${user.email}`}
+            disabled={!enabled || busy || !canGrantAdmin}
+            onClick={() => setAction("role")}
+          >
+            {roleLabel}
+          </Button>
+        </div>
+      )}
       <AlertDialog
         open={action !== null}
         onOpenChange={(open) => {

@@ -62,6 +62,7 @@ function FilterSelect({
 }
 
 type UsersProps = {
+  readonly renderActions?: (user: UserRow) => React.ReactNode;
   /** Puts the filters in the card header instead of a row below it. */
   readonly compactToolbar?: boolean;
   readonly description?: string;
@@ -79,6 +80,7 @@ type UsersProps = {
 };
 
 export function Users({
+  renderActions,
   compactToolbar = false,
   description = "Manage your organization members and their access.",
   getDetailsHref,
@@ -126,13 +128,14 @@ export function Users({
   const columns = React.useMemo(
     () =>
       createUsersColumns({
+        renderActions,
         onChangeRole,
         onToggleStatus,
         roleChoices,
         showTeam: teamOptions.length > 0,
         showWorkspace: workspaceOptions.length > 0,
       }),
-    [onChangeRole, onToggleStatus, roleChoices, teamOptions.length, workspaceOptions.length],
+    [renderActions, onChangeRole, onToggleStatus, roleChoices, teamOptions.length, workspaceOptions.length],
   );
 
   const table = useTable({
@@ -294,6 +297,7 @@ export function Users({
           grid={
             activeView === "grid" ? (
               <UsersGrid
+                renderActions={renderActions}
                 table={table}
                 getDetailsHref={getDetailsHref}
                 onChangeRole={onChangeRole}

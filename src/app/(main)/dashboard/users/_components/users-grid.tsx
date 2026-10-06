@@ -1,5 +1,7 @@
 "use client";
 
+import type { ReactNode } from "react";
+
 import Link from "next/link";
 
 import type { ReactTable } from "@tanstack/react-table";
@@ -7,10 +9,11 @@ import { cn } from "cn";
 import { Copy } from "lucide-react";
 import { toast } from "sonner";
 
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { resolveAvatarUrl } from "@/lib/auth/avatar";
 import type { DataTableFeatures } from "@/lib/data-table-features";
 import { getInitials } from "@/lib/utils";
 
@@ -18,6 +21,7 @@ import type { UserRow } from "./data";
 import { getAvatarTone, RoleSelect, StatusBadge } from "./users-columns";
 
 type UsersGridProps = {
+  readonly renderActions?: (user: UserRow) => ReactNode;
   readonly getDetailsHref?: (user: UserRow) => string | undefined;
   readonly onChangeRole?: (user: UserRow, role: string) => void;
   readonly onToggleStatus?: (user: UserRow) => void;
@@ -36,6 +40,7 @@ async function copyEmail(email: string) {
 }
 
 export function UsersGrid({
+  renderActions,
   getDetailsHref,
   onChangeRole,
   onToggleStatus,
@@ -60,6 +65,7 @@ export function UsersGrid({
             <CardContent className="flex flex-col gap-4">
               <div className="flex items-start gap-3">
                 <Avatar size="lg" className={cn("size-12 font-medium", getAvatarTone(user.name))}>
+                  <AvatarImage src={resolveAvatarUrl(user.avatar_url)} alt={user.name} crossOrigin="use-credentials" />
                   <AvatarFallback>{getInitials(user.name)}</AvatarFallback>
                 </Avatar>
                 <div className="min-w-0 flex-1">
@@ -89,30 +95,34 @@ export function UsersGrid({
 
               <Separator />
 
-              <div className="grid grid-cols-3 gap-2">
-                {href ? (
-                  <Button asChild variant="outline" size="sm">
-                    <Link href={href}>View profile</Link>
-                  </Button>
-                ) : (
+              {renderActions ? (
+                <div className="flex justify-end">{renderActions(user)}</div>
+              ) : (
+                <div className="grid grid-cols-3 gap-2">
+                  {href ? (
+                    <Button asChild variant="outline" size="sm">
+                      <Link href={href}>View profile</Link>
+                    </Button>
+                  ) : (
+                    <Button variant="outline" size="sm">
+                      View profile
+                    </Button>
+                  )}
+                  {/* Mock: the backend has no invitation flow. */}
                   <Button variant="outline" size="sm">
-                    View profile
+                    Resend invite
                   </Button>
-                )}
-                {/* Mock: the backend has no invitation flow. */}
-                <Button variant="outline" size="sm">
-                  Resend invite
-                </Button>
-                {user.status === "Active" ? (
-                  <Button variant="destructive" size="sm" onClick={() => onToggleStatus?.(user)}>
-                    Deactivate
-                  </Button>
-                ) : (
-                  <Button variant="outline" size="sm" onClick={() => onToggleStatus?.(user)}>
-                    Activate
-                  </Button>
-                )}
-              </div>
+                  {user.status === "Active" ? (
+                    <Button variant="destructive" size="sm" onClick={() => onToggleStatus?.(user)}>
+                      Deactivate
+                    </Button>
+                  ) : (
+                    <Button variant="outline" size="sm" onClick={() => onToggleStatus?.(user)}>
+                      Activate
+                    </Button>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
         );

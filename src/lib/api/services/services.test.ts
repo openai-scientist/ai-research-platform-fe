@@ -263,6 +263,55 @@ const contracts: Contract[] = [
     signal,
   },
   {
+    name: "search users by name or email",
+    method: "get",
+    url: "/users",
+    call: () => fetchAdmin.getUsers({ q: "demo", status: UserStatus.Active, ...list }, signal),
+    params: { q: "demo", status: "active", ...list },
+    signal,
+  },
+  {
+    name: "create user without a supplied password",
+    method: "post",
+    url: "/users",
+    call: () => fetchAdmin.createUser({ email: "demo@example.com", display_name: "Demo", send_email: false }),
+    body: { email: "demo@example.com", display_name: "Demo", send_email: false },
+  },
+  {
+    name: "resend account sign-in details",
+    method: "post",
+    url: "/users/user%2F1/invite",
+    call: () => fetchAdmin.inviteUser("user/1"),
+  },
+  {
+    name: "edit user profile",
+    method: "patch",
+    url: "/users/user%2F1",
+    call: () => fetchAdmin.updateUserProfile("user/1", { display_name: "Updated" }),
+    body: { display_name: "Updated" },
+  },
+  {
+    name: "remove user avatar",
+    method: "delete",
+    url: "/users/user%2F1/avatar",
+    call: () => fetchAdmin.removeUserAvatar("user/1"),
+  },
+  {
+    name: "edit own profile",
+    method: "patch",
+    url: "/auth/me",
+    call: () => fetchAuth.updateProfile({ display_name: "Updated" }),
+    body: { display_name: "Updated" },
+  },
+  { name: "remove own avatar", method: "delete", url: "/auth/me/avatar", call: () => fetchAuth.removeAvatar() },
+  {
+    name: "remove platform admin role",
+    method: "put",
+    url: "/users/user%2F1/platform-role",
+    call: () => fetchAdmin.updatePlatformRole("user/1", { role: PlatformRole.User }),
+    body: { role: "user" },
+  },
+  {
     name: "update user status",
     method: "patch",
     url: "/users/user%2F1/status",
@@ -424,6 +473,19 @@ describe("API service contracts", () => {
     await expect(fetchAuth.logout()).rejects.toMatchObject({ code: "INTERNAL_ERROR" });
     await fetchProject.create({ name: "Study" });
     expect(adapter.mock.calls.at(-1)?.[0].headers.get("X-CSRF-Token")).toBe("csrf");
+  });
+
+  it.each(["own", "admin"])("uploads %s avatar with credentials, CSRF and the file multipart field", async (kind) => {
+    const file = new File(["image"], "avatar.png", { type: "image/png" });
+    if (kind === "own") await fetchAuth.uploadAvatar(file);
+    else await fetchAdmin.uploadUserAvatar("user/1", file);
+    const config = adapter.mock.calls[0][0];
+    expect(config.url).toBe(kind === "own" ? "/auth/me/avatar" : "/users/user%2F1/avatar");
+    expect(config.withCredentials).toBe(true);
+    expect(config.headers.get("X-CSRF-Token")).toBe("csrf");
+    expect(config.data).toBeInstanceOf(FormData);
+    expect((config.data as FormData).get("file")).toBe(file);
+    expect(config.headers.get("Content-Type")).not.toBe("application/json");
   });
 
   it.each(["dataset", "version"])("uploads a %s as multipart", async (kind) => {

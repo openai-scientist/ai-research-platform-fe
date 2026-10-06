@@ -13,13 +13,13 @@ import { AuthTextField } from "@/components/auth/auth-text-field";
 import { Button } from "@/components/ui/button";
 import { FieldGroup } from "@/components/ui/field";
 import { useAuth } from "@/hooks/use-auth";
+import { useAuthCooldown } from "@/hooks/use-auth-cooldown";
 import type { VerificationPending } from "@/lib/api/services/fetch-auth";
 import { notifyAuthError, notifyValidationError } from "@/lib/auth/form-errors";
 import { emailSchema } from "@/lib/auth/schemas";
 
 import { AuthStepHeading } from "./auth-step-heading";
 import { ResetPasswordForm } from "./reset-password-form";
-import { useAuthCooldown } from "./use-auth-cooldown";
 
 export function ForgotPasswordForm() {
   const { forgotPassword } = useAuth();

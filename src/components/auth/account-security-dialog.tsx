@@ -10,11 +10,14 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { FieldGroup } from "@/components/ui/field";
 import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/hooks/use-auth";
 import { notifyAuthError, notifyValidationError } from "@/lib/auth/form-errors";
 import { changePasswordSchema } from "@/lib/auth/schemas";
 
 import { AuthTextField } from "./auth-text-field";
+import { ProfileEditor } from "./profile-editor";
 
 export function AccountSecurityDialog({
   open,
@@ -23,13 +26,14 @@ export function AccountSecurityDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const { changePassword, logout } = useAuth();
+  const { user, changePassword, logout } = useAuth();
   const [loggingOut, setLoggingOut] = useState(false);
+  const [profileBusy, setProfileBusy] = useState(false);
   const form = useForm<z.infer<typeof changePasswordSchema>>({
     resolver: zodResolver(changePasswordSchema),
     defaultValues: { current_password: "", new_password: "", confirmPassword: "" },
   });
-  const busy = loggingOut || form.formState.isSubmitting;
+  const busy = loggingOut || profileBusy || form.formState.isSubmitting;
   const handleOpenChange = (value: boolean) => {
     if (busy) return;
     if (!value) form.reset();
@@ -61,6 +65,7 @@ export function AccountSecurityDialog({
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
+        className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-lg"
         showCloseButton={!busy}
         onEscapeKeyDown={(event) => {
           if (busy) event.preventDefault();
@@ -70,55 +75,74 @@ export function AccountSecurityDialog({
         }}
       >
         <DialogHeader>
-          <DialogTitle>Account security</DialogTitle>
-          <DialogDescription>Change your password or sign out of all devices.</DialogDescription>
+          <DialogTitle>Account</DialogTitle>
+          <DialogDescription>Manage your profile, picture, and account security.</DialogDescription>
         </DialogHeader>
-        <form
-          noValidate
-          onSubmit={form.handleSubmit(onSubmit, notifyValidationError)}
-          className="flex flex-col gap-4"
-          aria-busy={busy}
-        >
-          <FieldGroup className="gap-4">
-            <AuthTextField
-              control={form.control}
-              name="current_password"
-              id="current-password"
-              label="Current Password"
-              type="password"
-              autoComplete="current-password"
-              disabled={busy}
-            />
-            <AuthTextField
-              control={form.control}
-              name="new_password"
-              id="new-password"
-              label="New Password"
-              type="password"
-              autoComplete="new-password"
-              disabled={busy}
-            />
-            <AuthTextField
-              control={form.control}
-              name="confirmPassword"
-              id="confirm-new-password"
-              label="Confirm Password"
-              type="password"
-              autoComplete="new-password"
-              disabled={busy}
-            />
-          </FieldGroup>
-          <p className="text-muted-foreground text-sm">
-            Use 8–128 characters. Other devices will be signed out after changing your password.
-          </p>
-          <Button type="submit" disabled={busy}>
-            {form.formState.isSubmitting ? "Saving..." : "Change password"}
-          </Button>
-        </form>
-        <Separator />
-        <Button variant="outline" onClick={() => void logoutAll()} disabled={busy}>
-          {loggingOut ? "Signing out..." : "Log out of all devices"}
-        </Button>
+        <Tabs defaultValue="profile">
+          <TabsList>
+            <TabsTrigger value="profile" disabled={busy}>
+              Profile
+            </TabsTrigger>
+            <TabsTrigger value="security" disabled={busy}>
+              Security
+            </TabsTrigger>
+          </TabsList>
+          <TabsContent value="profile">
+            {user ? (
+              <ProfileEditor key={user.id} user={user} onBusyChange={setProfileBusy} />
+            ) : (
+              <Skeleton className="h-64 w-full" />
+            )}
+          </TabsContent>
+          <TabsContent value="security" className="flex flex-col gap-4">
+            <form
+              noValidate
+              onSubmit={form.handleSubmit(onSubmit, notifyValidationError)}
+              className="flex flex-col gap-4"
+              aria-busy={busy}
+            >
+              <FieldGroup className="gap-4">
+                <AuthTextField
+                  control={form.control}
+                  name="current_password"
+                  id="current-password"
+                  label="Current Password"
+                  type="password"
+                  autoComplete="current-password"
+                  disabled={busy}
+                />
+                <AuthTextField
+                  control={form.control}
+                  name="new_password"
+                  id="new-password"
+                  label="New Password"
+                  type="password"
+                  autoComplete="new-password"
+                  disabled={busy}
+                />
+                <AuthTextField
+                  control={form.control}
+                  name="confirmPassword"
+                  id="confirm-new-password"
+                  label="Confirm Password"
+                  type="password"
+                  autoComplete="new-password"
+                  disabled={busy}
+                />
+              </FieldGroup>
+              <p className="text-muted-foreground text-sm">
+                Use 8–128 characters. Other devices will be signed out after changing your password.
+              </p>
+              <Button type="submit" disabled={busy}>
+                {form.formState.isSubmitting ? "Saving..." : "Change password"}
+              </Button>
+            </form>
+            <Separator />
+            <Button variant="outline" onClick={() => void logoutAll()} disabled={busy}>
+              {loggingOut ? "Signing out..." : "Log out of all devices"}
+            </Button>
+          </TabsContent>
+        </Tabs>
       </DialogContent>
     </Dialog>
   );

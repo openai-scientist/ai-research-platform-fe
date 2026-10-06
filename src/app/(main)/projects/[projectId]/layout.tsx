@@ -77,8 +77,8 @@ export default async function Layout({
               <span className="truncate font-medium text-sm">{project.name}</span>
             </div>
             <div className="flex items-center gap-2">
-              <LayoutControls />
               <NotificationBell />
+              <LayoutControls />
               <ThemeSwitcher />
               <AccountSwitcher
                 users={[{ id: user.email, name: user.name, email: user.email, avatar: "", role: user.role }]}

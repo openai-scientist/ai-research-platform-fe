@@ -4,10 +4,9 @@ import { useState } from "react";
 
 import { toast } from "sonner";
 
+import { useAuthCooldown } from "@/hooks/use-auth-cooldown";
 import type { VerificationPending } from "@/lib/api/services/fetch-auth";
 import { notifyAuthError } from "@/lib/auth/form-errors";
-
-import { useAuthCooldown } from "./use-auth-cooldown";
 
 export function useOtpChallenge(pending: VerificationPending, retryAfter = 0) {
   const [resending, setResending] = useState(false);

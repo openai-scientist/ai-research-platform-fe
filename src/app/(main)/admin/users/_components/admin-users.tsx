@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 import { format } from "date-fns";
 import { Download, Plus, UserCheck, UserPlus, Users as UsersIcon, UserX } from "lucide-react";
 import { toast } from "sonner";
@@ -12,6 +14,9 @@ import type { UserRow } from "../../../dashboard/users/_components/data";
 import { Users } from "../../../dashboard/users/_components/users";
 import { AdminPageHeader, MetricCard } from "../../_components/admin-primitives";
 import { useAdminAccess } from "../../_components/use-admin-access";
+import { AdminUserActions } from "./admin-user-actions";
+import { CreateUserDialog } from "./create-user-dialog";
+import { EditUserDialog } from "./edit-user-dialog";
 
 // Labels for the backend platform_role.
 const PLATFORM_ROLE_LABELS: Record<PlatformRole, string> = {
@@ -23,18 +28,22 @@ const ROLE_OPTIONS = ["All", PLATFORM_ROLE_LABELS[PlatformRole.PlatformAdmin], N
 const STATUS_OPTIONS = ["All", "Active", "Suspended"];
 const NO_OPTIONS: readonly string[] = [];
 
-function toPlatformRole(label: string): PlatformRole | null {
+function toPlatformRole(label: string): PlatformRole {
   const match = Object.entries(PLATFORM_ROLE_LABELS).find(([, value]) => value === label);
-  return match ? (match[0] as PlatformRole) : null;
+  return match ? (match[0] as PlatformRole) : PlatformRole.User;
 }
 
 export function AdminUsers() {
-  const { enabled } = useAdminAccess();
+  const { enabled, currentUserId } = useAdminAccess();
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const users = useUsersQuery({ limit: 100 }, { enabled });
   const statusMutation = useUpdateUserStatusMutation();
   const roleMutation = useUpdatePlatformRoleMutation();
+  const editingUser = users.data?.data.find((item) => item.id === editingId);
   const rows: UserRow[] = (users.data?.data ?? []).map((user) => ({
     id: user.id,
+    avatar_url: user.avatar_url,
     email: user.email,
     joinedDate: format(new Date(user.created_at), "dd MMM yyyy, h:mm a"),
     lastActive: 0,
@@ -55,6 +64,15 @@ export function AdminUsers() {
 
   const changeRole = (user: UserRow, role: string) => {
     if (!user.id || roleMutation.isPending) return;
+    const target = users.data?.data.find((item) => item.id === user.id);
+    if (
+      role === PLATFORM_ROLE_LABELS[PlatformRole.PlatformAdmin] &&
+      target &&
+      (!target.email_verified || target.must_change_password)
+    ) {
+      toast.error("The user must verify their email and change their temporary password before becoming an admin.");
+      return;
+    }
     roleMutation.mutate(
       { userId: user.id, role: toPlatformRole(role) },
       { onSuccess: () => toast.success("Role updated successfully.") },
@@ -68,12 +86,12 @@ export function AdminUsers() {
         description="Manage the system accounts used by the ResearchLab AI platform."
         actions={
           <>
-            {/* Mock: Export and Add User have no API yet. */}
+            {/* Export is not backed by an API yet. */}
             <Button variant="outline">
               <Download data-icon="inline-start" />
               Export
             </Button>
-            <Button>
+            <Button disabled={!enabled} onClick={() => setCreateOpen(true)}>
               <Plus data-icon="inline-start" />
               Add User
             </Button>
@@ -92,7 +110,17 @@ export function AdminUsers() {
       <Users
         compactToolbar
         description=""
-        getDetailsHref={(user) => (user.id ? `/admin/users/${encodeURIComponent(user.id)}` : undefined)}
+        renderActions={(row) => {
+          const user = users.data?.data.find((item) => item.id === row.id);
+          return user ? (
+            <AdminUserActions
+              user={user}
+              currentUserId={currentUserId}
+              enabled={enabled && !users.isFetching}
+              onEdit={() => setEditingId(user.id)}
+            />
+          ) : null;
+        }}
         onChangeRole={changeRole}
         onToggleStatus={toggleStatus}
         roleOptions={ROLE_OPTIONS}
@@ -104,6 +132,8 @@ export function AdminUsers() {
         users={rows}
         workspaceOptions={NO_OPTIONS}
       />
+      {createOpen && <CreateUserDialog onClose={() => setCreateOpen(false)} />}
+      {editingUser && <EditUserDialog user={editingUser} onClose={() => setEditingId(null)} />}
     </div>
   );
 }
