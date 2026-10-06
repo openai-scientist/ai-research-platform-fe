@@ -5,6 +5,7 @@ import { useState } from "react";
 import { cn } from "cn";
 import { ArrowRight, Check, Flag, Info, Play, Plus, Sparkles, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -21,7 +22,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import type { GateKind, ReviewMode, RunInput } from "@/lib/run-stream/contract";
-import { SHOW_DATA_STAGE, SHOW_REVIEW_MODE } from "@/lib/run-stream/features";
+import { RUN_SOURCE, SHOW_DATA_STAGE, SHOW_REVIEW_MODE } from "@/lib/run-stream/features";
 import { DATASET, SAMPLE_TOPIC } from "@/lib/run-stream/mock/scenario";
 
 import { MODES, PIPELINE, STAGE_SHORT, STOP_INFO } from "./run-meta";
@@ -43,7 +44,10 @@ function suggestFields(topic: string) {
   return FIELD_HINTS.filter(([re]) => re.test(topic)).map(([, field]) => field);
 }
 
+// The backend's limits for a topic run.
 const MIN_TOPIC = 12;
+const MAX_TOPIC = 1000;
+const MAX_FIELDS = 6;
 
 /** What Popper derives from the topic on its own, in the Scope stage. */
 const DERIVED = [
@@ -123,6 +127,171 @@ export function StopsPreview({ mode }: { mode: ReviewMode }) {
   );
 }
 
+/** The topic and fields a run starts from, within the backend's limits. Shared by the composer and the dialog. */
+export function useTopicDraft() {
+  const [topic, setTopic] = useState("");
+  const [removed, setRemoved] = useState<string[]>([]);
+  const [added, setAdded] = useState<string[]>([]);
+  const [newField, setNewField] = useState("");
+  const fields = [...new Set([...suggestFields(topic).filter((f) => !removed.includes(f)), ...added])];
+  const addField = () => {
+    const field = newField.trim();
+    if (!field) return;
+    if (field.length < 2) {
+      toast.error("A field needs at least 2 characters.");
+      return;
+    }
+    if (fields.some((f) => f.toLowerCase() === field.toLowerCase())) {
+      setNewField("");
+      return;
+    }
+    if (fields.length >= MAX_FIELDS) {
+      toast.error(`Keep at most ${MAX_FIELDS} fields.`);
+      return;
+    }
+    setAdded((list) => [...list, field]);
+    setRemoved((list) => list.filter((f) => f !== field));
+    setNewField("");
+  };
+  return {
+    topic,
+    setTopic,
+    fields,
+    newField,
+    setNewField,
+    addField,
+    removeField: (field: string) => {
+      setRemoved((list) => [...list, field]);
+      setAdded((list) => list.filter((f) => f !== field));
+    },
+    ready: topic.trim().length >= MIN_TOPIC,
+    words: topic.trim() ? topic.trim().split(/\s+/).length : 0,
+    reset: () => {
+      setTopic("");
+      setRemoved([]);
+      setAdded([]);
+      setNewField("");
+    },
+    /** What the run starts from, or null after saying why it can't start yet. */
+    input: (): RunInput | null => {
+      if (fields.length > MAX_FIELDS) {
+        toast.error(`Keep at most ${MAX_FIELDS} fields.`);
+        return null;
+      }
+      return { topic: topic.trim(), domains: fields };
+    },
+  };
+}
+
+type TopicDraft = ReturnType<typeof useTopicDraft>;
+
+export function TopicInput({
+  draft,
+  id,
+  label,
+  className,
+  autoFocus,
+}: {
+  draft: TopicDraft;
+  id: string;
+  label: string;
+  className?: string;
+  autoFocus?: boolean;
+}) {
+  return (
+    <Field>
+      <FieldLabel htmlFor={id} className={className}>
+        {label}
+      </FieldLabel>
+      <Textarea
+        id={id}
+        value={draft.topic}
+        onChange={(e) => draft.setTopic(e.target.value)}
+        maxLength={MAX_TOPIC}
+        placeholder="One question you want answered, such as: does more sleep go with higher exam scores in our undergraduates?"
+        className="font-(family-name:--font-lora) min-h-24 text-[17px] leading-snug md:text-[17px]"
+        autoFocus={autoFocus}
+      />
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+        <FieldDescription className="min-w-0 basis-full sm:basis-0 sm:flex-1">
+          Write it as one question. You don't list sub-questions; Popper derives them.
+        </FieldDescription>
+        {!draft.topic && (
+          <Button variant="outline" size="xs" onClick={() => draft.setTopic(SAMPLE_TOPIC)}>
+            Use the sample topic
+          </Button>
+        )}
+        <span className="font-mono text-[11px] text-muted-foreground tabular-nums">{draft.words} words</span>
+      </div>
+      {RUN_SOURCE === "mock" && draft.topic.trim() && draft.topic.trim() !== SAMPLE_TOPIC && (
+        <span className="text-muted-foreground text-xs">
+          Mock stream: the run plays the sample study on sleep, whatever topic you type.
+        </span>
+      )}
+    </Field>
+  );
+}
+
+export function FieldsInput({ draft, id }: { draft: TopicDraft; id: string }) {
+  const { fields, newField, setNewField, addField, removeField } = draft;
+  return (
+    <Field>
+      <FieldLabel htmlFor={id}>Fields</FieldLabel>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <AnimatePresence initial={false} mode="popLayout">
+          {fields.map((field) => (
+            <motion.span
+              key={field}
+              layout
+              initial={{ opacity: 0, scale: 0.85 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.85 }}
+              transition={{ type: "spring", stiffness: 420, damping: 26 }}
+              className="inline-flex h-7 items-center gap-1 rounded-md bg-pink-500/10 pr-1 pl-2 font-medium text-pink-700 text-xs ring-1 ring-pink-500/25 dark:text-pink-300"
+            >
+              {field}
+              <button
+                type="button"
+                onClick={() => removeField(field)}
+                aria-label={`Remove ${field}`}
+                className="grid size-5 place-items-center rounded hover:bg-pink-500/15"
+              >
+                <X className="size-3" />
+              </button>
+            </motion.span>
+          ))}
+        </AnimatePresence>
+        <span className="flex items-center gap-1">
+          <Input
+            id={id}
+            value={newField}
+            onChange={(e) => setNewField(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                addField();
+              }
+            }}
+            placeholder="Add a field"
+            maxLength={60}
+            className="h-7 w-32 text-xs md:text-xs"
+          />
+          {newField.trim() && (
+            <Button variant="ghost" size="icon-xs" onClick={addField} aria-label="Add field">
+              <Plus />
+            </Button>
+          )}
+        </span>
+      </div>
+      <FieldDescription>
+        {fields.length
+          ? "Suggested from your topic. They decide which skills and sources the agents use."
+          : "Fields appear as you type. You can also add your own."}
+      </FieldDescription>
+    </Field>
+  );
+}
+
 export function StartRunDialog({
   open,
   onOpenChange,
@@ -132,28 +301,23 @@ export function StartRunDialog({
   open: boolean;
   onOpenChange(open: boolean): void;
   defaultMode: ReviewMode;
-  onStart(mode: ReviewMode, input: RunInput): void;
+  /** The dialog shows the start as pending until this settles. */
+  onStart(mode: ReviewMode, input: RunInput): void | Promise<void>;
 }) {
   const [step, setStep] = useState(0);
   const [dir, setDir] = useState(1);
   const [mode, setMode] = useState<ReviewMode>(defaultMode);
-  const [topic, setTopic] = useState("");
-  const [removed, setRemoved] = useState<string[]>([]);
-  const [added, setAdded] = useState<string[]>([]);
-  const [newField, setNewField] = useState("");
-  const fields = [...new Set([...suggestFields(topic).filter((f) => !removed.includes(f)), ...added])];
-  const topicReady = topic.trim().length >= MIN_TOPIC;
-  const words = topic.trim() ? topic.trim().split(/\s+/).length : 0;
-  const addField = () => {
-    const field = newField.trim();
-    if (!field) return;
-    setAdded((list) => (list.includes(field) ? list : [...list, field]));
-    setRemoved((list) => list.filter((f) => f !== field));
-    setNewField("");
-  };
-  const removeField = (field: string) => {
-    setRemoved((list) => [...list, field]);
-    setAdded((list) => list.filter((f) => f !== field));
+  const draft = useTopicDraft();
+  const [starting, setStarting] = useState(false);
+  const start = async () => {
+    const input = draft.input();
+    if (!input) return;
+    setStarting(true);
+    try {
+      await onStart(mode, input);
+    } finally {
+      setStarting(false);
+    }
   };
   const move = (to: number) => {
     setDir(to > step ? 1 : -1);
@@ -167,10 +331,7 @@ export function StartRunDialog({
         if (next) {
           setStep(0);
           setMode(defaultMode);
-          setTopic("");
-          setRemoved([]);
-          setAdded([]);
-          setNewField("");
+          draft.reset();
         }
       }}
     >
@@ -225,81 +386,8 @@ export function StartRunDialog({
             >
               {step === 0 && (
                 <>
-                  <Field>
-                    <FieldLabel htmlFor="run-topic">Research topic</FieldLabel>
-                    <Textarea
-                      id="run-topic"
-                      value={topic}
-                      onChange={(e) => setTopic(e.target.value)}
-                      placeholder="One question you want answered, such as: does more sleep go with higher exam scores in our undergraduates?"
-                      className="font-(family-name:--font-lora) min-h-24 text-[17px] leading-snug md:text-[17px]"
-                      autoFocus
-                    />
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <FieldDescription>
-                        Write it as one question. You don't list sub-questions; Popper derives them.
-                      </FieldDescription>
-                      <span className="font-mono text-[11px] text-muted-foreground tabular-nums">{words} words</span>
-                    </div>
-                    {!topic && (
-                      <Button variant="outline" size="xs" className="w-fit" onClick={() => setTopic(SAMPLE_TOPIC)}>
-                        Use the sample topic
-                      </Button>
-                    )}
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="run-field">Fields</FieldLabel>
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <AnimatePresence initial={false} mode="popLayout">
-                        {fields.map((field) => (
-                          <motion.span
-                            key={field}
-                            layout
-                            initial={{ opacity: 0, scale: 0.85 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            exit={{ opacity: 0, scale: 0.85 }}
-                            transition={{ type: "spring", stiffness: 420, damping: 26 }}
-                            className="inline-flex h-7 items-center gap-1 rounded-md bg-pink-500/10 pr-1 pl-2 font-medium text-pink-700 text-xs ring-1 ring-pink-500/25 dark:text-pink-300"
-                          >
-                            {field}
-                            <button
-                              type="button"
-                              onClick={() => removeField(field)}
-                              aria-label={`Remove ${field}`}
-                              className="grid size-5 place-items-center rounded hover:bg-pink-500/15"
-                            >
-                              <X className="size-3" />
-                            </button>
-                          </motion.span>
-                        ))}
-                      </AnimatePresence>
-                      <span className="flex items-center gap-1">
-                        <Input
-                          id="run-field"
-                          value={newField}
-                          onChange={(e) => setNewField(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              e.preventDefault();
-                              addField();
-                            }
-                          }}
-                          placeholder="Add a field"
-                          className="h-7 w-32 text-xs md:text-xs"
-                        />
-                        {newField.trim() && (
-                          <Button variant="ghost" size="icon-xs" onClick={addField} aria-label="Add field">
-                            <Plus />
-                          </Button>
-                        )}
-                      </span>
-                    </div>
-                    <FieldDescription>
-                      {fields.length
-                        ? "Suggested from your topic. They decide which skills and sources the agents use."
-                        : "Fields appear as you type. You can also add your own."}
-                    </FieldDescription>
-                  </Field>
+                  <TopicInput draft={draft} id="run-topic" label="Research topic" autoFocus />
+                  <FieldsInput draft={draft} id="run-field" />
                   <div className="flex flex-col gap-2 rounded-xl bg-muted/60 px-4 py-3.5">
                     <span className="flex items-center gap-1.5 font-medium text-sm">
                       <Sparkles className="size-3.5 text-muted-foreground" />
@@ -315,11 +403,6 @@ export function StartRunDialog({
                         </li>
                       ))}
                     </ol>
-                    {topic.trim() && topic.trim() !== SAMPLE_TOPIC && (
-                      <span className="text-muted-foreground text-xs">
-                        Mock stream: the run plays the sample study on sleep, whatever topic you type.
-                      </span>
-                    )}
                   </div>
                 </>
               )}
@@ -411,14 +494,14 @@ export function StartRunDialog({
             {STEPS.length > 1 && `Step ${step + 1} of ${STEPS.length}`}
           </span>
           {step < STEPS.length - 1 ? (
-            <Button onClick={() => move(step + 1)} disabled={step === 0 && !topicReady}>
+            <Button onClick={() => move(step + 1)} disabled={step === 0 && !draft.ready}>
               Next: {STEPS[step + 1]}
               <ArrowRight />
             </Button>
           ) : (
-            <Button onClick={() => onStart(mode, { topic: topic.trim(), domains: fields })} disabled={!topicReady}>
+            <Button onClick={start} disabled={!draft.ready || starting}>
               <Play />
-              Start research run
+              {starting ? "Starting…" : "Start research run"}
             </Button>
           )}
         </DialogFooter>

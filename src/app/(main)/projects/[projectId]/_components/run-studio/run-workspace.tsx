@@ -16,9 +16,10 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useRunsQuery } from "@/hooks/use-runs-query";
 import type { GateAnswer } from "@/lib/run-stream/contract";
-import { SHOW_REVIEW_MODE } from "@/lib/run-stream/features";
-import { type RunSession, useProjectRun, useRunStudio } from "@/lib/run-stream/run-store";
+import { RUN_SOURCE, SHOW_REVIEW_MODE } from "@/lib/run-stream/features";
+import { type RunSession, useProjectRun, useRunSession, useRunStudio } from "@/lib/run-stream/run-store";
 import { displayStatus, liveStageKey } from "@/lib/run-stream/selectors";
 
 import { DropBar, GateSheet } from "./gate-sheet";
@@ -58,8 +59,11 @@ function RunWorkspace({ session }: { session: RunSession }) {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [stepPause, setStepPause] = useState(false);
   const [holding, setHolding] = useState(false);
+  const [answering, setAnswering] = useState(false);
   const status = displayStatus(state);
   const paused = state.lifecycle === "paused";
+  // A run that failed has ended too: nothing is live and there is nothing to pause.
+  const ended = state.completed || state.lifecycle === "failed";
 
   // A review stop always brings you back to the live stage.
   const gateId = state.gate?.id;
@@ -69,6 +73,7 @@ function RunWorkspace({ session }: { session: RunSession }) {
     setMinimized(false);
     setDropMode(false);
     setDropped([]);
+    setAnswering(false);
   }, [gateId]);
 
   // The finished paper gets the full width.
@@ -90,12 +95,12 @@ function RunWorkspace({ session }: { session: RunSession }) {
   const doneSteps = Object.values(state.stages).reduce((n, s) => n + s.doneStepIds.length, 0);
   const lastDone = useRef(doneSteps);
   useEffect(() => {
-    if (doneSteps > lastDone.current && stepPause && !state.completed && !state.gate) {
+    if (doneSteps > lastDone.current && stepPause && !ended && !state.gate) {
       pause(runId);
       setHolding(true);
     }
     lastDone.current = doneSteps;
-  }, [doneSteps, stepPause, state.completed, state.gate, pause, runId]);
+  }, [doneSteps, stepPause, ended, state.gate, pause, runId]);
   const togglePause = () => {
     if (paused) {
       resume(runId);
@@ -107,7 +112,7 @@ function RunWorkspace({ session }: { session: RunSession }) {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== " " || (e.target as HTMLElement).closest("input, textarea, button, [role=radio], [role=switch]"))
         return;
-      if (state.gate || state.completed) return;
+      if (state.gate || ended) return;
       e.preventDefault();
       togglePause();
     };
@@ -115,8 +120,13 @@ function RunWorkspace({ session }: { session: RunSession }) {
     return () => window.removeEventListener("keydown", onKey);
   });
 
-  const answer = (a: GateAnswer) => {
-    if (state.gate) answerGate(runId, state.gate.id, a);
+  // The gate closes when the backend's `gate.resolved` arrives; until then the answer can't be sent again.
+  const answer = async (a: GateAnswer) => {
+    if (!state.gate || answering) return false;
+    setAnswering(true);
+    const recorded = await answerGate(runId, state.gate.id, a);
+    if (!recorded) setAnswering(false);
+    return recorded;
   };
   const droppable = state.gate?.droppable ?? [];
   const dropsPapers = state.gate?.kind === "screen";
@@ -161,7 +171,7 @@ function RunWorkspace({ session }: { session: RunSession }) {
         <header className="flex min-h-14 flex-wrap items-center gap-x-2.5 gap-y-1.5 border-b px-3 py-2 md:flex-nowrap md:pr-4">
           <Button variant="ghost" size="sm" onClick={closeWorkspace} title="Leave the workspace. The run keeps going.">
             <ArrowLeft />
-            Experiments
+            Research flow
           </Button>
           <Separator orientation="vertical" className="h-5 max-md:hidden" />
           <div className="flex min-w-0 flex-1 items-baseline gap-2.5">
@@ -175,27 +185,29 @@ function RunWorkspace({ session }: { session: RunSession }) {
             </span>
           )}
           <div className="flex items-center gap-2 max-md:w-full max-md:justify-between">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span>
-                  <ToggleGroup
-                    type="single"
-                    size="sm"
-                    variant="outline"
-                    value={String(session.speed)}
-                    onValueChange={(v) => v && setSpeed(runId, Number(v))}
-                    aria-label="Mock playback speed"
-                  >
-                    {[1, 2, 4].map((s) => (
-                      <ToggleGroupItem key={s} value={String(s)} className="px-2 font-mono text-xs">
-                        {s}×
-                      </ToggleGroupItem>
-                    ))}
-                  </ToggleGroup>
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>Playback speed of the mock stream</TooltipContent>
-            </Tooltip>
+            {session.source === "mock" && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span>
+                    <ToggleGroup
+                      type="single"
+                      size="sm"
+                      variant="outline"
+                      value={String(session.speed)}
+                      onValueChange={(v) => v && setSpeed(runId, Number(v))}
+                      aria-label="Mock playback speed"
+                    >
+                      {[1, 2, 4].map((s) => (
+                        <ToggleGroupItem key={s} value={String(s)} className="px-2 font-mono text-xs">
+                          {s}×
+                        </ToggleGroupItem>
+                      ))}
+                    </ToggleGroup>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>Playback speed of the mock stream</TooltipContent>
+              </Tooltip>
+            )}
             <span className="flex items-center gap-2 whitespace-nowrap text-xs">
               <Switch
                 id="pause-each-step"
@@ -213,7 +225,7 @@ function RunWorkspace({ session }: { session: RunSession }) {
               variant="outline"
               size="sm"
               onClick={togglePause}
-              disabled={Boolean(state.gate) || state.completed}
+              disabled={Boolean(state.gate) || ended}
               title="Pause or resume (Space)"
             >
               {paused ? <Play /> : <Pause />}
@@ -247,6 +259,25 @@ function RunWorkspace({ session }: { session: RunSession }) {
               onWheel={() => isLiveView && setFollow(false)}
               onTouchMove={() => isLiveView && setFollow(false)}
             >
+              {!shown && (
+                <div className="grid min-h-[60vh] place-items-center px-4 text-center">
+                  <span className="flex flex-col items-center gap-2">
+                    {status === "failed" ? (
+                      <b className="font-semibold text-sm">The run stopped before its first stage</b>
+                    ) : (
+                      <>
+                        <PulseDot className="bg-sky-500" />
+                        <b className="font-semibold text-sm">Waiting for Popper to start</b>
+                      </>
+                    )}
+                    <span className="max-w-[44ch] text-muted-foreground text-xs">
+                      {status === "failed"
+                        ? (state.failure ?? "Popper could not start this run.")
+                        : "The first stage opens here as soon as it begins. You can leave; the run keeps going."}
+                    </span>
+                  </span>
+                </div>
+              )}
               <AnimatePresence mode="popLayout" initial={false} custom={direction}>
                 {shown && (
                   <motion.div
@@ -262,7 +293,7 @@ function RunWorkspace({ session }: { session: RunSession }) {
                       state={state}
                       stageKey={shown}
                       runLabel={session.label}
-                      live={isLiveView && !state.completed}
+                      live={isLiveView && !ended}
                       scroller={scroller}
                       onOpenReport={() => setViewKey("report")}
                       onOpenFindings={() => {
@@ -289,13 +320,13 @@ function RunWorkspace({ session }: { session: RunSession }) {
                     {state.stages[shown ?? ""]?.status === "done" ? ", finished" : ""}
                   </span>
                   <Button size="sm" onClick={() => setViewKey(null)}>
-                    {!state.completed && <PulseDot className="bg-sky-400" />}
-                    {state.completed ? "Back to" : "Live:"} {stageName(session, live)}
+                    {!ended && <PulseDot className="bg-sky-400" />}
+                    {ended ? "Back to" : "Live:"} {stageName(session, live)}
                     <ArrowRight />
                   </Button>
                 </motion.div>
               )}
-              {isLiveView && !follow && !state.completed && !state.gate && (
+              {isLiveView && !follow && !ended && !state.gate && (
                 <motion.div
                   initial={{ y: 16, opacity: 0 }}
                   animate={{ y: 0, opacity: 1 }}
@@ -321,6 +352,7 @@ function RunWorkspace({ session }: { session: RunSession }) {
                   onMinimize={setMinimized}
                   onAnswer={answer}
                   onStartDrop={() => setDropMode(true)}
+                  pending={answering}
                 />
               )}
               {state.gate && dropMode && (
@@ -329,10 +361,10 @@ function RunWorkspace({ session }: { session: RunSession }) {
                   total={droppable.length}
                   noun={dropsPapers ? "paper in the shortlist" : "hypothesis in the set"}
                   onReset={() => setDropped([])}
-                  onApprove={() => {
-                    answer({ option_id: "drop", dropped });
-                    setDropMode(false);
+                  onApprove={async () => {
+                    if (await answer({ option_id: "drop", dropped })) setDropMode(false);
                   }}
+                  pending={answering}
                 />
               )}
             </AnimatePresence>
@@ -357,13 +389,26 @@ function RunWorkspace({ session }: { session: RunSession }) {
   );
 }
 
+/** With runs on the backend, brings back the project's latest run after a reload or on another device. */
+function useLatestRun(projectId: string, known: boolean) {
+  const attachRun = useRunStudio((s) => s.attachRun);
+  const latest = useRunsQuery(projectId, { limit: 1 }, { enabled: RUN_SOURCE === "api" && !known });
+  const run = latest.data?.data[0];
+  useEffect(() => {
+    // Runs started from a dataset have no topic and keep their own page.
+    if (run?.topic && !known) attachRun(projectId, run, true);
+  }, [run, known, projectId, attachRun]);
+}
+
 /** Renders the open workspace over the whole app and tells you when a run you left needs you. */
 export function RunWorkspaceHost({ projectId }: { projectId: string }) {
   const openRunId = useRunStudio((s) => s.openRunId);
   const openWorkspace = useRunStudio((s) => s.openWorkspace);
   const session = useProjectRun(projectId);
+  const open = useRunSession(openRunId);
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
+  useLatestRun(projectId, Boolean(session));
 
   const gate = session?.state.gate;
   const away = Boolean(session) && openRunId !== session?.runId;
@@ -379,24 +424,31 @@ export function RunWorkspaceHost({ projectId }: { projectId: string }) {
       action: { label: "Review now", onClick: () => openWorkspace(runId) },
     });
   }, [gate, away, label, runId, openWorkspace]);
-  // Only tell about a finish that happened while you were away, not when you leave a finished run.
+  // Tell about a finish that happened while you were away, and about any stop, but only when it happens:
+  // not when you leave a finished run, and not when a run that had already ended is loaded.
   const completed = Boolean(session?.state.completed);
   const withPaper = Boolean(session?.state.paperTitle);
-  const wasCompleted = useRef(completed);
+  const failed = session?.state.lifecycle === "failed";
+  const failure = session?.state.failure;
+  const seen = useRef({ runId, completed, failed });
   useEffect(() => {
-    if (completed && !wasCompleted.current && away)
+    const before = seen.current;
+    seen.current = { runId, completed, failed };
+    if (!runId || before.runId !== runId) return;
+    if (completed && !before.completed && away)
       toast.success(`${label} finished`, {
         description: withPaper ? "The paper is in Findings." : "The hypotheses are ready.",
       });
-    wasCompleted.current = completed;
-  }, [completed, away, label, withPaper]);
+    if (failed && !before.failed)
+      toast.error(`${label} stopped`, { description: failure ?? "Popper could not finish this run." });
+  }, [runId, completed, failed, away, label, withPaper, failure]);
 
   if (!mounted) return null;
   return createPortal(
     <>
       <FlightLayer />
       <AnimatePresence>
-        {session && openRunId === session.runId && <RunWorkspace key={session.runId} session={session} />}
+        {open?.projectId === projectId && <RunWorkspace key={open.runId} session={open} />}
       </AnimatePresence>
     </>,
     document.body,

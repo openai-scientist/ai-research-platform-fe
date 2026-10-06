@@ -12,8 +12,8 @@ const sections: Record<string, { title: string; description: string; managerOnly
     description: "Upload, version, and download the data used by this project's research runs.",
   },
   experiments: {
-    title: "Experiments",
-    description: "Save research context, start research runs, and review their progress and results.",
+    title: "Research flow",
+    description: "Start a research run from a topic and follow it stage by stage, up to the hypotheses.",
   },
   findings: {
     title: "Findings",

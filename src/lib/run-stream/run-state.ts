@@ -274,6 +274,8 @@ export interface RunState {
   estimates: { estimate: Estimate; check?: EstimateCheck }[];
   completed: boolean;
   paperTitle?: string;
+  /** Why the run stopped, once it failed. */
+  failure?: string;
 }
 
 export function emptyContent(plan: StagePlan): StageContent {

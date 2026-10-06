@@ -1,4 +1,4 @@
-import { Database, FlaskConical, LayoutDashboard, Lightbulb, Settings, Users } from "lucide-react";
+import { Database, LayoutDashboard, Lightbulb, Settings, Users, Workflow } from "lucide-react";
 
 import type { UserRole } from "@/lib/auth/auth-config";
 
@@ -10,9 +10,26 @@ export function getProjectSidebarItems(projectId: string, role: UserRole): NavGr
   return [
     {
       id: 1,
-      label: "WORKSPACE",
+      items: [{ id: "project-overview", title: "Overview", url: baseUrl, icon: LayoutDashboard }],
+    },
+    {
+      id: 2,
+      label: "RESEARCH",
       items: [
-        { id: "project-overview", title: "Overview", url: baseUrl, icon: LayoutDashboard },
+        // The route keeps its old name so existing links still work.
+        {
+          id: "project-experiments",
+          title: "Research flow",
+          url: `${baseUrl}/experiments`,
+          icon: Workflow,
+          activeMatch: "prefix",
+        },
+      ],
+    },
+    {
+      id: 3,
+      label: "LIBRARY",
+      items: [
         {
           id: "project-datasets",
           title: "Datasets",
@@ -20,18 +37,11 @@ export function getProjectSidebarItems(projectId: string, role: UserRole): NavGr
           icon: Database,
           activeMatch: "prefix",
         },
-        {
-          id: "project-experiments",
-          title: "Experiments",
-          url: `${baseUrl}/experiments`,
-          icon: FlaskConical,
-          activeMatch: "prefix",
-        },
         { id: "project-findings", title: "Findings", url: `${baseUrl}/findings`, icon: Lightbulb },
       ],
     },
     {
-      id: 2,
+      id: 4,
       label: "PROJECT",
       items: [
         { id: "project-members", title: "Members", url: `${baseUrl}/members`, icon: Users },

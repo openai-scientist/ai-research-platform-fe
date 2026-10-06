@@ -1,7 +1,7 @@
 import { ProjectStatus, RunStatus } from "@/types/enums";
 
 export function isActiveRun(status: RunStatus) {
-  return [RunStatus.Queued, RunStatus.Running, RunStatus.AwaitingReview].includes(status);
+  return [RunStatus.Queued, RunStatus.Running, RunStatus.AwaitingReview, RunStatus.Paused].includes(status);
 }
 
 export function blocksNewRun(status: ProjectStatus) {

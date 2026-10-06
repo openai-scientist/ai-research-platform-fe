@@ -199,11 +199,17 @@ const FULL_PIPELINE: { stage: RunStage; title: string; text: string }[] = [
   { stage: "write", title: "Write the paper", text: "The paper is written from the report, reviewed and checked." },
 ];
 
+const SHOWN_PIPELINE = FULL_PIPELINE.filter((p) => SHOW_DATA_STAGE || p.stage !== "data");
+const LAST_REACHED =
+  RUN_ENDS_AT === "hypotheses" ? SHOWN_PIPELINE.findIndex((p) => p.stage === "hypothesize") + 1 : undefined;
+
 /** Stages as the start screens describe them. */
-export const PIPELINE = FULL_PIPELINE.filter((p) => SHOW_DATA_STAGE || p.stage !== "data").slice(
-  0,
-  RUN_ENDS_AT === "hypotheses" ? FULL_PIPELINE.findIndex((p) => p.stage === "hypothesize") + 1 : undefined,
-);
+export const PIPELINE = SHOWN_PIPELINE.slice(0, LAST_REACHED);
+
+/** Stages after the hypotheses that runs don't reach yet: shown, but locked. */
+export const LOCKED_PIPELINE = LAST_REACHED === undefined ? [] : SHOWN_PIPELINE.slice(LAST_REACHED);
+
+export const LOCKED_HINT = "Coming soon. For now a run ends once the hypotheses are picked.";
 
 /** Stops a run in this mode really makes, given where runs end for now. */
 export function stopsFor(mode: ReviewMode): GateKind[] {

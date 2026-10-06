@@ -1,6 +1,14 @@
+import { toast } from "sonner";
 import { create } from "zustand";
 
-import type { GateAnswer, ReviewMode, RunEvent, RunInput } from "./contract";
+import { fetchRuns, type RunItem } from "@/lib/api/services/fetch-runs";
+import { isActiveRun } from "@/lib/research-workspace";
+import { ApiError } from "@/types/api";
+import { RunStatus } from "@/types/enums";
+
+import { ApiRun } from "./api-run";
+import type { GateAnswer, ReviewMode, RunCommands, RunEvent, RunInput } from "./contract";
+import { RUN_SOURCE } from "./features";
 import { MockRun } from "./mock/mock-run";
 import { applyRunEvent } from "./reducer";
 import { initialRunState, type RunState } from "./run-state";
@@ -10,7 +18,8 @@ export interface RunSession {
   projectId: string;
   /** Short label shown in the UI, such as `RUN-3F9C`. */
   label: string;
-  source: "mock";
+  /** `mock` runs play in the browser; `api` runs live on the backend. */
+  source: "mock" | "api";
   speed: number;
   state: RunState;
 }
@@ -22,23 +31,34 @@ interface RunStudioState {
   /** Run whose workspace is open, and the element it opened from. */
   openRunId: string | null;
   openFrom: DOMRect | null;
-  startRun(projectId: string, mode: ReviewMode, input: RunInput): string;
-  answerGate(runId: string, gateId: string, answer: GateAnswer): void;
+  /** Starts a run and makes it the project's run. Resolves to the run to open, or null when none started. */
+  startRun(projectId: string, mode: ReviewMode, input: RunInput): Promise<string | null>;
+  /** Shows a run from the backend. `active` makes it the project's run; otherwise it can only be opened. */
+  attachRun(projectId: string, run: RunItem, active: boolean): void;
+  /** Resolves to false when the answer was not recorded. */
+  answerGate(runId: string, gateId: string, answer: GateAnswer): Promise<boolean>;
   pause(runId: string): void;
   resume(runId: string): void;
+  /** Playback speed of a mock run. */
   setSpeed(runId: string, speed: number): void;
   openWorkspace(runId: string, from?: Element | null): void;
   closeWorkspace(): void;
-  discardRun(projectId: string): void;
 }
 
+interface Stream extends RunCommands {
+  dispose(): void;
+  setSpeed?(speed: number): void;
+}
+
+const labelOf = (runId: string) => `RUN-${runId.slice(0, 4).toUpperCase()}`;
+
 // Live streams sit outside React state; only the folded state goes into the store.
-const streams = new Map<string, MockRun>();
+const streams = new Map<string, Stream>();
 const queue = new Map<string, RunEvent[]>();
 let frame = 0;
 
 export const useRunStudio = create<RunStudioState>()((set, get) => {
-  // Many events can arrive within one frame (streamed text); fold them in one update.
+  // Many events can arrive within one frame (streamed text, a replayed run); fold them in one update.
   const flush = () => {
     frame = 0;
     const pending = [...queue.entries()];
@@ -63,31 +83,97 @@ export const useRunStudio = create<RunStudioState>()((set, get) => {
           ? requestAnimationFrame(flush)
           : (setTimeout(flush, 16) as unknown as number);
   };
+  // Adds a session. As the project's run, it replaces the one before it.
+  const track = (session: RunSession, stream: Stream, active: boolean) => {
+    const { projectId, runId } = session;
+    const previous = active ? get().activeRun[projectId] : undefined;
+    const replaced = previous && previous !== runId ? previous : undefined;
+    if (replaced) {
+      streams.get(replaced)?.dispose();
+      streams.delete(replaced);
+    }
+    streams.set(runId, stream);
+    set((store) => {
+      const { [replaced ?? ""]: _gone, ...sessions } = store.sessions;
+      return {
+        sessions: { ...sessions, [runId]: session },
+        activeRun: active ? { ...store.activeRun, [projectId]: runId } : store.activeRun,
+        openRunId: store.openRunId === replaced ? null : store.openRunId,
+      };
+    });
+  };
 
   return {
     sessions: {},
     activeRun: {},
     openRunId: null,
     openFrom: null,
-    startRun(projectId, mode, input) {
-      const previous = get().activeRun[projectId];
-      if (previous) streams.get(previous)?.dispose();
-      const runId = crypto.randomUUID();
-      const label = `RUN-${runId.slice(0, 4).toUpperCase()}`;
-      const run = new MockRun(label, mode, (event) => receive({ ...event, run_id: runId }), input);
-      streams.set(runId, run);
-      set((store) => ({
-        sessions: {
-          ...store.sessions,
-          [runId]: { runId, projectId, label, source: "mock", speed: 1, state: initialRunState(runId) },
-        },
-        activeRun: { ...store.activeRun, [projectId]: runId },
-      }));
-      run.start();
-      return runId;
+    async startRun(projectId, mode, input) {
+      if (RUN_SOURCE === "mock") {
+        const runId = crypto.randomUUID();
+        const label = labelOf(runId);
+        const run = new MockRun(label, mode, (event) => receive({ ...event, run_id: runId }), input);
+        track({ runId, projectId, label, source: "mock", speed: 1, state: initialRunState(runId) }, run, true);
+        run.start();
+        return runId;
+      }
+      try {
+        const { data: run } = await fetchRuns.create(projectId, {
+          topic: input.topic,
+          domains: input.domains,
+          review_mode: mode,
+        });
+        get().attachRun(projectId, run, true);
+        return run.id;
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Unable to start the run. Please try again.");
+        if (!(error instanceof ApiError && error.code === "RUN_ACTIVE")) return null;
+        // The project already has a run going: show that one instead.
+        try {
+          const running = (await fetchRuns.getList(projectId, { limit: 1 })).data[0];
+          if (!running?.topic) return null;
+          get().attachRun(projectId, running, true);
+          return running.id;
+        } catch {
+          return null;
+        }
+      }
     },
-    answerGate(runId, gateId, answer) {
-      streams.get(runId)?.answerGate(gateId, answer);
+    attachRun(projectId, run, active) {
+      if (get().sessions[run.id]) {
+        if (active) set((store) => ({ activeRun: { ...store.activeRun, [projectId]: run.id } }));
+        return;
+      }
+      const failed = run.status === RunStatus.Failed || run.status === RunStatus.BudgetExceeded;
+      const stream = new ApiRun(projectId, run.id, (events) => {
+        for (const event of events) receive(event);
+      });
+      track(
+        {
+          runId: run.id,
+          projectId,
+          label: run.label ?? labelOf(run.id),
+          source: "api",
+          speed: 1,
+          // What the run already says about itself, until its events arrive.
+          state: {
+            ...initialRunState(run.id),
+            topic: run.topic ?? "",
+            domains: run.domains ?? [],
+            mode: run.review_mode ?? "copilot",
+            ...(run.status === RunStatus.Completed ? { completed: true, lifecycle: "completed" as const } : {}),
+            ...(failed ? { lifecycle: "failed" as const, failure: run.failure_message ?? undefined } : {}),
+          },
+        },
+        stream,
+        active,
+      );
+      stream.start(isActiveRun(run.status));
+    },
+    async answerGate(runId, gateId, answer) {
+      const stream = streams.get(runId);
+      if (!stream) return false;
+      return (await stream.answerGate(gateId, answer)) !== false;
     },
     pause(runId) {
       streams.get(runId)?.pause();
@@ -96,7 +182,7 @@ export const useRunStudio = create<RunStudioState>()((set, get) => {
       streams.get(runId)?.resume();
     },
     setSpeed(runId, speed) {
-      streams.get(runId)?.setSpeed(speed);
+      streams.get(runId)?.setSpeed?.(speed);
       set((store) => {
         const session = store.sessions[runId];
         return session ? { sessions: { ...store.sessions, [runId]: { ...session, speed } } } : {};
@@ -107,17 +193,6 @@ export const useRunStudio = create<RunStudioState>()((set, get) => {
     },
     closeWorkspace() {
       set({ openRunId: null });
-    },
-    discardRun(projectId) {
-      const runId = get().activeRun[projectId];
-      if (!runId) return;
-      streams.get(runId)?.dispose();
-      streams.delete(runId);
-      set((store) => {
-        const { [projectId]: _gone, ...activeRun } = store.activeRun;
-        const { [runId]: _session, ...sessions } = store.sessions;
-        return { activeRun, sessions, openRunId: store.openRunId === runId ? null : store.openRunId };
-      });
     },
   };
 });

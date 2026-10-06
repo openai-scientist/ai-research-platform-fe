@@ -11,6 +11,7 @@ export enum RunStatus {
   Queued = "queued",
   Running = "running",
   AwaitingReview = "awaiting_review",
+  Paused = "paused",
   Completed = "completed",
   BudgetExceeded = "budget_exceeded",
   Failed = "failed",

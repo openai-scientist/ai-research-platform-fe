@@ -27,6 +27,7 @@ export function GateSheet({
   onMinimize,
   onAnswer,
   onStartDrop,
+  pending = false,
 }: {
   gate: Gate;
   mode: keyof typeof MODES;
@@ -35,6 +36,8 @@ export function GateSheet({
   onMinimize(minimized: boolean): void;
   onAnswer(answer: GateAnswer): void;
   onStartDrop(): void;
+  /** The answer is on its way; it can't be sent twice. */
+  pending?: boolean;
 }) {
   const preferred = gate.options.find((o) => o.recommended && !o.disabled) ?? gate.options.find((o) => !o.disabled);
   const [choice, setChoice] = useState(preferred?.id ?? "");
@@ -161,8 +164,8 @@ export function GateSheet({
         </div>
         <div className="flex items-center gap-3 border-t bg-popover px-5 py-3.5">
           <span className="flex-1 text-muted-foreground text-xs">Nothing runs until you confirm.</span>
-          <Button onClick={confirm} disabled={!option || option.disabled}>
-            {option?.confirm_label ?? "Confirm"}
+          <Button onClick={confirm} disabled={!option || option.disabled || pending}>
+            {pending ? "Sending…" : (option?.confirm_label ?? "Confirm")}
           </Button>
         </div>
       </motion.div>
@@ -176,6 +179,7 @@ export function DropBar({
   noun,
   onReset,
   onApprove,
+  pending = false,
 }: {
   kept: number;
   total: number;
@@ -183,6 +187,7 @@ export function DropBar({
   noun: string;
   onReset(): void;
   onApprove(): void;
+  pending?: boolean;
 }) {
   return (
     <motion.div
@@ -199,11 +204,12 @@ export function DropBar({
         variant="ghost"
         className="text-primary-foreground hover:bg-primary-foreground/15 hover:text-primary-foreground"
         onClick={onReset}
+        disabled={pending}
       >
         Undo all
       </Button>
-      <Button size="sm" variant="secondary" onClick={onApprove}>
-        Approve {kept}
+      <Button size="sm" variant="secondary" onClick={onApprove} disabled={pending}>
+        {pending ? "Sending…" : `Approve ${kept}`}
       </Button>
     </motion.div>
   );

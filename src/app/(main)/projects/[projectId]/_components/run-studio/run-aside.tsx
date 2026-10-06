@@ -97,6 +97,17 @@ export function NowCard({
       </div>
     );
 
+  if (state.lifecycle === "failed")
+    return (
+      <div className="flex flex-col gap-2 rounded-xl bg-card p-3.5 ring-1 ring-foreground/10">
+        <span className="text-muted-foreground text-xs">Stopped</span>
+        <h3 className="font-semibold text-[15px]">The run stopped</h3>
+        <p className="text-muted-foreground text-sm">
+          {state.failure ?? "Popper could not finish this run."} Use the stages above to look back at what was done.
+        </p>
+      </div>
+    );
+
   return (
     <div className="flex flex-col gap-2 rounded-xl bg-card p-3.5 shadow-xs ring-1 ring-foreground/10">
       <div className="flex justify-between gap-2 text-muted-foreground text-xs">
@@ -256,7 +267,7 @@ function Steps({ state }: { state: RunState }) {
 }
 
 function NextStop({ state }: { state: RunState }) {
-  if (state.completed) return null;
+  if (state.completed || state.lifecycle === "failed") return null;
   if (state.gate)
     return (
       <div className="grid grid-cols-[auto_1fr] gap-2.5 rounded-xl border border-amber-500/50 bg-amber-500/10 p-3 text-xs">
@@ -392,7 +403,8 @@ function Activity({ state }: { state: RunState }) {
 export function RunAside({ state, holding, onContinue }: { state: RunState; holding: boolean; onContinue(): void }) {
   const stage = state.currentStageKey ? state.stages[state.currentStageKey] : undefined;
   const step = stage?.plan.steps.find((s) => s.id === stage.currentStepId);
-  const active = state.completed || state.gate ? null : (state.message?.actor ?? step?.actor ?? null);
+  const ended = state.completed || state.lifecycle === "failed";
+  const active = ended || state.gate ? null : (state.message?.actor ?? step?.actor ?? null);
   return (
     <div className="flex h-full min-h-0 flex-col">
       <Team active={active === "code" ? null : active} />

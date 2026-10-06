@@ -8,7 +8,6 @@ import type { ProjectSummary } from "@/lib/projects/project-data";
 import { getProjectSidebarItems } from "@/navigation/sidebar/project-sidebar-items";
 
 import { ProjectSwitcher } from "./project-switcher";
-import { LiveRunNav } from "./run-studio/live-run-nav";
 
 export function ProjectSidebar({
   activeProject,
@@ -28,7 +27,6 @@ export function ProjectSidebar({
   return (
     <AppSidebar
       header={<ProjectSwitcher activeProject={activeProject} canCreate={canCreate} projects={projects} />}
-      extra={<LiveRunNav projectId={activeProject.id} />}
       items={getProjectSidebarItems(activeProject.id, user.role)}
       showQuickCreate={false}
       user={{ ...user, avatar: "" }}

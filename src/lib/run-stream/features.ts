@@ -11,3 +11,9 @@ export const SHOW_REVIEW_MODE = false;
  * `paper` runs experiments, the report and the paper too.
  */
 export const RUN_ENDS_AT: "hypotheses" | "paper" = "hypotheses";
+
+/**
+ * Where runs come from. `mock` plays a scripted run in the browser; `api` starts and follows real runs on the
+ * backend. Set `NEXT_PUBLIC_RUN_STREAM_SOURCE=api` once the backend serves run events.
+ */
+export const RUN_SOURCE: "mock" | "api" = process.env.NEXT_PUBLIC_RUN_STREAM_SOURCE === "api" ? "api" : "mock";

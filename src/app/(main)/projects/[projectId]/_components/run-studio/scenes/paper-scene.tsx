@@ -191,7 +191,7 @@ export function PaperScene({
           </Button>
           <Button variant="ghost" onClick={onClose} className="justify-start">
             <ArrowLeft />
-            Back to Experiments
+            Back to Research flow
           </Button>
         </div>
       </aside>

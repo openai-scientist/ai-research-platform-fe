@@ -1,28 +1,44 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import Link from "next/link";
 
+import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "cn";
-import { ArrowRight, ChevronRight, CircleCheck, ExternalLink, Flag, Lightbulb, Play, Plus } from "lucide-react";
+import {
+  ArrowRight,
+  ChevronRight,
+  CircleCheck,
+  CircleX,
+  Database,
+  Flag,
+  Lightbulb,
+  Lock,
+  Play,
+  Plus,
+  Upload,
+} from "lucide-react";
 import { motion } from "motion/react";
 
 import { ManagementStatusBadge } from "@/components/management-status-badge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Field, FieldDescription, FieldTitle } from "@/components/ui/field";
 import { useInfiniteRuns } from "@/hooks/use-runs-query";
+import { projectKeys } from "@/lib/api/query-keys";
+import type { RunItem } from "@/lib/api/services/fetch-runs";
 import { researchRunUrl } from "@/lib/research-workspace";
 import type { ReviewMode, RunInput } from "@/lib/run-stream/contract";
-import { SHOW_DATA_STAGE, SHOW_REVIEW_MODE } from "@/lib/run-stream/features";
+import { RUN_SOURCE, SHOW_DATA_STAGE, SHOW_REVIEW_MODE } from "@/lib/run-stream/features";
 import { DATASET } from "@/lib/run-stream/mock/scenario";
 import { type RunSession, useProjectRun, useRunStudio } from "@/lib/run-stream/run-store";
 import { displayStatus, finalResults, GATE_TITLE, nextStop, signed } from "@/lib/run-stream/selectors";
 
 import { ListState, LoadMore } from "../workspace-ui";
 import { AgentAvatar, StatusPill } from "./run-bits";
-import { AGENTS, MODES, PIPELINE, STAGE_SHORT, STOP_INFO, stopsFor } from "./run-meta";
-import { StartRunDialog } from "./start-run-dialog";
+import { AGENTS, LOCKED_HINT, LOCKED_PIPELINE, MODES, PIPELINE, STAGE_SHORT, STOP_INFO, stopsFor } from "./run-meta";
+import { FieldsInput, StartRunDialog, TopicInput, useTopicDraft } from "./start-run-dialog";
 
 function SectionTitle({ title, aside }: { title: string; aside?: string }) {
   return (
@@ -33,91 +49,112 @@ function SectionTitle({ title, aside }: { title: string; aside?: string }) {
   );
 }
 
-function StartCard({
+/** Your own data. A run starts from the topic alone for now, so choosing data stays locked. */
+function DataField() {
+  if (SHOW_DATA_STAGE)
+    return (
+      <Field>
+        <FieldTitle>Data</FieldTitle>
+        <p className="text-sm">
+          {DATASET.name} · v1{" "}
+          <span className="text-muted-foreground text-xs">· 1,240 rows, checked by the Steward first</span>
+        </p>
+      </Field>
+    );
+  return (
+    <Field>
+      <FieldTitle>
+        Data
+        <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-px font-medium text-[11px] text-muted-foreground">
+          <Lock className="size-2.5" />
+          Coming soon
+        </span>
+      </FieldTitle>
+      <div className="flex flex-wrap gap-2" title="Coming soon. For now a run starts from your topic alone.">
+        <Button variant="outline" size="sm" disabled>
+          <Upload />
+          Upload a dataset
+        </Button>
+        <Button variant="outline" size="sm" disabled>
+          <Database />
+          Choose existing
+        </Button>
+      </div>
+      <FieldDescription>
+        For now a run starts from your topic alone. Your own data comes in with experiments.
+      </FieldDescription>
+    </Field>
+  );
+}
+
+/** The next run, started right here: type the topic, keep its fields, start. */
+function TopicComposer({
   mode,
-  onStart,
   canWrite,
+  onStart,
 }: {
   mode: ReviewMode;
-  onStart(from: HTMLElement | null): void;
   canWrite: boolean;
+  /** Settles once the run has started or was refused. */
+  onStart(mode: ReviewMode, input: RunInput, from: HTMLElement | null): Promise<void>;
 }) {
-  const meta = MODES[mode];
+  const draft = useTopicDraft();
   const button = useRef<HTMLButtonElement>(null);
+  const [starting, setStarting] = useState(false);
   const stops = stopsFor(mode);
   const nouns = stops.map((k) => STOP_INFO[k].noun);
   const approves = nouns.length > 1 ? `${nouns.slice(0, -1).join(", ")} and ${nouns[nouns.length - 1]}` : nouns[0];
+  const start = async () => {
+    const input = draft.input();
+    if (!input) return;
+    setStarting(true);
+    try {
+      await onStart(mode, input, button.current);
+    } finally {
+      setStarting(false);
+    }
+  };
   return (
     <motion.section
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      className="grid overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]"
+      className="overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10"
     >
-      <div className="flex min-w-0 flex-col gap-4.5 p-6">
-        <div>
-          <span className="flex items-center gap-2 font-medium text-muted-foreground text-xs uppercase tracking-wide">
-            Next research run
+      <div className="flex flex-col gap-5 p-5 md:p-6">
+        <span className="flex items-center gap-2 font-medium text-muted-foreground text-xs uppercase tracking-wide">
+          Next research run
+          {RUN_SOURCE === "mock" && (
             <Badge variant="outline" className="normal-case tracking-normal">
               Mock stream
             </Badge>
-          </span>
-          <p className="font-(family-name:--font-lora) mt-2 text-[22px] leading-snug">Start from a topic</p>
-          <p className="mt-1.5 max-w-[60ch] text-muted-foreground text-sm">
-            Type one question. Popper writes the goal, splits it into sub-questions, reads the literature and proposes
-            hypotheses before any code runs.
-          </p>
-        </div>
-        <dl className="grid grid-cols-1 border-t text-sm sm:grid-cols-[110px_minmax(0,1fr)]">
-          <dt className="border-b py-2.5 text-muted-foreground max-sm:border-b-0 max-sm:pb-0">Topic</dt>
-          <dd className="border-b py-2.5">
-            You type it when you start{" "}
-            <span className="text-muted-foreground text-xs">· sub-questions are derived from it</span>
-          </dd>
-          {SHOW_DATA_STAGE && (
-            <>
-              <dt className="border-b py-2.5 text-muted-foreground max-sm:border-b-0 max-sm:pb-0">Data</dt>
-              <dd className="border-b py-2.5">
-                {DATASET.name} · v1{" "}
-                <span className="text-muted-foreground text-xs">· 1,240 rows, checked by the Steward first</span>
-              </dd>
-            </>
           )}
-          <dt className="border-b py-2.5 text-muted-foreground max-sm:border-b-0 max-sm:pb-0">
-            {SHOW_REVIEW_MODE ? "Review mode" : "Stops for you"}
-          </dt>
-          <dd className="border-b py-2.5">
-            {SHOW_REVIEW_MODE && `${meta.label} `}
-            <span className={cn(SHOW_REVIEW_MODE && "text-muted-foreground text-xs")}>
-              {SHOW_REVIEW_MODE && "· "}
-              {nouns.length
-                ? `${SHOW_REVIEW_MODE ? "you" : "Once:"} approve ${approves}`
-                : "never stops; the PI decides"}
-            </span>
-          </dd>
-        </dl>
-        <ul className="flex flex-col gap-2 text-muted-foreground text-sm">
-          <li className="grid grid-cols-[16px_1fr] gap-2.5">
-            <ExternalLink className="mt-0.5 size-3.5" />A live workspace opens where you can watch each agent work,
-            stage by stage.
-          </li>
-          <li className="grid grid-cols-[16px_1fr] gap-2.5">
-            <Flag className="mt-0.5 size-3.5" />
-            It only stops at the flagged steps. Leave any time; the sidebar shows when it needs you.
-          </li>
-        </ul>
-        <div className="mt-auto flex flex-wrap items-center gap-3.5">
-          <Button ref={button} size="lg" disabled={!canWrite} onClick={() => onStart(button.current)}>
+        </span>
+        <TopicInput
+          draft={draft}
+          id="composer-topic"
+          label="What do you want to find out?"
+          className="font-(family-name:--font-lora) font-normal text-[22px] leading-snug"
+        />
+        <div className="grid gap-5 md:grid-cols-2">
+          <FieldsInput draft={draft} id="composer-field" />
+          <DataField />
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
+          <span className="flex min-w-0 max-w-[60ch] items-start gap-2 text-muted-foreground text-xs">
+            <Flag className="mt-px size-3.5 shrink-0" />
+            {nouns.length
+              ? `It stops ${stops.length === 1 ? "once" : `${stops.length} times`}, so you can approve ${approves}. A live workspace opens, and you can leave any time.`
+              : "It never stops; the PI makes every call. A live workspace opens, and you can leave any time."}
+          </span>
+          <Button ref={button} size="lg" disabled={!canWrite || !draft.ready || starting} onClick={start}>
             <Play />
-            Start a research run
+            {starting ? "Starting…" : "Start research run"}
           </Button>
-          <span className="text-muted-foreground text-xs">You can change any of these before it starts.</span>
         </div>
       </div>
-      <div className="flex min-w-0 flex-col gap-4 border-t bg-muted/45 p-6 lg:border-t-0 lg:border-l">
-        <span className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
-          What the agents will do
-        </span>
-        <ol className="flex flex-col">
+      <div className="flex flex-col gap-3.5 border-t bg-muted/45 px-5 py-4.5 md:px-6">
+        <span className="font-medium text-muted-foreground text-xs uppercase tracking-wide">What happens next</span>
+        <ol className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
           {PIPELINE.map((p, i) => {
             const stop = stops.find((k) => STOP_INFO[k].stage === p.stage);
             return (
@@ -126,13 +163,13 @@ function StartCard({
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.05 }}
-                className="relative grid grid-cols-[22px_minmax(0,1fr)] gap-3 pb-3.5 last:pb-0 [&:not(:last-child)]:before:absolute [&:not(:last-child)]:before:top-6 [&:not(:last-child)]:before:bottom-0.5 [&:not(:last-child)]:before:left-[10.5px] [&:not(:last-child)]:before:w-px [&:not(:last-child)]:before:bg-foreground/20"
+                className="grid grid-cols-[22px_minmax(0,1fr)] gap-2.5"
               >
                 <span className="grid size-[22px] place-items-center rounded-full border bg-card font-mono font-semibold text-[10.5px] text-muted-foreground">
                   {i + 1}
                 </span>
-                <span>
-                  <b className="flex flex-wrap items-center gap-2 font-semibold text-sm">
+                <span className="min-w-0">
+                  <b className="flex flex-wrap items-center gap-x-2 gap-y-1 font-semibold text-sm">
                     {p.title}
                     {stop && (
                       <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 py-px pr-2 pl-1.5 font-medium text-[11px] text-amber-800 dark:text-amber-300">
@@ -141,7 +178,7 @@ function StartCard({
                       </span>
                     )}
                   </b>
-                  <span className="text-muted-foreground text-xs">{p.text}</span>
+                  <span className="mt-0.5 block text-muted-foreground text-xs">{p.text}</span>
                 </span>
               </motion.li>
             );
@@ -154,9 +191,23 @@ function StartCard({
             it.
           </p>
         ) : (
-          <p className="text-muted-foreground text-xs">
-            For now a run ends once the hypotheses are picked. Experiments, the report and the paper come later.
-          </p>
+          LOCKED_PIPELINE.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5 border-t pt-3.5">
+              <span className="mr-1 text-muted-foreground text-xs">
+                Runs end at the hypotheses for now. Coming later:
+              </span>
+              {LOCKED_PIPELINE.map((p) => (
+                <span
+                  key={p.stage}
+                  title={`${p.title}: ${p.text}`}
+                  className="inline-flex h-6 items-center gap-1.5 rounded-full border border-dashed px-2.5 text-muted-foreground text-xs"
+                >
+                  <Lock className="size-3" />
+                  {STAGE_SHORT[p.stage]}
+                </span>
+              ))}
+            </div>
+          )
         )}
       </div>
     </motion.section>
@@ -201,6 +252,14 @@ export function LiveRunCard({ session, onOpen }: { session: RunSession; onOpen(f
   const actor = state.message?.actor ?? step?.actor ?? "steward";
   const next = nextStop(state);
   const h1 = finalResults(state).H1;
+  const failed = state.lifecycle === "failed";
+  const locked = state.plan.length ? LOCKED_PIPELINE.filter((p) => !state.plan.some((s) => s.stage === p.stage)) : [];
+  const started =
+    session.source === "mock"
+      ? "started today · mock stream"
+      : state.startedAt
+        ? `started ${new Date(state.startedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
+        : "starting";
   return (
     <motion.section
       ref={card}
@@ -215,7 +274,8 @@ export function LiveRunCard({ session, onOpen }: { session: RunSession; onOpen(f
         <b className="font-mono font-semibold text-sm">{session.label}</b>
         <StatusPill status={status} />
         <span className="text-muted-foreground text-xs">
-          {SHOW_REVIEW_MODE && `${MODES[state.mode].label} mode · `}started today · mock stream
+          {SHOW_REVIEW_MODE && `${MODES[state.mode].label} mode · `}
+          {started}
         </span>
         <Button
           size="sm"
@@ -223,7 +283,7 @@ export function LiveRunCard({ session, onOpen }: { session: RunSession; onOpen(f
           className={cn("ml-auto", state.gate && "bg-amber-500 text-amber-950 hover:bg-amber-500/85")}
           onClick={() => onOpen(card.current)}
         >
-          {state.gate ? "Review now" : state.completed ? "View results" : "Open workspace"}
+          {state.gate ? "Review now" : state.completed ? "View results" : failed ? "View run" : "Open workspace"}
           <ArrowRight />
         </Button>
       </div>
@@ -249,7 +309,7 @@ export function LiveRunCard({ session, onOpen }: { session: RunSession; onOpen(f
                   current && (state.gate ? "bg-amber-500" : "bg-sky-500/30"),
                 )}
               >
-                {current && !state.gate && (
+                {current && !state.gate && !failed && (
                   <motion.b
                     className="absolute inset-y-0 w-2/5 rounded-full bg-sky-500"
                     animate={{ x: ["-100%", "250%"] }}
@@ -270,8 +330,28 @@ export function LiveRunCard({ session, onOpen }: { session: RunSession; onOpen(f
             </motion.li>
           );
         })}
+        {locked.map((p) => (
+          <li key={`locked-${p.stage}`} title={LOCKED_HINT} className="flex min-w-0 flex-1 flex-col gap-1.5">
+            <i className="mt-px h-0 border-foreground/15 border-t-2 border-dashed" />
+            <span className="flex items-center gap-1 truncate text-[11.5px] text-muted-foreground/70">
+              <Lock className="size-2.5 shrink-0" />
+              {STAGE_SHORT[p.stage]}
+              <span className="sr-only">, locked</span>
+            </span>
+          </li>
+        ))}
       </ol>
-      {state.completed && !state.paperTitle ? (
+      {failed ? (
+        <div className="grid grid-cols-[auto_1fr] items-center gap-3 rounded-lg bg-muted/70 px-3.5 py-3 text-sm">
+          <CircleX className="size-4.5 text-destructive" />
+          <span>
+            <b className="block font-semibold">The run stopped</b>
+            <span className="text-muted-foreground text-xs">
+              {state.failure ?? "Popper could not finish this run."}
+            </span>
+          </span>
+        </div>
+      ) : state.completed && !state.paperTitle ? (
         <HypothesesReady state={state} />
       ) : state.completed ? (
         <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-lg bg-muted/70 px-3.5 py-3 text-sm max-sm:grid-cols-[auto_minmax(0,1fr)]">
@@ -323,47 +403,79 @@ export function LiveRunCard({ session, onOpen }: { session: RunSession; onOpen(f
   );
 }
 
-function PastRuns({ projectId }: { projectId: string }) {
-  const runs = useInfiniteRuns(projectId, { refetchInterval: (query) => (query.state.error ? false : 15_000) });
+const ROW =
+  "grid w-full grid-cols-[96px_auto_minmax(0,1fr)_auto_16px] items-center gap-4 px-4.5 py-3.5 text-left text-sm outline-none transition-colors hover:bg-muted/50 focus-visible:bg-muted/60 max-md:grid-cols-[auto_auto_1fr]";
+
+function PastRunRow({ run }: { run: RunItem }) {
   return (
     <>
-      <SectionTitle title="Past runs" aside={runs.runs.length ? String(runs.runs.length) : undefined} />
+      <span className="font-mono font-semibold text-xs">
+        {run.topic ? (run.label ?? run.id.slice(0, 8)) : run.id.slice(0, 8)}
+      </span>
+      <ManagementStatusBadge status={run.status} />
+      <span className="min-w-0 max-md:col-span-3 max-md:row-start-2">
+        <b className="block truncate font-medium">
+          {run.topic ?? `Context v${run.research_context_version} · dataset v${run.dataset_version_number}`}
+        </b>
+        <span className="text-muted-foreground text-xs">
+          ${run.cost_usd} of ${run.budget_usd} ·{" "}
+          {run.topic
+            ? "from a topic to hypotheses"
+            : run.auto_review
+              ? "frame reviews approved automatically"
+              : "you review frames"}
+        </span>
+      </span>
+      <span className="whitespace-nowrap text-muted-foreground text-xs max-md:justify-self-end">
+        {new Date(run.created_at).toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        })}
+      </span>
+      <ChevronRight className="size-4 text-muted-foreground max-md:hidden" />
+    </>
+  );
+}
+
+/** Earlier runs. A run started from a topic opens in the workspace; older runs open their own page. */
+function PastRuns({ projectId, hide }: { projectId: string; hide?: string }) {
+  const runs = useInfiniteRuns(projectId, { refetchInterval: (query) => (query.state.error ? false : 15_000) });
+  const attachRun = useRunStudio((s) => s.attachRun);
+  const openWorkspace = useRunStudio((s) => s.openWorkspace);
+  // The run shown in the card above isn't listed again. With nothing to list, the section stays out of the way.
+  const list = runs.runs.filter((run) => run.id !== hide);
+  if (runs.isSuccess && !list.length) return null;
+  return (
+    <>
+      <SectionTitle title="Past runs" aside={list.length ? String(list.length) : undefined} />
       <ListState
         pending={runs.isPending}
         failed={runs.isError}
-        empty={!runs.runs.length}
+        empty={!list.length}
         title="Runs"
         retry={runs.refetch}
       />
-      {runs.runs.length > 0 && (
+      {list.length > 0 && (
         <ul className="overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10">
-          {runs.runs.map((run) => (
+          {list.map((run) => (
             <li key={run.id} className="border-b last:border-0">
-              <Link
-                prefetch={false}
-                href={researchRunUrl(projectId, run.id)}
-                className="grid grid-cols-[96px_auto_minmax(0,1fr)_auto_16px] items-center gap-4 px-4.5 py-3.5 text-sm outline-none transition-colors hover:bg-muted/50 focus-visible:bg-muted/60 max-md:grid-cols-[auto_auto_1fr]"
-              >
-                <span className="font-mono font-semibold text-xs">{run.id.slice(0, 8)}</span>
-                <ManagementStatusBadge status={run.status} />
-                <span className="min-w-0 max-md:col-span-3 max-md:row-start-2">
-                  <b className="block truncate font-medium">
-                    Context v{run.research_context_version} · dataset v{run.dataset_version_number}
-                  </b>
-                  <span className="text-muted-foreground text-xs">
-                    ${run.cost_usd} of ${run.budget_usd} ·{" "}
-                    {run.auto_review ? "frame reviews approved automatically" : "you review frames"}
-                  </span>
-                </span>
-                <span className="whitespace-nowrap text-muted-foreground text-xs max-md:justify-self-end">
-                  {new Date(run.created_at).toLocaleDateString("en-US", {
-                    month: "short",
-                    day: "numeric",
-                    year: "numeric",
-                  })}
-                </span>
-                <ChevronRight className="size-4 text-muted-foreground max-md:hidden" />
-              </Link>
+              {run.topic ? (
+                <button
+                  type="button"
+                  className={ROW}
+                  onClick={(event) => {
+                    attachRun(projectId, run, false);
+                    openWorkspace(run.id, event.currentTarget);
+                  }}
+                >
+                  <PastRunRow run={run} />
+                </button>
+              ) : (
+                <Link prefetch={false} href={researchRunUrl(projectId, run.id)} className={ROW}>
+                  <PastRunRow run={run} />
+                </Link>
+              )}
             </li>
           ))}
         </ul>
@@ -378,15 +490,28 @@ export function RunStudio({ projectId, canWrite }: { projectId: string; canWrite
   const session = useProjectRun(projectId);
   const startRun = useRunStudio((s) => s.startRun);
   const openWorkspace = useRunStudio((s) => s.openWorkspace);
-  const discardRun = useRunStudio((s) => s.discardRun);
+  const queryClient = useQueryClient();
   const [dialog, setDialog] = useState(false);
   const [mode] = useState<ReviewMode>("copilot");
   const from = useRef<HTMLElement | null>(null);
+  const finished = Boolean(session && (session.state.completed || session.state.lifecycle === "failed"));
+  const canStart = canWrite && (!session || finished);
 
-  const start = (chosen: ReviewMode, input: RunInput) => {
+  // Links elsewhere in the project use `#start-run`: focus the topic box, or open the dialog after a finished run.
+  const hasSession = Boolean(session);
+  useEffect(() => {
+    if (!canStart || window.location.hash !== "#start-run") return;
+    if (hasSession) setDialog(true);
+    else document.getElementById("composer-topic")?.focus();
+  }, [canStart, hasSession]);
+
+  // The dialog stays open until the run has started, so a refused start can be fixed and tried again.
+  const start = async (chosen: ReviewMode, input: RunInput) => {
+    const runId = await startRun(projectId, chosen, input);
+    if (!runId) return;
     setDialog(false);
-    if (session) discardRun(projectId);
-    const runId = startRun(projectId, chosen, input);
+    void queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) });
+    void queryClient.invalidateQueries({ queryKey: projectKeys.lists() });
     // Let the dialog close, then grow the workspace out of the card.
     window.setTimeout(() => openWorkspace(runId, document.querySelector("[data-live-run]") ?? from.current), 380);
   };
@@ -397,10 +522,10 @@ export function RunStudio({ projectId, canWrite }: { projectId: string; canWrite
         <>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <SectionTitle
-              title={session.state.completed ? "Latest run" : "Running now"}
-              aside={session.state.completed ? undefined : "One run at a time per project"}
+              title={finished ? "Latest run" : "Running now"}
+              aside={finished ? undefined : "One run at a time per project"}
             />
-            {session.state.completed && canWrite && (
+            {finished && canWrite && (
               <Button variant="outline" size="sm" onClick={() => setDialog(true)}>
                 <Plus />
                 Start a research run
@@ -412,16 +537,16 @@ export function RunStudio({ projectId, canWrite }: { projectId: string; canWrite
           </div>
         </>
       ) : (
-        <StartCard
+        <TopicComposer
           mode={mode}
           canWrite={canWrite}
-          onStart={(el) => {
+          onStart={async (chosen, input, el) => {
             from.current = el;
-            setDialog(true);
+            await start(chosen, input);
           }}
         />
       )}
-      <PastRuns projectId={projectId} />
+      <PastRuns projectId={projectId} hide={session?.runId} />
       <StartRunDialog open={dialog} onOpenChange={setDialog} defaultMode={mode} onStart={start} />
     </div>
   );

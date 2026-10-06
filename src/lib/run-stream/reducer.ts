@@ -41,6 +41,7 @@ export function applyRunEvent(previous: RunState, event: RunEvent): RunState {
         break;
       case "run.status":
         state.lifecycle = event.payload.status;
+        if (event.payload.status === "failed") state.failure = event.payload.reason;
         break;
       case "run.completed":
         state.completed = true;

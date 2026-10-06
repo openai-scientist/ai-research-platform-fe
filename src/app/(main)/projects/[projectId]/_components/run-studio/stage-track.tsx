@@ -3,13 +3,13 @@
 import { useEffect, useRef } from "react";
 
 import { cn } from "cn";
-import { CircleCheck, Flag } from "lucide-react";
+import { CircleCheck, Flag, Lock } from "lucide-react";
 import { motion } from "motion/react";
 
 import type { RunState } from "@/lib/run-stream/run-state";
 import { liveStageKey } from "@/lib/run-stream/selectors";
 
-import { STAGE_SHORT } from "./run-meta";
+import { LOCKED_HINT, LOCKED_PIPELINE, STAGE_SHORT } from "./run-meta";
 
 /** The run's stages as tabs: a bar per stage that fills as its steps finish, with a flag where the run stops for you. */
 export function StageTrack({
@@ -30,6 +30,8 @@ export function StageTrack({
       ? [{ key: "done", stage: "done" as const, title: "Paper", has_gate: false, round: undefined, done: true }]
       : []),
   ];
+  // Experiments and the paper come later: shown after the last stage, locked.
+  const locked = state.plan.length ? LOCKED_PIPELINE.filter((p) => !state.plan.some((s) => s.stage === p.stage)) : [];
   const scroller = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = scroller.current?.querySelector<HTMLElement>(`[data-track="${live}"]`);
@@ -38,13 +40,13 @@ export function StageTrack({
 
   return (
     <div ref={scroller} className="overflow-x-auto border-b px-4 pt-3 pb-3.5 md:px-5">
-      <ol className="flex gap-1.5" style={{ minWidth: Math.max(620, items.length * 104) }}>
+      <ol className="flex gap-1.5" style={{ minWidth: Math.max(620, (items.length + locked.length) * 104) }}>
         {items.map((item, i) => {
           const stage = item.key === "done" ? undefined : state.stages[item.key];
           const total = stage?.plan.steps.length ?? 1;
           const doneSteps = stage ? stage.doneStepIds.length : 0;
           const isPast = i < liveIndex || state.completed;
-          const isLive = item.key === live && !state.completed;
+          const isLive = item.key === live && !state.completed && state.lifecycle !== "failed";
           const fill = isPast ? 100 : isLive ? Math.max(4, (doneSteps / total) * 100) : 0;
           const waiting = isLive && Boolean(state.gate);
           const available = Boolean(stage) || (item.key === "done" && state.completed);
@@ -122,6 +124,18 @@ export function StageTrack({
             </motion.li>
           );
         })}
+        {locked.map((p) => (
+          <li key={`locked-${p.stage}`} title={LOCKED_HINT} className="min-w-0 flex-1 basis-0">
+            <span aria-disabled="true" className="flex cursor-not-allowed flex-col gap-1.5 py-0.5">
+              <span className="flex items-center gap-1.5 truncate pr-3 font-medium text-muted-foreground/70 text-xs">
+                <Lock className="size-3 shrink-0" />
+                {STAGE_SHORT[p.stage]}
+                <span className="sr-only">, locked</span>
+              </span>
+              <span className="mt-px h-0 border-foreground/15 border-t-2 border-dashed" />
+            </span>
+          </li>
+        ))}
       </ol>
     </div>
   );

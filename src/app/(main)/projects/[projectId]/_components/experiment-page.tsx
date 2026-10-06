@@ -48,7 +48,7 @@ export async function ExperimentPage({
             <BreadcrumbItem>
               <BreadcrumbLink asChild>
                 <Link prefetch={false} href={`/projects/${projectId}/experiments`} className="py-1.5">
-                  Experiments
+                  Research flow
                 </Link>
               </BreadcrumbLink>
             </BreadcrumbItem>

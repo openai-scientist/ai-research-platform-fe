@@ -669,7 +669,8 @@ export interface RunInput {
 
 /** Commands the client sends back. In the real API each is a POST under the run. */
 export interface RunCommands {
-  answerGate(gateId: string, answer: GateAnswer): void;
+  /** A promise that resolves to false when the answer was not recorded. */
+  answerGate(gateId: string, answer: GateAnswer): void | Promise<boolean>;
   pause(): void;
   resume(): void;
 }
