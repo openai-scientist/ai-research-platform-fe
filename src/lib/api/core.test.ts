@@ -1,6 +1,7 @@
 import axios, { AxiosError, CanceledError, type InternalAxiosRequestConfig } from "axios";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { PUBLIC_AUTH_PATHS } from "@/lib/auth/auth-config";
 import { ApiError } from "@/types/api";
 
 import { ApiService } from "./core";
@@ -32,7 +33,7 @@ describe("session API client", () => {
     expect(config.headers.has("X-CSRF-Token")).toBe(false);
   });
 
-  it.each(["/auth/login", "/auth/register"])("exempts %s from CSRF", async (url) => {
+  it.each(PUBLIC_AUTH_PATHS)("exempts %s from CSRF", async (url) => {
     await api.post(url, { email: "test@example.com", password: "password" });
     expect(adapter).toHaveBeenCalledTimes(1);
     expect(adapter.mock.calls[0][0].headers.has("X-CSRF-Token")).toBe(false);

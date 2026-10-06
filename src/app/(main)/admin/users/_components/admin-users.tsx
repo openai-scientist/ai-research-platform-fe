@@ -13,8 +13,9 @@ import { Users } from "../../../dashboard/users/_components/users";
 import { AdminPageHeader, MetricCard } from "../../_components/admin-primitives";
 import { useAdminAccess } from "../../_components/use-admin-access";
 
-// Labels for the backend platform_role; null means the account has no platform-wide role.
+// Labels for the backend platform_role.
 const PLATFORM_ROLE_LABELS: Record<PlatformRole, string> = {
+  [PlatformRole.User]: "User",
   [PlatformRole.PlatformAdmin]: "Platform Admin",
 };
 const NO_PLATFORM_ROLE_LABEL = "User";

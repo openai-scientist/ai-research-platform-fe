@@ -8,7 +8,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import apiService from "@/lib/api/core";
-import { LOGIN_PATH, SESSION_INVALID_CODES } from "@/lib/auth/auth-config";
+import { CHANGE_PASSWORD_PATH, LOGIN_PATH, SESSION_INVALID_CODES } from "@/lib/auth/auth-config";
 import { AUTH_CHANNEL, broadcastAuthChange } from "@/lib/auth/session-events";
 import { useAppDispatch } from "@/lib/redux/hooks";
 import { logout, restoreSession } from "@/lib/redux/slices/auth-slice";
@@ -18,7 +18,7 @@ export function useAuthSyncAcrossTabs() {
   const router = useRouter();
   const pathname = usePathname();
   const queryClient = useQueryClient();
-  const shouldRestoreSession = ["/admin", "/projects", "/reviews", "/dashboard"].some(
+  const shouldRestoreSession = ["/admin", "/projects", "/reviews", "/dashboard", CHANGE_PASSWORD_PATH].some(
     (path) => pathname === path || pathname.startsWith(`${path}/`),
   );
 
@@ -26,6 +26,14 @@ export function useAuthSyncAcrossTabs() {
     const restore = () => {
       const pending = dispatch(restoreSession());
       void pending.then((action) => {
+        if (
+          restoreSession.fulfilled.match(action) &&
+          action.payload.user.must_change_password &&
+          window.location.pathname !== CHANGE_PASSWORD_PATH
+        ) {
+          const next = `${window.location.pathname}${window.location.search}`;
+          router.replace(`${CHANGE_PASSWORD_PATH}?${new URLSearchParams({ next })}`);
+        }
         if (
           restoreSession.rejected.match(action) &&
           !action.meta.aborted &&
@@ -49,7 +57,7 @@ export function useAuthSyncAcrossTabs() {
       apiService.setCsrfToken(null);
       dispatch(logout());
       queryClient.clear();
-      if (![LOGIN_PATH, "/auth/register"].includes(window.location.pathname)) {
+      if (!window.location.pathname.startsWith("/auth/")) {
         router.replace(LOGIN_PATH);
         router.refresh();
       }

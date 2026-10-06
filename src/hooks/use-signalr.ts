@@ -18,7 +18,7 @@ interface NotificationStreamState {
 /** Existing realtime hook; the current backend transport is SSE, not a SignalR Hub. */
 export function useSignalR() {
   const { user, session, isAuthenticated } = useAppSelector(selectAuth);
-  const userId = isAuthenticated ? user?.id : undefined;
+  const userId = isAuthenticated && !user?.must_change_password ? user?.id : undefined;
   const sessionKey = userId ? `${userId}:${session?.created_at ?? ""}` : "";
   const [state, setState] = useState<NotificationStreamState | null>(null);
 

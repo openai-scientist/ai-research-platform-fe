@@ -6,7 +6,9 @@ export interface UserProfile {
   email: string;
   display_name: string | null;
   status: UserStatus;
-  platform_role: PlatformRole | null;
+  platform_role: PlatformRole;
+  email_verified: boolean;
+  must_change_password: boolean;
   created_at: string;
 }
 export interface SessionDetails {

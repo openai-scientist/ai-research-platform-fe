@@ -1,9 +1,12 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 import { Globe } from "lucide-react";
 import type { Metadata } from "next";
 
 import { APP_CONFIG } from "@/config/app-config";
+import { getRoleHomePath } from "@/lib/auth/auth-config";
+import { getAuthenticatedUser } from "@/server/auth";
 
 import { LoginForm } from "../_components/login-form";
 
@@ -12,17 +15,13 @@ export const metadata: Metadata = {
   description: "Sign in to the ResearchLab AI AI Research Experimentation Platform.",
 };
 
-export default function LoginPage() {
+export default async function LoginPage() {
+  const user = await getAuthenticatedUser();
+  if (user) redirect(getRoleHomePath(user.role));
   return (
     <>
-      <div className="mx-auto flex w-full flex-col justify-center space-y-8 sm:w-[350px]">
-        <div className="space-y-2 text-center">
-          <h1 className="font-medium text-3xl">Login to your account</h1>
-          <p className="text-muted-foreground text-sm">Please enter your details to login.</p>
-        </div>
-        <div className="space-y-4">
-          <LoginForm />
-        </div>
+      <div className="mx-auto flex w-full max-w-[350px] flex-col justify-center px-4 py-24 sm:px-0">
+        <LoginForm />
       </div>
 
       <div className="absolute top-5 flex w-full justify-end px-10">

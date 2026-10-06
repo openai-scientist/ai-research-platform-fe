@@ -318,15 +318,72 @@ describe("API service contracts", () => {
     },
   );
 
-  it.each(["login", "register"] as const)("%s seeds CSRF from the returned session", async (method) => {
+  it.each(["login", "verifyEmail"] as const)("%s seeds CSRF from the returned session", async (method) => {
     const session = { user: { id: "user" }, session: { created_at: "now" }, csrf_token: "login-csrf" };
     adapter.mockImplementation(async (config) => respond(config, success(session)));
-    const result = await fetchAuth[method]({ email: "demo@example.com", password: "password" });
+    const credentials = { email: "demo@example.com", password: "password" };
+    const result =
+      method === "login"
+        ? await fetchAuth.login(credentials)
+        : await fetchAuth.verifyEmail({ ...credentials, code: "123456" });
     expect(result).toEqual(session);
-    expect(adapter.mock.calls[0][0].url).toBe(`/auth/${method}`);
+    expect(adapter.mock.calls[0][0].url).toBe(method === "login" ? "/auth/login" : "/auth/verify-email");
     expect(adapter.mock.calls[0][0].headers.has("X-CSRF-Token")).toBe(false);
     await fetchProject.create({ name: "Study" });
     expect(adapter.mock.calls.at(-1)?.[0].headers.get("X-CSRF-Token")).toBe("login-csrf");
+  });
+
+  it("registration returns a pending verification without replacing session CSRF", async () => {
+    const pending = { email: "demo@example.com", expires_in_seconds: 600, resend_after_seconds: 60 };
+    adapter.mockImplementation(async (config) => respond(config, success(pending)));
+    expect(await fetchAuth.register({ email: pending.email, password: "password", display_name: "Demo" })).toEqual(
+      pending,
+    );
+    expect(adapter.mock.calls[0][0].url).toBe("/auth/register");
+    expect(JSON.parse(adapter.mock.calls[0][0].data as string)).toEqual({
+      email: pending.email,
+      password: "password",
+      display_name: "Demo",
+    });
+    expect(adapter.mock.calls[0][0].headers.has("X-CSRF-Token")).toBe(false);
+    await fetchProject.create({ name: "Study" });
+    expect(adapter.mock.calls.at(-1)?.[0].headers.get("X-CSRF-Token")).toBe("csrf");
+  });
+
+  it.each(["resendVerification", "forgotPassword"] as const)(
+    "%s returns timing settings without a session",
+    async (method) => {
+      const pending = { email: "demo@example.com", expires_in_seconds: 600, resend_after_seconds: 60 };
+      adapter.mockImplementation(async (config) => respond(config, success(pending)));
+      expect(await fetchAuth[method](pending.email)).toEqual(pending);
+      const config = adapter.mock.calls[0][0];
+      expect(config.url).toBe(method === "resendVerification" ? "/auth/resend-verification" : "/auth/forgot-password");
+      expect(JSON.parse(config.data as string)).toEqual({ email: pending.email });
+      expect(config.headers.has("X-CSRF-Token")).toBe(false);
+    },
+  );
+
+  it("verifyResetPassword preserves a leading-zero code and returns a token without starting a session", async () => {
+    const data = { email: "demo@example.com", code: "012345" };
+    const grant = { reset_token: "a".repeat(64), expires_in_seconds: 600 };
+    adapter.mockImplementation(async (config) => respond(config, success(grant)));
+    expect(await fetchAuth.verifyResetPassword(data)).toEqual(grant);
+    const config = adapter.mock.calls[0][0];
+    expect(config.url).toBe("/auth/verify-reset-password");
+    expect(JSON.parse(config.data as string)).toEqual(data);
+    expect(config.headers.has("X-CSRF-Token")).toBe(false);
+    await fetchProject.create({ name: "Study" });
+    expect(adapter.mock.calls.at(-1)?.[0].headers.get("X-CSRF-Token")).toBe("csrf");
+  });
+
+  it("resetPassword sends the reset token and new password without CSRF or automatic login", async () => {
+    const data = { email: "demo@example.com", reset_token: "a".repeat(64), new_password: "new-password" };
+    await fetchAuth.resetPassword(data);
+    expect(adapter).toHaveBeenCalledTimes(1);
+    const config = adapter.mock.calls[0][0];
+    expect(config.url).toBe("/auth/reset-password");
+    expect(JSON.parse(config.data as string)).toEqual(data);
+    expect(config.headers.has("X-CSRF-Token")).toBe(false);
   });
 
   it("me and csrfToken preserve the auth return contract and AbortSignal", async () => {

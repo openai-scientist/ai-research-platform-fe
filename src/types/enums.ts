@@ -28,6 +28,7 @@ export enum ProjectRole {
 }
 
 export enum PlatformRole {
+  User = "user",
   PlatformAdmin = "platform_admin",
 }
 
