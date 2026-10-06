@@ -143,20 +143,19 @@ export function ReadScene({
         <div ref={tray}>
           <Pane title="Gap material" aside={`${data.cards.length} limitation${data.cards.length === 1 ? "" : "s"}`}>
             {data.cards.length ? (
-              <ul className="flex flex-col divide-y">
+              // Each card already shows its limitation in full; here they only collect, so the column stays short.
+              <ul className="flex flex-wrap gap-1.5">
                 {data.cards.map((card, i) => (
                   <motion.li
                     key={card.id}
                     data-tray={card.id}
-                    initial={live && i >= fresh ? { opacity: 0, height: 0 } : false}
-                    animate={{ opacity: 1, height: "auto" }}
+                    title={card.limitations}
+                    initial={live && i >= fresh ? { opacity: 0, scale: 0.8 } : false}
+                    animate={{ opacity: 1, scale: 1 }}
                     transition={{ delay: live && i >= fresh ? 0.25 + FIELDS.length * FIELD_STEP + 0.6 : 0 }}
-                    className="flex flex-col items-start gap-1 overflow-hidden py-2 text-xs first:pt-0 last:pb-0"
+                    className="inline-flex h-6 items-center whitespace-nowrap rounded-md bg-amber-500/12 px-2 font-medium text-[11px] text-amber-800 dark:text-amber-300"
                   >
-                    <span className="inline-flex h-5 items-center whitespace-nowrap rounded-md bg-amber-500/12 px-1.5 font-medium text-[11px] text-amber-800 dark:text-amber-300">
-                      {shortCite(card.citation)}
-                    </span>
-                    <span className="leading-snug">{card.limitations}</span>
+                    {shortCite(card.citation)}
                   </motion.li>
                 ))}
               </ul>

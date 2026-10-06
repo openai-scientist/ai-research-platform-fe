@@ -74,6 +74,9 @@ export function SearchScene({ data, live }: { data: SearchContent; live: boolean
   const total = data.queries.length * data.sources.length;
   const raw = Object.values(data.cells).reduce<number>((a, v) => a + (v ?? 0), 0);
   const lastCell = sent[sent.length - 1];
+  const order = data.sources.map((s) => s.name);
+  const bySourceOrder = (records: SearchContent["merged"][number]["records"]) =>
+    [...records].sort((a, b) => order.indexOf(a.source) - order.indexOf(b.source));
   const bySource = (sourceId: string) => data.queries.reduce((a, q) => a + (data.cells[`${q.id}:${sourceId}`] ?? 0), 0);
 
   let target: string | null = data.queries.length ? `query:${data.queries[data.queries.length - 1].id}` : null;
@@ -146,12 +149,12 @@ export function SearchScene({ data, live }: { data: SearchContent; live: boolean
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(300px,1fr)]">
-        <div ref={collectRef} className="flex flex-col">
+        <div ref={collectRef} className="flex min-w-0 flex-col gap-4">
           {data.sources.length ? (
             <Pane
               title="Collecting"
               aside={`${(data.delayMs / 1000).toFixed(1)} s between requests, to respect each source · ${sent.length} of ${total} sent`}
-              className="flex-1"
+              className={data.collected ? undefined : "flex-1"}
             >
               <div className="mb-3 flex h-2.5 items-center gap-1" aria-hidden>
                 {Array.from({ length: total }, (_, i) => {
@@ -180,7 +183,7 @@ export function SearchScene({ data, live }: { data: SearchContent; live: boolean
                     <tr className="border-b">
                       <th className="pr-3 pb-2 text-left font-medium">Query</th>
                       {data.sources.map((s) => (
-                        <th key={s.id} className="whitespace-nowrap px-2 pb-2 text-right font-medium">
+                        <th key={s.id} className="whitespace-nowrap px-2.5 pb-2 text-right font-medium">
                           <span className="inline-flex items-center gap-1.5">
                             <i className={cn("size-2 rounded-sm", SOURCE_TONE[s.id])} />
                             {s.name}
@@ -196,7 +199,11 @@ export function SearchScene({ data, live }: { data: SearchContent; live: boolean
                       const sum = row.reduce<number>((a, v) => a + (v ?? 0), 0);
                       return (
                         <tr key={q.id} className="border-b last:border-0">
-                          <td className="max-w-56 truncate py-1.5 pr-3 font-mono text-xs">{q.text}</td>
+                          <td className="w-full min-w-32 max-w-0 py-1.5 pr-3 font-mono text-xs">
+                            <span className="block truncate" title={q.text}>
+                              {q.text}
+                            </span>
+                          </td>
                           {data.sources.map((s, i) => {
                             const v = row[i];
                             const key = `${q.id}:${s.id}`;
@@ -235,7 +242,7 @@ export function SearchScene({ data, live }: { data: SearchContent; live: boolean
                     <tr className="border-t-2 font-mono font-semibold text-xs">
                       <td className="pt-2 pr-3 font-medium font-sans text-muted-foreground">All queries</td>
                       {data.sources.map((s) => (
-                        <td key={s.id} className="px-2 pt-2 text-right tabular-nums">
+                        <td key={s.id} className="px-2.5 pt-2 text-right tabular-nums">
                           <AnimatedNumber value={bySource(s.id)} duration={400} />
                         </td>
                       ))}
@@ -250,15 +257,37 @@ export function SearchScene({ data, live }: { data: SearchContent; live: boolean
           ) : (
             <Placeholder>Each query then goes to every source</Placeholder>
           )}
+          {data.collected && (
+            <Pane title="Saved for the next stages" className="flex-1">
+              <div data-cursor="files" className="flex flex-col gap-1.5">
+                <span className="text-muted-foreground text-xs">
+                  {data.collected.duplicates} duplicates merged. Collected at {utcTime(data.collected.collected_at)},
+                  with each paper's source, ID and citation count.
+                </span>
+                {data.collected.files.map((f, i) => (
+                  <motion.span
+                    key={f.name}
+                    initial={live ? { opacity: 0, x: -6 } : false}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: i * 0.15 }}
+                    className="flex items-center gap-2 text-xs"
+                  >
+                    <FileText className="size-3.5 shrink-0 text-muted-foreground" />
+                    <b className="shrink-0 font-medium">{f.name}</b>
+                    <span className="truncate text-muted-foreground">{f.detail}</span>
+                  </motion.span>
+                ))}
+              </div>
+            </Pane>
+          )}
         </div>
 
-        <div ref={mergeRef} className="flex flex-col">
+        <div ref={mergeRef} className="flex min-w-0 flex-col">
           {data.merged.length || data.collected ? (
-            <Pane
-              title="Merging duplicates"
-              aside="same DOI, arXiv ID or title · keeps the record with a DOI, then most citations"
-              className="flex-1"
-            >
+            <Pane title="Merging duplicates" className="flex-1">
+              <p className="-mt-2 mb-3 text-muted-foreground text-xs">
+                Same DOI, arXiv ID or title. Keeps the record with a DOI, then the most citations.
+              </p>
               <div className="mb-3 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 text-center">
                 <span className="rounded-lg bg-muted/70 px-2 py-2">
                   <AnimatedNumber value={raw} className="block font-mono font-semibold text-xl tabular-nums" />
@@ -288,12 +317,11 @@ export function SearchScene({ data, live }: { data: SearchContent; live: boolean
                   >
                     <span className="line-clamp-2 font-medium text-[12.5px] leading-snug">{m.title}</span>
                     <ul className="flex flex-col gap-1">
-                      {m.records.map((r, k) => {
+                      {bySourceOrder(m.records).map((r, k) => {
                         const kept = r.source === m.kept;
                         return (
                           <motion.li
                             key={r.record_id}
-                            title={r.record_id}
                             initial={live ? { y: (k - (m.records.length - 1) / 2) * -10, opacity: 0 } : false}
                             animate={{ y: 0, opacity: kept ? 1 : 0.55 }}
                             transition={{ delay: live ? 0.15 + k * 0.1 : 0, duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
@@ -315,10 +343,10 @@ export function SearchScene({ data, live }: { data: SearchContent; live: boolean
                                 "inline-flex h-4 items-center rounded px-1 text-[10px]",
                                 r.has_doi
                                   ? "bg-emerald-500/12 text-emerald-700 dark:text-emerald-300"
-                                  : "bg-muted text-muted-foreground line-through",
+                                  : "bg-muted text-muted-foreground",
                               )}
                             >
-                              DOI
+                              {r.has_doi ? "DOI" : "No DOI"}
                             </span>
                             <span className="w-24 text-right text-muted-foreground tabular-nums">
                               {r.citations.toLocaleString("en-US")} citations
@@ -338,27 +366,6 @@ export function SearchScene({ data, live }: { data: SearchContent; live: boolean
                   </motion.li>
                 ))}
               </ul>
-              {data.collected && (
-                <div data-cursor="files" className="mt-3 flex flex-col gap-1.5 border-t pt-3">
-                  <span className="text-muted-foreground text-xs">
-                    {data.collected.duplicates} duplicates merged. Collected at {utcTime(data.collected.collected_at)},
-                    with each paper's source, ID and citation count. Saved for the next stages:
-                  </span>
-                  {data.collected.files.map((f, i) => (
-                    <motion.span
-                      key={f.name}
-                      initial={live ? { opacity: 0, x: -6 } : false}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: i * 0.15 }}
-                      className="flex items-center gap-2 text-xs"
-                    >
-                      <FileText className="size-3.5 shrink-0 text-muted-foreground" />
-                      <b className="shrink-0 font-medium">{f.name}</b>
-                      <span className="truncate text-muted-foreground">{f.detail}</span>
-                    </motion.span>
-                  ))}
-                </div>
-              )}
             </Pane>
           ) : (
             <Placeholder>Papers found more than once are merged</Placeholder>
