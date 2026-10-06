@@ -1,13 +1,13 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 
 import { cn } from "cn";
 import { motion } from "motion/react";
 
 import type { AgentRole } from "@/lib/run-stream/contract";
 
-import { AgentAvatar } from "../run-bits";
+import { AgentAvatar, Caret } from "../run-bits";
 import { AGENTS } from "../run-meta";
 
 export function Pane({
@@ -97,5 +97,76 @@ export function SceneNote({
         {note && <p className="mt-0.5 text-muted-foreground text-xs italic">Note: “{note}”</p>}
       </div>
     </motion.div>
+  );
+}
+
+/** Types `text` out at `speed` characters a second while live; shows it whole otherwise. */
+export function TypeText({
+  text,
+  live,
+  speed = 110,
+  className,
+}: {
+  text: string;
+  live: boolean;
+  speed?: number;
+  className?: string;
+}) {
+  const [shown, setShown] = useState(live ? 0 : text.length);
+  useEffect(() => {
+    if (!live || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setShown(text.length);
+      return;
+    }
+    const t0 = performance.now();
+    let raf = 0;
+    const step = (now: number) => {
+      const next = Math.min(text.length, Math.round(((now - t0) / 1000) * speed));
+      setShown(next);
+      if (next < text.length) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [text, live, speed]);
+  return (
+    <span className={className}>
+      {text.slice(0, shown)}
+      {shown < text.length && <Caret />}
+    </span>
+  );
+}
+
+/** Grey bars standing in for text that is about to be written. */
+export function PendingLines({ lines = 2, className }: { lines?: number; className?: string }) {
+  return (
+    <span aria-hidden className={cn("flex flex-col gap-1.5 py-1", className)}>
+      {Array.from({ length: lines }, (_, i) => (
+        <span
+          key={i}
+          className={cn("h-2.5 animate-pulse rounded-full bg-muted", i === lines - 1 ? "w-2/5" : "w-full")}
+        />
+      ))}
+    </span>
+  );
+}
+
+/** Text struck through in red. When `live`, the strike fades in so the change is noticed; it wraps with the text. */
+export function Strike({ children, live, className }: { children: ReactNode; live: boolean; className?: string }) {
+  const [on, setOn] = useState(!live);
+  useEffect(() => {
+    if (on) return;
+    const timer = window.setTimeout(() => setOn(true), 60);
+    return () => window.clearTimeout(timer);
+  }, [on]);
+  return (
+    <span
+      className={cn(
+        "line-through decoration-1 transition-[text-decoration-color] duration-700",
+        on ? "decoration-rose-500" : "decoration-transparent",
+        className,
+      )}
+    >
+      {children}
+    </span>
   );
 }

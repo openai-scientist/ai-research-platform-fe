@@ -7,11 +7,12 @@ import { AlertTriangle, Info, Lock, Star, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 
 import { Button } from "@/components/ui/button";
-import type { Hypothesis } from "@/lib/run-stream/contract";
+import type { Hypothesis, TestDesign } from "@/lib/run-stream/contract";
 import type { ExperimentContent, NodeState } from "@/lib/run-stream/run-state";
 
 import { AgentCursor, launchFlight } from "../run-bits";
 import { useReveal } from "../workspace-context";
+import { Pane, Placeholder } from "./scene-ui";
 
 const W = 180;
 const H = 66;
@@ -343,6 +344,110 @@ function Inspector({
 
 const fmt = (v: number | null) => (v === null ? "null" : v.toFixed(1));
 
+function PlanPane({
+  planId,
+  plan,
+  design,
+  live,
+}: {
+  planId: string;
+  plan: Hypothesis[];
+  design?: TestDesign;
+  live: boolean;
+}) {
+  const groups = design
+    ? ([
+        ["What changes", design.independent, "bg-blue-500/10 text-blue-700 ring-blue-500/25 dark:text-blue-300"],
+        [
+          "What is measured",
+          design.dependent,
+          "bg-emerald-500/10 text-emerald-700 ring-emerald-500/25 dark:text-emerald-300",
+        ],
+        ["Held equal", design.controls, "bg-muted text-muted-foreground ring-foreground/10"],
+      ] as const)
+    : [];
+  return (
+    <Pane
+      title={`Test plan ${planId}`}
+      aside="exp_plan.yaml · Stage 09"
+      action={
+        <motion.span
+          data-cursor="plan"
+          initial={live ? { scale: 1.6, rotate: -6, opacity: 0 } : false}
+          animate={{ scale: 1, rotate: 0, opacity: 1 }}
+          transition={{ delay: 0.35 + plan.length * 0.12, type: "spring", stiffness: 300, damping: 16 }}
+          className="inline-flex h-6 items-center gap-1.5 rounded-full bg-primary px-2.5 font-semibold text-primary-foreground text-xs"
+        >
+          <Lock className="size-3" />
+          Locked before any code runs
+        </motion.span>
+      }
+    >
+      {design && (
+        <div className="mb-3 grid gap-3 border-b pb-3 sm:grid-cols-3">
+          {groups.map(([label, items, tone], gi) => (
+            <div key={label} className="flex min-w-0 flex-col gap-1.5">
+              <span className="text-muted-foreground text-xs">{label}</span>
+              <span className="flex flex-wrap gap-1">
+                {items.map((item, i) => (
+                  <motion.code
+                    key={item}
+                    initial={live ? { opacity: 0, y: 4 } : false}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: gi * 0.2 + i * 0.06 }}
+                    className={cn("rounded-md px-1.5 py-0.5 font-mono text-[11.5px] ring-1", tone)}
+                  >
+                    {item}
+                  </motion.code>
+                ))}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="text-muted-foreground text-xs">
+            <tr className="border-b">
+              {["ID", "How it's tested", "Compares", "Must report", "Wrong if"].map((h) => (
+                <th key={h} className="whitespace-nowrap pr-3 pb-2 text-left font-medium">
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {plan.map((h, i) => (
+              <motion.tr
+                key={h.id}
+                initial={live ? { opacity: 0, y: 6 } : false}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.12 }}
+                className="border-b last:border-0"
+              >
+                <td className="py-2 pr-3 align-top">
+                  <span className="rounded-md bg-primary px-1.5 py-0.5 font-mono font-semibold text-primary-foreground text-xs">
+                    {h.id}
+                  </span>
+                </td>
+                <td className="py-2 pr-3 align-top">
+                  {h.method}
+                  <span className="block text-muted-foreground text-xs">
+                    {h.outcome} · {h.exposure}
+                  </span>
+                </td>
+                <td className="py-2 pr-3 align-top">{h.estimand}</td>
+                <td className="py-2 pr-3 align-top font-mono text-xs">{h.report_key}</td>
+                <td className="min-w-48 py-2 align-top text-muted-foreground text-xs">{h.falsify.text}</td>
+              </motion.tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Pane>
+  );
+}
+
 export function ExperimentScene({ data, live }: { data: ExperimentContent; live: boolean }) {
   const scene = useRef<HTMLDivElement>(null);
   const json = useRef<HTMLDivElement>(null);
@@ -380,6 +485,13 @@ export function ExperimentScene({ data, live }: { data: ExperimentContent; live:
 
   return (
     <div ref={scene} className="relative flex flex-col gap-4">
+      {data.planId ? (
+        <PlanPane planId={data.planId} plan={data.plan} design={data.design} live={live} />
+      ) : (
+        <Placeholder icon={<Lock className="size-3.5" />}>
+          The test plan is locked before any code is written
+        </Placeholder>
+      )}
       <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(340px,420px)]">
         <div className="flex min-w-0 flex-col gap-3">
           {data.hypotheses.map((h) => (
@@ -464,7 +576,7 @@ export function ExperimentScene({ data, live }: { data: ExperimentContent; live:
       <AgentCursor
         agent={live ? (scoring ? "skeptic" : "methodologist") : null}
         container={scene}
-        target={data.activeNodeId ? `node:${data.activeNodeId}` : null}
+        target={data.activeNodeId ? `node:${data.activeNodeId}` : data.planId ? "plan" : null}
         version={`${Object.keys(data.nodes).length}-${shown?.status}`}
       />
     </div>

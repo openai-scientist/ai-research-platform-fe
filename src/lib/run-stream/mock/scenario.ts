@@ -1,18 +1,10 @@
 // Example data for the mock research run: a sleep and exam-score study on 1,240 students.
 // Every value here is what Popper would report through the event stream.
 
-import type {
-  DataColumn,
-  DataIssue,
-  FrameSlot,
-  Hypothesis,
-  IdeaReview,
-  IdeaSource,
-  LiteraturePaper,
-  Verdict,
-} from "../contract";
+import type { DataColumn, DataIssue, Hypothesis, Verdict } from "../contract";
 
-export const QUESTION =
+/** The topic of the sample run. The mock plays this run whatever topic is typed. */
+export const SAMPLE_TOPIC =
   "Does getting more sleep go with higher exam scores in our undergraduates, and what explains it?";
 
 export const DATASET = { name: "student_wellbeing.csv", version: 1, rows: 1240, columns: 8 } as const;
@@ -149,79 +141,12 @@ export const ISSUES: MockIssue[] = [
   },
 ];
 
-export const FRAME: FrameSlot[] = [
-  {
-    slot: "outcome",
-    label: "What is measured",
-    value: "exam_score",
-    note: "Final exam, points out of 100",
-    phrase: "higher exam scores",
-  },
-  {
-    slot: "exposure",
-    label: "What might affect it",
-    value: "sleep_hours",
-    note: "Average hours per night",
-    phrase: "more sleep",
-  },
-  {
-    slot: "population",
-    label: "Who it's about",
-    value: "Undergraduates",
-    note: "One faculty, spring 2026",
-    phrase: "our undergraduates",
-  },
-  {
-    slot: "follow_up",
-    label: "Then ask",
-    value: "What explains it",
-    note: "Stress, study time, screen time",
-    phrase: "what explains it",
-  },
-  { slot: "unit", label: "One row is", value: "One student", note: "Over one semester" },
-  {
-    slot: "out_of_reach",
-    label: "Out of reach",
-    value: "Proof of cause",
-    note: "Survey data shows links only; caffeine wasn't recorded",
-  },
-];
-
 export const SLEEP_BARS = [
   { label: "< 5 h", value: 61.2 },
   { label: "5–6 h", value: 65.8 },
   { label: "6–7 h", value: 70.4 },
   { label: "7–8 h", value: 75.9 },
   { label: "8 h +", value: 74.6 },
-];
-
-export const PATTERNS = [
-  "Scores rise with sleep up to about 8 hours, then flatten.",
-  "Students sleeping under 6 hours report high stress twice as often.",
-  "Students who sleep more also study more.",
-];
-
-export const PAPERS: LiteraturePaper[] = [
-  {
-    citation: "Okano et al., 2019",
-    claim: "Longer, more consistent sleep went with better grades in college students.",
-    doi: "10.1038/s41539-019-0055-z",
-  },
-  {
-    citation: "Curcio, Ferrara & De Gennaro, 2006",
-    claim: "A review linking sleep loss to weaker learning and academic results.",
-    doi: "10.1016/j.smrv.2005.11.001",
-  },
-  {
-    citation: "Hershner & Chervin, 2014",
-    claim: "A review of why students sleep poorly and how sleepiness relates to grades.",
-    doi: "10.2147/NSS.S62907",
-  },
-];
-
-export const GAPS = [
-  "Few papers separate study time from sleep.",
-  "Stress as the link is mostly tested in younger students.",
 ];
 
 export const REFERENCES = [
@@ -253,6 +178,16 @@ export const HYPOTHESES: Record<string, Hypothesis> = {
     estimand: "Adjusted difference",
     method: "Regression with controls",
     report_key: "h1_sleep7_diff",
+    sub_question: "SQ1",
+    gap: "G1",
+    novelty:
+      "Prior work rarely holds study time, stress and screens equal while testing a 7-hour cut-off in one faculty.",
+    rationale: "Sleep consolidates what was learned that day, and lost sleep slows performance on tests.",
+    falsify: {
+      text: "Wrong if the 95% range of the adjusted difference touches or falls below 0 points.",
+      zone: [null, 0],
+      unit: "points",
+    },
   },
   H2: {
     id: "H2",
@@ -264,6 +199,15 @@ export const HYPOTHESES: Record<string, Hypothesis> = {
     estimand: "Indirect effect",
     method: "Mediation, bootstrap",
     report_key: "h2_indirect",
+    sub_question: "SQ2",
+    gap: "G2",
+    novelty: "Stress as the link is mostly tested in school-age adolescents, not in undergraduates.",
+    rationale: "Short sleep raises next-day stress, and stress lowers exam performance.",
+    falsify: {
+      text: "Wrong if the 95% range of the indirect effect includes 0.",
+      zone: [null, 0],
+      unit: "points",
+    },
   },
   H3: {
     id: "H3",
@@ -275,6 +219,15 @@ export const HYPOTHESES: Record<string, Hypothesis> = {
     estimand: "Slope per hour",
     method: "Regression, robust errors",
     report_key: "h3_screen_slope",
+    sub_question: "SQ4",
+    gap: "G3",
+    novelty: "Screens are tied to poor sleep, but rarely tested against grades directly.",
+    rationale: "Screen time takes hours from study and sleep alike.",
+    falsify: {
+      text: "Wrong if the 95% range of the slope includes 0 or sits above it.",
+      zone: [0, null],
+      unit: "points per hour",
+    },
   },
   H4: {
     id: "H4",
@@ -286,6 +239,15 @@ export const HYPOTHESES: Record<string, Hypothesis> = {
     estimand: "Difference in effects",
     method: "Interaction model",
     report_key: "h4_age_interaction",
+    sub_question: "SQ1",
+    gap: "G2",
+    novelty: "Most samples are 18 to 22; the effect in older students is unknown.",
+    rationale: "Older students often work and sleep less regularly, so sleep may matter more.",
+    falsify: {
+      text: "Wrong if the 95% range of the difference in effects includes 0.",
+      zone: [null, 0],
+      unit: "points",
+    },
   },
   H5: {
     id: "H5",
@@ -297,6 +259,15 @@ export const HYPOTHESES: Record<string, Hypothesis> = {
     estimand: "Drop in the sleep effect",
     method: "Compare two models",
     report_key: "h5_attenuation",
+    sub_question: "SQ3",
+    gap: "G1",
+    novelty: "Few papers separate study time from sleep.",
+    rationale: "Students who sleep more also study more, so part of the sleep gap may be study time.",
+    falsify: {
+      text: "Wrong if the 95% range of the drop in the sleep effect includes 0.",
+      zone: [null, 0],
+      unit: "points",
+    },
   },
   H6: {
     id: "H6",
@@ -308,124 +279,16 @@ export const HYPOTHESES: Record<string, Hypothesis> = {
     estimand: "Difference in effects",
     method: "Interaction model",
     report_key: "h6_gender_interaction",
+    sub_question: "SQ1",
+    gap: "G2",
+    novelty: "Differences by gender are rarely reported in the shortlisted papers.",
+    rationale: "A steeper slope for women showed up in the data; worth a cheap check, flagged as such.",
+    falsify: {
+      text: "Wrong if the 95% range of the difference in effects includes 0.",
+      zone: [0, 0],
+      unit: "points",
+    },
   },
-};
-
-export interface MockIdea {
-  id: string;
-  hypothesis?: string;
-  statement?: string;
-  source: IdeaSource;
-  review: IdeaReview;
-  keep?: string;
-}
-
-export const IDEAS: Record<"first" | "pivot", MockIdea[]> = {
-  first: [
-    {
-      id: "C1",
-      hypothesis: "H1",
-      source: { kind: "pattern", ref: "P1", text: "Scores rise with sleep up to about 8 h" },
-      review: {
-        testable: true,
-        columns: ["sleep_hours", "exam_score"],
-        risk: "low",
-        objection: "Strong students may simply sleep more. Say so in the paper.",
-      },
-    },
-    {
-      id: "C2",
-      hypothesis: "H2",
-      source: { kind: "gap", ref: "Gap 2", text: "Stress as the link is mostly tested in younger students" },
-      review: {
-        testable: true,
-        columns: ["sleep_hours", "stress_level"],
-        risk: "medium",
-        objection: "Stress and sleep were measured at the same time, so which came first is unclear.",
-      },
-    },
-    {
-      id: "C3",
-      hypothesis: "H3",
-      source: { kind: "literature", ref: "Lit", text: "Hershner & Chervin, 2014" },
-      review: {
-        testable: true,
-        columns: ["screen_time", "exam_score"],
-        risk: "low",
-        objection: "Screen time is self-reported and rounded.",
-      },
-    },
-    {
-      id: "C4",
-      hypothesis: "H4",
-      source: { kind: "data", ref: "Data", text: "Students over 25 trend higher" },
-      review: {
-        testable: true,
-        columns: ["sleep_hours", "age"],
-        risk: "high",
-        objection: "Only 58 students are over 25. Probably too few.",
-      },
-      keep: "Kept anyway: a clear answer either way is useful. The Skeptic's objection stays on record.",
-    },
-    {
-      id: "C5",
-      statement: "Caffeine changes the sleep effect.",
-      source: { kind: "literature", ref: "Lit", text: "Okano et al., 2019" },
-      review: {
-        testable: false,
-        missing: "No caffeine column",
-        risk: "high",
-        objection: "There is nothing in the data to test this with.",
-      },
-    },
-    {
-      id: "C6",
-      statement: "Exam timing explains the sleep effect.",
-      source: { kind: "literature", ref: "Lit", text: "Curcio et al., 2006" },
-      review: {
-        testable: false,
-        missing: "No exam-time column",
-        risk: "high",
-        objection: "Morning and evening exams can't be told apart.",
-      },
-    },
-  ],
-  pivot: [
-    {
-      id: "D1",
-      hypothesis: "H5",
-      source: { kind: "pattern", ref: "P3 + Gap 1", text: "Students who sleep more also study more" },
-      review: {
-        testable: true,
-        columns: ["sleep_hours", "study_hours"],
-        risk: "low",
-        objection: "Both models must use the same students, or the comparison means nothing.",
-      },
-    },
-    {
-      id: "D2",
-      hypothesis: "H6",
-      source: { kind: "data", ref: "Data", text: "The slope looks steeper for women" },
-      review: {
-        testable: true,
-        columns: ["sleep_hours", "gender"],
-        risk: "medium",
-        objection: "No prior reason to expect it. If kept, flag it as a fishing risk.",
-      },
-      keep: "Kept as a cheap check. The Reporter will flag it.",
-    },
-    {
-      id: "D3",
-      statement: "Sleep consistency matters more than sleep length.",
-      source: { kind: "literature", ref: "Lit", text: "Okano et al., 2019" },
-      review: {
-        testable: false,
-        missing: "Only nightly averages",
-        risk: "high",
-        objection: "Needs night-by-night data; we only have averages.",
-      },
-    },
-  ],
 };
 
 /** One analysis version: [kind, title, outcome, score, best, error or rule-2 note, parent index]. */

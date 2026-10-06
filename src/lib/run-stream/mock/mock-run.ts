@@ -20,26 +20,55 @@ import type {
   RunEvent,
   RunEventOf,
   RunEventType,
+  RunInput,
+  Skill,
   StagePlan,
   StagePlanStep,
 } from "../contract";
+import { RUN_ENDS_AT, SHOW_DATA_STAGE } from "../features";
+import {
+  CARDS,
+  CLUSTERS,
+  COLLECTED,
+  COMPUTE,
+  DEBATES,
+  DOMAINS,
+  designFor,
+  ESTIMATE_CHECKS,
+  ESTIMATES,
+  GAPS,
+  GOAL,
+  HITS,
+  MERGED,
+  OVERVIEW,
+  QUERIES,
+  RANKING,
+  REJECTED,
+  RISKS,
+  SCOPE_ADJUSTED,
+  SCREEN_RULES,
+  SHORTLIST,
+  SKILLS,
+  SOURCES,
+  STRATEGIES,
+  SUB_QUESTIONS,
+  screenPoints,
+  TENSION,
+  TOPIC_ADVICE,
+  TOPIC_SCORES,
+} from "./discovery";
 import { buildPaper, COMMENTS, type FinalResult, REVISIONS, TYPED_NUMBER } from "./paper-script";
 import {
   CODE,
   COLUMNS,
   DATASET,
   DIFF,
-  FRAME,
-  GAPS,
   HYPOTHESES,
-  IDEAS,
   ISSUES,
   type MockNode,
   type MockResult,
-  PAPERS,
-  PATTERNS,
-  QUESTION,
   RESULTS,
+  SAMPLE_TOPIC,
   SLEEP_BARS,
   sampleRows,
   TREES,
@@ -50,8 +79,8 @@ class Stopped extends Error {}
 const MODE_GATES: Record<ReviewMode, GateKind[]> = {
   auto: [],
   light: ["publish"],
-  copilot: ["hypotheses", "decision", "publish"],
-  full: ["framing", "hypotheses", "decision", "report", "publish"],
+  copilot: ["screen", "hypotheses", "decision", "publish"],
+  full: ["scope", "screen", "hypotheses", "decision", "report", "publish"],
 };
 
 const MODE_LABEL: Record<ReviewMode, string> = { auto: "Auto", light: "Light", copilot: "Copilot", full: "Full" };
@@ -83,6 +112,7 @@ interface StageSpec {
   plan: Omit<StagePlan, "steps" | "has_gate">;
   steps: StepSpec[];
   summary: () => string;
+  skills?: Skill[];
 }
 
 interface Recorded {
@@ -100,6 +130,7 @@ export class MockRun implements RunCommands {
   private rounds: Round[] = [{ n: 1, kind: "first" }];
   private sets: Record<number, string[]> = {};
   private dropped: Record<number, string[]> = {};
+  private droppedPapers: string[] = [];
   private recorded: Recorded[] = [];
   private stageKey: string | undefined;
   private stopsOpened = 0;
@@ -111,7 +142,21 @@ export class MockRun implements RunCommands {
     readonly runId: string,
     readonly mode: ReviewMode,
     private readonly emit: (event: RunEvent) => void,
+    private readonly input: RunInput = { topic: SAMPLE_TOPIC, domains: DOMAINS },
+    private readonly options: { withData: boolean; endsAt: "hypotheses" | "paper" } = {
+      withData: SHOW_DATA_STAGE,
+      endsAt: RUN_ENDS_AT,
+    },
   ) {}
+
+  private get withData() {
+    return this.options.withData;
+  }
+
+  /** The run stops once hypotheses are picked, as pipeline stages 1 to 8 do. */
+  private get endsAtHypotheses() {
+    return this.options.endsAt === "hypotheses";
+  }
 
   start() {
     void this.main();
@@ -189,7 +234,8 @@ export class MockRun implements RunCommands {
   }
 
   private gates() {
-    return MODE_GATES[this.mode];
+    // A run that ends at hypotheses only has the stops of stages 1 to 7 left: nothing runs after stage 8.
+    return MODE_GATES[this.mode].filter((k) => !this.endsAtHypotheses || k === "scope" || k === "screen");
   }
 
   private gateOn(kind: GateKind) {
@@ -198,9 +244,24 @@ export class MockRun implements RunCommands {
 
   private planned(): PlannedStage[] {
     const stages: PlannedStage[] = [
-      { key: "data", stage: "data", title: "Check the data", has_gate: false },
-      { key: "understand", stage: "understand", title: "Understand", has_gate: this.gateOn("framing") },
+      ...(this.withData ? [{ key: "data", stage: "data" as const, title: "Check the data", has_gate: false }] : []),
+      { key: "scope", stage: "scope", title: "Scope the question", has_gate: this.gateOn("scope"), pipeline: [1, 2] },
+      { key: "search", stage: "search", title: "Search the literature", has_gate: false, pipeline: [3, 4] },
+      { key: "screen", stage: "screen", title: "Screen the papers", has_gate: this.gateOn("screen"), pipeline: [5] },
+      { key: "read", stage: "read", title: "Read and extract", has_gate: false, pipeline: [6] },
+      { key: "synthesize", stage: "synthesize", title: "Find the gaps", has_gate: false, pipeline: [7] },
     ];
+    if (this.endsAtHypotheses) {
+      // A run that ends at hypotheses has no rounds, so the stage carries no round number.
+      stages.push({
+        key: "r1-hypothesize",
+        stage: "hypothesize",
+        title: "Hypothesize",
+        has_gate: false,
+        pipeline: [8],
+      });
+      return stages;
+    }
     for (const r of this.rounds) {
       if (r.kind !== "refine")
         stages.push({
@@ -210,6 +271,7 @@ export class MockRun implements RunCommands {
           round_kind: r.kind,
           title: "Hypothesize",
           has_gate: this.gateOn("hypotheses"),
+          pipeline: [8],
         });
       stages.push({
         key: `r${r.n}-experiment`,
@@ -269,6 +331,7 @@ export class MockRun implements RunCommands {
     const plan: StagePlan = { ...spec.plan, steps, has_gate: steps.some((s) => s.gate) };
     this.stageKey = plan.key;
     this.send("stage.started", { plan });
+    if (spec.skills) this.send("skills.loaded", { skills: spec.skills });
     await this.wait(700);
     for (const step of spec.steps) {
       this.send("step.started", { step_id: step.id });
@@ -289,11 +352,26 @@ export class MockRun implements RunCommands {
 
   private async main() {
     try {
-      this.send("run.started", { mode: this.mode, question: QUESTION, dataset: { ...DATASET }, context_version: 3 });
+      this.send("run.started", {
+        mode: this.mode,
+        topic: this.input.topic,
+        domains: this.input.domains,
+        ...(this.withData ? { dataset: { ...DATASET } } : {}),
+      });
       this.send("run.plan", { stages: this.planned() });
       await this.wait(500);
-      await this.runStage(this.dataStage());
-      await this.runStage(this.understandStage());
+      if (this.withData) await this.runStage(this.dataStage());
+      await this.runStage(this.scopeStage());
+      await this.runStage(this.searchStage());
+      await this.runStage(this.screenStage());
+      await this.runStage(this.readStage());
+      await this.runStage(this.synthesizeStage());
+      if (this.endsAtHypotheses) {
+        await this.runStage(this.hypothesizeStage(this.rounds[0]));
+        this.stageKey = undefined;
+        this.send("run.completed", {});
+        return;
+      }
       for (let i = 0; i < this.rounds.length; i++) {
         const round = this.rounds[i];
         if (round.kind !== "refine") await this.runStage(this.hypothesizeStage(round));
@@ -397,111 +475,148 @@ export class MockRun implements RunCommands {
     };
   }
 
-  // ---------- understand ----------
+  // ---------- scope: pipeline stages 1 and 2 ----------
 
-  private understandStage(): StageSpec {
+  private scopeStage(): StageSpec {
     return {
       plan: {
-        key: "understand",
-        stage: "understand",
-        title: "Understand the question",
+        key: "scope",
+        stage: "scope",
+        title: "Scope the question",
+        pipeline: [1, 2],
+        reads: ["Your topic", "Your fields", "This machine"],
         purpose:
-          "Before anyone guesses an answer, the question is made precise, the data is explored, and prior work is read.",
-        cast: ["theorist", "methodologist", "knowledge"],
+          "Your topic becomes a goal with five parts, then a tree of sub-questions that don't overlap. The PI rates the topic before any search starts.",
+        cast: ["strategist", "pi"],
       },
-      summary: () => "Question framed · 3 patterns found · 12 papers used, 2 gaps",
+      skills: SKILLS.scope,
+      summary: () => "Goal set · 4 sub-questions, ranked · topic scored 8.3 of 10",
       steps: [
         {
-          id: "frame",
-          title: "Make the question precise",
-          actor: "theorist",
+          id: "profile",
+          title: "Check the field and the machine",
+          actor: "strategist",
+          pipeline_stage: 1,
+          artifact: "Compute profile",
           explain:
-            "Splits your question into its parts: what is measured, what might affect it, who it is about, and what this data cannot answer.",
-          say: "Your question asks two things: does sleep matter, and what explains it. This data shows links, not causes, so I frame both that way.",
+            "Matches your topic to fields, and measures the cores, memory and GPU the run can use. Without a GPU, the scope stays light enough for a CPU.",
+          say: "Two fields matched. CPU only, which is plenty for this topic.",
           run: async () => {
-            for (const slot of FRAME) {
-              await this.wait(700);
-              this.send("understand.frame", { slot }, "theorist");
-            }
+            const domains = this.input.domains.length ? this.input.domains : DOMAINS;
+            await this.wait(500);
+            this.send("scope.profile", { domains, compute: COMPUTE }, "strategist");
+            await this.wait(900);
           },
         },
         {
-          id: "explore",
-          title: "Explore the data",
-          actor: "methodologist",
-          explain: "Simple summaries come first. Patterns found here become the raw material for hypotheses.",
-          say: "Scores climb with sleep up to about 8 hours, then flatten. Short sleepers also report more stress.",
+          id: "goal",
+          title: "Set the goal",
+          actor: "strategist",
+          pipeline_stage: 1,
+          artifact: "Research goal",
+          explain:
+            "Writes the goal in five parts, each specific and measurable. Numbers recalled from memory are marked unverified. The PI approves the goal before it is split.",
+          say: "Goal written and approved. I narrowed the scope to what answers your topic, and two numbers from memory stay unverified until the papers are read.",
           run: async () => {
+            for (const goal of GOAL) {
+              await this.wait(750);
+              this.send("scope.goal", goal, "strategist");
+              if (goal.field === "problem")
+                for (const estimate of ESTIMATES) {
+                  await this.wait(500);
+                  this.send("scope.estimate", { estimate }, "strategist");
+                }
+            }
+            await this.wait(900);
+            const from = GOAL.find((g) => g.field === "scope")?.value ?? "";
+            this.send("scope.adjusted", { ...SCOPE_ADJUSTED, from }, "strategist");
+            await this.wait(900);
             this.send(
-              "understand.chart",
-              { title: "Average exam score by nightly sleep", note: "data v2 · n = 1,230", bars: SLEEP_BARS },
-              "methodologist",
+              "scope.approved",
+              { at: "2026-10-06T07:46:03Z", note: "Specific, measurable and doable on this machine." },
+              "pi",
             );
-            await this.wait(1100);
-            for (const [i, text] of PATTERNS.entries()) {
-              await this.wait(500);
-              this.send("understand.pattern", { id: `P${i + 1}`, text }, "methodologist");
+            await this.wait(700);
+          },
+        },
+        {
+          id: "decompose",
+          title: "Split it into sub-questions",
+          actor: "strategist",
+          pipeline_stage: 2,
+          artifact: "Sub-question tree",
+          explain:
+            "Sub-questions must not overlap, and together they must cover the whole question. Each is ranked and gets its risks.",
+          say: "Four sub-questions, no overlap, and together they cover your whole question.",
+          run: async () => {
+            for (const sq of SUB_QUESTIONS) {
+              await this.wait(800);
+              this.send("problem.subquestion", { sub_question: sq }, "strategist");
+              for (const risk of RISKS.filter((r) => r.sq_id === sq.id)) {
+                await this.wait(450);
+                this.send("problem.risk", { risk }, "strategist");
+              }
             }
           },
         },
         {
-          id: "literature",
-          title: "Read prior work",
-          actor: "knowledge",
-          explain: "Searches published papers, keeps the relevant ones, and notes what nobody has studied yet.",
-          say: "12 papers fit. Few separate study time from sleep. That gap is worth testing.",
+          id: "evaluate",
+          title: "Rate the topic",
+          actor: "pi",
+          pipeline_stage: 2,
+          artifact: "Topic score",
+          explain:
+            "The PI scores the topic like a conference area chair: novelty, specificity, feasibility. Below 5 of 10, the run stops to rethink.",
+          say: "8.3 of 10. Worth doing, with one tweak to SQ1.",
           run: async () => {
-            this.send("literature.searched", { found: 214, relevant: 61, used: 12 }, "knowledge");
-            await this.wait(1100);
-            for (const paper of PAPERS) {
-              await this.wait(450);
-              this.send("literature.paper", { paper }, "knowledge");
-            }
-            for (const [i, text] of GAPS.entries()) {
-              await this.wait(450);
-              this.send("literature.gap", { id: `Gap ${i + 1}`, text }, "knowledge");
-            }
+            await this.wait(700);
+            this.send(
+              "topic.evaluated",
+              { scores: TOPIC_SCORES, overall: 8.3, threshold: 5, advice: TOPIC_ADVICE },
+              "pi",
+            );
+            await this.wait(1600);
           },
         },
-        ...(this.gateOn("framing")
+        ...(this.gateOn("scope")
           ? [
               {
-                id: "framing-gate",
-                title: "Your check: the question",
+                id: "scope-gate",
+                title: "Your check: the scope",
                 actor: "pi" as const,
-                gate: "framing" as const,
-                explain: "Full mode stops here so a wrong framing is caught before anything is built on it.",
+                gate: "scope" as const,
+                explain: "Full mode stops here so a wrong scope is caught before the search is built on it.",
                 say: "This is how we read your question. Is it what you meant?",
                 run: async () => {
                   await this.gate(
-                    "framing",
+                    "scope",
                     {
-                      title: "Check the question",
-                      why: "Full mode asks you to confirm the framing, because every later step builds on it.",
+                      title: "Check the scope",
+                      why: "Full mode asks you to confirm the goal and sub-questions, because every search and hypothesis builds on them.",
                       summary: [
-                        "Measured: exam_score · Might affect it: sleep_hours",
-                        "About: undergraduates, one student per row",
-                        "Out of reach: proof of cause",
+                        "Goal: the exam gap at 7 h of sleep, and how much runs through stress and study time",
+                        "4 sub-questions, ranked, with their risks",
+                        "Topic scored 8.3 of 10",
                       ],
                       options: [
                         {
                           id: "ok",
                           label: "Yes, this is my question",
-                          description: "Build hypotheses on this framing.",
-                          leads_to: "Hypothesize starts",
+                          description: "Search the literature for these sub-questions.",
+                          leads_to: "Search starts",
                           confirm_label: "Continue",
                           recommended: true,
                         },
                         {
                           id: "note",
                           label: "Continue, with a note",
-                          description: "Add a note below; the Theorist reads it before proposing ideas.",
-                          leads_to: "Hypothesize starts, with your note",
+                          description: "Add a note below; the Librarian reads it before searching.",
+                          leads_to: "Search starts, with your note",
                           confirm_label: "Continue with note",
                         },
                       ],
                     },
-                    () => "Confirmed the framing of the question.",
+                    () => "Confirmed the scope.",
                   );
                 },
               },
@@ -511,56 +626,430 @@ export class MockRun implements RunCommands {
     };
   }
 
-  // ---------- hypothesize ----------
+  // ---------- search: pipeline stages 3 and 4 ----------
+
+  private searchStage(): StageSpec {
+    return {
+      plan: {
+        key: "search",
+        stage: "search",
+        title: "Search the literature",
+        pipeline: [3, 4],
+        reads: ["Sub-question tree"],
+        purpose:
+          "Short queries from three angles go to three scholarly sources. Everything found is merged into one list, with duplicates removed.",
+        cast: ["librarian"],
+      },
+      skills: SKILLS.search,
+      summary: () =>
+        `${COLLECTED.raw} hits · ${COLLECTED.unique} unique papers · ${COLLECTED.duplicates} duplicates merged`,
+      steps: [
+        {
+          id: "strategy",
+          title: "Plan the searches",
+          actor: "librarian",
+          pipeline_stage: 3,
+          artifact: "Search plan",
+          explain:
+            "Three angles, each with short queries of 3 to 6 words. Scholarly search engines do badly with long sentences.",
+          say: "Three angles, eight short queries, three sources.",
+          run: async () => {
+            for (const strategy of STRATEGIES) {
+              await this.wait(600);
+              this.send("search.strategy", { strategy }, "librarian");
+              for (const query of QUERIES.filter((q) => q.strategy_id === strategy.id)) {
+                await this.wait(520);
+                this.send("search.query", { query }, "librarian");
+              }
+            }
+            await this.wait(400);
+            this.send("search.sources", { sources: SOURCES, delay_ms: 1500 }, "librarian");
+          },
+        },
+        {
+          id: "collect",
+          title: "Collect candidates",
+          actor: "librarian",
+          pipeline_stage: 4,
+          artifact: "Candidate list",
+          explain:
+            "Every query goes to every source, 1.5 s apart to respect their rate limits. Papers found more than once are merged.",
+          say: `${COLLECTED.raw} hits, ${COLLECTED.unique} unique papers once duplicates were merged.`,
+          run: async () => {
+            for (const query of QUERIES) {
+              for (const [i, source] of SOURCES.entries()) {
+                this.send("literature.request", { query_id: query.id, source_id: source.id }, "librarian");
+                await this.wait(330);
+                this.send(
+                  "literature.batch",
+                  { query_id: query.id, source_id: source.id, hits: HITS[query.id][i] },
+                  "librarian",
+                );
+              }
+            }
+            for (const merged of MERGED) {
+              await this.wait(800);
+              this.send("literature.merged", merged, "librarian");
+            }
+            await this.wait(700);
+            this.send("literature.collected", COLLECTED, "librarian");
+            await this.wait(600);
+          },
+        },
+      ],
+    };
+  }
+
+  // ---------- screen: pipeline stage 5 ----------
+
+  private shortlist() {
+    return SHORTLIST.filter((p) => !this.droppedPapers.includes(p.id));
+  }
+
+  private screenStage(): StageSpec {
+    return {
+      plan: {
+        key: "screen",
+        stage: "screen",
+        title: "Screen the papers",
+        pipeline: [5],
+        reads: ["Candidate list", "Sub-question tree"],
+        purpose:
+          "Every paper is scored for relevance and quality. Only those that clear both bars are kept, and papers that share our words but not our field are thrown out.",
+        cast: ["librarian"],
+      },
+      skills: SKILLS.screen,
+      summary: () =>
+        `${COLLECTED.unique} scored · ${this.shortlist().length} kept · ${REJECTED.length} wrong-field matches rejected${this.droppedPapers.length ? ` · you removed ${this.droppedPapers.length}` : ""}`,
+      steps: [
+        {
+          id: "score",
+          title: "Score every paper",
+          actor: "librarian",
+          pipeline_stage: 5,
+          explain:
+            "Two scores from 0 to 1: how well the abstract matches the sub-questions, and how solid the venue and citations are.",
+          say: `${COLLECTED.unique} scored. ${SHORTLIST.length + REJECTED.length} clear both bars.`,
+          run: async () => {
+            this.send("screen.criteria", { rules: SCREEN_RULES, relevance_min: 0.7, quality_min: 0.5 }, "librarian");
+            await this.wait(700);
+            const points = screenPoints();
+            for (let i = 0; i < points.length; i += 24) {
+              await this.wait(380);
+              this.send("screen.scored", { points: points.slice(i, i + 24) }, "librarian");
+            }
+          },
+        },
+        {
+          id: "reject",
+          title: "Reject wrong-field matches",
+          actor: "librarian",
+          pipeline_stage: 5,
+          explain:
+            "A paper can share the question's words and still be about something else. Those are rejected even when they score well.",
+          say: "Three shared our words but not our field. Out.",
+          run: async () => {
+            for (const { relevance: _r, quality: _q, ...paper } of REJECTED) {
+              await this.wait(900);
+              this.send("screen.rejected", { paper }, "librarian");
+            }
+          },
+        },
+        {
+          id: "shortlist",
+          title: "Keep the shortlist",
+          actor: "librarian",
+          pipeline_stage: 5,
+          artifact: "Shortlist",
+          explain:
+            "What clears both bars is kept with a one-line reason. A few old papers stay because the field is built on them.",
+          say: `${SHORTLIST.length} papers kept, ${SHORTLIST.filter((p) => p.seminal).length} of them seminal.`,
+          run: async () => {
+            for (const paper of SHORTLIST) {
+              await this.wait(520);
+              this.send("screen.kept", { paper }, "librarian");
+            }
+          },
+        },
+        ...(this.gateOn("screen")
+          ? [
+              {
+                id: "screen-gate",
+                title: "Your check: the shortlist",
+                actor: "pi" as const,
+                gate: "screen" as const,
+                explain: "Approve the papers the agents will read, or remove ones you don't trust.",
+                say: "This is what we'll read and build on. Anything you'd leave out?",
+                run: async () => {
+                  const answer = await this.gate(
+                    "screen",
+                    {
+                      title: "Approve the shortlist",
+                      why: `In ${MODE_LABEL[this.mode]} mode you check the reading list, because every gap and hypothesis is built on it.`,
+                      summary: [
+                        `${SHORTLIST.length} of ${COLLECTED.unique} papers kept, each with a reason`,
+                        `${REJECTED.length} wrong-field matches rejected`,
+                        `${SHORTLIST.filter((p) => p.seminal).length} seminal papers kept despite their age`,
+                      ],
+                      options: [
+                        {
+                          id: "approve",
+                          label: `Read all ${SHORTLIST.length}`,
+                          description: "Approve the shortlist as screened.",
+                          leads_to: "Each paper becomes a knowledge card",
+                          confirm_label: "Approve the shortlist",
+                          recommended: true,
+                        },
+                        {
+                          id: "drop",
+                          label: "Remove some first",
+                          description: "Click papers in the shortlist to leave them out.",
+                          leads_to: "Removed papers are not read or cited",
+                          confirm_label: "Choose what to remove",
+                        },
+                      ],
+                      droppable: SHORTLIST.map((p) => p.id),
+                    },
+                    (a) =>
+                      a.dropped?.length
+                        ? `Approved the shortlist without ${a.dropped.length} paper${a.dropped.length > 1 ? "s" : ""}.`
+                        : `Approved all ${SHORTLIST.length} papers.`,
+                  );
+                  this.droppedPapers = (answer.dropped ?? []).filter((id) => SHORTLIST.some((p) => p.id === id));
+                },
+              },
+            ]
+          : []),
+      ],
+    };
+  }
+
+  // ---------- read: pipeline stage 6 ----------
+
+  private cards() {
+    const kept = new Set(this.shortlist().map((p) => p.id));
+    return CARDS.filter((c) => kept.has(c.paper_id));
+  }
+
+  private readStage(): StageSpec {
+    return {
+      plan: {
+        key: "read",
+        stage: "read",
+        title: "Read and extract",
+        pipeline: [6],
+        reads: ["Shortlist"],
+        purpose:
+          "Each paper becomes one knowledge card with the same fields. Limitations matter most: they are where the gaps come from.",
+        cast: ["librarian"],
+      },
+      skills: SKILLS.read,
+      summary: () => `${this.cards().length} knowledge cards · 2 recalled numbers checked`,
+      steps: [
+        {
+          id: "extract",
+          title: "Extract a card per paper",
+          actor: "librarian",
+          pipeline_stage: 6,
+          artifact: "Knowledge cards",
+          explain:
+            "Problem, method, data, metrics, findings and limitations, pulled from each paper into the same shape.",
+          say: () => `${this.cards().length} cards. Every limitation is set aside as gap material.`,
+          run: async () => {
+            for (const card of this.cards()) {
+              await this.wait(1100);
+              this.send("card.extracted", { card }, "librarian");
+            }
+          },
+        },
+        {
+          id: "verify",
+          title: "Check the recalled numbers",
+          actor: "librarian",
+          pipeline_stage: 6,
+          explain:
+            "Numbers recalled while scoping are checked against the cards. Backed ones become verified; the rest are dropped.",
+          say: "One recalled number is backed by a paper. The other isn't, so it's gone.",
+          run: async () => {
+            for (const { after: _a, ...check } of ESTIMATE_CHECKS) {
+              await this.wait(1000);
+              this.send("estimate.checked", { check }, "librarian");
+            }
+            this.send("rule.checked", { rule: 6, state: "pass" });
+            await this.wait(500);
+          },
+        },
+      ],
+    };
+  }
+
+  // ---------- synthesize: pipeline stage 7 ----------
+
+  private synthesizeStage(): StageSpec {
+    const kept = new Set(this.cards().map((c) => c.id));
+    return {
+      plan: {
+        key: "synthesize",
+        stage: "synthesize",
+        title: "Find the gaps",
+        pipeline: [7],
+        reads: ["Knowledge cards", "Sub-question tree"],
+        purpose:
+          "The cards are grouped into schools of thought. Where groups pull in different directions, and where limitations pile up, the gaps appear.",
+        cast: ["theorist"],
+      },
+      skills: SKILLS.synthesize,
+      summary: () => `${CLUSTERS.length} groups · 1 tension · ${GAPS.length} gaps`,
+      steps: [
+        {
+          id: "cluster",
+          title: "Group into schools of thought",
+          actor: "theorist",
+          pipeline_stage: 7,
+          explain: "Papers are grouped by approach, not summarised one by one.",
+          say: "Four groups. Most of the evidence sits in the first one.",
+          run: async () => {
+            for (const cluster of CLUSTERS) {
+              await this.wait(1100);
+              this.send(
+                "synthesis.cluster",
+                { cluster: { ...cluster, card_ids: cluster.card_ids.filter((id) => kept.has(id)) } },
+                "theorist",
+              );
+            }
+          },
+        },
+        {
+          id: "overview",
+          title: "Sum up the field",
+          actor: "theorist",
+          pipeline_stage: 7,
+          explain: "One paragraph on where the evidence stands across the groups, before looking for gaps.",
+          say: "Most evidence is about younger students, and study time is rarely measured.",
+          run: async () => {
+            await this.wait(600);
+            this.send("synthesis.overview", { text: OVERVIEW }, "theorist");
+            await this.wait(1800);
+          },
+        },
+        {
+          id: "tension",
+          title: "Find where they disagree",
+          actor: "theorist",
+          pipeline_stage: 7,
+          explain: "Gaps show most clearly where two groups pull in different directions.",
+          say: "If stress and workload shape sleep, part of the sleep–grades link may be theirs.",
+          run: async () => {
+            await this.wait(900);
+            this.send("synthesis.tension", { tension: TENSION }, "theorist");
+            await this.wait(900);
+          },
+        },
+        {
+          id: "gaps",
+          title: "Name the gaps",
+          actor: "theorist",
+          pipeline_stage: 7,
+          explain: "Each gap is traced to the limitations that point to it.",
+          say: "Three gaps, each from limitations in more than one place.",
+          run: async () => {
+            for (const gap of GAPS) {
+              await this.wait(1300);
+              this.send("synthesis.gap", { gap: { ...gap, from: gap.from.filter((id) => kept.has(id)) } }, "theorist");
+            }
+          },
+        },
+        {
+          id: "rank",
+          title: "Rank the opportunities",
+          actor: "theorist",
+          pipeline_stage: 7,
+          artifact: "Gap map",
+          explain: "Gaps are ordered by how directly they answer your sub-questions and how much there is to build on.",
+          say: "G1 first: it answers two sub-questions at once.",
+          run: async () => {
+            await this.wait(800);
+            this.send("synthesis.ranked", { ranking: RANKING }, "theorist");
+            await this.wait(1600);
+          },
+        },
+      ],
+    };
+  }
+
+  // ---------- hypothesize: pipeline stage 8 ----------
 
   private hypothesizeStage(round: Round): StageSpec {
-    const ideas = IDEAS[round.kind === "pivot" ? "pivot" : "first"];
+    const debate = DEBATES[round.kind === "pivot" ? "pivot" : "first"];
     const key = `r${round.n}-hypothesize`;
     return {
       plan: {
         key,
         stage: "hypothesize",
-        round: round.n,
-        round_kind: round.kind,
+        ...(this.endsAtHypotheses ? {} : { round: round.n, round_kind: round.kind }),
         title: round.kind === "pivot" ? "Hypothesize again, in a new direction" : "Hypothesize",
+        pipeline: [8],
+        reads: ["Gap map", "Shortlist", "Compute profile"],
         purpose:
-          "Many ideas go in, few come out. The Theorist proposes, the Skeptic attacks, the PI picks, and the test plan is locked before any code runs.",
-        cast: ["theorist", "skeptic", "pi", "methodologist"],
+          "Three perspectives argue over the gaps. What survives is written as a hypothesis with four parts, including the result that would prove it wrong.",
+        cast: ["theorist", "methodologist", "skeptic", "librarian", "pi"],
       },
+      skills: SKILLS.hypothesize,
       summary: () => {
         const dropped = this.dropped[round.n] ?? [];
-        return `${this.sets[round.n].length} hypotheses to test · plan P${round.n} locked${dropped.length ? ` · you dropped ${dropped.join(", ")}` : ""}`;
+        return `${this.sets[round.n].length} hypotheses to test, each with a way to be wrong${dropped.length ? ` · you dropped ${dropped.join(", ")}` : ""}`;
       },
       steps: [
         {
-          id: "propose",
-          title: "Propose ideas",
+          id: "debate",
+          title: "Debate the gaps",
           actor: "theorist",
+          pipeline_stage: 8,
+          artifact: "Debate record",
           explain:
-            "Ideas come from the patterns in the data and the gaps in the literature. There are always more ideas than will be tested.",
+            "The Theorist proposes, the Methodologist asks whether it can be measured, and the Skeptic looks for how it could fail.",
           say:
             round.kind === "pivot"
-              ? "The stress question stayed open. New direction: what else could explain the sleep effect?"
-              : "Six ideas. Two come from your question even though the data may not let us test them.",
+              ? "Two claims survive. One idea needs data we don't have."
+              : "Four claims survive the debate. Two ideas can't be measured, so they go aside.",
           run: async () => {
-            for (const idea of ideas) {
-              await this.wait(480);
-              const statement = idea.hypothesis ? HYPOTHESES[idea.hypothesis].statement : (idea.statement ?? "");
-              this.send("idea.proposed", { idea: { id: idea.id, statement, source: idea.source } }, "theorist");
+            for (const turn of debate.turns) {
+              await this.wait(700 + turn.text.length * 9);
+              this.send("debate.turn", { turn }, turn.actor);
             }
           },
         },
         {
-          id: "challenge",
-          title: "Challenge each idea",
-          actor: "skeptic",
+          id: "write",
+          title: "Write each hypothesis",
+          actor: "theorist",
+          pipeline_stage: 8,
+          artifact: "Hypotheses",
           explain:
-            "The Skeptic starts each review with a fresh memory and asks: can it be tested, could something else explain it, is there enough data?",
-          say: "Each idea gets a risk level. Some can't be tested at all with this data.",
+            "Four parts each: the claim, why it's new, why it should be true, and the result that would prove it wrong.",
+          say: "Each hypothesis now says exactly what result would sink it.",
           run: async () => {
-            for (const idea of ideas) {
-              await this.wait(900);
-              this.send("idea.reviewed", { idea_id: idea.id, review: idea.review }, "skeptic");
+            for (const id of debate.hypotheses) {
+              await this.wait(1500);
+              this.send("hypothesis.drafted", { hypothesis: HYPOTHESES[id] }, "theorist");
+            }
+            this.send("rule.checked", { rule: 5, state: "pass" });
+            await this.wait(400);
+          },
+        },
+        {
+          id: "check",
+          title: "Check novelty and feasibility",
+          actor: "librarian",
+          pipeline_stage: 8,
+          artifact: "Novelty check",
+          explain:
+            "Each hypothesis is compared with the shortlist, so nothing already published is retested, and with the compute available, so it can run.",
+          say: "None is already published, and all of them run on this machine.",
+          run: async () => {
+            for (const id of debate.hypotheses) {
+              await this.wait(1100);
+              this.send("hypothesis.checked", { hypothesis_id: id, ...debate.checks[id] }, "librarian");
             }
           },
         },
@@ -568,49 +1057,31 @@ export class MockRun implements RunCommands {
           id: "select",
           title: "Pick the set",
           actor: "pi",
+          pipeline_stage: 8,
           explain:
-            "The chosen ideas move into this round's set and get permanent IDs. When the PI overrides an objection, the objection stays on record.",
+            "The chosen hypotheses go into this round's set. When the PI overrides an objection, the objection stays on record.",
           say:
             round.kind === "pivot"
-              ? "I'm taking both testable ideas. H6 is a long shot, so we flag it."
-              : "I'm taking four. H4 is risky, but a clear answer either way is useful.",
+              ? "I'm taking both. H6 is a long shot, so we flag it."
+              : "I'm taking all four. H4 is risky, but a clear answer either way is useful.",
           run: async () => {
-            const chosen: string[] = [];
-            for (const idea of ideas) {
-              await this.wait(1000);
-              if (idea.hypothesis) {
-                chosen.push(idea.hypothesis);
-                this.send(
-                  "hypothesis.selected",
-                  { idea_id: idea.id, hypothesis: HYPOTHESES[idea.hypothesis], override_note: idea.keep },
-                  "pi",
-                );
-              } else
-                this.send(
-                  "idea.set_aside",
-                  { idea_id: idea.id, reason: `${idea.review.missing ?? "Can't be tested"} in the data` },
-                  "pi",
-                );
+            for (const id of debate.hypotheses) {
+              await this.wait(800);
+              this.send(
+                "hypothesis.selected",
+                { hypothesis_id: id, ...(debate.keep[id] ? { override_note: debate.keep[id] } : {}) },
+                "pi",
+              );
             }
-            this.sets[round.n] = chosen;
-          },
-        },
-        {
-          id: "plan",
-          title: "Lock the test plan",
-          actor: "methodologist",
-          explain:
-            "One plan says exactly how each hypothesis is tested and which number it must report. It is locked before code runs, so results can't bend the plan.",
-          say: "Plan locked. Each test names its hypothesis and the number it must produce.",
-          run: async () => {
-            await this.wait(400 + this.sets[round.n].length * 350);
-            this.send(
-              "plan.locked",
-              { plan_id: `P${round.n}`, hypotheses: this.sets[round.n].map((h) => HYPOTHESES[h]) },
-              "methodologist",
-            );
-            this.send("rule.checked", { rule: 4, state: "pass" });
-            await this.wait(600);
+            for (const aside of debate.asides) {
+              await this.wait(600);
+              this.send(
+                "idea.set_aside",
+                { idea_id: aside.id, statement: aside.statement, reason: aside.reason },
+                "pi",
+              );
+            }
+            this.sets[round.n] = [...debate.hypotheses];
           },
         },
         ...(this.gateOn("hypotheses")
@@ -628,14 +1099,14 @@ export class MockRun implements RunCommands {
                     "hypotheses",
                     {
                       title: "Approve the hypotheses",
-                      why: `In ${MODE_LABEL[this.mode]} mode you approve the set before any code runs, so no effort goes into ideas you don't want tested.`,
+                      why: `In ${MODE_LABEL[this.mode]} mode you approve the set before the test plan is locked, so no effort goes into ideas you don't want tested.`,
                       summary: set.map((h) => `${h} · ${HYPOTHESES[h].statement}`),
                       options: [
                         {
                           id: "approve",
                           label: `Test all ${set.length}`,
                           description: "Approve the set as the PI picked it.",
-                          leads_to: `Experiment starts for ${set.join(", ")}`,
+                          leads_to: `The test plan is locked for ${set.join(", ")}`,
                           confirm_label: "Approve the set",
                           recommended: true,
                         },
@@ -788,6 +1259,7 @@ export class MockRun implements RunCommands {
           "For each hypothesis the Methodologist writes analysis code, runs it in a sandbox, fixes what breaks and tries improvements. The Skeptic keeps the best version.",
         cast: ["methodologist", "skeptic"],
       },
+      skills: SKILLS.experiment,
       summary: () => {
         const ran = set.filter((h) => this.resultFor(h, round).estimate !== null).length;
         const dropped = set.reduce((a, h) => a + this.treeFor(h, round).filter((n) => n[2] === "dropped").length, 0);
@@ -795,6 +1267,29 @@ export class MockRun implements RunCommands {
         return `${ran} result${ran === 1 ? "" : "s"} saved to results.json${crashed ? ` · ${crashed} never ran` : ""}${dropped ? ` · ${dropped} version${dropped > 1 ? "s" : ""} thrown out by rule 2` : ""}`;
       },
       steps: [
+        {
+          id: "design",
+          title: "Lock the test plan",
+          actor: "methodologist",
+          pipeline_stage: 9,
+          artifact: "Test plan",
+          explain:
+            "Each hypothesis becomes variables: what changes, what is measured, what is held equal, and the number it must report. The plan is locked before any code runs.",
+          say:
+            round.kind === "refine"
+              ? "Same set, same plan, locked again for the deeper search."
+              : "Plan locked. Each test names its hypothesis, the number it must produce, and what would prove it wrong.",
+          run: async () => {
+            await this.wait(500 + set.length * 350);
+            this.send(
+              "plan.locked",
+              { plan_id: `P${round.n}`, hypotheses: set.map((h) => HYPOTHESES[h]), design: designFor(set) },
+              "methodologist",
+            );
+            this.send("rule.checked", { rule: 4, state: "pass" });
+            await this.wait(900);
+          },
+        },
         {
           id: "draft",
           title: "Write a first version",
@@ -1274,9 +1769,7 @@ export class MockRun implements RunCommands {
           say: "Anyone can rerun this from the record.",
           run: async () => {
             await this.wait(600);
-            const plans = this.rounds
-              .filter((r) => r.kind !== "refine")
-              .map((r) => `P${r.n} locked before round ${r.n} ran`);
+            const plans = this.rounds.map((r) => `P${r.n} locked before round ${r.n} ran`);
             const kept = this.recorded
               .filter((r) => r.result.estimate !== null)
               .map((r) => {

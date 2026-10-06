@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-import type { GateAnswer, ReviewMode, RunEvent } from "./contract";
+import type { GateAnswer, ReviewMode, RunEvent, RunInput } from "./contract";
 import { MockRun } from "./mock/mock-run";
 import { applyRunEvent } from "./reducer";
 import { initialRunState, type RunState } from "./run-state";
@@ -22,7 +22,7 @@ interface RunStudioState {
   /** Run whose workspace is open, and the element it opened from. */
   openRunId: string | null;
   openFrom: DOMRect | null;
-  startRun(projectId: string, mode: ReviewMode): string;
+  startRun(projectId: string, mode: ReviewMode, input: RunInput): string;
   answerGate(runId: string, gateId: string, answer: GateAnswer): void;
   pause(runId: string): void;
   resume(runId: string): void;
@@ -69,12 +69,12 @@ export const useRunStudio = create<RunStudioState>()((set, get) => {
     activeRun: {},
     openRunId: null,
     openFrom: null,
-    startRun(projectId, mode) {
+    startRun(projectId, mode, input) {
       const previous = get().activeRun[projectId];
       if (previous) streams.get(previous)?.dispose();
       const runId = crypto.randomUUID();
       const label = `RUN-${runId.slice(0, 4).toUpperCase()}`;
-      const run = new MockRun(label, mode, (event) => receive({ ...event, run_id: runId }));
+      const run = new MockRun(label, mode, (event) => receive({ ...event, run_id: runId }), input);
       streams.set(runId, run);
       set((store) => ({
         sessions: {

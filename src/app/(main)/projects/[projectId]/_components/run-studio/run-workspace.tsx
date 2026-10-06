@@ -17,6 +17,7 @@ import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { GateAnswer } from "@/lib/run-stream/contract";
+import { SHOW_REVIEW_MODE } from "@/lib/run-stream/features";
 import { type RunSession, useProjectRun, useRunStudio } from "@/lib/run-stream/run-store";
 import { displayStatus, liveStageKey } from "@/lib/run-stream/selectors";
 
@@ -118,6 +119,7 @@ function RunWorkspace({ session }: { session: RunSession }) {
     if (state.gate) answerGate(runId, state.gate.id, a);
   };
   const droppable = state.gate?.droppable ?? [];
+  const dropsPapers = state.gate?.kind === "screen";
   const ctx = useMemo(
     () => ({
       session,
@@ -130,13 +132,13 @@ function RunWorkspace({ session }: { session: RunSession }) {
         setDropped((list) => {
           if (list.includes(id)) return list.filter((x) => x !== id);
           if (droppable.length - list.length <= 1) {
-            toast.error("Keep at least one hypothesis.");
+            toast.error(dropsPapers ? "Keep at least one paper." : "Keep at least one hypothesis.");
             return list;
           }
           return [...list, id];
         }),
     }),
-    [session, state, follow, dropMode, dropped, droppable.length],
+    [session, state, follow, dropMode, dropped, droppable.length, dropsPapers],
   );
 
   const W = typeof window === "undefined" ? 0 : window.innerWidth;
@@ -164,12 +166,14 @@ function RunWorkspace({ session }: { session: RunSession }) {
           <Separator orientation="vertical" className="h-5 max-md:hidden" />
           <div className="flex min-w-0 flex-1 items-baseline gap-2.5">
             <b className="whitespace-nowrap font-mono font-semibold text-sm">{session.label}</b>
-            <span className="truncate text-muted-foreground text-sm max-md:hidden">{state.question}</span>
+            <span className="truncate text-muted-foreground text-sm max-md:hidden">{state.topic}</span>
           </div>
           <StatusPill status={status} />
-          <span className="whitespace-nowrap text-muted-foreground text-xs max-lg:hidden">
-            Review mode <b className="font-medium text-foreground">{MODES[state.mode].label}</b>
-          </span>
+          {SHOW_REVIEW_MODE && (
+            <span className="whitespace-nowrap text-muted-foreground text-xs max-lg:hidden">
+              Review mode <b className="font-medium text-foreground">{MODES[state.mode].label}</b>
+            </span>
+          )}
           <div className="flex items-center gap-2 max-md:w-full max-md:justify-between">
             <Tooltip>
               <TooltipTrigger asChild>
@@ -323,6 +327,7 @@ function RunWorkspace({ session }: { session: RunSession }) {
                 <DropBar
                   kept={droppable.length - dropped.length}
                   total={droppable.length}
+                  noun={dropsPapers ? "paper in the shortlist" : "hypothesis in the set"}
                   onReset={() => setDropped([])}
                   onApprove={() => {
                     answer({ option_id: "drop", dropped });
@@ -376,12 +381,15 @@ export function RunWorkspaceHost({ projectId }: { projectId: string }) {
   }, [gate, away, label, runId, openWorkspace]);
   // Only tell about a finish that happened while you were away, not when you leave a finished run.
   const completed = Boolean(session?.state.completed);
+  const withPaper = Boolean(session?.state.paperTitle);
   const wasCompleted = useRef(completed);
   useEffect(() => {
     if (completed && !wasCompleted.current && away)
-      toast.success(`${label} finished`, { description: "The paper is in Findings." });
+      toast.success(`${label} finished`, {
+        description: withPaper ? "The paper is in Findings." : "The hypotheses are ready.",
+      });
     wasCompleted.current = completed;
-  }, [completed, away, label]);
+  }, [completed, away, label, withPaper]);
 
   if (!mounted) return null;
   return createPortal(

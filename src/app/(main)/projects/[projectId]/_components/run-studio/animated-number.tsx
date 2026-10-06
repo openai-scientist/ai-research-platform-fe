@@ -6,10 +6,12 @@ import { useEffect, useRef, useState } from "react";
 export function AnimatedNumber({
   value,
   duration = 900,
+  decimals = 0,
   className,
 }: {
   value: number;
   duration?: number;
+  decimals?: number;
   className?: string;
 }) {
   const [shown, setShown] = useState(value);
@@ -27,7 +29,8 @@ export function AnimatedNumber({
     const step = (now: number) => {
       const p = Math.min(1, (now - t0) / duration);
       const eased = 1 - (1 - p) ** 3;
-      setShown(Math.round(start + (value - start) * eased));
+      const factor = 10 ** decimals;
+      setShown(Math.round((start + (value - start) * eased) * factor) / factor);
       if (p < 1) raf = requestAnimationFrame(step);
       else from.current = value;
     };
@@ -36,6 +39,10 @@ export function AnimatedNumber({
       cancelAnimationFrame(raf);
       from.current = value;
     };
-  }, [value, duration]);
-  return <span className={className}>{shown.toLocaleString("en-US")}</span>;
+  }, [value, duration, decimals]);
+  return (
+    <span className={className}>
+      {shown.toLocaleString("en-US", { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}
+    </span>
+  );
 }

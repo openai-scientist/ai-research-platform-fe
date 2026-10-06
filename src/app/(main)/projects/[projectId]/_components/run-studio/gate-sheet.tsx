@@ -63,7 +63,7 @@ export function GateSheet({
 
   const confirm = () => {
     if (!option || option.disabled) return;
-    if (gate.kind === "hypotheses" && option.id === "drop") {
+    if ((gate.kind === "hypotheses" || gate.kind === "screen") && option.id === "drop") {
       onStartDrop();
       return;
     }
@@ -173,11 +173,14 @@ export function GateSheet({
 export function DropBar({
   kept,
   total,
+  noun,
   onReset,
   onApprove,
 }: {
   kept: number;
   total: number;
+  /** What is being dropped, such as "hypothesis in the set" or "paper in the shortlist". */
+  noun: string;
   onReset(): void;
   onApprove(): void;
 }) {
@@ -189,7 +192,7 @@ export function DropBar({
       className="absolute bottom-4 left-1/2 z-30 flex w-[min(640px,calc(100%-2rem))] -translate-x-1/2 flex-wrap items-center gap-2.5 rounded-2xl bg-primary py-3 pr-3 pl-4 text-primary-foreground text-sm shadow-2xl"
     >
       <span className="min-w-40 flex-1">
-        <b className="font-semibold">Click a hypothesis in the set to drop it.</b> {kept} of {total} kept.
+        <b className="font-semibold">Click a {noun} to drop it.</b> {kept} of {total} kept.
       </span>
       <Button
         size="sm"

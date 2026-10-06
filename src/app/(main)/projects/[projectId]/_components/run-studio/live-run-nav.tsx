@@ -45,7 +45,9 @@ export function LiveRunNav({ projectId }: { projectId: string }) {
                       ? session.state.stages[session.state.currentStageKey]
                       : undefined;
                     const where = session.state.completed
-                      ? "Paper published"
+                      ? session.state.paperTitle
+                        ? "Paper published"
+                        : "Hypotheses ready"
                       : session.state.gate
                         ? "Needs you"
                         : stage

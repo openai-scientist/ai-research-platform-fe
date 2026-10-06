@@ -11,17 +11,17 @@ import { motion } from "motion/react";
 import { ManagementStatusBadge } from "@/components/management-status-badge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useInfiniteRuns } from "@/hooks/use-runs-query";
 import { researchRunUrl } from "@/lib/research-workspace";
-import type { ReviewMode } from "@/lib/run-stream/contract";
-import { DATASET, QUESTION } from "@/lib/run-stream/mock/scenario";
+import type { ReviewMode, RunInput } from "@/lib/run-stream/contract";
+import { SHOW_DATA_STAGE, SHOW_REVIEW_MODE } from "@/lib/run-stream/features";
+import { DATASET } from "@/lib/run-stream/mock/scenario";
 import { type RunSession, useProjectRun, useRunStudio } from "@/lib/run-stream/run-store";
 import { displayStatus, finalResults, GATE_TITLE, nextStop, signed } from "@/lib/run-stream/selectors";
 
 import { ListState, LoadMore } from "../workspace-ui";
 import { AgentAvatar, StatusPill } from "./run-bits";
-import { AGENTS, MODES, PIPELINE, STAGE_SHORT, STOP_INFO } from "./run-meta";
+import { AGENTS, MODES, PIPELINE, STAGE_SHORT, STOP_INFO, stopsFor } from "./run-meta";
 import { StartRunDialog } from "./start-run-dialog";
 
 function SectionTitle({ title, aside }: { title: string; aside?: string }) {
@@ -44,7 +44,8 @@ function StartCard({
 }) {
   const meta = MODES[mode];
   const button = useRef<HTMLButtonElement>(null);
-  const nouns = meta.stops.map((k) => STOP_INFO[k].noun);
+  const stops = stopsFor(mode);
+  const nouns = stops.map((k) => STOP_INFO[k].noun);
   const approves = nouns.length > 1 ? `${nouns.slice(0, -1).join(", ")} and ${nouns[nouns.length - 1]}` : nouns[0];
   return (
     <motion.section
@@ -60,35 +61,37 @@ function StartCard({
               Mock stream
             </Badge>
           </span>
-          <p className="font-(family-name:--font-lora) mt-2 text-[22px] leading-snug">{QUESTION}</p>
+          <p className="font-(family-name:--font-lora) mt-2 text-[22px] leading-snug">Start from a topic</p>
+          <p className="mt-1.5 max-w-[60ch] text-muted-foreground text-sm">
+            Type one question. Popper writes the goal, splits it into sub-questions, reads the literature and proposes
+            hypotheses before any code runs.
+          </p>
         </div>
         <dl className="grid grid-cols-1 border-t text-sm sm:grid-cols-[110px_minmax(0,1fr)]">
-          <dt className="border-b py-2.5 text-muted-foreground max-sm:border-b-0 max-sm:pb-0">Question</dt>
+          <dt className="border-b py-2.5 text-muted-foreground max-sm:border-b-0 max-sm:pb-0">Topic</dt>
           <dd className="border-b py-2.5">
-            Research context v3 ·{" "}
-            <Collapsible className="inline">
-              <CollapsibleTrigger className="underline decoration-foreground/30 underline-offset-4 hover:decoration-foreground">
-                5 variables
-              </CollapsibleTrigger>
-              <CollapsibleContent className="mt-2 flex flex-wrap gap-1.5">
-                {["exam_score", "sleep_hours", "stress_level", "study_hours", "screen_time"].map((v) => (
-                  <code key={v} className="rounded-md border px-1.5 py-0.5 font-mono text-xs">
-                    {v}
-                  </code>
-                ))}
-              </CollapsibleContent>
-            </Collapsible>
+            You type it when you start{" "}
+            <span className="text-muted-foreground text-xs">· sub-questions are derived from it</span>
           </dd>
-          <dt className="border-b py-2.5 text-muted-foreground max-sm:border-b-0 max-sm:pb-0">Data</dt>
+          {SHOW_DATA_STAGE && (
+            <>
+              <dt className="border-b py-2.5 text-muted-foreground max-sm:border-b-0 max-sm:pb-0">Data</dt>
+              <dd className="border-b py-2.5">
+                {DATASET.name} · v1{" "}
+                <span className="text-muted-foreground text-xs">· 1,240 rows, checked by the Steward first</span>
+              </dd>
+            </>
+          )}
+          <dt className="border-b py-2.5 text-muted-foreground max-sm:border-b-0 max-sm:pb-0">
+            {SHOW_REVIEW_MODE ? "Review mode" : "Stops for you"}
+          </dt>
           <dd className="border-b py-2.5">
-            {DATASET.name} · v1{" "}
-            <span className="text-muted-foreground text-xs">· 1,240 rows, checked by the Steward first</span>
-          </dd>
-          <dt className="border-b py-2.5 text-muted-foreground max-sm:border-b-0 max-sm:pb-0">Review mode</dt>
-          <dd className="border-b py-2.5">
-            {meta.label}{" "}
-            <span className="text-muted-foreground text-xs">
-              · {nouns.length ? `you approve ${approves}` : "never stops; the PI decides"}
+            {SHOW_REVIEW_MODE && `${meta.label} `}
+            <span className={cn(SHOW_REVIEW_MODE && "text-muted-foreground text-xs")}>
+              {SHOW_REVIEW_MODE && "· "}
+              {nouns.length
+                ? `${SHOW_REVIEW_MODE ? "you" : "Once:"} approve ${approves}`
+                : "never stops; the PI decides"}
             </span>
           </dd>
         </dl>
@@ -116,7 +119,7 @@ function StartCard({
         </span>
         <ol className="flex flex-col">
           {PIPELINE.map((p, i) => {
-            const stop = meta.stops.find((k) => STOP_INFO[k].stage === p.stage);
+            const stop = stops.find((k) => STOP_INFO[k].stage === p.stage);
             return (
               <motion.li
                 key={p.stage}
@@ -144,11 +147,47 @@ function StartCard({
             );
           })}
         </ol>
-        <p className="text-muted-foreground text-xs">
-          Steps 3 to 5 can repeat if the PI decides another round is worth it.
-        </p>
+        {PIPELINE.some((p) => p.stage === "interpret") ? (
+          <p className="text-muted-foreground text-xs">
+            Steps {PIPELINE.findIndex((p) => p.stage === "hypothesize") + 1} to{" "}
+            {PIPELINE.findIndex((p) => p.stage === "interpret") + 1} can repeat if the PI decides another round is worth
+            it.
+          </p>
+        ) : (
+          <p className="text-muted-foreground text-xs">
+            For now a run ends once the hypotheses are picked. Experiments, the report and the paper come later.
+          </p>
+        )}
       </div>
     </motion.section>
+  );
+}
+
+/** The end of a run that stops at pipeline stage 8: the hypotheses it picked. */
+function HypothesesReady({ state }: { state: RunSession["state"] }) {
+  const stage = Object.values(state.stages).find((s) => s.content.stage === "hypothesize");
+  const picked =
+    stage?.content.stage === "hypothesize" ? Object.values(stage.content.drafts).filter((d) => d.selected) : [];
+  return (
+    <div className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-3 rounded-lg bg-muted/70 px-3.5 py-3 text-sm">
+      <CircleCheck className="mt-0.5 size-4.5 text-emerald-600" />
+      <span className="flex min-w-0 flex-col gap-2">
+        <span>
+          <b className="block font-semibold">{picked.length} hypotheses ready to test</b>
+          <span className="text-muted-foreground text-xs">Each one says what result would prove it wrong.</span>
+        </span>
+        <span className="flex flex-col gap-1">
+          {picked.map((d) => (
+            <span key={d.hypothesis.id} className="grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-2 text-xs">
+              <b className="rounded bg-primary px-1.5 font-mono font-semibold text-[11px] text-primary-foreground">
+                {d.hypothesis.id}
+              </b>
+              <span className="truncate">{d.hypothesis.statement}</span>
+            </span>
+          ))}
+        </span>
+      </span>
+    </div>
   );
 }
 
@@ -176,7 +215,7 @@ export function LiveRunCard({ session, onOpen }: { session: RunSession; onOpen(f
         <b className="font-mono font-semibold text-sm">{session.label}</b>
         <StatusPill status={status} />
         <span className="text-muted-foreground text-xs">
-          {MODES[state.mode].label} mode · started today · mock stream
+          {SHOW_REVIEW_MODE && `${MODES[state.mode].label} mode · `}started today · mock stream
         </span>
         <Button
           size="sm"
@@ -188,7 +227,7 @@ export function LiveRunCard({ session, onOpen }: { session: RunSession; onOpen(f
           <ArrowRight />
         </Button>
       </div>
-      <p className="font-(family-name:--font-lora) text-[19px] leading-snug">{state.question}</p>
+      <p className="font-(family-name:--font-lora) text-[19px] leading-snug">{state.topic}</p>
       <ol className="flex gap-1 pt-4">
         {state.plan.map((p, i) => {
           const done = i < liveIndex;
@@ -232,7 +271,9 @@ export function LiveRunCard({ session, onOpen }: { session: RunSession; onOpen(f
           );
         })}
       </ol>
-      {state.completed ? (
+      {state.completed && !state.paperTitle ? (
+        <HypothesesReady state={state} />
+      ) : state.completed ? (
         <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-lg bg-muted/70 px-3.5 py-3 text-sm max-sm:grid-cols-[auto_minmax(0,1fr)]">
           <CircleCheck className="size-4.5 text-emerald-600" />
           <span>
@@ -342,10 +383,10 @@ export function RunStudio({ projectId, canWrite }: { projectId: string; canWrite
   const [mode] = useState<ReviewMode>("copilot");
   const from = useRef<HTMLElement | null>(null);
 
-  const start = (chosen: ReviewMode) => {
+  const start = (chosen: ReviewMode, input: RunInput) => {
     setDialog(false);
     if (session) discardRun(projectId);
-    const runId = startRun(projectId, chosen);
+    const runId = startRun(projectId, chosen, input);
     // Let the dialog close, then grow the workspace out of the card.
     window.setTimeout(() => openWorkspace(runId, document.querySelector("[data-live-run]") ?? from.current), 380);
   };

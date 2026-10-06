@@ -2,7 +2,8 @@ import type { GateKind, PlannedStage, RecordedResult, RunStage } from "./contrac
 import type { RunState } from "./run-state";
 
 export const STAGE_GATE: Partial<Record<RunStage, GateKind>> = {
-  understand: "framing",
+  scope: "scope",
+  screen: "screen",
   hypothesize: "hypotheses",
   interpret: "decision",
   report: "report",
@@ -10,7 +11,8 @@ export const STAGE_GATE: Partial<Record<RunStage, GateKind>> = {
 };
 
 export const GATE_TITLE: Record<GateKind, string> = {
-  framing: "Check the question",
+  scope: "Check the scope",
+  screen: "Approve the shortlist",
   hypotheses: "Approve the hypotheses",
   decision: "Decide what's next",
   report: "Check the report",
@@ -19,7 +21,8 @@ export const GATE_TITLE: Record<GateKind, string> = {
 
 /** Key of the stage the run is on now; `done` once the paper is published. */
 export function liveStageKey(state: RunState) {
-  return state.completed ? "done" : state.currentStageKey;
+  if (!state.completed) return state.currentStageKey;
+  return state.paperTitle ? "done" : (state.stageOrder[state.stageOrder.length - 1] ?? null);
 }
 
 export function plannedIndex(state: RunState, key: string | null) {
@@ -71,6 +74,13 @@ export function finalResults(state: RunState): Record<string, RecordedResult> {
 
 export function stageTitle(stage: PlannedStage) {
   return `${stage.title}${stage.round ? ` · R${stage.round}` : ""}`;
+}
+
+/** Label for the Popper pipeline stages a screen covers, such as `Stages 03–04`. */
+export function pipelineLabel(stages: number[] | undefined) {
+  if (!stages?.length) return null;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return stages.length === 1 ? `Stage ${pad(stages[0])}` : `Stages ${pad(stages[0])}–${pad(stages[stages.length - 1])}`;
 }
 
 export const signed = (v: number) => `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v).toFixed(1)}`;

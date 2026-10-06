@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { GateAnswer, ReviewMode, RunEvent, RunEventOf, RunEventType } from "./contract";
+import { SHOW_DATA_STAGE } from "./features";
 import { MockRun } from "./mock/mock-run";
 import { applyRunEvent, replayRunEvents } from "./reducer";
 import { initialRunState } from "./run-state";
-import { finalResults, nextStop } from "./selectors";
+import { finalResults, liveStageKey, nextStop } from "./selectors";
 
 let seq = 0;
 function event<T extends RunEventType>(
@@ -34,9 +35,9 @@ describe("applyRunEvent", () => {
   it("ignores events it has already applied", () => {
     const first = event("run.started", {
       mode: "auto",
-      question: "Q",
+      topic: "Q",
+      domains: [],
       dataset: { name: "d.csv", version: 1, rows: 10, columns: 2 },
-      context_version: 1,
     });
     const state = applyRunEvent(initialRunState("run-1"), first);
     expect(applyRunEvent(state, first)).toBe(state);
@@ -141,17 +142,27 @@ describe("mock run", () => {
     vi.useRealTimers();
   });
 
-  async function play(mode: ReviewMode, answer: (gate: RunEventOf<"gate.opened">["payload"]["gate"]) => GateAnswer) {
+  async function play(
+    mode: ReviewMode,
+    answer: (gate: RunEventOf<"gate.opened">["payload"]["gate"]) => GateAnswer,
+    endsAt: "hypotheses" | "paper" = "paper",
+  ) {
     vi.useFakeTimers({ toFake: ["setTimeout", "performance"] });
     const events: RunEvent[] = [];
     let run: MockRun | undefined;
-    run = new MockRun("RUN-TEST", mode, (e) => {
-      events.push(e);
-      if (e.type === "gate.opened") {
-        const { gate } = e.payload;
-        queueMicrotask(() => run?.answerGate(gate.id, answer(gate)));
-      }
-    });
+    run = new MockRun(
+      "RUN-TEST",
+      mode,
+      (e) => {
+        events.push(e);
+        if (e.type === "gate.opened") {
+          const { gate } = e.payload;
+          queueMicrotask(() => run?.answerGate(gate.id, answer(gate)));
+        }
+      },
+      undefined,
+      { withData: SHOW_DATA_STAGE, endsAt },
+    );
     run.setSpeed(50);
     run.start();
     for (let i = 0; i < 400 && !events.some((e) => e.type === "run.completed"); i++)
@@ -159,6 +170,43 @@ describe("mock run", () => {
     run.dispose();
     return events;
   }
+
+  it("ends once the hypotheses are picked, stopping only at the shortlist", async () => {
+    const events = await play(
+      "copilot",
+      (gate) => ({ option_id: gate.options.find((o) => o.recommended)?.id ?? gate.options[0].id }),
+      "hypotheses",
+    );
+    const state = replayRunEvents("run", events);
+    expect(state.completed).toBe(true);
+    expect(state.paperTitle).toBeUndefined();
+    const kinds = events
+      .filter((e): e is RunEventOf<"gate.opened"> => e.type === "gate.opened")
+      .map((e) => e.payload.gate.kind);
+    expect(kinds).toEqual(["screen"]);
+    expect(state.plan.map((s) => s.stage)).toEqual(
+      (SHOW_DATA_STAGE ? ["data"] : []).concat(["scope", "search", "screen", "read", "synthesize", "hypothesize"]),
+    );
+    expect(liveStageKey(state)).toBe("r1-hypothesize");
+    const h = state.stages["r1-hypothesize"].content;
+    if (h.stage !== "hypothesize") throw new Error("wrong stage");
+    expect(Object.values(h.drafts).filter((d) => d.selected)).toHaveLength(4);
+    expect(events.some((e) => e.type === "plan.locked")).toBe(false);
+
+    // Stage 1 is approved before stage 2; stage 4 keeps the record with a DOI; stage 7 ranks the gaps.
+    const scope = state.stages.scope.content;
+    if (scope.stage !== "scope") throw new Error("wrong stage");
+    expect(scope.approved?.at).toMatch(/Z$/);
+    const approvedAt = events.findIndex((e) => e.type === "scope.approved");
+    expect(approvedAt).toBeLessThan(events.findIndex((e) => e.type === "problem.subquestion"));
+    const search = state.stages.search.content;
+    if (search.stage !== "search") throw new Error("wrong stage");
+    for (const m of search.merged) expect(m.records.find((r) => r.source === m.kept)?.has_doi).toBe(true);
+    const synth = state.stages.synthesize.content;
+    if (synth.stage !== "synthesize") throw new Error("wrong stage");
+    expect(synth.overview).toBeTruthy();
+    expect(synth.ranking.map((r) => r.gap_id)).toEqual(["G1", "G2", "G3"]);
+  });
 
   it("plays a whole run in auto mode without stopping", async () => {
     const events = await play("auto", () => ({ option_id: "unused" }));
@@ -173,19 +221,64 @@ describe("mock run", () => {
     expect(write.fixedNumbers["typed-1"]?.value).toBe("6.1");
   });
 
-  it("stops at every copilot gate and honours dropped hypotheses", async () => {
-    const events = await play("copilot", (gate) =>
-      gate.kind === "hypotheses" && gate.stop_index === 1
-        ? { option_id: "drop", dropped: ["H4"] }
-        : { option_id: gate.options.find((o) => o.recommended)?.id ?? gate.options[0].id },
-    );
+  it("stops at every copilot gate and honours dropped papers and hypotheses", async () => {
+    let firstHypothesesStop = true;
+    const events = await play("copilot", (gate) => {
+      if (gate.kind === "screen") return { option_id: "drop", dropped: ["walker2006"] };
+      if (gate.kind === "hypotheses" && firstHypothesesStop) {
+        firstHypothesesStop = false;
+        return { option_id: "drop", dropped: ["H4"] };
+      }
+      return { option_id: gate.options.find((o) => o.recommended)?.id ?? gate.options[0].id };
+    });
     const state = replayRunEvents("run", events);
     expect(state.completed).toBe(true);
     const kinds = events
       .filter((e): e is RunEventOf<"gate.opened"> => e.type === "gate.opened")
       .map((e) => e.payload.gate.kind);
-    expect(kinds).toEqual(["hypotheses", "decision", "hypotheses", "decision", "publish"]);
+    expect(kinds).toEqual(["screen", "hypotheses", "decision", "hypotheses", "decision", "publish"]);
     expect(Object.keys(finalResults(state))).not.toContain("H4");
     expect(nextStop(state)).toBeNull();
+
+    const screen = state.stages.screen.content;
+    const read = state.stages.read.content;
+    const synthesis = state.stages.synthesize.content;
+    if (screen.stage !== "screen" || read.stage !== "read" || synthesis.stage !== "synthesize")
+      throw new Error("wrong stage");
+    expect(screen.dropped).toEqual(["walker2006"]);
+    // A removed paper is never read, so it can't feed a cluster either.
+    expect(read.cards.map((c) => c.id)).not.toContain("walker2006");
+    expect(synthesis.clusters.flatMap((c) => c.card_ids)).not.toContain("walker2006");
+  });
+
+  it("scopes, reads and debates before any plan is locked", async () => {
+    const events = await play("full", (gate) => ({
+      option_id: gate.options.find((o) => o.recommended)?.id ?? gate.options[0].id,
+    }));
+    const state = replayRunEvents("run", events);
+    const first = events.find((e): e is RunEventOf<"gate.opened"> => e.type === "gate.opened");
+    expect(first?.payload.gate.kind).toBe("scope");
+
+    const scope = state.stages.scope.content;
+    if (scope.stage !== "scope") throw new Error("wrong stage");
+    expect(scope.subQuestions.map((sq) => sq.id)).toEqual(["SQ1", "SQ2", "SQ3", "SQ4"]);
+    expect(scope.goal.find((g) => g.field === "scope")?.value).toMatch(/^Sleep, stress, study time and screen time/);
+    // Rule 6: every number recalled while scoping is checked against the papers.
+    expect(state.estimates.map((e) => e.check?.status)).toEqual(["verified", "unsupported"]);
+
+    const hypothesize = state.stages["r1-hypothesize"].content;
+    if (hypothesize.stage !== "hypothesize") throw new Error("wrong stage");
+    expect(hypothesize.turns.length).toBeGreaterThan(0);
+    expect(Object.values(hypothesize.drafts).every((d) => d.novelty && d.hypothesis.falsify.text)).toBe(true);
+
+    // The plan is locked in the experiment stage, before the first version of any analysis.
+    const lockAt = events.findIndex((e) => e.type === "plan.locked");
+    const firstNode = events.findIndex((e) => e.type === "node.created");
+    expect(lockAt).toBeGreaterThan(-1);
+    expect(lockAt).toBeLessThan(firstNode);
+    expect(events[lockAt].stage_key).toBe("r1-experiment");
+    // Rule 3 is checked by the data stage, which is hidden for now.
+    expect(Object.keys(state.rules).map(Number).sort()).toEqual(SHOW_DATA_STAGE ? [1, 2, 3, 4, 5, 6] : [1, 2, 4, 5, 6]);
+    expect(Boolean(state.stages.data)).toBe(SHOW_DATA_STAGE);
   });
 });

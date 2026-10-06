@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 
 import { cn } from "cn";
-import { Check, ChevronRight, Flag, Play } from "lucide-react";
+import { Check, ChevronRight, FileText, Flag, Play } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,7 @@ import type { RunState } from "@/lib/run-stream/run-state";
 import { GATE_TITLE, nextStop } from "@/lib/run-stream/selectors";
 
 import { AgentAvatar, Caret } from "./run-bits";
-import { AGENTS, RULES, TEAM } from "./run-meta";
+import { AGENTS, RULE_IDS, RULES, TEAM } from "./run-meta";
 
 function Team({ active }: { active: AgentRole | null }) {
   return (
@@ -90,7 +90,9 @@ export function NowCard({
         <span className="text-muted-foreground text-xs">Finished</span>
         <h3 className="font-semibold text-[15px]">Run complete</h3>
         <p className="text-muted-foreground text-sm">
-          The paper is published. Use the stages above to look back at any part of the run.
+          {state.paperTitle
+            ? "The paper is published. Use the stages above to look back at any part of the run."
+            : "The hypotheses are picked. Experiments are switched off for now; use the stages above to look back."}
         </p>
       </div>
     );
@@ -237,6 +239,12 @@ function Steps({ state }: { state: RunState }) {
                   )}
                 >
                   {step.gate ? "You decide · Popper waits" : AGENTS[step.actor].name}
+                  {step.artifact && !step.gate && (
+                    <span className="ml-1.5 inline-flex items-center gap-1 text-[11px] text-muted-foreground/80">
+                      <FileText className="size-3" />
+                      {step.artifact}
+                    </span>
+                  )}
                 </small>
               </span>
             </li>
@@ -299,11 +307,13 @@ function Rules({ state }: { state: RunState }) {
       <CollapsibleTrigger className="group flex w-full items-center gap-2 px-3 py-2.5 text-left font-medium text-xs outline-none">
         <ChevronRight className="size-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-90" />
         Rules Popper never bends
-        <span className="ml-auto font-mono text-[11px] text-muted-foreground">{checked} of 4 checked</span>
+        <span className="ml-auto font-mono text-[11px] text-muted-foreground">
+          {checked} of {RULE_IDS.length} checked
+        </span>
       </CollapsibleTrigger>
       <CollapsibleContent>
         <ul className="flex flex-col gap-1.5 px-3 pb-3 text-xs">
-          {([1, 2, 3, 4] as const).map((rule) => {
+          {RULE_IDS.map((rule) => {
             const s = state.rules[rule];
             return (
               <li

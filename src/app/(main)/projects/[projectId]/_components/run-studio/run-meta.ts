@@ -1,4 +1,5 @@
-import type { AgentRole, GateKind, ReviewMode, RunStage, Verdict } from "@/lib/run-stream/contract";
+import type { AgentRole, GateKind, ReviewMode, RuleId, RunStage, Verdict } from "@/lib/run-stream/contract";
+import { RUN_ENDS_AT, SHOW_DATA_STAGE } from "@/lib/run-stream/features";
 
 export interface AgentMeta {
   name: string;
@@ -19,19 +20,26 @@ export const AGENTS: Record<AgentRole, AgentMeta> = {
     soft: "bg-teal-500/12 ring-teal-500/30",
     solid: "bg-teal-600",
   },
+  strategist: {
+    name: "Strategist",
+    initials: "Sg",
+    text: "text-pink-700 dark:text-pink-300",
+    soft: "bg-pink-500/12 ring-pink-500/30",
+    solid: "bg-pink-600",
+  },
+  librarian: {
+    name: "Librarian",
+    initials: "Li",
+    text: "text-cyan-700 dark:text-cyan-300",
+    soft: "bg-cyan-500/12 ring-cyan-500/30",
+    solid: "bg-cyan-600",
+  },
   theorist: {
     name: "Theorist",
     initials: "Th",
     text: "text-violet-700 dark:text-violet-300",
     soft: "bg-violet-500/12 ring-violet-500/30",
     solid: "bg-violet-600",
-  },
-  knowledge: {
-    name: "Knowledge",
-    initials: "Kn",
-    text: "text-cyan-700 dark:text-cyan-300",
-    soft: "bg-cyan-500/12 ring-cyan-500/30",
-    solid: "bg-cyan-600",
   },
   methodologist: {
     name: "Methodologist",
@@ -78,9 +86,10 @@ export const AGENTS: Record<AgentRole, AgentMeta> = {
 };
 
 export const TEAM: AgentRole[] = [
-  "steward",
+  ...(SHOW_DATA_STAGE ? (["steward"] as const) : []),
+  "strategist",
+  "librarian",
   "theorist",
-  "knowledge",
   "methodologist",
   "skeptic",
   "pi",
@@ -93,13 +102,13 @@ export const MODES: Record<ReviewMode, { label: string; line: string; stops: Gat
   light: { label: "Light", line: "Stops once, before the paper is published.", stops: ["publish"] },
   copilot: {
     label: "Copilot",
-    line: "You approve the hypotheses, each round's next step, and the paper.",
-    stops: ["hypotheses", "decision", "publish"],
+    line: "You approve the reading list, the hypotheses, each round's next step, and the paper.",
+    stops: ["screen", "hypotheses", "decision", "publish"],
   },
   full: {
     label: "Full",
-    line: "Like Copilot, plus checks of the question framing and the report.",
-    stops: ["framing", "hypotheses", "decision", "report", "publish"],
+    line: "Like Copilot, plus checks of the scope and the report.",
+    stops: ["scope", "screen", "hypotheses", "decision", "report", "publish"],
   },
 };
 
@@ -107,13 +116,21 @@ export const STOP_INFO: Record<
   GateKind,
   { title: string; where: string; what: string; verb: string; noun: string; stage: RunStage }
 > = {
-  framing: {
-    title: "Check the question",
-    where: "After Understand",
-    what: "Confirm the framing before anything is built on it.",
+  scope: {
+    title: "Check the scope",
+    where: "After Scope",
+    what: "Confirm the goal and sub-questions before the search is built on them.",
     verb: "you check it",
-    noun: "the framing",
-    stage: "understand",
+    noun: "the scope",
+    stage: "scope",
+  },
+  screen: {
+    title: "Approve the shortlist",
+    where: "After Screen",
+    what: "Approve or remove papers before they are read.",
+    verb: "you approve",
+    noun: "the reading list",
+    stage: "screen",
   },
   hypotheses: {
     title: "Approve the hypotheses",
@@ -151,7 +168,11 @@ export const STOP_INFO: Record<
 
 export const STAGE_SHORT: Record<RunStage | "done", string> = {
   data: "Data",
-  understand: "Understand",
+  scope: "Scope",
+  search: "Search",
+  screen: "Screen",
+  read: "Read",
+  synthesize: "Synthesize",
   hypothesize: "Hypothesize",
   experiment: "Experiment",
   interpret: "Interpret",
@@ -160,15 +181,34 @@ export const STAGE_SHORT: Record<RunStage | "done", string> = {
   done: "Paper",
 };
 
-export const PIPELINE: { stage: RunStage; title: string; text: string }[] = [
+const FULL_PIPELINE: { stage: RunStage; title: string; text: string }[] = [
   { stage: "data", title: "Check the data", text: "The Steward fixes problems and saves a cleaned version." },
-  { stage: "understand", title: "Understand", text: "The question is made precise and prior work is read." },
-  { stage: "hypothesize", title: "Hypothesize", text: "Ideas are proposed, attacked, and a few are picked." },
+  { stage: "scope", title: "Scope the question", text: "A goal in five parts, split into sub-questions and rated." },
+  {
+    stage: "search",
+    title: "Search the literature",
+    text: "Short queries go to three sources; duplicates are merged.",
+  },
+  { stage: "screen", title: "Screen the papers", text: "Each paper is scored; only the relevant and solid are kept." },
+  { stage: "read", title: "Read and extract", text: "Each paper becomes a card; its limitations become gap material." },
+  { stage: "synthesize", title: "Find the gaps", text: "Cards are grouped into schools of thought to find the gaps." },
+  { stage: "hypothesize", title: "Hypothesize", text: "Agents debate; survivors say what would prove them wrong." },
   { stage: "experiment", title: "Experiment", text: "Code is written, run in a sandbox and fixed; the best is kept." },
   { stage: "interpret", title: "Interpret", text: "Each result gets a verdict and a second opinion." },
   { stage: "report", title: "Build the report", text: "Code gathers every result, figure and how to reproduce it." },
   { stage: "write", title: "Write the paper", text: "The paper is written from the report, reviewed and checked." },
 ];
+
+/** Stages as the start screens describe them. */
+export const PIPELINE = FULL_PIPELINE.filter((p) => SHOW_DATA_STAGE || p.stage !== "data").slice(
+  0,
+  RUN_ENDS_AT === "hypotheses" ? FULL_PIPELINE.findIndex((p) => p.stage === "hypothesize") + 1 : undefined,
+);
+
+/** Stops a run in this mode really makes, given where runs end for now. */
+export function stopsFor(mode: ReviewMode): GateKind[] {
+  return MODES[mode].stops.filter((k) => RUN_ENDS_AT === "paper" || k === "scope" || k === "screen");
+}
 
 export const VERDICT: Record<Verdict, { label: string; className: string; dot: string; stroke: string; fill: string }> =
   {
@@ -211,9 +251,20 @@ export const STATUS_TONE = {
   failed: { label: "Failed", className: "bg-destructive/10 text-destructive", dot: "bg-destructive" },
 } as const;
 
-export const RULES: Record<1 | 2 | 3 | 4, string> = {
+export const RULES: Record<RuleId, string> = {
   1: "Every number in the paper comes from results.json.",
   2: "Every analysis reports the number its plan promised.",
   3: "Data versions and records are never overwritten.",
   4: "The test plan is locked before any code runs.",
+  5: "Every hypothesis says what result would prove it wrong.",
+  6: "Numbers recalled from memory stay unverified until a paper backs them.",
 };
+
+export const RULE_IDS: RuleId[] = [1, 2, 3, 4, 5, 6];
+
+/** "Curcio, Ferrara & De Gennaro, 2006" → "Curcio 2006": short enough for a chip. */
+export function shortCite(citation: string) {
+  const year = citation.match(/\d{4}/)?.[0] ?? "";
+  const author = citation.split(/[ ,&]/)[0];
+  return year ? `${author} ${year}` : author;
+}

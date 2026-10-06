@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 import { cn } from "cn";
-import { ArrowRight, Check, CircleCheck, FileText, Flag, Info, Play } from "lucide-react";
+import { ArrowRight, Check, Flag, Info, Play, Plus, Sparkles, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 
 import { Button } from "@/components/ui/button";
@@ -16,22 +16,42 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import type { GateKind, ReviewMode } from "@/lib/run-stream/contract";
-import { DATASET, QUESTION } from "@/lib/run-stream/mock/scenario";
+import { Textarea } from "@/components/ui/textarea";
+import type { GateKind, ReviewMode, RunInput } from "@/lib/run-stream/contract";
+import { SHOW_DATA_STAGE, SHOW_REVIEW_MODE } from "@/lib/run-stream/features";
+import { DATASET, SAMPLE_TOPIC } from "@/lib/run-stream/mock/scenario";
 
 import { MODES, PIPELINE, STAGE_SHORT, STOP_INFO } from "./run-meta";
 
-const VARIABLES: [string, string][] = [
-  ["exam_score", "outcome"],
-  ["sleep_hours", "exposure"],
-  ["stress_level", "covariate"],
-  ["study_hours", "covariate"],
-  ["screen_time", "covariate"],
+const STEPS = ["Topic", ...(SHOW_DATA_STAGE ? ["Data"] : []), ...(SHOW_REVIEW_MODE ? ["Your involvement"] : [])];
+
+/** Fields suggested from the words of the topic. The person keeps, removes or adds to them. */
+const FIELD_HINTS: [RegExp, string][] = [
+  [/\b(sleep|insomnia|circadian|nap)/i, "Sleep science"],
+  [/\b(exam|grade|gpa|student|undergrad|school|learning outcome|academic)/i, "Educational psychology"],
+  [/\b(stress|anxiety|wellbeing|well-being|mood|depress)/i, "Psychology"],
+  [/\b(survey|questionnaire|self-report)/i, "Survey statistics"],
+  [/\b(neural|deep learning|transformer|federated|classifier|model training)/i, "Machine learning"],
+  [/\b(distributed|asynchronous|byzantine|network|latency)/i, "Distributed systems"],
+  [/\b(patient|clinical|hospital|disease|treatment)/i, "Clinical research"],
 ];
-const STEPS = ["Question", "Data", "Your involvement"];
-const ORDER: GateKind[] = ["framing", "hypotheses", "decision", "report", "publish"];
+
+function suggestFields(topic: string) {
+  return FIELD_HINTS.filter(([re]) => re.test(topic)).map(([, field]) => field);
+}
+
+const MIN_TOPIC = 12;
+
+/** What Popper derives from the topic on its own, in the Scope stage. */
+const DERIVED = [
+  ["Goal", "in five parts: title, problem, objective, scope, success"],
+  ["Sub-questions", "that don't overlap and together cover the topic, ranked"],
+  ["Topic score", "for novelty, specificity and feasibility, out of 10"],
+] as const;
+const ORDER: GateKind[] = ["scope", "screen", "hypotheses", "decision", "report", "publish"];
 
 export function StopsPreview({ mode }: { mode: ReviewMode }) {
   const stops = [...MODES[mode].stops].sort((a, b) => ORDER.indexOf(a) - ORDER.indexOf(b));
@@ -112,11 +132,29 @@ export function StartRunDialog({
   open: boolean;
   onOpenChange(open: boolean): void;
   defaultMode: ReviewMode;
-  onStart(mode: ReviewMode): void;
+  onStart(mode: ReviewMode, input: RunInput): void;
 }) {
   const [step, setStep] = useState(0);
   const [dir, setDir] = useState(1);
   const [mode, setMode] = useState<ReviewMode>(defaultMode);
+  const [topic, setTopic] = useState("");
+  const [removed, setRemoved] = useState<string[]>([]);
+  const [added, setAdded] = useState<string[]>([]);
+  const [newField, setNewField] = useState("");
+  const fields = [...new Set([...suggestFields(topic).filter((f) => !removed.includes(f)), ...added])];
+  const topicReady = topic.trim().length >= MIN_TOPIC;
+  const words = topic.trim() ? topic.trim().split(/\s+/).length : 0;
+  const addField = () => {
+    const field = newField.trim();
+    if (!field) return;
+    setAdded((list) => (list.includes(field) ? list : [...list, field]));
+    setRemoved((list) => list.filter((f) => f !== field));
+    setNewField("");
+  };
+  const removeField = (field: string) => {
+    setRemoved((list) => [...list, field]);
+    setAdded((list) => list.filter((f) => f !== field));
+  };
   const move = (to: number) => {
     setDir(to > step ? 1 : -1);
     setStep(to);
@@ -129,6 +167,10 @@ export function StartRunDialog({
         if (next) {
           setStep(0);
           setMode(defaultMode);
+          setTopic("");
+          setRemoved([]);
+          setAdded([]);
+          setNewField("");
         }
       }}
     >
@@ -136,9 +178,11 @@ export function StartRunDialog({
         <DialogHeader className="gap-1 px-5.5 pt-5">
           <DialogTitle className="text-base">Start a research run</DialogTitle>
           <DialogDescription>
-            Three choices. After that the agents work on their own and only stop where you tell them to.
+            {STEPS.length > 1
+              ? `${STEPS.length === 3 ? "Three" : "Two"} choices. After that the agents work on their own and only stop where you tell them to.`
+              : "Type a topic. The agents take it from there, from the goal to the hypotheses, and stop once so you can check the reading list."}
           </DialogDescription>
-          <ol className="mt-4 flex border-b">
+          <ol className={cn("mt-4 flex border-b", STEPS.length === 1 && "hidden")}>
             {STEPS.map((label, i) => (
               <li
                 key={label}
@@ -182,37 +226,104 @@ export function StartRunDialog({
               {step === 0 && (
                 <>
                   <Field>
-                    <FieldLabel>Research context</FieldLabel>
-                    <div className="flex h-9 items-center gap-2 rounded-lg border px-3 text-sm">
-                      <FileText className="size-4 text-muted-foreground" />
-                      Version 3 · latest
-                      <span className="ml-auto text-muted-foreground text-xs">saved Oct 2</span>
+                    <FieldLabel htmlFor="run-topic">Research topic</FieldLabel>
+                    <Textarea
+                      id="run-topic"
+                      value={topic}
+                      onChange={(e) => setTopic(e.target.value)}
+                      placeholder="One question you want answered, such as: does more sleep go with higher exam scores in our undergraduates?"
+                      className="font-(family-name:--font-lora) min-h-24 text-[17px] leading-snug md:text-[17px]"
+                      autoFocus
+                    />
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <FieldDescription>
+                        Write it as one question. You don't list sub-questions; Popper derives them.
+                      </FieldDescription>
+                      <span className="font-mono text-[11px] text-muted-foreground tabular-nums">{words} words</span>
+                    </div>
+                    {!topic && (
+                      <Button variant="outline" size="xs" className="w-fit" onClick={() => setTopic(SAMPLE_TOPIC)}>
+                        Use the sample topic
+                      </Button>
+                    )}
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="run-field">Fields</FieldLabel>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <AnimatePresence initial={false} mode="popLayout">
+                        {fields.map((field) => (
+                          <motion.span
+                            key={field}
+                            layout
+                            initial={{ opacity: 0, scale: 0.85 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.85 }}
+                            transition={{ type: "spring", stiffness: 420, damping: 26 }}
+                            className="inline-flex h-7 items-center gap-1 rounded-md bg-pink-500/10 pr-1 pl-2 font-medium text-pink-700 text-xs ring-1 ring-pink-500/25 dark:text-pink-300"
+                          >
+                            {field}
+                            <button
+                              type="button"
+                              onClick={() => removeField(field)}
+                              aria-label={`Remove ${field}`}
+                              className="grid size-5 place-items-center rounded hover:bg-pink-500/15"
+                            >
+                              <X className="size-3" />
+                            </button>
+                          </motion.span>
+                        ))}
+                      </AnimatePresence>
+                      <span className="flex items-center gap-1">
+                        <Input
+                          id="run-field"
+                          value={newField}
+                          onChange={(e) => setNewField(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              addField();
+                            }
+                          }}
+                          placeholder="Add a field"
+                          className="h-7 w-32 text-xs md:text-xs"
+                        />
+                        {newField.trim() && (
+                          <Button variant="ghost" size="icon-xs" onClick={addField} aria-label="Add field">
+                            <Plus />
+                          </Button>
+                        )}
+                      </span>
                     </div>
                     <FieldDescription>
-                      A run always uses one saved version, so its results point back to the exact question.
+                      {fields.length
+                        ? "Suggested from your topic. They decide which skills and sources the agents use."
+                        : "Fields appear as you type. You can also add your own."}
                     </FieldDescription>
                   </Field>
-                  <blockquote className="rounded-r-lg border-foreground border-l-[3px] bg-muted/60 px-4 py-3.5">
-                    <span className="font-medium text-muted-foreground text-xs uppercase tracking-wide">Question</span>
-                    <p className="font-(family-name:--font-lora) mt-1 text-[17px] leading-snug">{QUESTION}</p>
-                  </blockquote>
-                  <Field>
-                    <FieldLabel>Variables in this context</FieldLabel>
-                    <div className="flex flex-wrap gap-1.5">
-                      {VARIABLES.map(([name, role]) => (
-                        <span
-                          key={name}
-                          className="inline-flex h-6.5 items-center gap-1.5 rounded-md border px-2 text-xs"
-                        >
-                          <code className="font-medium font-mono">{name}</code>
-                          <span className="text-muted-foreground">{role}</span>
-                        </span>
+                  <div className="flex flex-col gap-2 rounded-xl bg-muted/60 px-4 py-3.5">
+                    <span className="flex items-center gap-1.5 font-medium text-sm">
+                      <Sparkles className="size-3.5 text-muted-foreground" />
+                      What Popper writes from it, before any search
+                    </span>
+                    <ol className="flex flex-col gap-1">
+                      {DERIVED.map(([what, how], i) => (
+                        <li key={what} className="grid grid-cols-[18px_1fr] gap-2 text-sm">
+                          <span className="font-mono text-muted-foreground text-xs leading-5">{i + 1}</span>
+                          <span>
+                            <b className="font-medium">{what}</b> <span className="text-muted-foreground">{how}</span>
+                          </span>
+                        </li>
                       ))}
-                    </div>
-                  </Field>
+                    </ol>
+                    {topic.trim() && topic.trim() !== SAMPLE_TOPIC && (
+                      <span className="text-muted-foreground text-xs">
+                        Mock stream: the run plays the sample study on sleep, whatever topic you type.
+                      </span>
+                    )}
+                  </div>
                 </>
               )}
-              {step === 1 && (
+              {STEPS[step] === "Data" && (
                 <>
                   <Field>
                     <FieldLabel htmlFor="mock-dataset">Dataset</FieldLabel>
@@ -240,10 +351,6 @@ export function StartRunDialog({
                       </SelectContent>
                     </Select>
                   </Field>
-                  <p className="flex items-center gap-2 text-emerald-700 text-sm dark:text-emerald-300">
-                    <CircleCheck className="size-4" />
-                    All 5 context variables are columns in v1.
-                  </p>
                   <div className="grid grid-cols-[auto_1fr] gap-2.5 rounded-xl border px-3.5 py-3 text-sm">
                     <Info className="mt-0.5 size-4 text-muted-foreground" />
                     <p>
@@ -253,7 +360,7 @@ export function StartRunDialog({
                   </div>
                 </>
               )}
-              {step === 2 && (
+              {STEPS[step] === "Your involvement" && (
                 <>
                   <Field>
                     <FieldLabel>How often should Popper stop and ask you?</FieldLabel>
@@ -300,14 +407,16 @@ export function StartRunDialog({
           <Button variant="outline" onClick={() => (step === 0 ? onOpenChange(false) : move(step - 1))}>
             {step === 0 ? "Cancel" : "Back"}
           </Button>
-          <span className="ml-auto text-muted-foreground text-xs max-sm:hidden">Step {step + 1} of 3</span>
-          {step < 2 ? (
-            <Button onClick={() => move(step + 1)}>
+          <span className="ml-auto text-muted-foreground text-xs max-sm:hidden">
+            {STEPS.length > 1 && `Step ${step + 1} of ${STEPS.length}`}
+          </span>
+          {step < STEPS.length - 1 ? (
+            <Button onClick={() => move(step + 1)} disabled={step === 0 && !topicReady}>
               Next: {STEPS[step + 1]}
               <ArrowRight />
             </Button>
           ) : (
-            <Button onClick={() => onStart(mode)}>
+            <Button onClick={() => onStart(mode, { topic: topic.trim(), domains: fields })} disabled={!topicReady}>
               <Play />
               Start research run
             </Button>

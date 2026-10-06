@@ -1,31 +1,51 @@
 import type {
   AgentRole,
+  Cluster,
   CodeLine,
+  ComputeProfile,
   DataColumn,
   DataIssue,
   DatasetRef,
+  DebateTurn,
   Decision,
+  Estimate,
+  EstimateCheck,
+  FeasibilityCheck,
   Figure,
-  FrameSlot,
+  Gap,
   Gate,
+  GoalField,
   Hypothesis,
-  Idea,
-  IdeaReview,
-  LiteraturePaper,
+  KnowledgeCard,
+  LiteratureSource,
   LogLevel,
   NodeOutcome,
+  NoveltyCheck,
+  Opportunity,
   PaperBlock,
   PaperPiece,
   PaperSectionPlan,
   PaperSource,
   PlannedStage,
   RecordedResult,
+  RejectedPaper,
   ReportRow,
   ReviewMode,
   RuleId,
   RunLifecycle,
+  ScopeRisk,
+  ScreenPoint,
   SearchNode,
+  SearchQuery,
+  SearchStrategy,
+  ShortlistPaper,
+  Skill,
+  SourceRecord,
   StagePlan,
+  SubQuestion,
+  Tension,
+  TestDesign,
+  TopicScores,
   Verdict,
 } from "./contract";
 
@@ -46,33 +66,75 @@ export interface DataContent {
   version?: { version: number; rows: number; removed: number; fixes: number; sha256: string };
 }
 
-export interface UnderstandContent {
-  stage: "understand";
-  frame: FrameSlot[];
-  chart?: { title: string; note: string; bars: { label: string; value: number }[] };
-  patterns: { id: string; text: string }[];
-  literature?: { found: number; relevant: number; used: number };
-  papers: LiteraturePaper[];
-  gaps: { id: string; text: string }[];
+export interface ScopeContent {
+  stage: "scope";
+  domains: string[];
+  compute?: ComputeProfile;
+  goal: { field: GoalField; label: string; value: string }[];
+  adjusted: { field: GoalField; from: string; to: string; reason: string }[];
+  subQuestions: SubQuestion[];
+  risks: ScopeRisk[];
+  evaluation?: { scores: TopicScores; overall: number; threshold: number; advice: string };
+  approved?: { at: string; note: string };
 }
 
-export type IdeaColumn = "ideas" | "review" | "set" | "aside";
+export interface SearchContent {
+  stage: "search";
+  strategies: SearchStrategy[];
+  queries: SearchQuery[];
+  sources: LiteratureSource[];
+  delayMs: number;
+  /** Hits per `${queryId}:${sourceId}`; null while the request is out. */
+  cells: Record<string, number | null>;
+  requests: number;
+  merged: { title: string; records: SourceRecord[]; kept: string }[];
+  collected?: {
+    raw: number;
+    unique: number;
+    duplicates: number;
+    files: { name: string; detail: string }[];
+    collected_at: string;
+  };
+}
 
-export interface IdeaState {
-  idea: Idea;
-  column: IdeaColumn;
-  review?: IdeaReview;
-  hypothesis?: Hypothesis;
+export interface ScreenContent {
+  stage: "screen";
+  criteria?: { rules: string[]; relevanceMin: number; qualityMin: number };
+  points: ScreenPoint[];
+  rejected: RejectedPaper[];
+  kept: ShortlistPaper[];
+  /** Papers the person removed at the review stop. */
+  dropped: string[];
+}
+
+export interface ReadContent {
+  stage: "read";
+  cards: KnowledgeCard[];
+}
+
+export interface SynthesizeContent {
+  stage: "synthesize";
+  clusters: Cluster[];
+  tensions: Tension[];
+  gaps: Gap[];
+  overview?: string;
+  ranking: Opportunity[];
+}
+
+export interface DraftState {
+  hypothesis: Hypothesis;
+  novelty?: NoveltyCheck;
+  feasibility?: FeasibilityCheck;
+  selected: boolean;
   overrideNote?: string;
-  setAsideReason?: string;
 }
 
 export interface HypothesizeContent {
   stage: "hypothesize";
-  ideas: Record<string, IdeaState>;
+  turns: DebateTurn[];
+  drafts: Record<string, DraftState>;
   order: string[];
-  planId?: string;
-  plan: Hypothesis[];
+  asides: { id: string; statement: string; reason: string }[];
   dropped: string[];
 }
 
@@ -94,6 +156,10 @@ export interface ExperimentContent {
   nodeOrder: Record<string, string[]>;
   activeNodeId: string | null;
   results: Record<string, RecordedResult>;
+  /** The locked test plan, written in pipeline stage 9 before any code. */
+  planId?: string;
+  plan: Hypothesis[];
+  design?: TestDesign;
 }
 
 export interface EvidenceRow {
@@ -150,7 +216,11 @@ export interface WriteContent {
 
 export type StageContent =
   | DataContent
-  | UnderstandContent
+  | ScopeContent
+  | SearchContent
+  | ScreenContent
+  | ReadContent
+  | SynthesizeContent
   | HypothesizeContent
   | ExperimentContent
   | InterpretContent
@@ -163,6 +233,8 @@ export interface StageState {
   currentStepId: string | null;
   doneStepIds: string[];
   summary?: string;
+  /** Skills matched to this stage. */
+  skills: Skill[];
   content: StageContent;
 }
 
@@ -182,9 +254,10 @@ export interface RunState {
   lastSeq: number;
   lifecycle: RunLifecycle;
   mode: ReviewMode;
-  question: string;
+  /** The topic the person typed when starting the run. */
+  topic: string;
+  domains: string[];
   dataset?: DatasetRef;
-  contextVersion?: number;
   startedAt?: string;
   plan: PlannedStage[];
   stages: Record<string, StageState>;
@@ -197,6 +270,8 @@ export interface RunState {
   gate: Gate | null;
   decisions: FeedItem[];
   results: Record<string, RecordedResult>;
+  /** Numbers recalled while scoping, and what the literature later said about them. */
+  estimates: { estimate: Estimate; check?: EstimateCheck }[];
   completed: boolean;
   paperTitle?: string;
 }
@@ -217,12 +292,37 @@ export function emptyContent(plan: StagePlan): StageContent {
         replaced: {},
         removed: [],
       };
-    case "understand":
-      return { stage: "understand", frame: [], patterns: [], papers: [], gaps: [] };
+    case "scope":
+      return { stage: "scope", domains: [], goal: [], adjusted: [], subQuestions: [], risks: [] };
+    case "search":
+      return {
+        stage: "search",
+        strategies: [],
+        queries: [],
+        sources: [],
+        delayMs: 0,
+        cells: {},
+        requests: 0,
+        merged: [],
+      };
+    case "screen":
+      return { stage: "screen", points: [], rejected: [], kept: [], dropped: [] };
+    case "read":
+      return { stage: "read", cards: [] };
+    case "synthesize":
+      return { stage: "synthesize", clusters: [], tensions: [], gaps: [], ranking: [] };
     case "hypothesize":
-      return { stage: "hypothesize", ideas: {}, order: [], plan: [], dropped: [] };
+      return { stage: "hypothesize", turns: [], drafts: {}, order: [], asides: [], dropped: [] };
     case "experiment":
-      return { stage: "experiment", hypotheses: [], nodes: {}, nodeOrder: {}, activeNodeId: null, results: {} };
+      return {
+        stage: "experiment",
+        hypotheses: [],
+        nodes: {},
+        nodeOrder: {},
+        activeNodeId: null,
+        results: {},
+        plan: [],
+      };
     case "interpret":
       return { stage: "interpret", rows: [] };
     case "report":
@@ -251,7 +351,8 @@ export function initialRunState(runId: string): RunState {
     lastSeq: 0,
     lifecycle: "running",
     mode: "copilot",
-    question: "",
+    topic: "",
+    domains: [],
     plan: [],
     stages: {},
     stageOrder: [],
@@ -262,6 +363,7 @@ export function initialRunState(runId: string): RunState {
     gate: null,
     decisions: [],
     results: {},
+    estimates: [],
     completed: false,
   };
 }

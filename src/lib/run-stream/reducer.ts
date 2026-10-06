@@ -30,9 +30,9 @@ export function applyRunEvent(previous: RunState, event: RunEvent): RunState {
     switch (event.type) {
       case "run.started":
         state.mode = event.payload.mode;
-        state.question = event.payload.question;
+        state.topic = event.payload.topic;
+        state.domains = event.payload.domains;
         state.dataset = event.payload.dataset;
-        state.contextVersion = event.payload.context_version;
         state.startedAt = event.ts;
         state.lifecycle = "running";
         break;
@@ -46,7 +46,8 @@ export function applyRunEvent(previous: RunState, event: RunEvent): RunState {
         state.completed = true;
         state.lifecycle = "completed";
         state.paperTitle = event.payload.paper_title;
-        state.currentStageKey = "done";
+        // Only a run that ends with a paper has the paper screen to land on.
+        if (event.payload.paper_title) state.currentStageKey = "done";
         break;
       case "stage.started": {
         const { plan } = event.payload;
@@ -56,6 +57,7 @@ export function applyRunEvent(previous: RunState, event: RunEvent): RunState {
           status: "active",
           currentStepId: null,
           doneStepIds: [],
+          skills: [],
           content: emptyContent(plan),
         };
         state.currentStageKey = plan.key;
@@ -142,77 +144,217 @@ export function applyRunEvent(previous: RunState, event: RunEvent): RunState {
         break;
       }
 
-      // ---------- understand ----------
-      case "understand.frame": {
-        const u = content(state, event, "understand");
-        if (u) u.frame.push(event.payload.slot);
+      case "skills.loaded": {
+        const stage = event.stage_key ? state.stages[event.stage_key] : undefined;
+        if (stage) stage.skills = event.payload.skills;
         break;
       }
-      case "understand.chart": {
-        const u = content(state, event, "understand");
-        if (u) u.chart = { ...event.payload };
+
+      // ---------- scope ----------
+      case "scope.profile": {
+        const c = content(state, event, "scope");
+        if (!c) break;
+        c.domains = event.payload.domains;
+        c.compute = event.payload.compute;
         break;
       }
-      case "understand.pattern": {
-        const u = content(state, event, "understand");
-        if (u) u.patterns.push({ ...event.payload });
+      case "scope.goal": {
+        const c = content(state, event, "scope");
+        if (!c) break;
+        const { field, label, value } = event.payload;
+        const existing = c.goal.find((g) => g.field === field);
+        if (existing) existing.value = value;
+        else c.goal.push({ field, label, value });
         break;
       }
-      case "literature.searched": {
-        const u = content(state, event, "understand");
-        if (u) u.literature = { ...event.payload };
+      case "scope.estimate":
+        if (!state.estimates.some((e) => e.estimate.id === event.payload.estimate.id))
+          state.estimates.push({ estimate: event.payload.estimate });
+        break;
+      case "scope.adjusted": {
+        const c = content(state, event, "scope");
+        if (!c) break;
+        c.adjusted.push({ ...event.payload });
+        const goal = c.goal.find((g) => g.field === event.payload.field);
+        if (goal) goal.value = event.payload.to;
         break;
       }
-      case "literature.paper": {
-        const u = content(state, event, "understand");
-        if (u) u.papers.push(event.payload.paper);
+      case "scope.approved": {
+        const c = content(state, event, "scope");
+        if (c) c.approved = { ...event.payload };
         break;
       }
-      case "literature.gap": {
-        const u = content(state, event, "understand");
-        if (u) u.gaps.push({ ...event.payload });
+      case "problem.subquestion": {
+        const c = content(state, event, "scope");
+        if (c) c.subQuestions.push(event.payload.sub_question);
+        break;
+      }
+      case "problem.risk": {
+        const c = content(state, event, "scope");
+        if (c) c.risks.push(event.payload.risk);
+        break;
+      }
+      case "topic.evaluated": {
+        const c = content(state, event, "scope");
+        if (c) c.evaluation = { ...event.payload };
+        break;
+      }
+
+      // ---------- search ----------
+      case "search.strategy": {
+        const c = content(state, event, "search");
+        if (c) c.strategies.push(event.payload.strategy);
+        break;
+      }
+      case "search.query": {
+        const c = content(state, event, "search");
+        if (c) c.queries.push(event.payload.query);
+        break;
+      }
+      case "search.sources": {
+        const c = content(state, event, "search");
+        if (!c) break;
+        c.sources = event.payload.sources;
+        c.delayMs = event.payload.delay_ms;
+        break;
+      }
+      case "literature.request": {
+        const c = content(state, event, "search");
+        if (!c) break;
+        c.cells[`${event.payload.query_id}:${event.payload.source_id}`] = null;
+        c.requests += 1;
+        break;
+      }
+      case "literature.batch": {
+        const c = content(state, event, "search");
+        if (c) c.cells[`${event.payload.query_id}:${event.payload.source_id}`] = event.payload.hits;
+        break;
+      }
+      case "literature.merged": {
+        const c = content(state, event, "search");
+        if (c) c.merged.push({ ...event.payload });
+        break;
+      }
+      case "literature.collected": {
+        const c = content(state, event, "search");
+        if (c) c.collected = { ...event.payload };
+        break;
+      }
+
+      // ---------- screen ----------
+      case "screen.criteria": {
+        const c = content(state, event, "screen");
+        if (!c) break;
+        c.criteria = {
+          rules: event.payload.rules,
+          relevanceMin: event.payload.relevance_min,
+          qualityMin: event.payload.quality_min,
+        };
+        break;
+      }
+      case "screen.scored": {
+        const c = content(state, event, "screen");
+        if (c) c.points.push(...event.payload.points);
+        break;
+      }
+      case "screen.rejected": {
+        const c = content(state, event, "screen");
+        if (c) c.rejected.push(event.payload.paper);
+        break;
+      }
+      case "screen.kept": {
+        const c = content(state, event, "screen");
+        if (c) c.kept.push(event.payload.paper);
+        break;
+      }
+
+      // ---------- read ----------
+      case "card.extracted": {
+        const c = content(state, event, "read");
+        if (c) c.cards.push(event.payload.card);
+        break;
+      }
+      case "estimate.checked": {
+        const entry = state.estimates.find((e) => e.estimate.id === event.payload.check.estimate_id);
+        if (entry) entry.check = event.payload.check;
+        break;
+      }
+
+      // ---------- synthesize ----------
+      case "synthesis.cluster": {
+        const c = content(state, event, "synthesize");
+        if (c) c.clusters.push(event.payload.cluster);
+        break;
+      }
+      case "synthesis.tension": {
+        const c = content(state, event, "synthesize");
+        if (c) c.tensions.push(event.payload.tension);
+        break;
+      }
+      case "synthesis.gap": {
+        const c = content(state, event, "synthesize");
+        if (c) c.gaps.push(event.payload.gap);
+        break;
+      }
+      case "synthesis.overview": {
+        const c = content(state, event, "synthesize");
+        if (c) c.overview = event.payload.text;
+        break;
+      }
+      case "synthesis.ranked": {
+        const c = content(state, event, "synthesize");
+        if (c) c.ranking = event.payload.ranking;
         break;
       }
 
       // ---------- hypothesize ----------
-      case "idea.proposed": {
+      case "debate.turn": {
         const h = content(state, event, "hypothesize");
-        if (!h) break;
-        h.ideas[event.payload.idea.id] = { idea: event.payload.idea, column: "ideas" };
-        h.order.push(event.payload.idea.id);
+        if (h) h.turns.push(event.payload.turn);
         break;
       }
-      case "idea.reviewed": {
-        const idea = content(state, event, "hypothesize")?.ideas[event.payload.idea_id];
-        if (!idea) break;
-        idea.review = event.payload.review;
-        idea.column = "review";
+      case "hypothesis.drafted": {
+        const h = content(state, event, "hypothesize");
+        if (!h) break;
+        const { hypothesis } = event.payload;
+        if (!h.drafts[hypothesis.id]) h.order.push(hypothesis.id);
+        h.drafts[hypothesis.id] = { hypothesis, selected: false };
+        break;
+      }
+      case "hypothesis.checked": {
+        const draft = content(state, event, "hypothesize")?.drafts[event.payload.hypothesis_id];
+        if (!draft) break;
+        draft.novelty = event.payload.novelty;
+        draft.feasibility = event.payload.feasibility;
         break;
       }
       case "hypothesis.selected": {
-        const idea = content(state, event, "hypothesize")?.ideas[event.payload.idea_id];
-        if (!idea) break;
-        idea.hypothesis = event.payload.hypothesis;
-        idea.overrideNote = event.payload.override_note;
-        idea.column = "set";
+        const draft = content(state, event, "hypothesize")?.drafts[event.payload.hypothesis_id];
+        if (!draft) break;
+        draft.selected = true;
+        draft.overrideNote = event.payload.override_note;
         break;
       }
       case "idea.set_aside": {
-        const idea = content(state, event, "hypothesize")?.ideas[event.payload.idea_id];
-        if (!idea) break;
-        idea.setAsideReason = event.payload.reason;
-        idea.column = "aside";
-        break;
-      }
-      case "plan.locked": {
         const h = content(state, event, "hypothesize");
-        if (!h) break;
-        h.planId = event.payload.plan_id;
-        h.plan = event.payload.hypotheses;
+        if (h)
+          h.asides.push({
+            id: event.payload.idea_id,
+            statement: event.payload.statement,
+            reason: event.payload.reason,
+          });
         break;
       }
 
       // ---------- experiment ----------
+      case "plan.locked": {
+        const x = content(state, event, "experiment");
+        if (!x) break;
+        x.planId = event.payload.plan_id;
+        x.plan = event.payload.hypotheses;
+        x.design = event.payload.design;
+        break;
+      }
       case "experiment.hypotheses": {
         const x = content(state, event, "experiment");
         if (!x) break;
@@ -460,7 +602,8 @@ export function applyRunEvent(previous: RunState, event: RunEvent): RunState {
         state.gate = event.payload.gate;
         break;
       case "gate.resolved": {
-        if (state.gate?.id === event.payload.gate_id) state.gate = null;
+        const kind = state.gate?.id === event.payload.gate_id ? state.gate.kind : null;
+        if (kind) state.gate = null;
         const item = {
           seq: event.seq,
           actor: "you" as const,
@@ -472,8 +615,14 @@ export function applyRunEvent(previous: RunState, event: RunEvent): RunState {
         state.decisions.push(item);
         state.feed.push(item);
         const dropped = event.payload.answer.dropped;
-        const h = dropped?.length ? content(state, event, "hypothesize") : null;
-        if (h && dropped) h.dropped = dropped;
+        if (!dropped?.length) break;
+        if (kind === "screen") {
+          const c = content(state, event, "screen");
+          if (c) c.dropped = dropped;
+        } else {
+          const h = content(state, event, "hypothesize");
+          if (h) h.dropped = dropped;
+        }
         break;
       }
     }

@@ -5,12 +5,30 @@
 // The client rebuilds everything it shows from these events with `applyRunEvent`, so a mock stream
 // and the real stream must emit exactly the same shapes.
 
-export type RunStage = "data" | "understand" | "hypothesize" | "experiment" | "interpret" | "report" | "write";
+/**
+ * Screens of a run. `scope` to `hypothesize` cover Popper's pipeline stages 1 to 8:
+ * scope = 1 topic init + 2 problem decompose, search = 3 search strategy + 4 literature collect,
+ * screen = 5 literature screen, read = 6 knowledge extract, synthesize = 7, hypothesize = 8.
+ * `experiment` starts with stage 9, experiment design.
+ */
+export type RunStage =
+  | "data"
+  | "scope"
+  | "search"
+  | "screen"
+  | "read"
+  | "synthesize"
+  | "hypothesize"
+  | "experiment"
+  | "interpret"
+  | "report"
+  | "write";
 
 export type AgentRole =
   | "steward"
+  | "strategist"
+  | "librarian"
   | "theorist"
-  | "knowledge"
   | "methodologist"
   | "skeptic"
   | "pi"
@@ -21,7 +39,7 @@ export type AgentRole =
 /** How often the run stops for the person who started it. */
 export type ReviewMode = "auto" | "light" | "copilot" | "full";
 
-export type GateKind = "framing" | "hypotheses" | "decision" | "report" | "publish";
+export type GateKind = "scope" | "screen" | "hypotheses" | "decision" | "report" | "publish";
 
 export type RunLifecycle = "running" | "paused" | "awaiting_review" | "completed" | "failed";
 
@@ -41,13 +59,15 @@ export type NodeKind = "draft" | "debug" | "improve";
 export type NodeOutcome = "works" | "crashed" | "out_of_attempts" | "discarded";
 
 /**
- * The four rules Popper never bends.
+ * The rules Popper never bends.
  * 1: every number in the paper comes from the results file.
  * 2: every analysis reports the number its plan promised.
  * 3: data versions and records are never overwritten.
  * 4: the test plan is locked before any code runs.
+ * 5: every hypothesis states the result that would prove it wrong.
+ * 6: numbers recalled by the agents stay unverified until a paper backs them.
  */
-export type RuleId = 1 | 2 | 3 | 4;
+export type RuleId = 1 | 2 | 3 | 4 | 5 | 6;
 
 // ---------- shared shapes ----------
 
@@ -59,6 +79,10 @@ export interface StagePlanStep {
   explain: string;
   /** Present when this step stops for the person. */
   gate?: GateKind;
+  /** Popper pipeline stage this step belongs to, 1 to 9. */
+  pipeline_stage?: number;
+  /** Plain name of what the step writes, such as "Research goal". The run folder path stays on the backend. */
+  artifact?: string;
 }
 
 /** A stage as the backend plans it. Future stages appear in `run.plan` before they start. */
@@ -69,10 +93,14 @@ export interface PlannedStage {
   round_kind?: RoundKind;
   title: string;
   has_gate: boolean;
+  /** Popper pipeline stages this screen covers. */
+  pipeline?: number[];
 }
 
 export interface StagePlan extends PlannedStage {
   purpose: string;
+  /** Plain names of what this stage builds on, from earlier stages or your input. */
+  reads?: string[];
   cast: AgentRole[];
   steps: StagePlanStep[];
 }
@@ -106,42 +134,211 @@ export interface DataIssue {
   rows: number[];
 }
 
-export interface FrameSlot {
-  slot: "outcome" | "exposure" | "population" | "follow_up" | "unit" | "out_of_reach";
+export type SkillCategory = "domain" | "experiment" | "tooling" | "writing";
+
+/** A skill matched to this stage by keywords and injected into the agents' instructions. */
+export interface Skill {
+  id: string;
+  name: string;
+  category: SkillCategory;
+  /** Words from the question or data that made it match. Empty when it always applies to the stage. */
+  matched: string[];
+}
+
+// ---------- scope: topic init and problem decompose ----------
+
+export type GoalField = "title" | "problem" | "objective" | "scope" | "success";
+
+export interface ComputeProfile {
   label: string;
-  value: string;
-  note: string;
-  /** The words of the question this slot came from, when there are any. */
-  phrase?: string;
+  detail: string;
 }
 
-export interface LiteraturePaper {
-  citation: string;
-  claim: string;
-  doi: string;
-}
-
-export interface IdeaSource {
-  kind: "pattern" | "gap" | "literature" | "data" | "question";
-  /** Short reference such as `P1`, `Gap 2` or `Okano et al., 2019`. */
-  ref: string;
+/** A number the agents recall before reading any paper. It stays unverified until the literature backs it. */
+export interface Estimate {
+  id: string;
   text: string;
 }
 
-export interface Idea {
-  id: string;
-  statement: string;
-  source: IdeaSource;
+export interface EstimateCheck {
+  estimate_id: string;
+  status: "verified" | "unsupported";
+  /** Citation that backs or contradicts it. */
+  source?: string;
+  note: string;
 }
 
-export interface IdeaReview {
-  testable: boolean;
-  /** Columns the test would use, when testable. */
-  columns?: string[];
-  /** What the data lacks, when not testable. */
-  missing?: string;
-  risk: Risk;
-  objection: string;
+export interface SubQuestion {
+  id: string;
+  text: string;
+  /** What the test would compare, in column terms. */
+  tests: string;
+  /** 1 is answered first. */
+  priority: number;
+  /** Phrases of the question this sub-question covers, quoted exactly. */
+  covers: string[];
+}
+
+export interface ScopeRisk {
+  id: string;
+  sq_id: string;
+  text: string;
+  level: Risk;
+}
+
+export interface TopicScores {
+  novelty: number;
+  specificity: number;
+  feasibility: number;
+}
+
+// ---------- search and collect ----------
+
+export interface SearchStrategy {
+  id: string;
+  title: string;
+  why: string;
+}
+
+export interface SearchQuery {
+  id: string;
+  strategy_id: string;
+  text: string;
+}
+
+export interface LiteratureSource {
+  id: string;
+  name: string;
+}
+
+/** One source's record of a paper found more than once. */
+export interface SourceRecord {
+  source: string;
+  /** The source's own id for the paper. */
+  record_id: string;
+  citations: number;
+  has_doi: boolean;
+}
+
+// ---------- screen ----------
+
+export interface ScreenPoint {
+  id: string;
+  /** 0 to 1. */
+  relevance: number;
+  /** 0 to 1. */
+  quality: number;
+}
+
+export interface ShortlistPaper {
+  id: string;
+  citation: string;
+  title: string;
+  venue: string;
+  year: number;
+  relevance: number;
+  quality: number;
+  /** Why it was kept. */
+  reason: string;
+  doi?: string;
+  /** Kept for being foundational even though it is old. */
+  seminal?: boolean;
+  /** Where the kept record came from, and its citation count then. */
+  source: string;
+  citations: number;
+}
+
+/** A paper that shares the words of the question but is about something else. */
+export interface RejectedPaper {
+  id: string;
+  title: string;
+  venue: string;
+  /** The shared word that made it match. */
+  false_friend: string;
+  reason: string;
+}
+
+// ---------- read and synthesize ----------
+
+export interface KnowledgeCard {
+  /** Cite key, such as `okano2019`. */
+  id: string;
+  paper_id: string;
+  citation: string;
+  problem: string;
+  method: string;
+  data: string;
+  metrics: string;
+  findings: string;
+  limitations: string;
+}
+
+export interface Cluster {
+  id: string;
+  title: string;
+  claim: string;
+  card_ids: string[];
+}
+
+export interface Tension {
+  between: [string, string];
+  text: string;
+}
+
+export interface Gap {
+  id: string;
+  text: string;
+  /** Cards whose limitations point to it. */
+  from: string[];
+}
+
+/** A gap ranked as a research opportunity. Priority 1 is pursued first. */
+export interface Opportunity {
+  gap_id: string;
+  priority: number;
+  text: string;
+}
+
+// ---------- hypothesize ----------
+
+export type DebateStance = "propose" | "test" | "challenge" | "refine" | "concede";
+
+export interface DebateTurn {
+  id: string;
+  actor: AgentRole;
+  stance: DebateStance;
+  text: string;
+  reply_to?: string;
+  /** Hypothesis or idea the turn is about. */
+  about?: string;
+}
+
+/**
+ * What would prove a hypothesis wrong: the estimate's 95% range must stay clear of `zone`.
+ * A null end is open; a zone with equal ends is a single value, such as zero.
+ */
+export interface Falsifier {
+  text: string;
+  zone: [number | null, number | null];
+  unit: string;
+}
+
+export interface NoveltyCheck {
+  novel: boolean;
+  closest: string;
+  /** 0 to 1, against the closest shortlisted paper. */
+  similarity: number;
+}
+
+export interface FeasibilityCheck {
+  ok: boolean;
+  note: string;
+}
+
+export interface TestDesign {
+  independent: string[];
+  dependent: string[];
+  controls: string[];
 }
 
 export interface Hypothesis {
@@ -156,6 +353,15 @@ export interface Hypothesis {
   method: string;
   /** Name of the number this hypothesis must write to the results file. */
   report_key: string;
+  /** Sub-question it answers. */
+  sub_question: string;
+  /** Gap it fills, such as `G2`. */
+  gap: string;
+  /** Why nobody has shown this yet. */
+  novelty: string;
+  /** Why it should be true. */
+  rationale: string;
+  falsify: Falsifier;
 }
 
 export interface SearchNode {
@@ -211,14 +417,14 @@ export interface Gate {
   /** Position of this stop among all stops planned so far. */
   stop_index: number;
   stop_total: number;
-  /** Hypotheses the person may drop before approving. Only for `hypotheses` gates. */
+  /** Items the person may drop before approving: hypothesis ids for `hypotheses`, paper ids for `screen`. */
   droppable?: string[];
 }
 
 export interface GateAnswer {
   option_id: string;
   note?: string;
-  /** Hypothesis ids the person dropped. Only for `hypotheses` gates. */
+  /** Ids the person dropped. Only for `hypotheses` and `screen` gates. */
   dropped?: string[];
 }
 
@@ -319,10 +525,15 @@ interface EventBase<T extends string, P> {
 }
 
 export type RunEvent =
-  | EventBase<"run.started", { mode: ReviewMode; question: string; dataset: DatasetRef; context_version: number }>
+  /**
+   * `topic` is what the person typed; `domains` are the fields they kept. Sub-questions are derived in `scope`.
+   * `dataset` is absent for a run that starts from the topic alone.
+   */
+  | EventBase<"run.started", { mode: ReviewMode; topic: string; domains: string[]; dataset?: DatasetRef }>
   | EventBase<"run.plan", { stages: PlannedStage[] }>
   | EventBase<"run.status", { status: RunLifecycle; reason?: string }>
-  | EventBase<"run.completed", { paper_title: string }>
+  /** `paper_title` is absent when the run ends before the paper, such as right after hypotheses (stage 8). */
+  | EventBase<"run.completed", { paper_title?: string }>
   | EventBase<"stage.started", { plan: StagePlan }>
   | EventBase<"stage.completed", { summary: string }>
   | EventBase<"step.started", { step_id: string }>
@@ -345,20 +556,59 @@ export type RunEvent =
       }
     >
   | EventBase<"data.version_created", { version: number; rows: number; removed: number; fixes: number; sha256: string }>
-  // understand
-  | EventBase<"understand.frame", { slot: FrameSlot }>
-  | EventBase<"understand.chart", { title: string; note: string; bars: { label: string; value: number }[] }>
-  | EventBase<"understand.pattern", { id: string; text: string }>
-  | EventBase<"literature.searched", { found: number; relevant: number; used: number }>
-  | EventBase<"literature.paper", { paper: LiteraturePaper }>
-  | EventBase<"literature.gap", { id: string; text: string }>
-  // hypothesize
-  | EventBase<"idea.proposed", { idea: Idea }>
-  | EventBase<"idea.reviewed", { idea_id: string; review: IdeaReview }>
-  | EventBase<"hypothesis.selected", { idea_id: string; hypothesis: Hypothesis; override_note?: string }>
-  | EventBase<"idea.set_aside", { idea_id: string; reason: string }>
-  | EventBase<"plan.locked", { plan_id: string; hypotheses: Hypothesis[] }>
-  // experiment
+  | EventBase<"skills.loaded", { skills: Skill[] }>
+  // scope: stages 1 and 2
+  | EventBase<"scope.profile", { domains: string[]; compute: ComputeProfile }>
+  | EventBase<"scope.goal", { field: GoalField; label: string; value: string }>
+  | EventBase<"scope.estimate", { estimate: Estimate }>
+  | EventBase<"scope.adjusted", { field: GoalField; from: string; to: string; reason: string }>
+  /** The goal passed the PI's check and was saved; stage 2 may start. `at` is ISO 8601 UTC. */
+  | EventBase<"scope.approved", { at: string; note: string }>
+  | EventBase<"problem.subquestion", { sub_question: SubQuestion }>
+  | EventBase<"problem.risk", { risk: ScopeRisk }>
+  | EventBase<"topic.evaluated", { scores: TopicScores; overall: number; threshold: number; advice: string }>
+  // search: stages 3 and 4
+  | EventBase<"search.strategy", { strategy: SearchStrategy }>
+  | EventBase<"search.query", { query: SearchQuery }>
+  | EventBase<"search.sources", { sources: LiteratureSource[]; delay_ms: number }>
+  | EventBase<"literature.request", { query_id: string; source_id: string }>
+  | EventBase<"literature.batch", { query_id: string; source_id: string; hits: number }>
+  /** A paper found in several sources. `kept` is the source whose record survives: DOI first, then most citations. */
+  | EventBase<"literature.merged", { title: string; records: SourceRecord[]; kept: string }>
+  | EventBase<
+      "literature.collected",
+      {
+        raw: number;
+        unique: number;
+        duplicates: number;
+        files: { name: string; detail: string }[];
+        /** ISO 8601 UTC. */
+        collected_at: string;
+      }
+    >
+  // screen: stage 5
+  | EventBase<"screen.criteria", { rules: string[]; relevance_min: number; quality_min: number }>
+  | EventBase<"screen.scored", { points: ScreenPoint[] }>
+  | EventBase<"screen.rejected", { paper: RejectedPaper }>
+  | EventBase<"screen.kept", { paper: ShortlistPaper }>
+  // read: stage 6
+  | EventBase<"card.extracted", { card: KnowledgeCard }>
+  | EventBase<"estimate.checked", { check: EstimateCheck }>
+  // synthesize: stage 7
+  | EventBase<"synthesis.cluster", { cluster: Cluster }>
+  | EventBase<"synthesis.tension", { tension: Tension }>
+  | EventBase<"synthesis.gap", { gap: Gap }>
+  /** The field at a glance, written once the clusters are set. */
+  | EventBase<"synthesis.overview", { text: string }>
+  | EventBase<"synthesis.ranked", { ranking: Opportunity[] }>
+  // hypothesize: stage 8
+  | EventBase<"debate.turn", { turn: DebateTurn }>
+  | EventBase<"hypothesis.drafted", { hypothesis: Hypothesis }>
+  | EventBase<"hypothesis.checked", { hypothesis_id: string; novelty: NoveltyCheck; feasibility: FeasibilityCheck }>
+  | EventBase<"hypothesis.selected", { hypothesis_id: string; override_note?: string }>
+  | EventBase<"idea.set_aside", { idea_id: string; statement: string; reason: string }>
+  // experiment: stage 9 onwards
+  | EventBase<"plan.locked", { plan_id: string; hypotheses: Hypothesis[]; design: TestDesign }>
   | EventBase<"experiment.hypotheses", { hypotheses: Hypothesis[] }>
   | EventBase<"node.created", { node: SearchNode }>
   | EventBase<"node.code", { node_id: string; lines: CodeLine[] }>
@@ -410,6 +660,12 @@ export type RunEvent =
 
 export type RunEventType = RunEvent["type"];
 export type RunEventOf<T extends RunEventType> = Extract<RunEvent, { type: T }>;
+
+/** What the person gives when starting a run. In the real API this is the body of `POST …/runs`. */
+export interface RunInput {
+  topic: string;
+  domains: string[];
+}
 
 /** Commands the client sends back. In the real API each is a POST under the run. */
 export interface RunCommands {

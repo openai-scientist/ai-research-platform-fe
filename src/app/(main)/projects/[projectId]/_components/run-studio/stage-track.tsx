@@ -25,7 +25,10 @@ export function StageTrack({
   const liveIndex = state.completed ? state.plan.length : state.plan.findIndex((s) => s.key === live);
   const items = [
     ...state.plan.map((p) => ({ ...p, done: false })),
-    { key: "done", stage: "done" as const, title: "Paper", has_gate: false, round: undefined, done: true },
+    // Runs that stop at the hypotheses have no paper to end on.
+    ...(state.plan.some((p) => p.stage === "write")
+      ? [{ key: "done", stage: "done" as const, title: "Paper", has_gate: false, round: undefined, done: true }]
+      : []),
   ];
   const scroller = useRef<HTMLDivElement>(null);
   useEffect(() => {
