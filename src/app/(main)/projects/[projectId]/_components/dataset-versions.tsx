@@ -2,16 +2,16 @@
 
 import { useState } from "react";
 
-import { DataTable } from "@/components/data-table";
-import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { useCreateDatasetVersionMutation, useInfiniteDatasetVersions } from "@/hooks/use-datasets-query";
-import { type DatasetItem, fetchDatasets } from "@/lib/api/services/fetch-datasets";
+import type { DatasetItem } from "@/lib/api/services/fetch-datasets";
 
 import { CsvFileInput } from "./csv-file-input";
-import { DatasetCsvPreview } from "./dataset-csv-preview";
+import { DatasetVersionOrigin } from "./data-connections/dataset-connection-source";
+import { DatasetTable } from "./dataset-table";
+import { DatasetVersionActions } from "./dataset-version-actions";
 import { WorkspaceFormDialog } from "./workspace-form-dialog";
-import { ListState, LoadMore, perform, validateCsv } from "./workspace-ui";
+import { LoadMore, perform, validateCsv } from "./workspace-ui";
 
 export function DatasetVersions({
   dataset,
@@ -33,6 +33,7 @@ export function DatasetVersions({
         title="Upload new version"
         description="Add a CSV version while preserving previous versions."
         submitLabel="Upload new version"
+        triggerVariant="default"
         pending={upload.isPending}
         noValidate
         onSubmit={async (event) => {
@@ -58,41 +59,60 @@ export function DatasetVersions({
 
   return (
     <div className="flex min-w-0 flex-col gap-4">
-      {!versions.versions.length && versionActions}
-      <ListState
+      <DatasetTable
+        title="Version history"
+        description="Preview or download any saved CSV version."
+        actions={versionActions}
         pending={versions.isPending}
         failed={versions.isError}
-        empty={!versions.versions.length}
-        title="Versions"
-        retry={versions.refetch}
+        onRetry={versions.refetch}
+        hasMore={Boolean(versions.hasNextPage)}
+        searchText={(version) => {
+          const source = version.source?.source;
+          const sourceLabel =
+            source?.type === "table" ? `${source.schema}.${source.name}` : source ? "SELECT query" : "CSV upload";
+          return `v${version.version_number} ${version.original_filename} ${version.source?.connection_name ?? ""} ${sourceLabel}`;
+        }}
+        rows={versions.versions}
+        getRowId={(version) => version.id}
+        columns={[
+          {
+            id: "Version",
+            label: "Version",
+            hideable: false,
+            cell: (version) => <span className="font-medium">v{version.version_number}</span>,
+          },
+          {
+            id: "File",
+            label: "File",
+            cell: (version) => <span className="font-medium">{version.original_filename}</span>,
+          },
+          { id: "Source", label: "Source", cell: (version) => <DatasetVersionOrigin version={version} /> },
+          {
+            id: "Rows",
+            label: "Rows",
+            cell: (version) => <span className="tabular-nums">{version.row_count.toLocaleString("en-US")}</span>,
+          },
+          {
+            id: "Columns",
+            label: "Columns",
+            cell: (version) => <span className="tabular-nums">{version.column_names.length}</span>,
+          },
+          {
+            id: "Actions",
+            label: "Actions",
+            align: "right" as const,
+            cell: (version) => (
+              <div className="flex flex-wrap justify-end gap-2">
+                <DatasetVersionActions projectId={projectId} datasetId={dataset.id} version={version} />
+              </div>
+            ),
+          },
+        ]}
+        footer={
+          <LoadMore visible={Boolean(versions.hasNextPage)} pending={versions.isFetching} onClick={versions.loadMore} />
+        }
       />
-      {versions.versions.length > 0 && (
-        <DataTable
-          toolbar={versionActions}
-          rows={versions.versions}
-          getRowId={(version) => version.id}
-          columns={[
-            { id: "Version", label: "Version", hideable: false, cell: (version) => <>v{version.version_number}</> },
-            { id: "File", label: "File", cell: (version) => <>{version.original_filename}</> },
-            { id: "Rows", label: "Rows", cell: (version) => <>{version.row_count}</> },
-            { id: "Columns", label: "Columns", cell: (version) => <>{version.column_names.length}</> },
-            {
-              id: "Actions",
-              label: "Actions",
-              align: "right" as const,
-              cell: (version) => (
-                <div className="flex flex-wrap justify-end gap-2">
-                  <DatasetCsvPreview projectId={projectId} datasetId={dataset.id} version={version} />
-                  <Button asChild variant="outline" size="sm">
-                    <a href={fetchDatasets.getVersionDownloadUrl(projectId, dataset.id, version.id)}>Download CSV</a>
-                  </Button>
-                </div>
-              ),
-            },
-          ]}
-        />
-      )}
-      <LoadMore visible={Boolean(versions.hasNextPage)} pending={versions.isFetching} onClick={versions.loadMore} />
     </div>
   );
 }

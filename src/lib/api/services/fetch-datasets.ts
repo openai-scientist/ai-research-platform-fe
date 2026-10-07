@@ -1,8 +1,10 @@
 import type { ApiResult } from "@/types/api";
 
+import { connectionRequest } from "../connection-runtime";
 import apiService from "../core";
 import { downloadUrl, projectPath, requestDownload } from "../request";
 import type { FileDownload, ListParams } from "../types";
+import type { ConnectionKind, ConnectionSource } from "./fetch-data-connections";
 
 export interface DatasetVersionItem {
   id: string;
@@ -13,6 +15,14 @@ export interface DatasetVersionItem {
   sha256: string;
   row_count: number;
   column_names: string[];
+  source_type: "upload" | "connection";
+  source: {
+    connection_id: string;
+    connection_name: string;
+    connection_kind: ConnectionKind;
+    source: ConnectionSource;
+    fetched_at: string;
+  } | null;
   created_by_user_id: string;
   created_at: string;
 }
@@ -39,6 +49,15 @@ export interface UpdateDatasetRequest {
   description?: string | null;
 }
 
+export interface ImportConnectionSource {
+  connection_id: string;
+  source: ConnectionSource;
+}
+export interface ImportConnectionDatasetRequest extends ImportConnectionSource {
+  name: string;
+  description?: string;
+}
+
 export type DatasetListResponse = ApiResult<DatasetItem[]>;
 export type DatasetDetailResponse = ApiResult<DatasetItem>;
 export type DatasetVersionListResponse = ApiResult<DatasetVersionItem[]>;
@@ -51,6 +70,32 @@ const versionDownloadPath = (projectId: string, datasetId: string, versionId: st
   `${datasetPath(projectId, datasetId)}/versions/${encodeURIComponent(versionId)}/download`;
 
 export const fetchDatasets = {
+  importConnection: (projectId: string, input: ImportConnectionDatasetRequest): Promise<DatasetDetailResponse> =>
+    connectionRequest(
+      projectId,
+      async () =>
+        (
+          await apiService.post<DatasetDetailResponse>(`${datasetsPath(projectId)}/from-connection`, input, {
+            timeout: 330_000,
+          })
+        ).data,
+    ),
+  importConnectionVersion: (
+    projectId: string,
+    datasetId: string,
+    input: ImportConnectionSource,
+  ): Promise<DatasetVersionDetailResponse> =>
+    connectionRequest(
+      projectId,
+      async () =>
+        (
+          await apiService.post<DatasetVersionDetailResponse>(
+            `${datasetPath(projectId, datasetId)}/versions/from-connection`,
+            input,
+            { timeout: 330_000 },
+          )
+        ).data,
+    ),
   getList: async (projectId: string, params?: ListParams, signal?: AbortSignal): Promise<DatasetListResponse> => {
     const response = await apiService.get<DatasetListResponse>(datasetsPath(projectId), params, { signal });
     return response.data;

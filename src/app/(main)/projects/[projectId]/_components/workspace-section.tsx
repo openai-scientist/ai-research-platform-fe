@@ -7,6 +7,7 @@ import type { ProjectItem } from "@/lib/api/services/fetch-project";
 import type { RunSection } from "@/lib/research-workspace";
 import { ProjectRole, ProjectStatus } from "@/types/enums";
 
+import { ConnectionsSection } from "./data-connections/connections-section";
 import { DatasetDetails } from "./dataset-details";
 import { DatasetsSection } from "./datasets-section";
 import { ExperimentsSection } from "./experiments-section";
@@ -18,6 +19,7 @@ import { SettingsSection } from "./settings-section";
 import type { WorkspaceProps } from "./workspace-ui";
 
 const screens: Record<string, ComponentType<WorkspaceProps>> = {
+  connections: ConnectionsSection,
   datasets: DatasetsSection,
   experiments: ExperimentsSection,
   members: MembersSection,

@@ -17,7 +17,7 @@ export interface ApiResult<T> {
 export interface ApiFailure {
   success: false;
   message: string;
-  error: { code: string; details: ValidationDetail[] };
+  error: { code: string; details: ValidationDetail[]; reason?: string };
   meta: { request_id: string };
 }
 
@@ -31,6 +31,7 @@ export class ApiError extends Error {
     public readonly details: ValidationDetail[] = [],
     public readonly requestId: string | null = null,
     public readonly retryAfter: number | null = null,
+    public readonly reason: string | null = null,
   ) {
     super(message);
     this.name = "ApiError";

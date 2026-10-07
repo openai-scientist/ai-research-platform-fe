@@ -7,6 +7,10 @@ import { ProjectRole } from "@/types/enums";
 import { WorkspaceSection } from "../_components/workspace-section";
 
 const sections: Record<string, { title: string; description: string; managerOnly?: boolean }> = {
+  connections: {
+    title: "Data Connections",
+    description: "Connect an external database and import data into this project.",
+  },
   datasets: {
     title: "Datasets",
     description: "Upload, version, and download the data used by this project's research runs.",
@@ -59,7 +63,7 @@ export default async function Page({ params }: { params: Promise<{ projectId: st
 
   return (
     <div className="flex flex-col gap-6">
-      {section !== "members" && header}
+      {section !== "members" && section !== "connections" && header}
       <WorkspaceSection
         project={project}
         section={section}

@@ -6,6 +6,11 @@ import type { ProjectListParams } from "@/lib/api/services/fetch-project";
 import type { ListParams, TimeRangeParams } from "./types";
 
 export const authKeys = { all: ["auth"] as const, me: ["auth", "me"] as const, csrf: ["auth", "csrf"] as const };
+export const connectionKeys = {
+  project: (id: string) => ["projects", "detail", id, "connections"] as const,
+  lists: (id: string) => ["projects", "detail", id, "connections", "list"] as const,
+  list: (id: string, q?: string) => ["projects", "detail", id, "connections", "list", q] as const,
+};
 export const invitationKeys = {
   all: ["invitations"] as const,
   list: (params?: ListParams) => ["invitations", params] as const,

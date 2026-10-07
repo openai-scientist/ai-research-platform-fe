@@ -28,12 +28,23 @@ export function DatasetCsvPreview({
   projectId,
   datasetId,
   version,
+  open: controlledOpen,
+  onOpenChange,
+  showTrigger = true,
 }: {
   projectId: string;
   datasetId: string;
   version: DatasetVersionItem;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  showTrigger?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const [localOpen, setLocalOpen] = useState(false);
+  const open = controlledOpen ?? localOpen;
+  const changeOpen = (value: boolean) => {
+    setLocalOpen(value);
+    onOpenChange?.(value);
+  };
   const query = useApiQuery(
     [...projectKeys.dataset(projectId, datasetId), "preview", version.id],
     async (signal) => {
@@ -46,12 +57,14 @@ export function DatasetCsvPreview({
   const rows = query.data ?? [];
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline" size="sm">
-          Preview CSV
-        </Button>
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={changeOpen}>
+      {showTrigger && (
+        <DialogTrigger asChild>
+          <Button variant="outline" size="sm">
+            Preview CSV
+          </Button>
+        </DialogTrigger>
+      )}
       <DialogContent className="management-surface flex max-h-[85dvh] min-w-0 flex-col gap-4 overflow-hidden sm:max-w-5xl">
         <DialogHeader className="shrink-0 pr-8">
           <DialogTitle className="break-words">{version.original_filename}</DialogTitle>

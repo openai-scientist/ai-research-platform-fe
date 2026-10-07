@@ -112,6 +112,7 @@ export class ApiService {
       body?.error?.details ?? [],
       body?.meta?.request_id ?? response.headers["x-request-id"] ?? null,
       retryAfter,
+      body?.error?.reason ?? null,
     );
   }
 

@@ -20,6 +20,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useDatasetDetailQuery, useUpdateDatasetMutation } from "@/hooks/use-datasets-query";
 import type { DatasetItem } from "@/lib/api/services/fetch-datasets";
 
+import { DatasetConnectionSource } from "./data-connections/dataset-connection-source";
 import { DatasetVersions } from "./dataset-versions";
 import { WorkspaceFormDialog } from "./workspace-form-dialog";
 import { ListState, perform, type WorkspaceProps } from "./workspace-ui";
@@ -129,13 +130,8 @@ export function DatasetDetails({ project, canWrite, datasetId }: WorkspaceProps 
             </div>
             {canWrite && <DatasetEditDialog key={dataset.id} dataset={dataset} projectId={project.id} />}
           </div>
-          <section aria-labelledby="dataset-versions" className="flex min-w-0 flex-col gap-3">
-            <div className="flex flex-col gap-1">
-              <h2 id="dataset-versions" className="font-medium">
-                Version history
-              </h2>
-              <p className="text-muted-foreground text-sm">Preview or download any saved CSV version.</p>
-            </div>
+          <DatasetConnectionSource dataset={dataset} projectId={project.id} canWrite={canWrite} />
+          <section aria-label="Dataset version history" className="min-w-0">
             <DatasetVersions key={dataset.id} dataset={dataset} projectId={project.id} canWrite={canWrite} />
           </section>
         </>
