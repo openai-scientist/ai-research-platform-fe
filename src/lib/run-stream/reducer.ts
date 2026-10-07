@@ -1,6 +1,6 @@
 import { type Draft, produce } from "immer";
 
-import type { RunEvent, RunStage } from "./contract";
+import type { Gate, GateKind, RunEvent, RunStage } from "./contract";
 import { emptyContent, initialRunState, type RunState, type StageContent } from "./run-state";
 
 type ContentOf<S extends RunStage> = Extract<StageContent, { stage: S }>;
@@ -87,11 +87,20 @@ export function applyRunEvent(previous: RunState, event: RunEvent): RunState {
         break;
       }
       case "agent.message": {
-        const { message_id, delta, done } = event.payload;
+        const payload = event.payload as {
+          message_id: string;
+          delta?: string;
+          text?: string;
+          done?: boolean;
+        };
+        const chunk = payload.delta ?? payload.text ?? "";
         const actor = event.actor ?? "code";
-        if (state.message?.id === message_id) state.message.text += delta;
-        else state.message = { id: message_id, actor, text: delta, done: false };
-        if (done) {
+        if (state.message?.id === payload.message_id) {
+          state.message.text = payload.text ?? state.message.text + chunk;
+        } else {
+          state.message = { id: payload.message_id, actor, text: chunk, done: false };
+        }
+        if (payload.done) {
           state.message.done = true;
           state.feed.push({ seq: event.seq, actor, text: state.message.text, kind: "message" });
         }
@@ -255,7 +264,24 @@ export function applyRunEvent(previous: RunState, event: RunEvent): RunState {
       }
       case "screen.scored": {
         const c = content(state, event, "screen");
-        if (c) c.points.push(...event.payload.points);
+        if (c) {
+          const payload = event.payload as {
+            points?: { id: string; relevance: number; quality: number }[];
+            paper_id?: string;
+            score?: number;
+            relevance?: number;
+            quality?: number;
+          };
+          if (Array.isArray(payload.points)) {
+            c.points.push(...payload.points);
+          } else if (payload.paper_id) {
+            c.points.push({
+              id: payload.paper_id,
+              relevance: payload.score ?? payload.relevance ?? 8.0,
+              quality: payload.quality ?? 8.0,
+            });
+          }
+        }
         break;
       }
       case "screen.rejected": {
@@ -599,30 +625,99 @@ export function applyRunEvent(previous: RunState, event: RunEvent): RunState {
       }
 
       // ---------- review stops ----------
-      case "gate.opened":
-        state.gate = event.payload.gate;
+      case "gate.opened": {
+        const payload = event.payload as {
+          gate?: Gate;
+          gate_id?: string;
+          kind?: GateKind;
+          title?: string;
+          why?: string;
+          summary?: string[];
+          options?: {
+            id: string;
+            label?: string;
+            description?: string;
+            leads_to?: string;
+            confirm_label?: string;
+            recommended?: boolean;
+            disabled?: boolean;
+          }[];
+          stop_index?: number;
+          stop_total?: number;
+          droppable?: string[];
+        };
+        const raw = payload.gate ?? (payload.gate_id ? payload : null);
+        if (raw) {
+          const rawOptions = raw.options ?? [
+            {
+              id: "approve",
+              label: "Approve literature shortlist",
+              description: "Continue reading and synthesizing with the selected papers.",
+              leads_to: "Stage 6: Read and extract knowledge cards",
+              confirm_label: "Approve and continue",
+              recommended: true,
+            },
+          ];
+          state.gate = {
+            id: raw.gate_id ?? "gate-1",
+            kind: raw.kind ?? "screen",
+            title: raw.title ?? "Review Paper Shortlist",
+            why: raw.why ?? "Screening complete. Shortlist prepared for human review.",
+            summary: Array.isArray(raw.summary)
+              ? raw.summary
+              : ["Review and confirm the literature shortlist before moving to knowledge extraction."],
+            options: rawOptions.map((opt) => ({
+              id: opt.id,
+              label: opt.label ?? opt.id,
+              description: opt.description ?? "Proceed with this option.",
+              leads_to: opt.leads_to ?? "Continue research workflow",
+              confirm_label: opt.confirm_label ?? opt.label ?? "Confirm",
+              recommended: Boolean(opt.recommended ?? opt.id === "approve"),
+              disabled: Boolean(opt.disabled),
+            })),
+            stop_index: raw.stop_index ?? 1,
+            stop_total: raw.stop_total ?? 1,
+            droppable: Array.isArray(raw.droppable) ? raw.droppable : [],
+          };
+        }
         break;
+      }
       case "gate.resolved": {
-        const kind = state.gate?.id === event.payload.gate_id ? state.gate.kind : null;
-        if (kind) state.gate = null;
+        const payload = event.payload as {
+          gate_id?: string;
+          summary?: string;
+          answer?: { note?: string; dropped?: string[]; option_id?: string };
+          option_id?: string;
+          dropped?: string[];
+          note?: string;
+        };
+        const kind = state.gate?.kind ?? "screen";
+        state.gate = null;
+        const answerNote = payload.answer?.note ?? payload.note ?? undefined;
+        const answerDropped = payload.answer?.dropped ?? payload.dropped ?? [];
+        const summary =
+          payload.summary ??
+          (payload.option_id === "approve" || payload.answer?.option_id === "approve"
+            ? "Approved shortlist."
+            : "Gate resolved.");
         const item = {
           seq: event.seq,
           actor: "you" as const,
-          text: event.payload.summary,
+          text: summary,
           kind: "decision" as const,
           stageKey: event.stage_key,
-          note: event.payload.answer.note,
+          note: answerNote,
         };
         state.decisions.push(item);
         state.feed.push(item);
-        const dropped = event.payload.answer.dropped;
-        if (!dropped?.length) break;
-        if (kind === "screen") {
-          const c = content(state, event, "screen");
-          if (c) c.dropped = dropped;
-        } else {
-          const h = content(state, event, "hypothesize");
-          if (h) h.dropped = dropped;
+        if (answerDropped.length > 0) {
+          if (kind === "screen") {
+            const c = content(state, event, "screen");
+            if (c) c.dropped = answerDropped;
+          } else {
+            const h = content(state, event, "hypothesize");
+            if (h) h.dropped = answerDropped;
+          }
         }
         break;
       }

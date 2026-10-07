@@ -166,10 +166,10 @@ export function PaperScene({
                   <b
                     className={cn(
                       "font-semibold text-xs",
-                      d.actor === "you" ? "text-amber-800 dark:text-amber-300" : AGENTS[d.actor].text,
+                      d.actor === "you" ? "text-amber-800 dark:text-amber-300" : (AGENTS[d.actor]?.text ?? ""),
                     )}
                   >
-                    {d.actor === "you" ? "You" : AGENTS[d.actor].name}
+                    {d.actor === "you" ? "You" : (AGENTS[d.actor]?.name ?? d.actor)}
                   </b>{" "}
                   <span className="font-mono text-[10.5px] text-muted-foreground">
                     #{String(d.seq).padStart(4, "0")}

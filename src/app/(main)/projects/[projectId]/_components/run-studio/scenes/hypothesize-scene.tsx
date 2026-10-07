@@ -146,8 +146,8 @@ function Thread({
         {turns.map((turn) => {
           const reply = turn.reply_to ? byId.get(turn.reply_to) : undefined;
           const depth = depthOf(turn, byId);
-          const stance = STANCE[turn.stance];
-          const agent = AGENTS[turn.actor];
+          const stance = turn.stance && STANCE[turn.stance] ? STANCE[turn.stance] : STANCE.propose;
+          const agent = turn.actor && AGENTS[turn.actor] ? AGENTS[turn.actor] : AGENTS.theorist;
           return (
             <motion.li
               key={turn.id}
@@ -179,7 +179,9 @@ function Thread({
                   >
                     {stance.label}
                   </span>
-                  {reply && <span className="text-muted-foreground">replying to {AGENTS[reply.actor].name}</span>}
+                  {reply && AGENTS[reply.actor] && (
+                    <span className="text-muted-foreground">replying to {AGENTS[reply.actor].name}</span>
+                  )}
                 </span>
                 <p className="mt-0.5 max-w-[78ch] text-sm leading-snug">
                   <TypeText text={turn.text} live={live && turn.id === newest} speed={150} />
@@ -251,7 +253,8 @@ function HypothesisCard({
           <div className="mt-1 rounded-lg bg-muted/40 px-2 pt-1.5 pb-0.5">
             <FalsifyLine falsify={h.falsify} delay={fresh ? 4 * PART_STEP : 0} className="max-w-[380px]" />
             <span className="block pb-1 text-[10.5px] text-muted-foreground">
-              Exam points. The result's 95% range must stay out of the red.
+              {(h.falsify as any)?.unit ? `${(h.falsify as any).unit}. ` : "Standardized effect size. "}The result's 95%
+              range must stay out of the red.
             </span>
           </div>
         </div>

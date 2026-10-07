@@ -318,7 +318,10 @@ export function ScopeScene({
               </b>
               <span className="text-muted-foreground">{data.approved.note}</span>
               <span className="ml-auto text-muted-foreground tabular-nums">
-                Saved {data.approved.at.slice(0, 10)} · {data.approved.at.slice(11, 16)} UTC
+                Saved{" "}
+                {data.approved.at
+                  ? `${data.approved.at.slice(0, 10)} · ${data.approved.at.slice(11, 16)} UTC`
+                  : "recently"}
               </span>
             </motion.div>
           )}

@@ -92,7 +92,7 @@ export function SceneNote({
         <AgentAvatar agent={actor} size="sm" />
       )}
       <div>
-        <b className={cn("font-semibold text-xs", !you && AGENTS[actor].text)}>{title}</b>
+        <b className={cn("font-semibold text-xs", !you && (AGENTS[actor]?.text ?? ""))}>{title}</b>
         <p>{text}</p>
         {note && <p className="mt-0.5 text-muted-foreground text-xs italic">Note: “{note}”</p>}
       </div>
@@ -107,31 +107,38 @@ export function TypeText({
   speed = 110,
   className,
 }: {
-  text: string;
+  text: any;
   live: boolean;
   speed?: number;
   className?: string;
 }) {
-  const [shown, setShown] = useState(live ? 0 : text.length);
+  const safeText =
+    typeof text === "string"
+      ? text
+      : typeof text === "object" && text !== null
+        ? ((text as any).text ?? (text as any).value ?? (text as any).statement ?? JSON.stringify(text))
+        : String(text ?? "");
+
+  const [shown, setShown] = useState(live ? 0 : safeText.length);
   useEffect(() => {
-    if (!live || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      setShown(text.length);
+    if (!live || typeof window === "undefined" || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setShown(safeText.length);
       return;
     }
     const t0 = performance.now();
     let raf = 0;
     const step = (now: number) => {
-      const next = Math.min(text.length, Math.round(((now - t0) / 1000) * speed));
+      const next = Math.min(safeText.length, Math.round(((now - t0) / 1000) * speed));
       setShown(next);
-      if (next < text.length) raf = requestAnimationFrame(step);
+      if (next < safeText.length) raf = requestAnimationFrame(step);
     };
     raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);
-  }, [text, live, speed]);
+  }, [safeText, live, speed]);
   return (
     <span className={className}>
-      {text.slice(0, shown)}
-      {shown < text.length && <Caret />}
+      {safeText.slice(0, shown)}
+      {shown < safeText.length && <Caret />}
     </span>
   );
 }

@@ -70,7 +70,12 @@ export function SynthesizeScene({
   const placed = new Set(data.clusters.flatMap((c) => c.card_ids));
   const pool = cards.filter((c) => !placed.has(c.id));
   const tension = data.tensions[0];
-  const cite = new Map(cards.map((c) => [c.id, shortCite(c.citation)]));
+  const betweenList = Array.isArray(tension?.between)
+    ? tension.between
+    : typeof tension?.between === "string"
+      ? ((tension.between as string).match(/C\d+/g) ?? ["C1", "C2"])
+      : ["C1", "C2"];
+  const cite = new Map((cards ?? []).map((c) => [c.id, shortCite(c.citation)]));
   const label = (id: string) => cite.get(id) ?? id;
   const toneOf = (clusterId: string) =>
     TONES[
@@ -80,7 +85,7 @@ export function SynthesizeScene({
       ) % 4
     ];
 
-  const rankOf = new Map(data.ranking.map((r) => [r.gap_id, r]));
+  const rankOf = new Map((data.ranking ?? []).map((r) => [r.gap_id, r]));
   const ranked = data.ranking.length > 0;
   const gaps = ranked
     ? [...data.gaps].sort((a, b) => (rankOf.get(a.id)?.priority ?? 99) - (rankOf.get(b.id)?.priority ?? 99))
@@ -117,7 +122,7 @@ export function SynthesizeScene({
         <div className="grid gap-3 md:grid-cols-2">
           {data.clusters.map((cluster) => {
             const tone = toneOf(cluster.id);
-            const pulled = tension?.between.includes(cluster.id);
+            const pulled = Boolean(betweenList.includes(cluster.id));
             return (
               <motion.section
                 key={cluster.id}
@@ -141,12 +146,12 @@ export function SynthesizeScene({
                   </b>
                   <b className="font-semibold">{cluster.title}</b>
                   <span className="ml-auto font-mono text-[11px] text-muted-foreground">
-                    {cluster.card_ids.length} paper{cluster.card_ids.length === 1 ? "" : "s"}
+                    {(cluster.card_ids ?? []).length} paper{cluster.card_ids.length === 1 ? "" : "s"}
                   </span>
                 </header>
                 <p className="text-muted-foreground text-xs leading-snug">{cluster.claim}</p>
                 <div className="mt-auto flex flex-wrap gap-1.5">
-                  {cluster.card_ids.map((id) => (
+                  {(cluster.card_ids ?? []).map((id) => (
                     <Chip key={id} id={id} label={label(id)} tone={tone.chip} lit={lit.has(id)} />
                   ))}
                 </div>
@@ -177,10 +182,10 @@ export function SynthesizeScene({
                 <b
                   className={cn(
                     "inline-flex h-6 items-center rounded-md px-2 font-mono font-semibold text-xs",
-                    toneOf(tension.between[0]).badge,
+                    toneOf(betweenList[0] ?? "C1").badge,
                   )}
                 >
-                  {tension.between[0]}
+                  {betweenList[0] ?? "C1"}
                 </b>
                 <svg viewBox="0 0 120 12" className="h-3 flex-1" aria-hidden="true">
                   <motion.line
@@ -214,15 +219,15 @@ export function SynthesizeScene({
                 <b
                   className={cn(
                     "inline-flex h-6 items-center rounded-md px-2 font-mono font-semibold text-xs",
-                    toneOf(tension.between[1]).badge,
+                    toneOf(betweenList[1] ?? "C2").badge,
                   )}
                 >
-                  {tension.between[1]}
+                  {betweenList[1] ?? "C2"}
                 </b>
               </div>
               <p className="text-sm leading-relaxed">{tension.text}</p>
               <div className="grid grid-cols-2 gap-2 text-xs">
-                {tension.between.map((id) => {
+                {betweenList.map((id) => {
                   const cluster = data.clusters.find((c) => c.id === id);
                   return (
                     <span key={id} className="rounded-lg bg-muted/60 px-2.5 py-2">
@@ -285,14 +290,19 @@ export function SynthesizeScene({
                         </motion.span>
                       )}
                     </span>
-                    <span className="col-start-2 flex flex-wrap items-center gap-1 text-muted-foreground text-xs">
-                      from the limits of
-                      {gap.from.map((id) => (
-                        <span key={id} className="inline-flex h-5 items-center rounded-md bg-muted px-1.5 text-[11px]">
-                          {label(id)}
-                        </span>
-                      ))}
-                    </span>
+                    {gap.from && gap.from.length > 0 && (
+                      <span className="col-start-2 flex flex-wrap items-center gap-1 text-muted-foreground text-xs">
+                        from the limits of
+                        {(gap.from ?? []).map((id) => (
+                          <span
+                            key={id}
+                            className="inline-flex h-5 items-center rounded-md bg-muted px-1.5 text-[11px]"
+                          >
+                            {label(id)}
+                          </span>
+                        ))}
+                      </span>
+                    )}
                     {opportunity && (
                       <motion.span
                         initial={live ? { opacity: 0, height: 0 } : false}
