@@ -5,14 +5,15 @@ import { useRef, useState } from "react";
 import Link from "next/link";
 
 import { useQueryClient } from "@tanstack/react-query";
+import { cn } from "cn";
 import { RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { showConnectionError, useConnectionAccess, useInfiniteDataConnections } from "@/hooks/use-data-connections";
 import { collectPages } from "@/lib/api/infinite-pagination";
 import { projectKeys } from "@/lib/api/query-keys";
@@ -29,18 +30,30 @@ import { WorkspaceFormDialog } from "../workspace-form-dialog";
 import { LoadMore } from "../workspace-ui";
 import { CONNECTION_PROVIDERS } from "./connection-display";
 
-export function DatasetVersionOrigin({ version }: { version: DatasetVersionItem }) {
+export function DatasetVersionOrigin({ version, compact = false }: { version: DatasetVersionItem; compact?: boolean }) {
   const origin = version.source_type === "connection" ? version.source : null;
   if (!origin) return <span className="text-muted-foreground text-xs">CSV upload</span>;
   return (
-    <div className="flex min-w-0 flex-col gap-1 text-xs">
-      <span>
+    <div className={cn("flex min-w-0 gap-1 text-xs", compact ? "flex-wrap items-baseline gap-x-2" : "flex-col")}>
+      <span className="min-w-0 break-words">
         {origin.connection_name} · {CONNECTION_PROVIDERS[origin.connection_kind].label}
       </span>
-      <span className="text-muted-foreground">
+      <span className="min-w-0 break-words text-muted-foreground">
+        {compact && <span aria-hidden="true">· </span>}
         {origin.source.type === "table" ? `${origin.source.schema}.${origin.source.name}` : "SELECT query"}
       </span>
-      <span className="text-muted-foreground">Fetched {new Date(origin.fetched_at).toLocaleString("en-US")}</span>
+      <time
+        dateTime={origin.fetched_at}
+        title={new Date(origin.fetched_at).toLocaleString("en-US")}
+        className="text-muted-foreground"
+      >
+        {compact && <span aria-hidden="true">· </span>}
+        Fetched{" "}
+        {new Date(origin.fetched_at).toLocaleString(
+          "en-US",
+          compact ? { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" } : undefined,
+        )}
+      </time>
     </div>
   );
 }
@@ -99,7 +112,36 @@ function ReplacementConnection({
   );
 }
 
-export function DatasetConnectionSource({
+export function DatasetConnectionSource({ dataset }: { dataset: DatasetItem }) {
+  const version = dataset.latest_version;
+  const source = version?.source_type === "connection" ? version.source?.source : null;
+  const [showSql, setShowSql] = useState(false);
+
+  if (!version) return null;
+
+  return (
+    <section aria-label="Dataset source" className="flex min-w-0 flex-col gap-2">
+      <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
+        <div className="flex min-w-0 items-baseline gap-2">
+          <span className="shrink-0 text-muted-foreground text-xs">Source</span>
+          <DatasetVersionOrigin version={version} compact />
+        </div>
+        {source?.type === "query" && (
+          <Button variant="ghost" size="sm" onClick={() => setShowSql((value) => !value)} aria-expanded={showSql}>
+            {showSql ? "Hide SQL query" : "View SQL query"}
+          </Button>
+        )}
+      </div>
+      {source?.type === "query" && showSql && (
+        <pre className="max-h-56 overflow-auto rounded-lg bg-muted p-3 text-xs">
+          <code>{source.sql}</code>
+        </pre>
+      )}
+    </section>
+  );
+}
+
+export function DatasetConnectionActions({
   dataset,
   projectId,
   canWrite,
@@ -112,7 +154,6 @@ export function DatasetConnectionSource({
   const access = useConnectionAccess(projectId);
   const origin = dataset.latest_version?.source_type === "connection" ? dataset.latest_version.source : null;
   const [pending, setPending] = useState(false);
-  const [showSql, setShowSql] = useState(false);
   const [missingConnection, setMissingConnection] = useState(false);
   const [needsReconciliation, setNeedsReconciliation] = useState(false);
   const locked = useRef(false);
@@ -188,17 +229,16 @@ export function DatasetConnectionSource({
 
   if (!origin) return null;
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <CardTitle>Source</CardTitle>
-          {canWrite &&
-            (needsReconciliation ? (
-              <Button variant="outline" disabled={pending} onClick={() => void reload()}>
-                {pending && <Spinner data-icon="inline-start" />}Reload versions
-              </Button>
-            ) : (
-              access.configured && (
+    <div className="flex flex-wrap items-center gap-2">
+      {canWrite &&
+        (needsReconciliation ? (
+          <Button variant="outline" disabled={pending} onClick={() => void reload()}>
+            {pending && <Spinner data-icon="inline-start" />}Reload versions
+          </Button>
+        ) : (
+          access.configured && (
+            <Tooltip>
+              <TooltipTrigger asChild>
                 <Button
                   variant="outline"
                   disabled={pending || access.rateLimited}
@@ -207,36 +247,16 @@ export function DatasetConnectionSource({
                   {pending ? <Spinner data-icon="inline-start" /> : <RefreshCw data-icon="inline-start" />}{" "}
                   {pending ? "Refreshing…" : "Refresh data"}
                 </Button>
-              )
-            ))}
-        </div>
-      </CardHeader>
-      <CardContent className="flex min-w-0 flex-col gap-4">
-        {dataset.latest_version && <DatasetVersionOrigin version={dataset.latest_version} />}
-        {origin.source.type === "query" && (
-          <div className="flex min-w-0 flex-col gap-2">
-            <Button
-              variant="ghost"
-              className="self-start"
-              onClick={() => setShowSql((value) => !value)}
-              aria-expanded={showSql}
-            >
-              {showSql ? "Hide SQL query" : "View SQL query"}
-            </Button>
-            {showSql && (
-              <pre className="max-h-56 overflow-auto rounded-lg bg-muted p-3 text-xs">
-                <code>{origin.source.sql}</code>
-              </pre>
-            )}
-          </div>
-        )}
-        <p className="text-pretty text-muted-foreground text-xs">
-          Refresh imports the current source data into a new version. Existing versions remain available.
-        </p>
-        {missingConnection && canWrite && access.configured && (
-          <ReplacementConnection projectId={projectId} pending={pending} onRefresh={refresh} />
-        )}
-      </CardContent>
-    </Card>
+              </TooltipTrigger>
+              <TooltipContent>
+                Refresh imports the current source data into a new version. Existing versions remain available.
+              </TooltipContent>
+            </Tooltip>
+          )
+        ))}
+      {missingConnection && canWrite && access.configured && (
+        <ReplacementConnection projectId={projectId} pending={pending} onRefresh={refresh} />
+      )}
+    </div>
   );
 }

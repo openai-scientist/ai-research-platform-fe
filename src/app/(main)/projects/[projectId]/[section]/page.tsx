@@ -70,6 +70,7 @@ export default async function Page({ params }: { params: Promise<{ projectId: st
         isAdmin={user.role === "SYSTEM_ADMIN"}
         userId={user.id}
         membersHeader={section === "members" ? header : undefined}
+        connectionsHeader={section === "connections" ? header : undefined}
       />
     </div>
   );

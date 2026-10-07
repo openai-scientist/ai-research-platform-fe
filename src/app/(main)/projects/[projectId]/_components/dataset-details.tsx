@@ -115,23 +115,29 @@ export function DatasetDetails({ project, canWrite, datasetId }: WorkspaceProps 
       />
       {dataset && (
         <>
-          <div className="flex min-w-0 flex-col items-start justify-between gap-4 sm:flex-row">
-            <div className="flex min-w-0 flex-1 flex-col gap-2">
-              <h1 className="break-words font-heading text-3xl tracking-tight">{dataset.name}</h1>
-              <p className="max-w-3xl whitespace-pre-wrap break-words text-muted-foreground text-sm">
-                {dataset.description?.trim() || "No description provided."}
-              </p>
-              {latest && (
-                <p className="text-muted-foreground text-sm">
-                  Latest version: v{latest.version_number} · {latest.row_count.toLocaleString()} rows ·{" "}
-                  {latest.column_names.length} columns
-                </p>
-              )}
+          <header className="flex min-w-0 flex-col gap-3">
+            <div className="flex min-w-0 flex-col items-start justify-between gap-3 sm:flex-row">
+              <div className="flex min-w-0 flex-1 flex-col gap-1">
+                <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
+                  <h1 className="min-w-0 break-words font-heading font-semibold text-xl">{dataset.name}</h1>
+                  {latest && (
+                    <p className="text-muted-foreground text-sm">
+                      <span className="sr-only">Latest dataset version: </span>v{latest.version_number} ·{" "}
+                      {latest.row_count.toLocaleString()} rows · {latest.column_names.length} columns
+                    </p>
+                  )}
+                </div>
+                {dataset.description?.trim() && (
+                  <p className="max-w-prose whitespace-pre-wrap break-words text-muted-foreground text-sm">
+                    {dataset.description.trim()}
+                  </p>
+                )}
+              </div>
+              {canWrite && <DatasetEditDialog key={dataset.id} dataset={dataset} projectId={project.id} />}
             </div>
-            {canWrite && <DatasetEditDialog key={dataset.id} dataset={dataset} projectId={project.id} />}
-          </div>
-          <DatasetConnectionSource dataset={dataset} projectId={project.id} canWrite={canWrite} />
-          <section aria-label="Dataset version history" className="min-w-0">
+            <DatasetConnectionSource dataset={dataset} />
+          </header>
+          <section aria-label="Latest dataset version" className="min-w-0">
             <DatasetVersions key={dataset.id} dataset={dataset} projectId={project.id} canWrite={canWrite} />
           </section>
         </>

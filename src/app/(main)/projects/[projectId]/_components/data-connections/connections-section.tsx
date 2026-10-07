@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 
 import { useRouter } from "next/navigation";
 
@@ -117,7 +117,7 @@ function ConnectionDetails({ connection, onClose }: { connection: ConnectionItem
   );
 }
 
-export function ConnectionsSection({ project, canWrite }: WorkspaceProps) {
+export function ConnectionsSection({ project, canWrite, header }: WorkspaceProps & { header?: ReactNode }) {
   const router = useRouter();
   const access = useConnectionAccess(project.id);
   const [search, setSearch] = useState("");
@@ -135,12 +135,9 @@ export function ConnectionsSection({ project, canWrite }: WorkspaceProps) {
   const disabled = actions.pending || access.rateLimited;
 
   return (
-    <div className="flex min-w-0 flex-col gap-5">
+    <div className="flex min-w-0 flex-col gap-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex min-w-0 flex-col gap-1">
-          <h1 className="font-semibold text-xl">Data Connections</h1>
-          <p className="text-muted-foreground text-sm">Manage the external databases connected to this project.</p>
-        </div>
+        {header}
         {canWrite && access.configured && (
           <Button disabled={disabled} onClick={() => setFlow({})}>
             <Plus data-icon="inline-start" />

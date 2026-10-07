@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 
+import { cn } from "cn";
+
 import { DialogScrollArea } from "@/components/dialog-scroll-area";
 import { Button } from "@/components/ui/button";
 import {
@@ -31,6 +33,7 @@ export function DatasetCsvPreview({
   open: controlledOpen,
   onOpenChange,
   showTrigger = true,
+  inline = false,
 }: {
   projectId: string;
   datasetId: string;
@@ -38,6 +41,7 @@ export function DatasetCsvPreview({
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   showTrigger?: boolean;
+  inline?: boolean;
 }) {
   const [localOpen, setLocalOpen] = useState(false);
   const open = controlledOpen ?? localOpen;
@@ -52,9 +56,66 @@ export function DatasetCsvPreview({
       const text = await blob.slice(0, PREVIEW_BYTES).text();
       return previewRows(text, ",", blob.size <= PREVIEW_BYTES);
     },
-    { enabled: open, staleTime: Infinity },
+    { enabled: inline ? true : open, staleTime: Infinity },
   );
   const rows = query.data ?? [];
+
+  const content = (
+    <div className="flex min-h-0 min-w-0 flex-col gap-3">
+      <ListState
+        pending={query.isFetching && !query.data}
+        failed={query.isError}
+        empty={!query.isFetching && !query.isError && rows.length <= 1}
+        title="CSV rows"
+        retry={query.refetch}
+      />
+      {rows.length > 1 && (
+        <DialogScrollArea
+          horizontal
+          contentLabel="CSV preview table"
+          className={cn(
+            "rounded-lg border border-border",
+            inline ? "max-h-[max(16rem,calc(100dvh-22rem))] sm:max-h-[max(16rem,calc(100dvh-19rem))]" : "max-h-[55dvh]",
+          )}
+          contentClassName="p-0!"
+        >
+          <Table>
+            <TableHeader className="sticky top-0 bg-muted">
+              <TableRow>
+                <TableHead className="w-12">Row</TableHead>
+                {rows[0].map((column, index) => (
+                  // biome-ignore lint/suspicious/noArrayIndexKey: Column positions are fixed in this immutable preview.
+                  <TableHead key={index} className="min-w-36 whitespace-normal break-words">
+                    {column || `Column ${index + 1}`}
+                  </TableHead>
+                ))}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.slice(1).map((row, index) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: Row coordinates are stable in this unsorted preview.
+                <TableRow key={index}>
+                  <TableCell className="align-top text-muted-foreground">{index + 1}</TableCell>
+                  {rows[0].map((_, column) => (
+                    // biome-ignore lint/suspicious/noArrayIndexKey: Duplicate CSV values are valid; column position identifies each cell.
+                    <TableCell key={column} className="max-w-80 whitespace-pre-wrap break-words align-top">
+                      {row[column] ?? ""}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </DialogScrollArea>
+      )}
+      <p className="text-muted-foreground text-xs">
+        Preview shows up to 100 rows and 50 columns from the start of the file. Download CSV to view the complete
+        dataset.
+      </p>
+    </div>
+  );
+
+  if (inline) return content;
 
   return (
     <Dialog open={open} onOpenChange={changeOpen}>
@@ -73,50 +134,7 @@ export function DatasetCsvPreview({
             columns
           </DialogDescription>
         </DialogHeader>
-        <div className="flex min-h-0 min-w-0 flex-col gap-3">
-          <ListState
-            pending={query.isFetching && !query.data}
-            failed={query.isError}
-            empty={!query.isFetching && !query.isError && !rows.length}
-            title="CSV rows"
-            retry={query.refetch}
-          />
-          {rows.length > 0 && (
-            <DialogScrollArea horizontal contentLabel="CSV preview table" className="max-h-[55dvh]">
-              <Table>
-                <TableHeader className="sticky top-0 bg-muted">
-                  <TableRow>
-                    <TableHead className="w-12">Row</TableHead>
-                    {rows[0].map((column, index) => (
-                      // biome-ignore lint/suspicious/noArrayIndexKey: Column positions are fixed in this immutable preview.
-                      <TableHead key={index} className="min-w-36 whitespace-normal break-words">
-                        {column || `Column ${index + 1}`}
-                      </TableHead>
-                    ))}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {rows.slice(1).map((row, index) => (
-                    // biome-ignore lint/suspicious/noArrayIndexKey: Row coordinates are stable in this unsorted preview.
-                    <TableRow key={index}>
-                      <TableCell className="align-top text-muted-foreground">{index + 1}</TableCell>
-                      {rows[0].map((_, column) => (
-                        // biome-ignore lint/suspicious/noArrayIndexKey: Duplicate CSV values are valid; column position identifies each cell.
-                        <TableCell key={column} className="max-w-80 whitespace-pre-wrap break-words align-top">
-                          {row[column] ?? ""}
-                        </TableCell>
-                      ))}
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </DialogScrollArea>
-          )}
-          <p className="text-muted-foreground text-xs">
-            Preview shows up to 100 rows and 50 columns from the start of the file. Download CSV to view the complete
-            dataset.
-          </p>
-        </div>
+        {content}
         <DialogFooter className="shrink-0">
           <DialogClose asChild>
             <Button variant="secondary">Close</Button>

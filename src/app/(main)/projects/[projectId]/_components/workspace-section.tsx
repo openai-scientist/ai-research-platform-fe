@@ -36,6 +36,7 @@ export function WorkspaceSection({
   datasetId,
   experimentSection,
   membersHeader,
+  connectionsHeader,
 }: {
   project: ProjectItem;
   section: string;
@@ -45,6 +46,7 @@ export function WorkspaceSection({
   datasetId?: string;
   experimentSection?: RunSection | "current" | "history";
   membersHeader?: ReactNode;
+  connectionsHeader?: ReactNode;
 }) {
   const query = useProjectDetailQuery(initial.id, { refetchInterval: (state) => (state.state.error ? false : 15_000) });
   const project = query.data?.data ?? initial;
@@ -71,6 +73,7 @@ export function WorkspaceSection({
   if (section === "research-context")
     return <ResearchContextSection {...props} section={experimentSection === "history" ? "history" : "current"} />;
   if (section === "members") return <MembersSection {...props} header={membersHeader} />;
+  if (section === "connections") return <ConnectionsSection {...props} header={connectionsHeader} />;
   if (!Screen || (section === "settings" && !canManage)) return null;
   return <Screen {...props} />;
 }
