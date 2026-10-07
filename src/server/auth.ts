@@ -18,19 +18,25 @@ export const getCurrentSession = cache(async (): Promise<CurrentUser | null> => 
   const session = (await cookies()).get(AUTH_COOKIE_NAME)?.value;
   if (!session) return null;
 
-  const response = await fetch(`${getServerApiBaseUrl()}/auth/me`, {
-    headers: { Cookie: `${AUTH_COOKIE_NAME}=${session}` },
-    credentials: "include",
-    cache: "no-store",
-    signal: AbortSignal.timeout(15000),
-  });
-  const body: ApiResponse<CurrentUser> = await response.json();
-  if (!body.success) {
-    if (SESSION_INVALID_CODES.includes(body.error.code)) return null;
-    throw new ApiError(response.status, body.error.code, body.message, body.error.details, body.meta.request_id);
+  try {
+    const response = await fetch(`${getServerApiBaseUrl()}/auth/me`, {
+      headers: { Cookie: `${AUTH_COOKIE_NAME}=${session}` },
+      credentials: "include",
+      cache: "no-store",
+      signal: AbortSignal.timeout(15000),
+    });
+    const body: ApiResponse<CurrentUser> = await response.json();
+    if (!body.success) {
+      if (SESSION_INVALID_CODES.includes(body.error.code)) return null;
+      throw new ApiError(response.status, body.error.code, body.message, body.error.details, body.meta.request_id);
+    }
+    if (!response.ok) throw new Error("Unable to validate session");
+    return body.data;
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    console.warn("Unable to reach auth service or validate session:", error);
+    return null;
   }
-  if (!response.ok) throw new Error("Unable to validate session");
-  return body.data;
 });
 
 export async function getAuthenticatedUser(projectId?: string): Promise<AuthUser | null> {
