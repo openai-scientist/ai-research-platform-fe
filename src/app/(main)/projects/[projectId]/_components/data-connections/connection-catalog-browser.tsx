@@ -115,17 +115,17 @@ export function ConnectionCatalogBrowser({ flow }: { flow: ConnectionFlowState }
     if (flow.busy)
       return (
         <div className="max-w-xl">
-          <CatalogLoading label="Loading database catalog" />
+          <CatalogLoading label="Loading data catalog" />
         </div>
       );
     return (
       <Empty className="mx-auto max-w-2xl flex-none py-8">
         <EmptyHeader>
-          <EmptyTitle>{flow.catalogLoaded ? "No accessible schemas" : "Load your database catalog"}</EmptyTitle>
+          <EmptyTitle>{flow.catalogLoaded ? "No accessible sources" : "Load your data catalog"}</EmptyTitle>
           <EmptyDescription>
             {flow.catalogLoaded
-              ? "The catalog returned no schemas. Check the database account's read permissions, then reload."
-              : "Reload the catalog to list the schemas, tables and columns available to this connection."}
+              ? "The catalog returned no sources. Check the account's read permissions, then reload."
+              : "Reload the catalog to list the sources and columns available to this connection."}
           </EmptyDescription>
         </EmptyHeader>
         <EmptyContent className="flex-row flex-wrap justify-center">
@@ -134,9 +134,11 @@ export function ConnectionCatalogBrowser({ flow }: { flow: ConnectionFlowState }
               Reload catalog
             </Button>
           )}
-          <Button variant="outline" disabled={flow.disabled} onClick={() => flow.setMode("query")}>
-            Use SQL query
-          </Button>
+          {!flow.isGoogle && (
+            <Button variant="outline" disabled={flow.disabled} onClick={() => flow.setMode("query")}>
+              Use SQL query
+            </Button>
+          )}
         </EmptyContent>
       </Empty>
     );
@@ -177,7 +179,15 @@ export function ConnectionCatalogBrowser({ flow }: { flow: ConnectionFlowState }
       <div className="grid min-h-0 flex-1 grid-cols-1 overflow-y-auto rounded-lg border md:grid-cols-[minmax(0,0.7fr)_minmax(0,1fr)_minmax(0,1.3fr)] md:overflow-hidden lg:grid-cols-[16rem_20rem_minmax(0,1fr)]">
         <CatalogPane
           id="catalog-schemas"
-          title={flow.kind === "bigquery" ? "Datasets" : "Schemas"}
+          title={
+            flow.kind === "google_sheets"
+              ? "Spreadsheet"
+              : flow.kind === "google_drive"
+                ? "Files"
+                : flow.kind === "bigquery"
+                  ? "Datasets"
+                  : "Schemas"
+          }
           icon={Database}
           count={flow.schemas.length}
           controls={

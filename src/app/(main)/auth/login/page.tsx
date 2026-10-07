@@ -7,8 +7,10 @@ import type { Metadata } from "next";
 import { APP_CONFIG } from "@/config/app-config";
 import { getRoleHomePath } from "@/lib/auth/auth-config";
 import { getAuthenticatedUser } from "@/server/auth";
+import { isGoogleSignInAvailable } from "@/server/google-sign-in";
 
 import { LoginForm } from "../_components/login-form";
+import { GoogleSignInFeedback } from "../_components/social-auth/google-sign-in-feedback";
 
 export const metadata: Metadata = {
   title: "Login · ResearchLab AI",
@@ -18,10 +20,12 @@ export const metadata: Metadata = {
 export default async function LoginPage() {
   const user = await getAuthenticatedUser();
   if (user) redirect(getRoleHomePath(user.role));
+  const googleSignInAvailable = isGoogleSignInAvailable();
   return (
     <>
+      <GoogleSignInFeedback />
       <div className="mx-auto flex w-full max-w-[350px] flex-col justify-center px-4 py-24 sm:px-0">
-        <LoginForm />
+        <LoginForm googleSignInAvailable={googleSignInAvailable} />
       </div>
 
       <div className="absolute top-5 flex w-full justify-end px-10">

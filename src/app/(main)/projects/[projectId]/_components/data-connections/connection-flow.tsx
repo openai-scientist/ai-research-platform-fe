@@ -17,7 +17,11 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
-import type { ConnectionItem, ConnectionKind } from "@/lib/api/services/fetch-data-connections";
+import {
+  type ConnectionItem,
+  type ConnectionKind,
+  isGoogleConnection,
+} from "@/lib/api/services/fetch-data-connections";
 import type { DatasetItem } from "@/lib/api/services/fetch-datasets";
 import type { ProjectItem } from "@/lib/api/services/fetch-project";
 
@@ -25,19 +29,21 @@ import { CONNECTION_PROVIDERS, ConnectionLogo } from "./connection-display";
 import { ConnectionForm, ConnectionGuidance } from "./connection-form";
 import { ConnectionPreviewStep } from "./connection-preview-step";
 import { ConnectionCatalogRefresh, ConnectionSourceControls, ConnectionSourceStep } from "./connection-source-step";
+import type { GoogleConnectionResume } from "./google-connection-state";
+import { GoogleReconnectButton } from "./google-reconnect-button";
 import { type ConnectionFlowState, type ConnectionStep, useConnectionFlow } from "./use-connection-flow";
 
 const STAGES = [
   {
-    label: "Database",
-    title: "Choose your database",
-    purpose: "Choose the database that holds your research data.",
-    output: "Database provider",
+    label: "Provider",
+    title: "Choose your data provider",
+    purpose: "Choose the database, spreadsheet or folder that holds your research data.",
+    output: "Data provider",
   },
   {
     label: "Connect",
-    title: "Connect your database",
-    purpose: "Enter connection details. We will test the credentials before saving.",
+    title: "Connect your data source",
+    purpose: "Enter connection details. We will check access before saving.",
     output: "Saved connection",
   },
   {
@@ -59,6 +65,13 @@ const STAGES = [
     output: "Dataset version",
   },
 ] as const;
+
+function currentStage(flow: ConnectionFlowState) {
+  const stage = STAGES[flow.step];
+  return flow.isGoogle && flow.step === 2
+    ? { ...stage, purpose: "Choose a file or spreadsheet tab to import.", output: "Table source" }
+    : stage;
+}
 
 function StageTrack({ flow }: { flow: ConnectionFlowState }) {
   return (
@@ -106,7 +119,7 @@ function StageTrack({ flow }: { flow: ConnectionFlowState }) {
 }
 
 function FlowContext({ flow, project }: { flow: ConnectionFlowState; project: ProjectItem }) {
-  const stage = STAGES[flow.step];
+  const stage = currentStage(flow);
   const facts = [
     ...(flow.connection
       ? [
@@ -204,7 +217,9 @@ function FlowActions({ flow, placement = "footer" }: { flow: ConnectionFlowState
   if (flow.step === 0) return null;
   const label =
     flow.step === 1
-      ? "Connect and continue"
+      ? flow.isGoogle && !flow.grantId
+        ? "Connect Google account"
+        : "Connect and continue"
       : flow.step === 2
         ? "Continue to preview"
         : flow.step === 3
@@ -213,7 +228,7 @@ function FlowActions({ flow, placement = "footer" }: { flow: ConnectionFlowState
             ? "Reload datasets"
             : "Import dataset";
   const next = () => {
-    if (flow.step === 1) void flow.connect();
+    if (flow.step === 1) void (flow.isGoogle && !flow.grantId ? flow.authorizeGoogle() : flow.connect());
     else if (flow.step === 2) void flow.previewSource();
     else if (flow.step === 3) flow.setStep(4);
     else if (flow.reconcileRequired) void flow.reconcileImport();
@@ -246,7 +261,10 @@ function FlowActions({ flow, placement = "footer" }: { flow: ConnectionFlowState
           disabled={
             flow.reconcileRequired
               ? flow.busy
-              : flow.disabled || (flow.step === 2 && !flow.source) || (flow.step === 3 && !flow.preview?.rows.length)
+              : flow.disabled ||
+                (flow.step === 1 && flow.isGoogle && !flow.googleAvailable) ||
+                (flow.step === 2 && (!flow.source || flow.needsReauthorization)) ||
+                (flow.step === 3 && !flow.preview?.rows.length)
           }
           onClick={next}
         >
@@ -261,23 +279,37 @@ function FlowActions({ flow, placement = "footer" }: { flow: ConnectionFlowState
 export function ConnectionFlow({
   project,
   initialConnection,
+  googleResume,
+  googleAvailable,
+  userId,
   canWrite,
   onClose,
   onComplete,
 }: {
   project: ProjectItem;
   initialConnection?: ConnectionItem;
+  googleResume?: GoogleConnectionResume;
+  googleAvailable: boolean;
+  userId: string;
   canWrite: boolean;
   onClose: () => void;
   onComplete: (dataset: DatasetItem) => void;
 }) {
-  const flow = useConnectionFlow(project.id, initialConnection, onComplete, canWrite);
+  const flow = useConnectionFlow(
+    project.id,
+    initialConnection,
+    onComplete,
+    canWrite,
+    userId,
+    googleAvailable,
+    googleResume,
+  );
   const reduceMotion = useReducedMotion();
   const [details, setDetails] = useState(false);
-  const stage = STAGES[flow.step];
+  const stage = currentStage(flow);
   const from =
     flow.step === 0
-      ? "Your database"
+      ? "Your data source"
       : flow.step === 1
         ? CONNECTION_PROVIDERS[flow.kind].label
         : flow.step === 2
@@ -306,7 +338,7 @@ export function ConnectionFlow({
       >
         <DialogTitle className="sr-only">Data flow — {stage.title}</DialogTitle>
         <DialogDescription className="sr-only">
-          Connect an external database and import its data in five steps.
+          Connect an external data source and import its data in five steps.
         </DialogDescription>
         <header className="flex min-h-14 shrink-0 items-center gap-3 border-b px-4 py-2 md:px-5">
           <Button variant="ghost" disabled={flow.busy} onClick={close}>
@@ -353,7 +385,7 @@ export function ConnectionFlow({
                       className="inline-flex min-w-0 items-center gap-2 text-muted-foreground text-sm"
                       title={CONNECTION_PROVIDERS[flow.kind].label}
                     >
-                      <span className="shrink-0 [&_svg]:size-5">
+                      <span className="shrink-0 [&_img]:size-5 [&_svg]:size-5">
                         <ConnectionLogo kind={flow.kind} />
                       </span>
                       <span>{CONNECTION_PROVIDERS[flow.kind].label}</span>
@@ -392,6 +424,14 @@ export function ConnectionFlow({
                   )}
                 >
                   {flow.step === 2 && <ConnectionSourceControls flow={flow} />}
+                  {flow.needsReauthorization && flow.connection && canWrite && (
+                    <GoogleReconnectButton
+                      projectId={project.id}
+                      connectionId={flow.connection.id}
+                      accountEmail={String(flow.connection.config.account_email ?? "")}
+                      disabled={flow.busy}
+                    />
+                  )}
                   <FlowActions flow={flow} placement="header" />
                   {flow.step === 2 && <ConnectionCatalogRefresh flow={flow} />}
                 </div>
@@ -418,30 +458,34 @@ export function ConnectionFlow({
                   {flow.step === 0 ? (
                     <>
                       <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
-                        {(Object.keys(CONNECTION_PROVIDERS) as ConnectionKind[]).map((kind) => {
-                          const provider = CONNECTION_PROVIDERS[kind];
-                          return (
-                            <button
-                              type="button"
-                              key={kind}
-                              disabled={flow.disabled}
-                              onClick={() => flow.chooseKind(kind)}
-                              className="rounded-xl text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
-                            >
-                              <Card className="h-full transition-colors hover:bg-muted/50">
-                                <CardHeader>
-                                  <ConnectionLogo kind={kind} />
-                                  <CardTitle className="mt-3">{provider.label}</CardTitle>
-                                  <CardDescription>{provider.description}</CardDescription>
-                                </CardHeader>
-                                <CardFooter className="justify-between">
-                                  <Badge variant="outline">{provider.category}</Badge>
-                                  <ArrowRight className="size-4 text-muted-foreground" aria-hidden="true" />
-                                </CardFooter>
-                              </Card>
-                            </button>
-                          );
-                        })}
+                        {(Object.keys(CONNECTION_PROVIDERS) as ConnectionKind[])
+                          .filter((kind) => !isGoogleConnection(kind) || flow.googleAvailable)
+                          .map((kind) => {
+                            const provider = CONNECTION_PROVIDERS[kind];
+                            return (
+                              <button
+                                type="button"
+                                key={kind}
+                                disabled={flow.disabled}
+                                onClick={() => flow.chooseKind(kind)}
+                                className="rounded-xl text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
+                              >
+                                <Card className="h-full transition-colors hover:bg-muted/50">
+                                  <CardHeader>
+                                    <ConnectionLogo kind={kind} />
+                                    <CardTitle className="mt-3">{provider.label}</CardTitle>
+                                    <CardDescription>{provider.description}</CardDescription>
+                                  </CardHeader>
+                                  <CardFooter className="justify-between">
+                                    <Badge variant="outline" className={provider.badgeColor}>
+                                      {provider.category}
+                                    </Badge>
+                                    <ArrowRight className="size-4 text-muted-foreground" aria-hidden="true" />
+                                  </CardFooter>
+                                </Card>
+                              </button>
+                            );
+                          })}
                       </div>
                       <p className="text-muted-foreground text-xs">Supabase uses PostgreSQL. MariaDB uses MySQL.</p>
                     </>
@@ -459,6 +503,20 @@ export function ConnectionFlow({
                         setDraft={flow.setDraft}
                         disabled={flow.disabled}
                       />
+                      {flow.isGoogle && flow.grantId && (
+                        <div className="flex flex-wrap items-center gap-3">
+                          <p className="text-muted-foreground text-sm">
+                            Google access authorized. Save your connection within 10 minutes of starting authorization.
+                          </p>
+                          <Button
+                            variant="outline"
+                            disabled={flow.disabled}
+                            onClick={() => void flow.authorizeGoogle()}
+                          >
+                            Use another Google account
+                          </Button>
+                        </div>
+                      )}
                       <div className="lg:hidden">
                         <ConnectionGuidance kind={flow.kind} ssl={flow.draft.ssl} />
                       </div>

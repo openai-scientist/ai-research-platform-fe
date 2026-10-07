@@ -23,9 +23,11 @@ export function useAuthSyncAcrossTabs() {
   );
 
   useEffect(() => {
+    let endingSession = false;
     const restore = () => {
       const pending = dispatch(restoreSession());
       void pending.then((action) => {
+        if (endingSession) return;
         if (
           restoreSession.fulfilled.match(action) &&
           action.payload.user.must_change_password &&
@@ -48,23 +50,29 @@ export function useAuthSyncAcrossTabs() {
     let request = shouldRestoreSession ? restore() : null;
     const stopRestoring = () => request?.abort();
     const refresh = () => {
-      if (!shouldRestoreSession) return;
+      if (!shouldRestoreSession || endingSession) return;
       request?.abort();
       request = restore();
     };
     const clearSession = () => {
+      if (endingSession) return false;
+      endingSession = true;
       request?.abort();
       apiService.setCsrfToken(null);
       dispatch(logout());
-      queryClient.clear();
-      if (!window.location.pathname.startsWith("/auth/")) {
-        router.replace(LOGIN_PATH);
-        router.refresh();
+      // Clearing the cache while protected observers are mounted recreates their queries and another 401.
+      // Cancel requests and let the document navigation discard the old cache and Router state together.
+      void queryClient.cancelQueries();
+      if (window.location.pathname.startsWith("/auth/")) {
+        queryClient.clear();
+      } else {
+        window.location.replace(LOGIN_PATH);
       }
+      return true;
     };
     const expire = () => {
-      clearSession();
-      broadcastAuthChange("signed-out");
+      // Several requests can fail together. Announce the transition once; receiving tabs must not echo it.
+      if (clearSession()) broadcastAuthChange("signed-out");
     };
     const channel = typeof BroadcastChannel === "undefined" ? null : new BroadcastChannel(AUTH_CHANNEL);
     if (channel) {
@@ -76,6 +84,8 @@ export function useAuthSyncAcrossTabs() {
           data === "profile-changed" ||
           data === "memberships-changed"
         ) {
+          if (endingSession && !window.location.pathname.startsWith("/auth/")) return;
+          endingSession = false;
           apiService.setCsrfToken(null);
           queryClient.clear();
           refresh();

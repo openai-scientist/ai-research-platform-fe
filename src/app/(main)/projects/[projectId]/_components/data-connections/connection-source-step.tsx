@@ -12,6 +12,7 @@ import { SqlQueryInput } from "./sql-query-input";
 import type { ConnectionFlowState } from "./use-connection-flow";
 
 export function ConnectionSourceControls({ flow }: { flow: ConnectionFlowState }) {
+  if (flow.isGoogle) return null;
   return (
     <div className="flex shrink-0 items-center gap-2">
       <Tabs
@@ -56,11 +57,12 @@ export function ConnectionCatalogRefresh({ flow }: { flow: ConnectionFlowState }
 
 export function ConnectionSourceStep({ flow }: { flow: ConnectionFlowState }) {
   return (
-    <div
+    <section
       className="flex h-full min-h-0 min-w-0 flex-col"
-      role="tabpanel"
+      role={flow.isGoogle ? "region" : "tabpanel"}
       id={flow.mode === "table" ? "source-browse-panel" : "source-query-panel"}
-      aria-labelledby={flow.mode === "table" ? "source-browse-tab" : "source-query-tab"}
+      aria-label={flow.isGoogle ? "Browse Google files and tabs" : undefined}
+      aria-labelledby={flow.isGoogle ? undefined : flow.mode === "table" ? "source-browse-tab" : "source-query-tab"}
     >
       {flow.mode === "table" ? (
         <ConnectionCatalogBrowser flow={flow} />
@@ -87,6 +89,6 @@ export function ConnectionSourceStep({ flow }: { flow: ConnectionFlowState }) {
           </FieldGroup>
         </ScrollArea>
       )}
-    </div>
+    </section>
   );
 }

@@ -11,7 +11,14 @@ import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import type { ConnectionKind, ConnectionSsl, CreateConnectionRequest } from "@/lib/api/services/fetch-data-connections";
+import {
+  type ConnectionKind,
+  type ConnectionSsl,
+  type CreateConnectionRequest,
+  isGoogleConnection,
+} from "@/lib/api/services/fetch-data-connections";
+
+const CONNECTION_INPUT_CLASSNAME = "h-11 bg-background md:h-10";
 
 export interface ConnectionDraft {
   name: string;
@@ -24,6 +31,7 @@ export interface ConnectionDraft {
   projectId: string;
   location: string;
   serviceAccountJson: string;
+  googleTarget: string;
 }
 export const EMPTY_CONNECTION_DRAFT: ConnectionDraft = {
   name: "",
@@ -36,11 +44,36 @@ export const EMPTY_CONNECTION_DRAFT: ConnectionDraft = {
   projectId: "",
   location: "",
   serviceAccountJson: "",
+  googleTarget: "",
 };
 
-export function createConnectionInput(kind: ConnectionKind, draft: ConnectionDraft): CreateConnectionRequest {
-  const name = draft.name.trim();
+function connectionName(value: string) {
+  const name = value.trim();
   if (name.length < 2 || name.length > 120) throw new Error("Connection name must contain 2 to 120 characters.");
+  return name;
+}
+
+export function googleConnectionDetails(draft: Pick<ConnectionDraft, "name" | "googleTarget">) {
+  const name = connectionName(draft.name);
+  const target = draft.googleTarget.trim();
+  if (!target || target.length > 2048)
+    throw new Error("Provide a Google URL or ID containing at most 2,048 characters.");
+  return { name, target };
+}
+
+export function createConnectionInput(
+  kind: ConnectionKind,
+  draft: ConnectionDraft,
+  grantId?: string,
+): CreateConnectionRequest {
+  if (isGoogleConnection(kind)) {
+    const { name, target } = googleConnectionDetails(draft);
+    if (!grantId) throw new Error("Connect your Google account before saving this connection.");
+    return kind === "google_sheets"
+      ? { name, kind, config: { spreadsheet: target }, grant_id: grantId }
+      : { name, kind, config: { folder: target }, grant_id: grantId };
+  }
+  const name = connectionName(draft.name);
   if (kind === "bigquery") {
     if (!draft.serviceAccountJson.trim() || draft.serviceAccountJson.length > 16_384) {
       throw new Error("Provide a service account JSON key containing at most 16,384 characters.");
@@ -98,6 +131,30 @@ export function ConnectionGuidance({
   ssl: ConnectionSsl;
   compact?: boolean;
 }) {
+  if (isGoogleConnection(kind)) {
+    return (
+      <div className="flex flex-col gap-3 text-pretty text-muted-foreground text-xs leading-relaxed">
+        <h3 className="font-semibold text-foreground">Before you connect</h3>
+        <p>All project members who can contribute will be able to read this source using your Google account.</p>
+        <p>
+          Grant permission to view Google Drive files when Google asks. Signing in with Google does not grant this
+          access.
+        </p>
+        <p>The first row must contain unique column names. Data below an empty header is not supported.</p>
+        {kind === "google_drive" ? (
+          <p>
+            Only files directly inside the folder are read. Subfolders are excluded. Supported: CSV, Google Sheets and
+            Excel .xlsx.
+          </p>
+        ) : (
+          <p>
+            Excel files opened in Google Sheets must be converted using File → Save as Google Sheets, or connected
+            through Google Drive.
+          </p>
+        )}
+      </div>
+    );
+  }
   return (
     <div
       className={cn(
@@ -178,19 +235,45 @@ export function ConnectionForm({
           id={`connection-${key}`}
           type={type}
           value={draft[key]}
+          maxLength={key === "name" ? 120 : undefined}
           disabled={disabled}
           aria-required={required}
           autoComplete={key === "password" ? "new-password" : "off"}
-          className="h-11 bg-background md:h-10"
+          className={CONNECTION_INPUT_CLASSNAME}
           onChange={(event) => update(key, event.target.value)}
         />
       </Field>
     );
   };
   return (
-    <FieldGroup className={cn(kind !== "bigquery" && "grid grid-cols-1 gap-4 md:grid-cols-2")}>
+    <FieldGroup
+      className={cn(!isGoogleConnection(kind) && kind !== "bigquery" && "grid grid-cols-1 gap-4 md:grid-cols-2")}
+    >
       {input("name", "Connection name", true)}
-      {kind === "bigquery" ? (
+      {isGoogleConnection(kind) ? (
+        <Field>
+          <FieldLabel htmlFor="connection-google-target">
+            {kind === "google_sheets" ? "Spreadsheet URL or ID" : "Folder URL or ID"}
+            <span className="text-destructive">*</span>
+          </FieldLabel>
+          <Input
+            id="connection-google-target"
+            className={CONNECTION_INPUT_CLASSNAME}
+            value={draft.googleTarget}
+            maxLength={2048}
+            disabled={disabled}
+            aria-required
+            autoComplete="off"
+            placeholder={
+              kind === "google_sheets"
+                ? "https://docs.google.com/spreadsheets/d/..."
+                : "https://drive.google.com/drive/folders/..."
+            }
+            onChange={(event) => update("googleTarget", event.target.value)}
+          />
+          <FieldDescription>Paste the full URL or ID of the source you want this project to read.</FieldDescription>
+        </Field>
+      ) : kind === "bigquery" ? (
         <>
           {input("projectId", "Google Cloud project ID")}
           {input("location", "Location")}
@@ -228,7 +311,7 @@ export function ConnectionForm({
                 if (value === "require" || value === "verify-full" || value === "disable") update("ssl", value);
               }}
             >
-              <SelectTrigger id="connection-ssl" className="h-11 w-full bg-background md:h-10">
+              <SelectTrigger id="connection-ssl" className={cn("w-full", CONNECTION_INPUT_CLASSNAME)}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -244,8 +327,10 @@ export function ConnectionForm({
           </Field>
         </>
       )}
-      <FieldDescription className={cn(kind !== "bigquery" && "md:col-span-2")}>
-        Connecting tests these credentials and saves the connection only when successful.
+      <FieldDescription className={cn(!isGoogleConnection(kind) && kind !== "bigquery" && "md:col-span-2")}>
+        {isGoogleConnection(kind)
+          ? "Connecting checks access to this source and saves the connection only when successful."
+          : "Connecting tests these credentials and saves the connection only when successful."}
       </FieldDescription>
     </FieldGroup>
   );

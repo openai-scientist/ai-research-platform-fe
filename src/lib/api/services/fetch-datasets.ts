@@ -79,6 +79,8 @@ export const fetchDatasets = {
             timeout: 330_000,
           })
         ).data,
+      undefined,
+      input.connection_id,
     ),
   importConnectionVersion: (
     projectId: string,
@@ -95,6 +97,8 @@ export const fetchDatasets = {
             { timeout: 330_000 },
           )
         ).data,
+      undefined,
+      input.connection_id,
     ),
   getList: async (projectId: string, params?: ListParams, signal?: AbortSignal): Promise<DatasetListResponse> => {
     const response = await apiService.get<DatasetListResponse>(datasetsPath(projectId), params, { signal });

@@ -2,7 +2,7 @@
 
 import { type ReactNode, useEffect, useRef, useState } from "react";
 
-import { FileText, Grid2X2, List, Search } from "lucide-react";
+import { FileText, Grid2X2, List, Search, Upload } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
@@ -15,7 +15,7 @@ import type { ProjectFileKind } from "@/lib/api/services/fetch-project-files";
 import { ProjectRole, ProjectStatus } from "@/types/enums";
 
 import { ProjectFilesView } from "./project-files-view";
-import { UploadProjectFileDialog } from "./upload-project-file-dialog";
+import { PROJECT_FILE_ACCEPT, useProjectFileUpload } from "./use-project-file-upload";
 import type { WorkspaceProps } from "./workspace-ui";
 
 export function ProjectFilesSection({ project, header }: WorkspaceProps & { header?: ReactNode }) {
@@ -26,6 +26,8 @@ export function ProjectFilesSection({ project, header }: WorkspaceProps & { head
   const [view, setView] = useState<"grid" | "list">("grid");
   const [filters, setFilters] = useState({ q: "", kind: "all" as "all" | ProjectFileKind });
   const loadMoreRef = useRef<HTMLDivElement>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const upload = useProjectFileUpload(project.id, canWrite);
 
   useEffect(() => {
     const q = search.trim();
@@ -39,7 +41,6 @@ export function ProjectFilesSection({ project, header }: WorkspaceProps & { head
     kind: filters.kind === "all" ? undefined : filters.kind,
   });
   const files = query.files;
-  const total = query.totalItems ?? files.length;
   const filtered = Boolean(filters.q || filters.kind !== "all");
   const { loadMore } = query;
   const canLoadMore = Boolean(query.hasNextPage && !query.isFetching && !query.isError);
@@ -63,11 +64,38 @@ export function ProjectFilesSection({ project, header }: WorkspaceProps & { head
   };
 
   return (
-    <section className="flex min-w-0 flex-col gap-4">
+    <section className="relative flex min-h-96 min-w-0 flex-col gap-4" aria-label="Project documents">
       <div className="flex min-w-0 flex-wrap items-start justify-between gap-4">
         {header}
-        {canWrite && <UploadProjectFileDialog projectId={project.id} canUpload={canWrite} />}
+        {canWrite && (
+          <>
+            <input
+              ref={fileInput}
+              type="file"
+              multiple
+              accept={PROJECT_FILE_ACCEPT}
+              className="hidden"
+              tabIndex={-1}
+              aria-hidden="true"
+              disabled={upload.disabled}
+              onChange={(event) => {
+                const selected = Array.from(event.target.files ?? []);
+                event.target.value = "";
+                void upload.uploadFiles(selected);
+              }}
+            />
+            <Button disabled={upload.disabled} onClick={() => fileInput.current?.click()}>
+              <Upload data-icon="inline-start" />
+              Upload documents
+            </Button>
+          </>
+        )}
       </div>
+      {canWrite && (
+        <p className="text-muted-foreground text-xs">
+          Drop files anywhere to upload. PDF, CSV or Excel · Up to 50 MiB per file.
+        </p>
+      )}
       <div className="flex min-w-0 flex-col gap-2">
         <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
           <div className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto">
@@ -147,7 +175,9 @@ export function ProjectFilesSection({ project, header }: WorkspaceProps & { head
               <EmptyDescription>
                 {filtered
                   ? "Try a different filename or clear the filters."
-                  : "Reference documents shared with this project will appear here."}
+                  : canWrite
+                    ? "Drop files here or use Upload documents to add reference documents."
+                    : "Reference documents shared with this project will appear here."}
               </EmptyDescription>
             </EmptyHeader>
           </Empty>
@@ -177,14 +207,20 @@ export function ProjectFilesSection({ project, header }: WorkspaceProps & { head
                 {query.isFetchNextPageError ? "Retry loading more" : "Reload documents"}
               </Button>
             )}
-            {files.length > 0 && (
-              <p className="text-center text-muted-foreground text-sm tabular-nums">
-                {files.length} of {total} {total === 1 ? "document" : "documents"}
-              </p>
-            )}
           </div>
         )}
       </div>
+      {canWrite && upload.isDragging && (
+        <Empty className="pointer-events-none absolute inset-0 border-2 border-primary bg-background/95" role="status">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <Upload />
+            </EmptyMedia>
+            <EmptyTitle>Drop files to upload</EmptyTitle>
+            <EmptyDescription>PDF, CSV or Excel · Up to 50 MiB per file.</EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+      )}
     </section>
   );
 }

@@ -65,7 +65,13 @@ export function DatasetVersions({
         <FieldGroup>
           <Field>
             <FieldLabel htmlFor="dataset-version-file">New version</FieldLabel>
-            <CsvFileInput key={fileKey} id="dataset-version-file" file={file} onChange={setFile} />
+            <CsvFileInput
+              key={fileKey}
+              id="dataset-version-file"
+              file={file}
+              onChange={setFile}
+              disabled={upload.isPending}
+            />
             <FieldDescription>CSV, UTF-8, up to 50 MiB. Previous versions are preserved.</FieldDescription>
           </Field>
         </FieldGroup>

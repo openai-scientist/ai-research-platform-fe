@@ -82,7 +82,7 @@ export function DatasetsSection({ project, canWrite }: WorkspaceProps) {
         </Field>
         <Field>
           <FieldLabel htmlFor="dataset-file">CSV file</FieldLabel>
-          <CsvFileInput key={fileKey} id="dataset-file" file={file} onChange={setFile} />
+          <CsvFileInput key={fileKey} id="dataset-file" file={file} onChange={setFile} disabled={upload.isPending} />
           <FieldDescription>UTF-8 CSV with a header and at least one data row. Maximum 50 MiB.</FieldDescription>
         </Field>
       </FieldGroup>

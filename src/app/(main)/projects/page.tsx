@@ -6,6 +6,7 @@ import { canCreateProject } from "@/lib/auth/auth-config";
 import { getAuthenticatedUser } from "@/server/auth";
 
 import { TopBarShell } from "../_components/top-bar-shell";
+import { GoogleConnectionFeedback } from "./_components/google-connection-feedback";
 import { WorkspaceProjects } from "./_components/workspace-projects";
 
 export const metadata: Metadata = {
@@ -23,6 +24,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ t
 
   return (
     <TopBarShell homeUrl="/projects" user={user}>
+      <GoogleConnectionFeedback />
       <WorkspaceProjects
         canCreate={canCreateProject(user.role)}
         initialInvitationsOpen={params.tab === "invitations"}

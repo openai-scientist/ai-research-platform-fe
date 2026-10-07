@@ -17,7 +17,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { showConnectionError, useConnectionAccess, useInfiniteDataConnections } from "@/hooks/use-data-connections";
 import { collectPages } from "@/lib/api/infinite-pagination";
 import { projectKeys } from "@/lib/api/query-keys";
-import { sameConnectionSource } from "@/lib/api/services/fetch-data-connections";
+import { isGoogleConnection, sameConnectionSource } from "@/lib/api/services/fetch-data-connections";
 import {
   type DatasetItem,
   type DatasetVersionItem,
@@ -29,6 +29,7 @@ import { ApiError } from "@/types/api";
 import { WorkspaceFormDialog } from "../workspace-form-dialog";
 import { LoadMore } from "../workspace-ui";
 import { CONNECTION_PROVIDERS } from "./connection-display";
+import { GoogleReconnectButton } from "./google-reconnect-button";
 
 export function DatasetVersionOrigin({ version, compact = false }: { version: DatasetVersionItem; compact?: boolean }) {
   const origin = version.source_type === "connection" ? version.source : null;
@@ -62,10 +63,12 @@ function ReplacementConnection({
   projectId,
   pending,
   onRefresh,
+  sourceType,
 }: {
   projectId: string;
   pending: boolean;
   onRefresh: (connectionId: string) => Promise<boolean>;
+  sourceType: "table" | "query";
 }) {
   const query = useInfiniteDataConnections(projectId);
   const access = useConnectionAccess(projectId);
@@ -88,15 +91,17 @@ function ReplacementConnection({
             </SelectTrigger>
             <SelectContent>
               <SelectGroup>
-                {query.connections.map((connection) => (
-                  <SelectItem key={connection.id} value={connection.id}>
-                    {connection.name} · {CONNECTION_PROVIDERS[connection.kind].label}
-                  </SelectItem>
-                ))}
+                {query.connections
+                  .filter((connection) => sourceType !== "query" || !isGoogleConnection(connection.kind))
+                  .map((connection) => (
+                    <SelectItem key={connection.id} value={connection.id}>
+                      {connection.name} · {CONNECTION_PROVIDERS[connection.kind].label}
+                    </SelectItem>
+                  ))}
               </SelectGroup>
             </SelectContent>
           </Select>
-          <FieldDescription>The selected database must support the saved table or SELECT query.</FieldDescription>
+          <FieldDescription>The selected connection must support the saved source.</FieldDescription>
         </Field>
         <LoadMore visible={Boolean(query.hasNextPage)} pending={query.isFetching} onClick={query.loadMore} />
         {query.isError && (
@@ -255,8 +260,20 @@ export function DatasetConnectionActions({
           )
         ))}
       {missingConnection && canWrite && access.configured && (
-        <ReplacementConnection projectId={projectId} pending={pending} onRefresh={refresh} />
+        <ReplacementConnection
+          projectId={projectId}
+          pending={pending}
+          onRefresh={refresh}
+          sourceType={origin.source.type}
+        />
       )}
+      {origin &&
+        canWrite &&
+        access.configured &&
+        isGoogleConnection(origin.connection_kind) &&
+        access.revokedConnectionIds.has(origin.connection_id) && (
+          <GoogleReconnectButton projectId={projectId} connectionId={origin.connection_id} disabled={pending} />
+        )}
     </div>
   );
 }

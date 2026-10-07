@@ -23,6 +23,7 @@ export function ConfirmDialog({
   open,
   onOpenChange,
   onConfirm,
+  disabled = false,
 }: {
   title: string;
   description: string;
@@ -32,6 +33,7 @@ export function ConfirmDialog({
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   onConfirm: () => void;
+  disabled?: boolean;
 }) {
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
@@ -43,7 +45,9 @@ export function ConfirmDialog({
         </AlertDialogHeader>
         <AlertDialogFooter className="flex-row justify-end">
           <AlertDialogCancel>{cancelLabel}</AlertDialogCancel>
-          <AlertDialogAction onClick={onConfirm}>{confirmLabel}</AlertDialogAction>
+          <AlertDialogAction onClick={onConfirm} disabled={disabled}>
+            {confirmLabel}
+          </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

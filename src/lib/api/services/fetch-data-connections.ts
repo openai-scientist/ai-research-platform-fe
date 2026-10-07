@@ -1,11 +1,15 @@
 import type { ApiResult } from "@/types/api";
 
-import { connectionRequest } from "../connection-runtime";
+import { clearConnectionRevocation, connectionRequest } from "../connection-runtime";
 import apiService from "../core";
 import { projectPath } from "../request";
 import type { ListParams } from "../types";
 
-export type ConnectionKind = "postgres" | "mysql" | "bigquery";
+export type GoogleConnectionKind = "google_sheets" | "google_drive";
+export type ConnectionKind = "postgres" | "mysql" | "bigquery" | GoogleConnectionKind;
+export function isGoogleConnection(kind: ConnectionKind): kind is GoogleConnectionKind {
+  return kind === "google_sheets" || kind === "google_drive";
+}
 export type ConnectionSsl = "require" | "verify-full" | "disable";
 export type ConnectionSource = { type: "table"; schema: string; name: string } | { type: "query"; sql: string };
 
@@ -38,7 +42,9 @@ export type CreateConnectionRequest =
       kind: "bigquery";
       config?: { project_id?: string; location?: string };
       secret: { service_account_json: string };
-    };
+    }
+  | { name: string; kind: "google_sheets"; config: { spreadsheet: string }; grant_id: string }
+  | { name: string; kind: "google_drive"; config: { folder: string }; grant_id: string };
 export interface ConnectionTable {
   schema: string;
   name: string;
@@ -76,6 +82,7 @@ export const fetchDataConnections = {
       async () =>
         (await apiService.get<ApiResult<ConnectionItem>>(connectionPath(projectId, id), undefined, { signal })).data,
       signal,
+      id,
     ),
   create: (projectId: string, input: CreateConnectionRequest) =>
     connectionRequest(
@@ -92,6 +99,16 @@ export const fetchDataConnections = {
       projectId,
       async () => (await apiService.patch<ApiResult<ConnectionItem>>(connectionPath(projectId, id), { name })).data,
     ),
+  reauthorize: (projectId: string, id: string, grantId: string) =>
+    connectionRequest(projectId, async () => {
+      const response = await apiService.post<ApiResult<ConnectionItem>>(
+        `${connectionPath(projectId, id)}/reauthorize`,
+        { grant_id: grantId },
+        { timeout: remoteTimeout },
+      );
+      clearConnectionRevocation(projectId, id);
+      return response.data;
+    }),
   remove: (projectId: string, id: string) =>
     connectionRequest(
       projectId,
@@ -106,6 +123,8 @@ export const fetchDataConnections = {
             timeout: remoteTimeout,
           })
         ).data,
+      undefined,
+      id,
     ),
   getSchemas: (projectId: string, id: string, signal?: AbortSignal) =>
     connectionRequest(
@@ -118,6 +137,7 @@ export const fetchDataConnections = {
           })
         ).data,
       signal,
+      id,
     ),
   getTables: (projectId: string, id: string, schema: string, search?: string, signal?: AbortSignal) =>
     connectionRequest(
@@ -134,6 +154,7 @@ export const fetchDataConnections = {
           )
         ).data,
       signal,
+      id,
     ),
   getColumns: (projectId: string, id: string, schema: string, table: string, signal?: AbortSignal) =>
     connectionRequest(
@@ -150,6 +171,7 @@ export const fetchDataConnections = {
           )
         ).data,
       signal,
+      id,
     ),
   preview: (projectId: string, id: string, source: ConnectionSource, signal?: AbortSignal) =>
     connectionRequest(
@@ -166,5 +188,6 @@ export const fetchDataConnections = {
           )
         ).data,
       signal,
+      id,
     ),
 };

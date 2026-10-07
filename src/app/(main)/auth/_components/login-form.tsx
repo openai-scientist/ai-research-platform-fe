@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 
 import Link from "next/link";
 
@@ -20,9 +20,10 @@ import { loginSchema } from "@/lib/auth/schemas";
 import { ApiError } from "@/types/api";
 
 import { AuthStepHeading } from "./auth-step-heading";
+import { GoogleSignInOption } from "./social-auth/google-button";
 import { VerifyEmailForm } from "./verify-email-form";
 
-export function LoginForm() {
+export function LoginForm({ googleSignInAvailable }: { googleSignInAvailable: Promise<boolean> }) {
   const { login, resendVerification } = useAuth();
   const [verification, setVerification] = useState<{
     credentials: LoginRequest;
@@ -66,6 +67,9 @@ export function LoginForm() {
   return (
     <div className="flex flex-col gap-6">
       <AuthStepHeading title="Login to your account" description="Please enter your details to login." />
+      <Suspense fallback={null}>
+        <GoogleSignInOption availability={googleSignInAvailable} disabled={busy} />
+      </Suspense>
       <form
         noValidate
         onSubmit={form.handleSubmit(onSubmit, notifyValidationError)}

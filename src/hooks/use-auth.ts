@@ -77,12 +77,8 @@ export function useAuth(projectId?: string) {
     } catch (error) {
       if (!(error instanceof ApiError) || !SESSION_INVALID_CODES.includes(error.code)) throw error;
     }
-    apiService.setCsrfToken(null);
-    dispatch(clearSession());
-    queryClient.clear();
-    broadcastAuthChange("signed-out");
-    router.replace(LOGIN_PATH);
-    router.refresh();
+    // The auth provider owns cancellation, session cleanup, cross-tab sync and the single login navigation.
+    window.dispatchEvent(new Event("auth:expired"));
     toast.success(allDevices ? "Signed out of all devices." : "Signed out successfully.");
   };
   const changePassword = async (data: ChangePasswordRequest) => {
