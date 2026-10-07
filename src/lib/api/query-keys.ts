@@ -24,6 +24,7 @@ export const projectKeys = {
   managerResearch: (id: string) => ["projects", "detail", id, "manager-research"] as const,
   memberLists: (id: string) => ["projects", "detail", id, "members"] as const,
   members: (id: string, params?: ListParams) => ["projects", "detail", id, "members", params] as const,
+  fileLists: (id: string) => ["projects", "detail", id, "files"] as const,
   datasets: (id: string, params?: ListParams) => ["projects", "detail", id, "datasets", "list", params] as const,
   dataset: (id: string, datasetId: string) => ["projects", "detail", id, "datasets", datasetId] as const,
   datasetVersions: (id: string, datasetId: string, params?: ListParams) =>

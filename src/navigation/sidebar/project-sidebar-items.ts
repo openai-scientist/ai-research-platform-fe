@@ -1,4 +1,4 @@
-import { Database, LayoutDashboard, Lightbulb, Plug, Settings, Users, Workflow } from "lucide-react";
+import { Database, FileText, LayoutDashboard, Lightbulb, Plug, Settings, Users, Workflow } from "lucide-react";
 
 import type { UserRole } from "@/lib/auth/auth-config";
 
@@ -44,6 +44,7 @@ export function getProjectSidebarItems(projectId: string, role: UserRole): NavGr
           icon: Plug,
           activeMatch: "prefix",
         },
+        { id: "project-files", title: "Documents", url: `${baseUrl}/files`, icon: FileText },
         { id: "project-findings", title: "Findings", url: `${baseUrl}/findings`, icon: Lightbulb },
       ],
     },

@@ -15,6 +15,10 @@ const sections: Record<string, { title: string; description: string; managerOnly
     title: "Datasets",
     description: "Upload, version, and download the data used by this project's research runs.",
   },
+  files: {
+    title: "Documents",
+    description: "Share PDF, CSV, and Excel reference documents with this project.",
+  },
   experiments: {
     title: "Research flow",
     description: "Start a research run from a topic and follow it stage by stage, up to the hypotheses.",
@@ -63,7 +67,7 @@ export default async function Page({ params }: { params: Promise<{ projectId: st
 
   return (
     <div className="flex flex-col gap-6">
-      {section !== "members" && section !== "connections" && header}
+      {section !== "members" && section !== "connections" && section !== "files" && header}
       <WorkspaceSection
         project={project}
         section={section}
@@ -71,6 +75,7 @@ export default async function Page({ params }: { params: Promise<{ projectId: st
         userId={user.id}
         membersHeader={section === "members" ? header : undefined}
         connectionsHeader={section === "connections" ? header : undefined}
+        filesHeader={section === "files" ? header : undefined}
       />
     </div>
   );

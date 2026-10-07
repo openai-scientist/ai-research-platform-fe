@@ -116,6 +116,18 @@ Tài liệu đính kèm project (PDF, CSV, Excel). Khác dataset: không có ver
 | `GET /projects/{id}/files/{file_id}/download` | tải file                              |
 | `DELETE /projects/{id}/files/{file_id}`       | xoá                                   |
 
+FE triển khai mục **Documents** trong sidebar Project, tại `/projects/{id}/files`.
+
+- Giao diện mặc định dạng thẻ, có Grid View / List View. Dùng infinite scroll để tải tiếp khi cuộn gần cuối danh sách, không có nút phân trang. API vẫn dùng `limit`/`offset` cho từng lượt tải.
+- Màu theo loại file: PDF đỏ, Excel xanh lá, CSV xanh dương; cùng cách thể hiện ở Grid View và List View.
+
+- Upload và xoá chỉ dành cho thành viên **đang active** có vai trò `project_manager` hoặc `researcher` trong project. Vai trò `platform_admin` riêng lẻ không cấp quyền upload/xoá file.
+- Reviewer và Platform Admin được xem danh sách, tải xuống. Project đã archive chỉ cho đọc/tải xuống.
+- Multipart chỉ có trường `file`; hỗ trợ `.pdf`, `.csv`, `.xlsx`, `.xls`, không nhận file rỗng. Giới hạn upload mặc định của BE là 50 MiB.
+- Item trả về: `id`, `project_id`, `filename`, `kind` (`pdf`, `csv`, `excel`), `content_type`, `size_bytes`, `sha256`, `created_by_user_id`, `created_at`.
+- Riêng danh sách file: `q` nhận cả 1–2 ký tự, tối đa 120 ký tự; `kind` là `pdf`, `csv` hoặc `excel`. Danh sách mới nhất trước, phân trang bằng `limit`/`offset`, tổng số ở `meta.pagination.total`.
+- Mọi lỗi API/validation của FE hiển thị qua Sonner toast. Upload/xoá thành công làm mới cache danh sách file.
+
 ## 8. Email người dùng nhận
 
 - Năm loại: thông tin đăng nhập (tài khoản admin tạo), lời mời vào project, mã xác minh, mã đặt lại mật khẩu, thông báo mật khẩu đã đổi.

@@ -12,6 +12,7 @@ import { DatasetDetails } from "./dataset-details";
 import { DatasetsSection } from "./datasets-section";
 import { ExperimentsSection } from "./experiments-section";
 import { MembersSection } from "./members-section";
+import { ProjectFilesSection } from "./project-files-section";
 import { ResearchContextSection } from "./research-context-section";
 import { FindingsSection } from "./research-preview";
 import { RunDetails } from "./run-details";
@@ -37,6 +38,7 @@ export function WorkspaceSection({
   experimentSection,
   membersHeader,
   connectionsHeader,
+  filesHeader,
 }: {
   project: ProjectItem;
   section: string;
@@ -47,6 +49,7 @@ export function WorkspaceSection({
   experimentSection?: RunSection | "current" | "history";
   membersHeader?: ReactNode;
   connectionsHeader?: ReactNode;
+  filesHeader?: ReactNode;
 }) {
   const query = useProjectDetailQuery(initial.id, { refetchInterval: (state) => (state.state.error ? false : 15_000) });
   const project = query.data?.data ?? initial;
@@ -74,6 +77,7 @@ export function WorkspaceSection({
     return <ResearchContextSection {...props} section={experimentSection === "history" ? "history" : "current"} />;
   if (section === "members") return <MembersSection {...props} header={membersHeader} />;
   if (section === "connections") return <ConnectionsSection {...props} header={connectionsHeader} />;
+  if (section === "files") return <ProjectFilesSection key={project.id} {...props} header={filesHeader} />;
   if (!Screen || (section === "settings" && !canManage)) return null;
   return <Screen {...props} />;
 }
