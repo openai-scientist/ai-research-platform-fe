@@ -2,6 +2,8 @@
 
 import { type ReactNode, useEffect, useRef, useState } from "react";
 
+import dynamic from "next/dynamic";
+
 import { FileText, Grid2X2, List, Search, Upload } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -11,12 +13,14 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectVa
 import { Spinner } from "@/components/ui/spinner";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useInfiniteProjectFiles } from "@/hooks/use-project-files-query";
-import type { ProjectFileKind } from "@/lib/api/services/fetch-project-files";
+import type { ProjectFileItem, ProjectFileKind } from "@/lib/api/services/fetch-project-files";
 import { ProjectRole, ProjectStatus } from "@/types/enums";
 
 import { ProjectFilesView } from "./project-files-view";
 import { PROJECT_FILE_ACCEPT, useProjectFileUpload } from "./use-project-file-upload";
 import type { WorkspaceProps } from "./workspace-ui";
+
+const ProjectFilePreview = dynamic(() => import("./project-file-preview"));
 
 export function ProjectFilesSection({ project, header }: WorkspaceProps & { header?: ReactNode }) {
   const canWrite =
@@ -24,6 +28,9 @@ export function ProjectFilesSection({ project, header }: WorkspaceProps & { head
     (project.my_role === ProjectRole.ProjectManager || project.my_role === ProjectRole.Researcher);
   const [search, setSearch] = useState("");
   const [view, setView] = useState<"grid" | "list">("grid");
+  const [previewFile, setPreviewFile] = useState<ProjectFileItem | null>(null);
+  const previewTriggerRef = useRef<HTMLElement | null>(null);
+  const sectionRef = useRef<HTMLElement>(null);
   const [filters, setFilters] = useState({ q: "", kind: "all" as "all" | ProjectFileKind });
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -42,6 +49,12 @@ export function ProjectFilesSection({ project, header }: WorkspaceProps & { head
   });
   const files = query.files;
   const filtered = Boolean(filters.q || filters.kind !== "all");
+  const showReload = query.isError && files.length === 0;
+  const showEmpty = !showReload && query.isSuccess && files.length === 0;
+  const defaultEmptyDescription = canWrite
+    ? "Drop files here or use Upload documents to add reference documents."
+    : "Reference documents shared with this project will appear here.";
+  const emptyDescription = filtered ? "Try a different filename or clear the filters." : defaultEmptyDescription;
   const { loadMore } = query;
   const canLoadMore = Boolean(query.hasNextPage && !query.isFetching && !query.isError);
 
@@ -64,7 +77,12 @@ export function ProjectFilesSection({ project, header }: WorkspaceProps & { head
   };
 
   return (
-    <section className="relative flex min-h-96 min-w-0 flex-col gap-4" aria-label="Project documents">
+    <section
+      ref={sectionRef}
+      tabIndex={-1}
+      className="relative flex min-h-96 min-w-0 flex-col gap-4 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      aria-label="Project documents"
+    >
       <div className="flex min-w-0 flex-wrap items-start justify-between gap-4">
         {header}
         {canWrite && (
@@ -156,7 +174,7 @@ export function ProjectFilesSection({ project, header }: WorkspaceProps & { head
             </ToggleGroupItem>
           </ToggleGroup>
         </div>
-        {query.isError && files.length === 0 ? (
+        {showReload && (
           <Button
             variant="outline"
             className="self-start"
@@ -165,23 +183,19 @@ export function ProjectFilesSection({ project, header }: WorkspaceProps & { head
           >
             Reload documents
           </Button>
-        ) : query.isSuccess && files.length === 0 ? (
+        )}
+        {showEmpty && (
           <Empty>
             <EmptyHeader>
               <EmptyMedia variant="icon">
                 <FileText />
               </EmptyMedia>
               <EmptyTitle>{filtered ? "No matching documents" : "No documents yet"}</EmptyTitle>
-              <EmptyDescription>
-                {filtered
-                  ? "Try a different filename or clear the filters."
-                  : canWrite
-                    ? "Drop files here or use Upload documents to add reference documents."
-                    : "Reference documents shared with this project will appear here."}
-              </EmptyDescription>
+              <EmptyDescription>{emptyDescription}</EmptyDescription>
             </EmptyHeader>
           </Empty>
-        ) : (
+        )}
+        {!showReload && !showEmpty && (
           <div className="flex min-w-0 flex-col gap-4">
             <ProjectFilesView
               projectId={project.id}
@@ -189,6 +203,10 @@ export function ProjectFilesSection({ project, header }: WorkspaceProps & { head
               view={view}
               canWrite={canWrite}
               pending={query.isPending}
+              onPreview={(file, trigger) => {
+                previewTriggerRef.current = trigger;
+                setPreviewFile(file);
+              }}
             />
             <div ref={loadMoreRef} className="h-px w-full" aria-hidden="true" />
             {query.isFetchingNextPage && (
@@ -210,6 +228,19 @@ export function ProjectFilesSection({ project, header }: WorkspaceProps & { head
           </div>
         )}
       </div>
+      {previewFile && (
+        <ProjectFilePreview
+          key={previewFile.id}
+          projectId={project.id}
+          file={previewFile}
+          onClose={() => setPreviewFile(null)}
+          restoreFocus={() => {
+            const trigger = previewTriggerRef.current;
+            if (trigger?.isConnected) trigger.focus();
+            else sectionRef.current?.focus();
+          }}
+        />
+      )}
       {canWrite && upload.isDragging && (
         <Empty className="pointer-events-none absolute inset-0 border-2 border-primary bg-background/95" role="status">
           <EmptyHeader>

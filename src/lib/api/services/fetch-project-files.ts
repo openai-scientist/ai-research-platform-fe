@@ -43,8 +43,8 @@ export const fetchProjectFiles = {
     const response = await apiService.upload<ApiResult<ProjectFileItem>>(filesPath(projectId), form);
     return response.data;
   },
-  download: (projectId: string, fileId: string): Promise<FileDownload> =>
-    requestDownload(`${filePath(projectId, fileId)}/download`),
+  download: (projectId: string, fileId: string, signal?: AbortSignal): Promise<FileDownload> =>
+    requestDownload(`${filePath(projectId, fileId)}/download`, signal),
   delete: async (projectId: string, fileId: string): Promise<ApiResult<null>> => {
     const response = await apiService.delete<ApiResult<null>>(filePath(projectId, fileId));
     return response.data;

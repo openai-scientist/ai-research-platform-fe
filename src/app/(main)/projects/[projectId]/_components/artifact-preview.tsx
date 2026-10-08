@@ -17,6 +17,7 @@ import { fetchArtifacts, type RunArtifactItem } from "@/lib/api/services/fetch-a
 
 import { ContextDisclosure } from "./context-disclosure";
 import { previewRows } from "./csv-preview";
+import { PdfPreview } from "./pdf-preview";
 import { StructuredData } from "./structured-data";
 
 const ArtifactMarkdown = dynamic(() => import("./artifact-markdown"), {
@@ -205,10 +206,10 @@ function ArtifactPreviewAttempt({
             />
           )}
           {preview?.kind === "pdf" && (
-            <iframe
-              title={artifact.filename}
-              src={preview.url}
-              className={cn("w-full", fullScreen ? "h-[calc(100dvh-12rem)]" : "h-[65dvh]")}
+            <PdfPreview
+              filename={artifact.filename}
+              url={preview.url}
+              className={fullScreen ? "h-[calc(100dvh-12rem)]" : "h-[65dvh]"}
             />
           )}
           {preview?.kind === "text" && <pre className="whitespace-pre-wrap break-words text-xs">{preview.text}</pre>}

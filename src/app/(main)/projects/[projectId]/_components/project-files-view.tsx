@@ -48,12 +48,14 @@ export function ProjectFilesView({
   view,
   canWrite,
   pending,
+  onPreview,
 }: {
   projectId: string;
   files: readonly ProjectFileItem[];
   view: "grid" | "list";
   canWrite: boolean;
   pending: boolean;
+  onPreview: (file: ProjectFileItem, trigger: HTMLElement | null) => void;
 }) {
   const gridClassName = "grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-4";
 
@@ -78,25 +80,45 @@ export function ProjectFilesView({
           return (
             <Card key={file.id} size="sm" className="min-w-0">
               <CardContent>
-                <div
-                  className={cn("relative flex h-36 items-center justify-center rounded-lg", fileType.previewClassName)}
+                <button
+                  type="button"
+                  className={cn(
+                    "relative flex h-36 w-full cursor-pointer items-center justify-center rounded-lg outline-none",
+                    "transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-ring",
+                    fileType.previewClassName,
+                  )}
+                  aria-label={`Preview ${file.filename}`}
+                  title={`Preview ${file.filename}`}
+                  onClick={(event) => onPreview(file, event.currentTarget)}
                 >
                   <FileIcon className={cn("size-12", fileType.iconClassName)} aria-hidden="true" />
-                  <div className="absolute inset-x-3 bottom-3 flex items-center justify-between gap-3 text-muted-foreground text-xs">
+                  <span className="absolute inset-x-3 bottom-3 flex items-center justify-between gap-3 text-muted-foreground text-xs">
                     <span className={fileType.iconClassName}>{fileType.label}</span>
                     <span className="tabular-nums">{formatFileSize(file.size_bytes)}</span>
-                  </div>
-                </div>
+                  </span>
+                </button>
               </CardContent>
               <CardHeader className="min-w-0">
                 <CardTitle className="min-w-0 truncate" title={file.filename}>
-                  {file.filename}
+                  <button
+                    type="button"
+                    className="block w-full cursor-pointer truncate text-left outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+                    aria-label={`Preview ${file.filename}`}
+                    onClick={(event) => onPreview(file, event.currentTarget)}
+                  >
+                    {file.filename}
+                  </button>
                 </CardTitle>
                 <CardDescription className="truncate">
                   Uploaded <time dateTime={file.created_at}>{format(new Date(file.created_at), "MMM d, yyyy")}</time>
                 </CardDescription>
                 <CardAction>
-                  <ProjectFileActions projectId={projectId} file={file} canWrite={canWrite} />
+                  <ProjectFileActions
+                    projectId={projectId}
+                    file={file}
+                    canWrite={canWrite}
+                    onPreview={(trigger) => onPreview(file, trigger)}
+                  />
                 </CardAction>
               </CardHeader>
             </Card>
@@ -129,9 +151,15 @@ export function ProjectFilesView({
                 <div className="flex min-w-0 items-center gap-3">
                   <FileIcon className={cn("size-5 shrink-0", fileType.iconClassName)} aria-hidden="true" />
                   <div className="flex min-w-0 flex-col gap-1">
-                    <span className="truncate font-medium" title={file.filename}>
+                    <button
+                      type="button"
+                      className="cursor-pointer truncate text-left font-medium outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+                      title={file.filename}
+                      aria-label={`Preview ${file.filename}`}
+                      onClick={(event) => onPreview(file, event.currentTarget)}
+                    >
                       {file.filename}
-                    </span>
+                    </button>
                     <span className="text-muted-foreground text-xs sm:hidden">
                       {fileType.label} · {formatFileSize(file.size_bytes)}
                     </span>
@@ -146,7 +174,12 @@ export function ProjectFilesView({
                 {formatFileSize(file.size_bytes)}
               </TableCell>
               <TableCell>
-                <ProjectFileActions projectId={projectId} file={file} canWrite={canWrite} />
+                <ProjectFileActions
+                  projectId={projectId}
+                  file={file}
+                  canWrite={canWrite}
+                  onPreview={(trigger) => onPreview(file, trigger)}
+                />
               </TableCell>
             </TableRow>
           );
