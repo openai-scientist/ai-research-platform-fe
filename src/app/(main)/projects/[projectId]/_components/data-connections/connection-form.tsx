@@ -56,8 +56,7 @@ function connectionName(value: string) {
 export function googleConnectionDetails(draft: Pick<ConnectionDraft, "name" | "googleTarget">) {
   const name = connectionName(draft.name);
   const target = draft.googleTarget.trim();
-  if (!target || target.length > 2048)
-    throw new Error("Provide a Google URL or ID containing at most 2,048 characters.");
+  if (!target || target.length > 2048) throw new Error("Choose a spreadsheet or folder from Google Drive.");
   return { name, target };
 }
 
@@ -217,7 +216,7 @@ export function ConnectionForm({
   setDraft,
   disabled,
 }: {
-  kind: ConnectionKind;
+  kind: Exclude<ConnectionKind, "google_sheets" | "google_drive">;
   draft: ConnectionDraft;
   setDraft: Dispatch<SetStateAction<ConnectionDraft>>;
   disabled: boolean;
@@ -246,34 +245,9 @@ export function ConnectionForm({
     );
   };
   return (
-    <FieldGroup
-      className={cn(!isGoogleConnection(kind) && kind !== "bigquery" && "grid grid-cols-1 gap-4 md:grid-cols-2")}
-    >
+    <FieldGroup className={cn(kind !== "bigquery" && "grid grid-cols-1 gap-4 md:grid-cols-2")}>
       {input("name", "Connection name", true)}
-      {isGoogleConnection(kind) ? (
-        <Field>
-          <FieldLabel htmlFor="connection-google-target">
-            {kind === "google_sheets" ? "Spreadsheet URL or ID" : "Folder URL or ID"}
-            <span className="text-destructive">*</span>
-          </FieldLabel>
-          <Input
-            id="connection-google-target"
-            className={CONNECTION_INPUT_CLASSNAME}
-            value={draft.googleTarget}
-            maxLength={2048}
-            disabled={disabled}
-            aria-required
-            autoComplete="off"
-            placeholder={
-              kind === "google_sheets"
-                ? "https://docs.google.com/spreadsheets/d/..."
-                : "https://drive.google.com/drive/folders/..."
-            }
-            onChange={(event) => update("googleTarget", event.target.value)}
-          />
-          <FieldDescription>Paste the full URL or ID of the source you want this project to read.</FieldDescription>
-        </Field>
-      ) : kind === "bigquery" ? (
+      {kind === "bigquery" ? (
         <>
           {input("projectId", "Google Cloud project ID")}
           {input("location", "Location")}

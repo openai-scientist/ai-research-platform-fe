@@ -55,6 +55,11 @@ export interface ConnectionColumn {
   name: string;
   type: string;
 }
+export interface GooglePickerCredentials {
+  access_token: string;
+  api_key: string;
+  app_id: string;
+}
 export interface ConnectionPreview {
   columns: ConnectionColumn[];
   rows: (string | null)[][];
@@ -69,6 +74,19 @@ const connectionPath = (projectId: string, id: string) => `${connectionsPath(pro
 const remoteTimeout = 75_000;
 
 export const fetchDataConnections = {
+  getGooglePicker: (projectId: string, grantId: string, signal?: AbortSignal) =>
+    connectionRequest(
+      projectId,
+      async () =>
+        (
+          await apiService.post<ApiResult<GooglePickerCredentials>>(
+            `${connectionsPath(projectId)}/google/picker`,
+            { grant_id: grantId },
+            { signal },
+          )
+        ).data,
+      signal,
+    ),
   getList: (projectId: string, params?: ConnectionListParams, signal?: AbortSignal) =>
     connectionRequest(
       projectId,
