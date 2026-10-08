@@ -77,7 +77,7 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
                     name: authenticatedUser.name,
                     email: authenticatedUser.email,
                     avatar: "",
-                    role: authenticatedUser.role,
+                    role: authenticatedUser.platform_role,
                   },
                 ]}
               />

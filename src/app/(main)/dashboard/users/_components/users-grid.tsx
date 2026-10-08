@@ -25,6 +25,7 @@ type UsersGridProps = {
   readonly showActions?: boolean;
   readonly renderActions?: (user: UserRow) => ReactNode;
   readonly getDetailsHref?: (user: UserRow) => string | undefined;
+  readonly getRoleChoices?: (user: UserRow) => readonly string[];
   readonly onChangeRole?: (user: UserRow, role: string) => void;
   readonly onToggleStatus?: (user: UserRow) => void;
   readonly roleChoices?: readonly string[];
@@ -46,6 +47,7 @@ export function UsersGrid({
   showActions = true,
   renderActions,
   getDetailsHref,
+  getRoleChoices,
   onChangeRole,
   onToggleStatus,
   roleChoices = [],
@@ -77,7 +79,7 @@ export function UsersGrid({
                   {onChangeRole && roleChoices.length > 0 ? (
                     <RoleSelect
                       user={user}
-                      choices={roleChoices}
+                      choices={getRoleChoices?.(user) ?? roleChoices}
                       onChange={onChangeRole}
                       className="mt-1 w-40"
                       disabled={roleChangeDisabled}

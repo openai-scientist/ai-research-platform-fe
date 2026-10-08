@@ -26,7 +26,7 @@ export function useInfiniteProjects(
     filters,
     fetchPage: (params, signal) => fetchProject.getList(params, signal),
   });
-  return { ...query, projects: query.items };
+  return { ...query, projects: query.items.filter((project) => project.my_role !== null) };
 }
 export function useProjectsQuery(params?: ProjectListParams, options?: ApiQueryOptions<ProjectListResponse>) {
   return useApiQuery(projectKeys.list(params), (signal) => fetchProject.getList(params, signal), options);

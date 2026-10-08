@@ -15,18 +15,21 @@ import {
   useResendProjectInviteMutation,
   useUpdateMemberMutation,
 } from "@/hooks/use-members-query";
-import { ProjectRole, ProjectStatus } from "@/types/enums";
+import {
+  ASSIGNABLE_PROJECT_ROLES,
+  canManageProjectMember,
+  isAssignableProjectRole,
+  PROJECT_ROLE_LABELS,
+} from "@/lib/auth/project-access";
+import { type ProjectRole, ProjectStatus } from "@/types/enums";
 
 import { InviteMemberDialog } from "./invite-member-dialog";
 import { MemberActions } from "./member-actions";
 import { perform, type WorkspaceProps } from "./workspace-ui";
 
-const ROLE_LABELS: Record<ProjectRole, string> = {
-  [ProjectRole.ProjectManager]: "Project Manager",
-  [ProjectRole.Researcher]: "Researcher",
-  [ProjectRole.Reviewer]: "Reviewer",
-};
+const ROLE_LABELS = PROJECT_ROLE_LABELS;
 const ROLE_OPTIONS = ["All", ...Object.values(ROLE_LABELS)];
+const ROLE_CHOICES = ASSIGNABLE_PROJECT_ROLES.map((role) => ROLE_LABELS[role]);
 const STATUS_OPTIONS = ["All", "Active", "Invited"];
 const NO_OPTIONS: readonly string[] = [];
 function toRole(label: string): ProjectRole | undefined {
@@ -133,6 +136,10 @@ export function MembersSection({ project, canManage, header }: WorkspaceProps & 
         roleFilterLabel="Project role"
         users={rows}
         roleOptions={ROLE_OPTIONS}
+        getRoleChoices={(row) => {
+          const member = query.data?.data.find((item) => item.id === row.id);
+          return writable && member && canManageProjectMember(project, member) ? ROLE_CHOICES : NO_OPTIONS;
+        }}
         statusOptions={STATUS_OPTIONS}
         teamOptions={NO_OPTIONS}
         workspaceOptions={NO_OPTIONS}
@@ -159,14 +166,24 @@ export function MembersSection({ project, canManage, header }: WorkspaceProps & 
             ? (row, label) => {
                 const role = toRole(label);
                 const membershipId = row.id;
-                if (!membershipId || !role || busy || row.role === label) return;
+                const member = query.data?.data.find((item) => item.id === membershipId);
+                if (
+                  !membershipId ||
+                  !role ||
+                  !isAssignableProjectRole(role) ||
+                  !member ||
+                  !canManageProjectMember(project, member) ||
+                  busy ||
+                  row.role === label
+                )
+                  return;
                 void perform(() => update.mutateAsync({ membershipId, role }), "Member role updated.");
               }
             : undefined
         }
         renderActions={(row) => {
           const member = query.data?.data.find((item) => item.id === row.id);
-          return member && writable ? (
+          return member && writable && canManageProjectMember(project, member) ? (
             <MemberActions
               member={member}
               disabled={busy || query.isFetching || changing}

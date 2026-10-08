@@ -18,6 +18,7 @@ import {
 import { useInfiniteInviteCandidates } from "@/hooks/use-infinite-invite-candidates";
 import { useAddMemberMutation } from "@/hooks/use-members-query";
 import type { InviteCandidate } from "@/lib/api/services/fetch-members";
+import type { AssignableProjectRole } from "@/lib/auth/project-access";
 import { ApiError } from "@/types/api";
 import { ProjectRole } from "@/types/enums";
 
@@ -29,7 +30,7 @@ export function InviteMemberDialog({ projectId, onClose }: { projectId: string; 
   const [search, setSearch] = useState("");
   const [q, setQ] = useState("");
   const [selected, setSelected] = useState<InviteCandidate | null>(null);
-  const [role, setRole] = useState(ProjectRole.Researcher);
+  const [role, setRole] = useState<AssignableProjectRole>(ProjectRole.Researcher);
   const invite = useAddMemberMutation(projectId);
   const ended = useCallback(() => {
     onClose();

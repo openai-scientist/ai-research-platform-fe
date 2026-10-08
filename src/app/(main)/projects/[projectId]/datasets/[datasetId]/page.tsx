@@ -12,13 +12,5 @@ export default async function Page({ params }: { params: Promise<{ projectId: st
   const project = await getWorkspaceProject(projectId);
   if (!project) notFound();
 
-  return (
-    <WorkspaceSection
-      project={project}
-      section="dataset-detail"
-      datasetId={datasetId}
-      isAdmin={user.role === "SYSTEM_ADMIN"}
-      userId={user.id}
-    />
-  );
+  return <WorkspaceSection project={project} section="dataset-detail" datasetId={datasetId} userId={user.id} />;
 }

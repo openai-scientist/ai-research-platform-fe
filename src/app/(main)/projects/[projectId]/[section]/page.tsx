@@ -1,8 +1,8 @@
 import { notFound, redirect } from "next/navigation";
 
+import { getProjectAccess } from "@/lib/auth/project-access";
 import { getAuthenticatedUser } from "@/server/auth";
 import { getWorkspaceProject } from "@/server/projects";
-import { ProjectRole } from "@/types/enums";
 
 import { WorkspaceSection } from "../_components/workspace-section";
 
@@ -53,7 +53,7 @@ export default async function Page({ params }: { params: Promise<{ projectId: st
     notFound();
   }
 
-  if (config.managerOnly && project.my_role !== ProjectRole.ProjectManager && user.role !== "SYSTEM_ADMIN") {
+  if (config.managerOnly && !getProjectAccess(project.my_role, project.status).canAccessSettings) {
     redirect(`/projects/${project.id}`);
   }
 
@@ -71,7 +71,6 @@ export default async function Page({ params }: { params: Promise<{ projectId: st
       <WorkspaceSection
         project={project}
         section={section}
-        isAdmin={user.role === "SYSTEM_ADMIN"}
         userId={user.id}
         membersHeader={section === "members" ? header : undefined}
         connectionsHeader={section === "connections" ? header : undefined}

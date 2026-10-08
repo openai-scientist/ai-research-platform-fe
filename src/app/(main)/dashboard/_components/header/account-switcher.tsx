@@ -14,6 +14,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { PLATFORM_ROLE_LABELS } from "@/lib/auth/auth-config";
 import { resolveAvatarUrl } from "@/lib/auth/avatar";
 import { getInitials } from "@/lib/utils";
 
@@ -31,7 +32,12 @@ export function AccountSwitcher({
   const { user: account, loggingOut, securityOpen, setSecurityOpen, handleLogout } = useAccountMenu();
   const displayedUsers = users.map((user) =>
     account && user.email === account.email
-      ? { ...user, name: account.display_name ?? account.email, avatar: account.avatar_url ?? "" }
+      ? {
+          ...user,
+          name: account.display_name ?? account.email,
+          avatar: account.avatar_url ?? "",
+          role: PLATFORM_ROLE_LABELS[account.platform_role],
+        }
       : user,
   );
   const activeUser = displayedUsers[0];
@@ -74,7 +80,9 @@ export function AccountSwitcher({
                   </Avatar>
                   <div className="grid min-w-0 flex-1 text-left text-sm leading-tight">
                     <span className="truncate font-semibold">{user.name}</span>
-                    <span className="truncate text-xs capitalize">{user.role}</span>
+                    <span className="truncate text-xs">
+                      {Object.entries(PLATFORM_ROLE_LABELS).find(([role]) => role === user.role)?.[1] ?? user.role}
+                    </span>
                   </div>
                   <span
                     className={cn(

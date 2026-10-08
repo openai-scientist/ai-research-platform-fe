@@ -12,8 +12,8 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
     redirect("/auth/login");
   }
 
-  if (!canAccessProjects(user.role)) {
-    redirect(getRoleHomePath(user.role));
+  if (!canAccessProjects(user.platform_role)) {
+    redirect(getRoleHomePath(user.platform_role));
   }
 
   return children;

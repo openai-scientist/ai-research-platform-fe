@@ -12,6 +12,7 @@ import { APP_CONFIG } from "@/config/app-config";
 import { getRoleHomePath } from "@/lib/auth/auth-config";
 import { getAuthenticatedUser } from "@/server/auth";
 import { getPreference } from "@/server/server-actions";
+import { PlatformRole } from "@/types/enums";
 
 import { NotificationBell } from "../_components/notifications/notification-bell";
 import { AccountSwitcher } from "../dashboard/_components/header/account-switcher";
@@ -32,8 +33,8 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
     redirect("/auth/login");
   }
 
-  if (authenticatedUser.role !== "SYSTEM_ADMIN") {
-    redirect(getRoleHomePath(authenticatedUser.role));
+  if (authenticatedUser.platform_role !== PlatformRole.PlatformAdmin) {
+    redirect(getRoleHomePath(authenticatedUser.platform_role));
   }
 
   return (
@@ -82,7 +83,7 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
                     name: authenticatedUser.name,
                     email: authenticatedUser.email,
                     avatar: "",
-                    role: authenticatedUser.role,
+                    role: authenticatedUser.platform_role,
                   },
                 ]}
               />

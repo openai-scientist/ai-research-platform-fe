@@ -61,7 +61,6 @@ export async function ExperimentPage({
       <WorkspaceSection
         project={project}
         section={runId ? "run" : "research-context"}
-        isAdmin={user.role === "SYSTEM_ADMIN"}
         userId={user.id}
         runId={runId}
         experimentSection={section}

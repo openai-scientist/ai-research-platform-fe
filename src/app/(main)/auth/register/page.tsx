@@ -17,7 +17,7 @@ export const metadata: Metadata = {
 
 export default async function RegisterPage() {
   const user = await getAuthenticatedUser();
-  if (user) redirect(getRoleHomePath(user.role));
+  if (user) redirect(getRoleHomePath(user.platform_role));
   return (
     <>
       <div className="mx-auto flex w-full max-w-[350px] flex-col justify-center px-4 py-24 sm:px-0">

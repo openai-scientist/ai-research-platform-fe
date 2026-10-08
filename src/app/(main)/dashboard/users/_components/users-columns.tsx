@@ -54,6 +54,7 @@ export function RoleSelect({
   className?: string;
   disabled?: boolean;
 }) {
+  if (choices.length === 0) return <RoleCell role={user.role} />;
   return (
     <Select
       disabled={disabled}
@@ -212,6 +213,7 @@ const workspaceColumn: ColumnDef<DataTableFeatures, UserRow> = {
 };
 
 export type UsersColumnsOptions = {
+  readonly getRoleChoices?: (user: UserRow) => readonly string[];
   readonly roleChangeDisabled?: boolean;
   readonly showActions?: boolean;
   readonly nameColumnLabel?: string;
@@ -225,6 +227,7 @@ export type UsersColumnsOptions = {
 };
 
 export const createUsersColumns = ({
+  getRoleChoices,
   roleChangeDisabled = false,
   showActions = true,
   nameColumnLabel = "User",
@@ -298,7 +301,12 @@ export const createUsersColumns = ({
     filterFn: "equalsString",
     cell: ({ row }) =>
       onChangeRole && roleChoices.length > 0 ? (
-        <RoleSelect user={row.original} choices={roleChoices} onChange={onChangeRole} disabled={roleChangeDisabled} />
+        <RoleSelect
+          user={row.original}
+          choices={getRoleChoices?.(row.original) ?? roleChoices}
+          onChange={onChangeRole}
+          disabled={roleChangeDisabled}
+        />
       ) : (
         <RoleCell role={row.original.role} team={showTeam ? row.original.team : undefined} />
       ),

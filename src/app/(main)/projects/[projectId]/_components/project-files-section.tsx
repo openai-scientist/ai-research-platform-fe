@@ -14,7 +14,6 @@ import { Spinner } from "@/components/ui/spinner";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useInfiniteProjectFiles } from "@/hooks/use-project-files-query";
 import type { ProjectFileItem, ProjectFileKind } from "@/lib/api/services/fetch-project-files";
-import { ProjectRole, ProjectStatus } from "@/types/enums";
 
 import { ProjectFilesView } from "./project-files-view";
 import { PROJECT_FILE_ACCEPT, useProjectFileUpload } from "./use-project-file-upload";
@@ -22,10 +21,7 @@ import type { WorkspaceProps } from "./workspace-ui";
 
 const ProjectFilePreview = dynamic(() => import("./project-file-preview"));
 
-export function ProjectFilesSection({ project, header }: WorkspaceProps & { header?: ReactNode }) {
-  const canWrite =
-    project.status !== ProjectStatus.Archived &&
-    (project.my_role === ProjectRole.ProjectManager || project.my_role === ProjectRole.Researcher);
+export function ProjectFilesSection({ project, canWrite, header }: WorkspaceProps & { header?: ReactNode }) {
   const [search, setSearch] = useState("");
   const [view, setView] = useState<"grid" | "list">("grid");
   const [previewFile, setPreviewFile] = useState<ProjectFileItem | null>(null);

@@ -7,13 +7,7 @@ import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { fetchAuth } from "@/lib/api/services/fetch-auth";
-import {
-  CHANGE_PASSWORD_PATH,
-  getRoleHomePath,
-  LOGIN_PATH,
-  SESSION_INVALID_CODES,
-  toAuthUser,
-} from "@/lib/auth/auth-config";
+import { CHANGE_PASSWORD_PATH, getRoleHomePath, LOGIN_PATH, SESSION_INVALID_CODES } from "@/lib/auth/auth-config";
 import { notifyAuthError } from "@/lib/auth/form-errors";
 import { broadcastAuthChange } from "@/lib/auth/session-events";
 import type { CurrentUser } from "@/lib/auth/types";
@@ -33,7 +27,9 @@ export function SessionRedirect({ current }: { current: CurrentUser }) {
       // The backend established the cookie session before sending the browser to /.
       queryClient.clear();
       dispatch(setSession(current));
-      let target = current.user.must_change_password ? CHANGE_PASSWORD_PATH : getRoleHomePath(toAuthUser(current).role);
+      let target = current.user.must_change_password
+        ? CHANGE_PASSWORD_PATH
+        : getRoleHomePath(current.user.platform_role);
       try {
         await fetchAuth.csrfToken(controller.signal);
       } catch (error) {

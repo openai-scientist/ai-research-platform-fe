@@ -109,7 +109,7 @@ export function useAuth(projectId?: string) {
     ...auth,
     isAdmin,
     projectRole,
-    isProjectManager: isAdmin || projectRole === ProjectRole.ProjectManager,
+    isProjectManager: projectRole === ProjectRole.ProjectManager,
     isResearcher: projectRole === ProjectRole.Researcher,
     isReviewer: projectRole === ProjectRole.Reviewer,
     login,

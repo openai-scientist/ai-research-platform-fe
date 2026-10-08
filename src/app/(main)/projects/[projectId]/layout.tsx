@@ -53,7 +53,7 @@ export default async function Layout({
       <RunWorkspaceHost projectId={project.id} />
       <ProjectSidebar
         activeProject={project}
-        canCreate={canCreateProject(user.role)}
+        canCreate={canCreateProject(user.platform_role)}
         projects={projects}
         user={user}
         variant={variant}
@@ -81,7 +81,7 @@ export default async function Layout({
               <LayoutControls />
               <ThemeSwitcher />
               <AccountSwitcher
-                users={[{ id: user.email, name: user.name, email: user.email, avatar: "", role: user.role }]}
+                users={[{ id: user.email, name: user.name, email: user.email, avatar: "", role: user.platform_role }]}
               />
             </div>
           </div>

@@ -1,10 +1,10 @@
 import { Database, FileText, LayoutDashboard, Lightbulb, Plug, Settings, Users, Workflow } from "lucide-react";
 
-import type { UserRole } from "@/lib/auth/auth-config";
+import { ProjectRole } from "@/types/enums";
 
 import type { NavGroup } from "./sidebar-items";
 
-export function getProjectSidebarItems(projectId: string, role: UserRole): NavGroup[] {
+export function getProjectSidebarItems(projectId: string, role: ProjectRole | null): NavGroup[] {
   const baseUrl = `/projects/${projectId}`;
 
   return [
@@ -53,7 +53,7 @@ export function getProjectSidebarItems(projectId: string, role: UserRole): NavGr
       label: "PROJECT",
       items: [
         { id: "project-members", title: "Members", url: `${baseUrl}/members`, icon: Users },
-        ...(role === "PROJECT_MANAGER" || role === "SYSTEM_ADMIN"
+        ...(role === ProjectRole.ProjectManager
           ? [{ id: "project-settings", title: "Settings", url: `${baseUrl}/settings`, icon: Settings }]
           : []),
       ],
