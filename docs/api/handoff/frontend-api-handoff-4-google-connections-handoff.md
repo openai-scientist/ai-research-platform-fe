@@ -104,8 +104,8 @@ Với `google_sheets` chỉ có một schema, FE có thể bỏ bước chọn s
 ## 3. Luồng tạo kết nối
 
 ```text
-1. Người dùng chọn loại Google, bấm "Kết nối tài khoản Google"
-2. FE lưu loại đã chọn và dữ liệu form vào sessionStorage
+1. Người dùng bấm Google Sheets hoặc Google Drive trong danh sách provider
+2. FE lưu loại đã chọn vào sessionStorage; không hỏi tên connection hay URL
 3. FE điều hướng cả trang tới
      GET /api/v1/projects/{project_id}/connections/google/start
 4. Google hỏi quyền
@@ -113,9 +113,12 @@ Với `google_sheets` chỉ có một schema, FE có thể bỏ bước chọn s
      {APP_URL}/projects/{project_id}/connections?google_grant=<uuid>
      {APP_URL}/projects/{project_id}/connections?error=<CODE>
      {APP_URL}/projects?error=GOOGLE_ACCESS_FAILED
-6. FE đọc google_grant, xoá nó khỏi URL, mở lại form với dữ liệu đã lưu
-7. Người dùng dán URL, đặt tên, bấm "Kết nối"
-8. FE gọi POST /api/v1/projects/{project_id}/connections kèm grant_id
+6. FE đọc google_grant, xoá nó khỏi URL và tiếp tục luồng chọn nguồn
+7. FE gọi POST /api/v1/projects/{project_id}/connections/google/picker kèm grant_id
+8. Google Picker mở để chọn spreadsheet (Google Sheets) hoặc thư mục (Google Drive)
+9. FE lấy ID và tên nguồn, tự đặt tên connection theo spreadsheet/thư mục đã chọn
+10. FE tự gọi POST /api/v1/projects/{project_id}/connections kèm grant_id và ID nguồn đã chọn,
+    rồi chuyển thẳng sang Source để chọn file/tab dữ liệu
 ```
 
 ### Bước 3: `start`
@@ -137,7 +140,40 @@ Với `google_sheets` chỉ có một schema, FE có thể bỏ bước chọn s
 - Trang `/projects` cũng phải đọc `error`: backend chuyển về đó khi không xác định được project.
 - Đọc xong thì xoá tham số khỏi URL (`history.replaceState`), để tải lại trang không dùng lại grant cũ.
 
-### Bước 8: tạo kết nối
+### Bước 7: Google Picker
+
+```http
+POST /api/v1/projects/{project_id}/connections/google/picker
+X-CSRF-Token: <csrf token>
+
+{ "grant_id": "<uuid từ google_grant>" }
+```
+
+Response dùng envelope hiện có; `data` gồm:
+
+```ts
+interface GooglePickerCredentials {
+  access_token: string;
+  api_key: string;
+  app_id: string;
+}
+```
+
+- Token thuộc đúng tài khoản đã cấp quyền trong grant. Endpoint không tiêu thụ grant.
+- Cần session, CSRF, quyền đóng góp trong project chưa archive và grant chưa hết hạn/chưa sử dụng.
+- Response có `Cache-Control: no-store`. FE chỉ giữ token trong bộ nhớ khi Picker đang mở,
+  không lưu trong URL, storage, React Query hoặc log. Không trả refresh token/client secret.
+- `google_sheets`: chỉ chọn Google Sheets; `google_drive`: chọn thư mục, không chọn từng file.
+- Luồng Google bỏ bước Connect: Provider → Source → Preview → Import.
+- Hủy Picker quay về danh sách provider, không tạo connection; grant còn dùng được để chọn lại.
+- Chọn xong tự tạo connection theo tên nguồn. Nếu tên đã có trong project, thêm hậu tố `(2)`, `(3)`, v.v.
+- Tạo hỏng hiện toast từ backend; chọn lại cùng provider để thử lại với grant hiện có.
+- `422 GOOGLE_GRANT_INVALID`: kết nối tài khoản Google lại.
+- `503 GOOGLE_PICKER_NOT_CONFIGURED`: backend chưa có cấu hình Picker.
+- `502 GOOGLE_PICKER_UNAVAILABLE`: Google chưa cấp được token; cho thử lại.
+- `429 RATE_LIMITED`/`CONNECTION_BUSY`: dùng xử lý `Retry-After` hiện có.
+
+### Bước 10: tạo kết nối
 
 Cần header `X-CSRF-Token` như mọi `POST` khác.
 
@@ -192,7 +228,8 @@ Hiển thị `account_email` trên thẻ kết nối.
 - Dùng một lần.
 - Sống 10 phút tính từ lúc gọi `start`. Thời gian người dùng ở trang Google cũng tính.
 - Chỉ dùng được bởi người đã bấm, trong đúng project đó.
-- Tạo kết nối hỏng thì grant vẫn còn. Cho người dùng sửa URL hoặc tên rồi gửi lại, không phải sang Google lần nữa.
+- Tạo kết nối hỏng thì grant vẫn còn. Cho người dùng chọn lại nguồn hoặc sửa tên rồi gửi lại,
+  không phải sang Google lần nữa.
 - Chỉ khi nhận `GOOGLE_GRANT_INVALID` mới phải bấm "Kết nối tài khoản Google" lại.
 
 ## 4. Kết nối lại
@@ -231,7 +268,7 @@ Envelope lỗi như cũ. Hiển thị theo `error.reason` khi có, theo `error.c
 
 | HTTP | `error.code` | Ý nghĩa | FE làm gì |
 |---|---|---|---|
-| 422 | `VALIDATION_ERROR` | URL sai dạng, ví dụ link publish `/d/e/...` | Báo trên ô URL. Grant còn |
+| 422 | `VALIDATION_ERROR` | ID hoặc cấu hình nguồn không hợp lệ | Báo toast bằng message của API. Grant còn |
 | 422 | `GOOGLE_GRANT_INVALID` | Grant hết hạn, đã dùng, hoặc không phải của người này trong project này | Bấm "Kết nối tài khoản Google" lại |
 | 422 | `CONNECTION_FAILED` | Không đọc được đích; xem `reason` | Báo trên form. Grant còn |
 | 409 | `CONNECTION_NAME_EXISTS` | Trùng tên trong project | Báo trên ô tên. Grant còn |
@@ -292,6 +329,20 @@ Cảnh báo:
 
 ## 8. Chạy local
 
+- Bật **Google Picker API** trong cùng Google Cloud project với OAuth client của backend.
+- Thêm vào `.env.local` của backend và khởi động lại backend:
+
+  ```dotenv
+  GOOGLE_PICKER_API_KEY=<browser API key>
+  GOOGLE_PICKER_APP_ID=<Google Cloud project number>
+  ```
+
+- Nếu backend chạy bằng Docker Compose, chạy `task up` trong thư mục backend để dựng lại
+  container với code và biến môi trường mới; `task restart` không nạp lại cấu hình môi trường.
+- API key là key dùng trong trình duyệt: giới hạn API là **Google Picker API**, Website restrictions
+  cho phép origin frontend (local: `http://localhost:3000/*`) và `https://docs.google.com/*`.
+  `APP_ID` là project **number**, không phải project ID hay OAuth client ID.
+  Xem [hướng dẫn Google Picker](https://developers.google.com/workspace/drive/picker/guides/web-picker).
 - Backend: `http://localhost:8080`. `APP_URL` của backend đang là `http://localhost:3000`, nên FE phải chạy ở cổng 3000 để nhận lượt quay về.
 - App Google ở chế độ Testing: chỉ tài khoản nằm trong danh sách test users mới đồng ý được. Nhờ chủ backend thêm email của bạn.
 - Google hiện màn hình "Google chưa xác minh ứng dụng này" trước màn hình quyền. Bấm tiếp tục.

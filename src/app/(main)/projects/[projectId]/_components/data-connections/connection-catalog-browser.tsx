@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useRef, useState } from "react";
+import { type ReactNode, useState } from "react";
 
 import { cn } from "cn";
 import { Columns3, Database, type LucideIcon, Search, Table2 } from "lucide-react";
@@ -15,13 +15,68 @@ import {
 import { Button } from "@/components/ui/button";
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { Field, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
+import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "@/components/ui/input-group";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 
-import { CONNECTION_PROVIDERS } from "./connection-display";
 import type { ConnectionFlowState } from "./use-connection-flow";
+
+function CatalogSearch({
+  id,
+  placeholder,
+  value,
+  disabled,
+  onChange,
+  onSearch,
+}: {
+  id: string;
+  placeholder: string;
+  value: string;
+  disabled: boolean;
+  onChange: (value: string) => void;
+  onSearch?: () => void;
+}) {
+  return (
+    <Field data-disabled={disabled}>
+      <FieldLabel htmlFor={id} className="sr-only">
+        {placeholder}
+      </FieldLabel>
+      <InputGroup>
+        <InputGroupInput
+          id={id}
+          placeholder={placeholder}
+          value={value}
+          disabled={disabled}
+          onChange={(event) => onChange(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              onSearch?.();
+            }
+          }}
+        />
+        <InputGroupAddon align="inline-end">
+          <span className="flex size-6 items-center justify-center">
+            {onSearch ? (
+              <InputGroupButton
+                size="icon-sm"
+                className="size-6"
+                disabled={disabled}
+                aria-label={placeholder}
+                title="Up to 500 tables are returned. Search to narrow larger schemas."
+                onClick={onSearch}
+              >
+                <Search />
+              </InputGroupButton>
+            ) : (
+              <Search className="size-4" aria-hidden="true" />
+            )}
+          </span>
+        </InputGroupAddon>
+      </InputGroup>
+    </Field>
+  );
+}
 
 function CatalogPane({
   id,
@@ -83,32 +138,28 @@ function CatalogLoading({ label }: { label: string }) {
 }
 
 const itemClass =
-  "flex min-h-10 w-full items-start gap-2 px-3 py-2 text-left text-sm transition-colors outline-none focus-visible:ring-3 focus-visible:ring-inset focus-visible:ring-ring/50 disabled:cursor-default disabled:opacity-50";
+  "flex min-h-10 w-full items-start gap-2 border-l-2 border-transparent px-3 py-2 text-left text-sm transition-colors outline-none focus-visible:ring-3 focus-visible:ring-inset focus-visible:ring-ring/50 disabled:cursor-default disabled:opacity-50";
+const selectedItemClass = "border-primary bg-primary/15 font-medium";
 
 export function ConnectionCatalogBrowser({ flow }: { flow: ConnectionFlowState }) {
   const [schemaSearch, setSchemaSearch] = useState("");
   const [columnSearch, setColumnSearch] = useState("");
-  const [selection, setSelection] = useState<{ tableKey: string; name: string } | null>(null);
-  const columnTrigger = useRef<HTMLButtonElement | null>(null);
-  const tableKey = `${flow.schema}.${flow.table}`;
-  const selectedColumn = flow.columns.find(
-    (column) => selection?.tableKey === tableKey && column.name === selection.name,
-  );
   const schemas = flow.schemas.filter((name) => name.toLowerCase().includes(schemaSearch.trim().toLowerCase()));
   const columns = flow.columns.filter((column) =>
     `${column.name} ${column.type}`.toLowerCase().includes(columnSearch.trim().toLowerCase()),
   );
-  const selectedTable = flow.tables.find((item) => item.name === flow.table);
   const chooseSchema = (value: string) => {
     if (value === flow.schema) return;
-    setSelection(null);
     setColumnSearch("");
     void flow.selectSchema(value);
   };
   const chooseTable = (value: string) => {
-    setSelection(null);
     setColumnSearch("");
     void flow.selectTable(value);
+  };
+  const searchTables = () => {
+    setColumnSearch("");
+    void flow.searchTables();
   };
 
   if (!flow.schemas.length) {
@@ -161,22 +212,13 @@ export function ConnectionCatalogBrowser({ flow }: { flow: ConnectionFlowState }
               <BreadcrumbSeparator />
               <BreadcrumbItem className="shrink-0">
                 <Table2 className="size-4 text-muted-foreground" aria-hidden="true" />
-                {selectedColumn ? <span>{flow.table}</span> : <BreadcrumbPage>{flow.table}</BreadcrumbPage>}
-              </BreadcrumbItem>
-            </>
-          )}
-          {selectedColumn && (
-            <>
-              <BreadcrumbSeparator />
-              <BreadcrumbItem className="shrink-0">
-                <Columns3 className="size-4 text-muted-foreground" aria-hidden="true" />
-                <BreadcrumbPage>{selectedColumn.name}</BreadcrumbPage>
+                <BreadcrumbPage>{flow.table}</BreadcrumbPage>
               </BreadcrumbItem>
             </>
           )}
         </BreadcrumbList>
       </Breadcrumb>
-      <div className="grid min-h-0 flex-1 grid-cols-1 overflow-y-auto rounded-lg border md:grid-cols-[minmax(0,0.7fr)_minmax(0,1fr)_minmax(0,1.3fr)] md:overflow-hidden lg:grid-cols-[16rem_20rem_minmax(0,1fr)]">
+      <div className="grid min-h-0 flex-1 grid-cols-1 overflow-y-auto rounded-lg border bg-card text-card-foreground md:grid-cols-3 md:overflow-hidden">
         <CatalogPane
           id="catalog-schemas"
           title={
@@ -191,18 +233,13 @@ export function ConnectionCatalogBrowser({ flow }: { flow: ConnectionFlowState }
           icon={Database}
           count={flow.schemas.length}
           controls={
-            <Field>
-              <FieldLabel htmlFor="schema-filter" className="sr-only">
-                Search schemas
-              </FieldLabel>
-              <Input
-                id="schema-filter"
-                value={schemaSearch}
-                placeholder="Search schemas"
-                disabled={flow.disabled}
-                onChange={(event) => setSchemaSearch(event.target.value)}
-              />
-            </Field>
+            <CatalogSearch
+              id="schema-filter"
+              value={schemaSearch}
+              placeholder="Search schemas"
+              disabled={flow.disabled}
+              onChange={setSchemaSearch}
+            />
           }
         >
           {!schemas.length ? (
@@ -216,10 +253,7 @@ export function ConnectionCatalogBrowser({ flow }: { flow: ConnectionFlowState }
                     disabled={flow.disabled}
                     aria-current={flow.schema === name ? "true" : undefined}
                     onClick={() => chooseSchema(name)}
-                    className={cn(
-                      itemClass,
-                      flow.schema === name ? "bg-secondary font-medium" : "hover:bg-foreground/5",
-                    )}
+                    className={cn(itemClass, flow.schema === name ? selectedItemClass : "hover:bg-foreground/5")}
                   >
                     <span className="min-w-0 break-all">{name}</span>
                   </button>
@@ -235,42 +269,14 @@ export function ConnectionCatalogBrowser({ flow }: { flow: ConnectionFlowState }
           count={flow.tables.length}
           controls={
             flow.schema && (
-              <Field>
-                <FieldLabel htmlFor="table-filter" className="sr-only">
-                  Search tables
-                </FieldLabel>
-                <div className="flex gap-1">
-                  <Input
-                    id="table-filter"
-                    placeholder="Search tables"
-                    value={flow.tableSearch}
-                    disabled={flow.disabled}
-                    onChange={(event) => flow.setTableSearch(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        event.preventDefault();
-                        void flow.searchTables();
-                      }
-                    }}
-                  />
-                  {flow.configured && (
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      disabled={flow.disabled}
-                      aria-label="Search tables"
-                      title="Up to 500 tables are returned. Search to narrow larger schemas."
-                      onClick={() => {
-                        setSelection(null);
-                        setColumnSearch("");
-                        void flow.searchTables();
-                      }}
-                    >
-                      <Search />
-                    </Button>
-                  )}
-                </div>
-              </Field>
+              <CatalogSearch
+                id="table-filter"
+                placeholder="Search tables"
+                value={flow.tableSearch}
+                disabled={flow.disabled}
+                onChange={flow.setTableSearch}
+                onSearch={flow.configured ? searchTables : undefined}
+              />
             )
           }
         >
@@ -289,10 +295,7 @@ export function ConnectionCatalogBrowser({ flow }: { flow: ConnectionFlowState }
                     disabled={flow.disabled}
                     aria-current={flow.table === item.name ? "true" : undefined}
                     onClick={() => chooseTable(item.name)}
-                    className={cn(
-                      itemClass,
-                      flow.table === item.name ? "bg-secondary font-medium" : "hover:bg-foreground/5",
-                    )}
+                    className={cn(itemClass, flow.table === item.name ? selectedItemClass : "hover:bg-foreground/5")}
                   >
                     <span className="flex min-w-0 flex-col gap-1">
                       <span className="break-all">{item.name}</span>
@@ -323,18 +326,13 @@ export function ConnectionCatalogBrowser({ flow }: { flow: ConnectionFlowState }
           count={flow.columns.length}
           controls={
             flow.table && (
-              <Field>
-                <FieldLabel htmlFor="column-filter" className="sr-only">
-                  Search columns
-                </FieldLabel>
-                <Input
-                  id="column-filter"
-                  placeholder="Search columns"
-                  value={columnSearch}
-                  disabled={flow.disabled}
-                  onChange={(event) => setColumnSearch(event.target.value)}
-                />
-              </Field>
+              <CatalogSearch
+                id="column-filter"
+                placeholder="Search columns"
+                value={columnSearch}
+                disabled={flow.disabled}
+                onChange={setColumnSearch}
+              />
             )
           }
         >
@@ -350,86 +348,15 @@ export function ConnectionCatalogBrowser({ flow }: { flow: ConnectionFlowState }
           ) : (
             <ul>
               {columns.map((column) => (
-                <li key={column.name}>
-                  <button
-                    type="button"
-                    disabled={flow.disabled}
-                    aria-current={selectedColumn?.name === column.name ? "true" : undefined}
-                    onClick={(event) => {
-                      columnTrigger.current = event.currentTarget;
-                      setSelection({ tableKey, name: column.name });
-                    }}
-                    className={cn(
-                      itemClass,
-                      selectedColumn?.name === column.name ? "bg-secondary font-medium" : "hover:bg-foreground/5",
-                    )}
-                  >
-                    <span className="flex min-w-0 flex-col gap-1">
-                      <span className="break-all">{column.name}</span>
-                      <span className="break-words text-foreground/70 text-xs">{column.type}</span>
-                    </span>
-                  </button>
+                <li key={column.name} className="flex min-h-10 flex-col gap-1 px-3 py-2 text-sm">
+                  <span className="break-all">{column.name}</span>
+                  <span className="break-words text-foreground/70 text-xs">{column.type}</span>
                 </li>
               ))}
             </ul>
           )}
         </CatalogPane>
       </div>
-      <Sheet
-        open={Boolean(selectedColumn)}
-        onOpenChange={(open) => {
-          if (!open) setSelection(null);
-        }}
-      >
-        <SheetContent
-          side="right"
-          className="w-full sm:max-w-sm"
-          onCloseAutoFocus={(event) => {
-            event.preventDefault();
-            if (columnTrigger.current?.isConnected) columnTrigger.current.focus();
-            else document.getElementById("source-query-tab")?.focus();
-          }}
-        >
-          <SheetHeader className="pr-12">
-            <SheetTitle className="break-all">{selectedColumn?.name ?? "Column details"}</SheetTitle>
-            <SheetDescription>Column metadata from this connection.</SheetDescription>
-          </SheetHeader>
-          {selectedColumn && (
-            <ScrollArea type="hover" className="min-h-0 flex-1 px-4 pb-4">
-              <div className="flex flex-col gap-5">
-                <dl className="flex flex-col gap-4 text-sm">
-                  {[
-                    { label: "Data type", value: selectedColumn.type },
-                    { label: "Schema", value: flow.schema },
-                    { label: selectedTable?.type === "view" ? "View" : "Table", value: flow.table },
-                    { label: "Connection", value: flow.connection?.name ?? "—" },
-                    { label: "Provider", value: CONNECTION_PROVIDERS[flow.kind].label },
-                  ].map((fact) => (
-                    <div key={fact.label} className="flex flex-col gap-1">
-                      <dt className="text-muted-foreground text-xs">{fact.label}</dt>
-                      <dd className="break-words font-medium">{fact.value}</dd>
-                    </div>
-                  ))}
-                </dl>
-                <p className="text-pretty border-t pt-4 text-muted-foreground text-xs">
-                  Table imports include all columns. Use SQL to select specific columns.
-                </p>
-                <Button
-                  variant="outline"
-                  className="self-start"
-                  disabled={flow.disabled}
-                  onClick={() => {
-                    setSelection(null);
-                    flow.setMode("query");
-                  }}
-                >
-                  Write a query
-                </Button>
-              </div>
-            </ScrollArea>
-          )}
-        </SheetContent>
-      </Sheet>
     </div>
   );
 }

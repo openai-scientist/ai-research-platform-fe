@@ -6,12 +6,29 @@ import { ApiError } from "@/types/api";
 import type { GoogleConnectionResume } from "./google-connection-state";
 import { useConnectionFlow } from "./use-connection-flow";
 
-const { effects, updates, create, getSchemas, getTables, invalidate, showError, access } = vi.hoisted(() => ({
+const {
+  effects,
+  updates,
+  create,
+  getSchemas,
+  getTables,
+  getList,
+  getGooglePicker,
+  openPicker,
+  beginGoogle,
+  invalidate,
+  showError,
+  access,
+} = vi.hoisted(() => ({
   effects: [] as (() => void)[],
   updates: [] as { initial: unknown; set: ReturnType<typeof vi.fn> }[],
   create: vi.fn(),
   getSchemas: vi.fn(),
   getTables: vi.fn(),
+  getList: vi.fn(),
+  getGooglePicker: vi.fn(),
+  openPicker: vi.fn(),
+  beginGoogle: vi.fn(),
   invalidate: vi.fn(),
   showError: vi.fn(),
   access: vi.fn(),
@@ -34,7 +51,12 @@ vi.mock("@tanstack/react-query", () => ({ useQueryClient: () => ({ invalidateQue
 vi.mock("@/hooks/use-data-connections", () => ({ useConnectionAccess: access, showConnectionError: showError }));
 vi.mock("@/lib/api/services/fetch-data-connections", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/api/services/fetch-data-connections")>()),
-  fetchDataConnections: { create, getSchemas, getTables },
+  fetchDataConnections: { create, getSchemas, getTables, getList, getGooglePicker },
+}));
+vi.mock("./google-picker", () => ({ openGooglePicker: openPicker }));
+vi.mock("./google-connection-state", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./google-connection-state")>()),
+  beginGoogleConnection: beginGoogle,
 }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn() } }));
 
@@ -49,8 +71,8 @@ describe("resuming Google connection creation", () => {
     last_error_code: null,
   } as ConnectionItem;
 
-  function useRenderConnectionFlow(value: GoogleConnectionResume | undefined = resume, canWrite = true) {
-    return useConnectionFlow("project-id", undefined, vi.fn(), canWrite, "user-id", true, value);
+  function useRenderConnectionFlow(value: GoogleConnectionResume | null = resume, canWrite = true) {
+    return useConnectionFlow("project-id", undefined, vi.fn(), canWrite, "user-id", true, value ?? undefined);
   }
 
   beforeEach(() => {
@@ -62,6 +84,9 @@ describe("resuming Google connection creation", () => {
     getSchemas.mockResolvedValue({ data: ["Spreadsheet"] });
     getTables.mockResolvedValue({ data: [] });
     invalidate.mockResolvedValue(undefined);
+    getGooglePicker.mockResolvedValue({ data: { access_token: "short-lived", api_key: "key", app_id: "123" } });
+    openPicker.mockResolvedValue({ id: "folder-id", name: "Study" });
+    getList.mockResolvedValue({ data: [], meta: { pagination: null } });
   });
 
   it.each(["google_drive", "google_sheets"] as const)(
@@ -82,8 +107,8 @@ describe("resuming Google connection creation", () => {
     },
   );
 
-  it("keeps a rejected form's grant and retries only on an explicit action", async () => {
-    const error = new ApiError(409, "CONNECTION_NAME_EXISTS", "Connection name already exists.");
+  it("keeps a rejected source's grant and retries only on an explicit action", async () => {
+    const error = new ApiError(422, "CONNECTION_FAILED", "This source cannot be read.");
     create.mockRejectedValueOnce(error);
     const flow = useRenderConnectionFlow();
     for (const setup of effects) setup();
@@ -92,7 +117,7 @@ describe("resuming Google connection creation", () => {
     expect(create).toHaveBeenCalledOnce();
     expect(updates.find((state) => state.initial === grantId)?.set).not.toHaveBeenCalled();
     expect(updates[0].set).not.toHaveBeenCalledWith(2);
-    await flow.connect();
+    await flow.chooseGoogleSource();
     expect(create).toHaveBeenCalledTimes(2);
     expect(create.mock.calls[1][1].grant_id).toBe(grantId);
   });
@@ -123,13 +148,80 @@ describe("resuming Google connection creation", () => {
     expect(create).not.toHaveBeenCalled();
   });
 
-  it.each([
-    { name: "", target: "folder-id", message: "Connection name must contain 2 to 120 characters." },
-    { name: "Study", target: "", message: "Provide a Google URL or ID containing at most 2,048 characters." },
-  ])("validates the form before leaving for Google: $message", async ({ name, target, message }) => {
-    const flow = useRenderConnectionFlow({ ...resume, name, target, grantId: undefined });
+  it("allows consent before a source is chosen and restores the draft afterwards", async () => {
+    const flow = useRenderConnectionFlow({ ...resume, name: "", target: "", grantId: undefined });
     await flow.authorizeGoogle();
-    expect(showError).toHaveBeenCalledWith(expect.objectContaining({ message }), "project-id");
+    expect(beginGoogle).toHaveBeenCalledWith("project-id", "user-id", {
+      action: "create",
+      draft: { kind: "google_drive", name: "", target: "" },
+    });
+    expect(showError).not.toHaveBeenCalled();
     expect(create).not.toHaveBeenCalled();
+  });
+
+  it("opens the picker once after consent without submitting an empty source", async () => {
+    openPicker.mockResolvedValue(null);
+    useRenderConnectionFlow({ ...resume, target: "" });
+    for (const setup of effects) setup();
+    for (const setup of effects) setup();
+    await vi.waitFor(() => expect(openPicker).toHaveBeenCalledOnce());
+    expect(getGooglePicker).toHaveBeenCalledWith("project-id", grantId, expect.any(AbortSignal));
+    expect(create).not.toHaveBeenCalled();
+    expect(showError).not.toHaveBeenCalled();
+  });
+
+  it("creates the connection with the selected source's name and ID, ignoring an old draft name", async () => {
+    openPicker.mockResolvedValue({ id: "selected-folder", name: "Study files" });
+    const flow = useRenderConnectionFlow({ ...resume, name: "Old connection name", target: "" });
+    await flow.chooseGoogleSource();
+    expect(create).toHaveBeenCalledWith("project-id", {
+      name: "Study files",
+      kind: "google_drive",
+      config: { folder: "selected-folder" },
+      grant_id: grantId,
+    });
+    expect(updates[0].set).toHaveBeenCalledWith(2);
+  });
+
+  it("keeps the previous source when the picker is cancelled", async () => {
+    openPicker.mockResolvedValue(null);
+    const flow = useRenderConnectionFlow();
+    await flow.chooseGoogleSource();
+    expect(updates.find((state) => state.initial === flow.draft)?.set).not.toHaveBeenCalled();
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it.each(["google_drive", "google_sheets"] as const)(
+    "starts %s authorization directly from provider selection without showing the details step",
+    async (kind) => {
+      const flow = useRenderConnectionFlow(null);
+      flow.chooseKind(kind);
+      await vi.waitFor(() => expect(beginGoogle).toHaveBeenCalled());
+      expect(beginGoogle).toHaveBeenCalledWith("project-id", "user-id", {
+        action: "create",
+        draft: { kind, name: "", target: "" },
+      });
+      expect(updates[0].set).not.toHaveBeenCalledWith(1);
+    },
+  );
+
+  it("adds the next available suffix when the source name already exists", async () => {
+    create.mockRejectedValueOnce(new ApiError(409, "CONNECTION_NAME_EXISTS", "Already exists."));
+    getList.mockResolvedValue({
+      data: [{ name: "Study" }, { name: "Study (2)" }],
+      meta: { pagination: null },
+    });
+    const flow = useRenderConnectionFlow();
+    await flow.chooseGoogleSource();
+    expect(create.mock.calls[1][1]).toMatchObject({ name: "Study (3)", grant_id: grantId });
+    expect(showError).not.toHaveBeenCalled();
+    expect(updates[0].set).toHaveBeenCalledWith(2);
+  });
+
+  it("keeps the details step for database providers", () => {
+    const flow = useRenderConnectionFlow(null);
+    flow.chooseKind("mysql");
+    expect(updates[0].set).toHaveBeenCalledWith(1);
+    expect(beginGoogle).not.toHaveBeenCalled();
   });
 });
