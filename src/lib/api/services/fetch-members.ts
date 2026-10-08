@@ -1,5 +1,6 @@
+import { type AssignableProjectRole, isAssignableProjectRole } from "@/lib/auth/project-access";
 import type { ProjectRole } from "@/lib/auth/types";
-import type { ApiResult } from "@/types/api";
+import { ApiError, type ApiResult } from "@/types/api";
 
 import apiService from "../core";
 import { projectPath } from "../request";
@@ -22,7 +23,7 @@ export interface ProjectMemberItem {
 
 export interface CreateMemberRequest {
   email: string;
-  role: ProjectRole;
+  role: AssignableProjectRole;
 }
 export interface MemberListParams extends ListParams {
   q?: string;
@@ -31,7 +32,7 @@ export interface MemberListParams extends ListParams {
 }
 
 export interface UpdateMemberRequest {
-  role: ProjectRole;
+  role: AssignableProjectRole;
 }
 
 export type MemberListResponse = ApiResult<ProjectMemberItem[]>;
@@ -49,6 +50,13 @@ export interface InviteCandidateParams extends ListParams {
 export type InviteCandidatesResponse = ApiResult<InviteCandidate[]>;
 
 const membersPath = (projectId: string) => `${projectPath(projectId)}/members`;
+
+function requireAssignableRole(role: string) {
+  if (!isAssignableProjectRole(role)) {
+    throw new ApiError(400, "INVALID_PROJECT_MEMBER_ROLE", "Members can only be assigned Researcher or Reviewer.");
+  }
+}
+
 export const fetchMembers = {
   getInviteCandidates: async (
     projectId: string,
@@ -73,10 +81,12 @@ export const fetchMembers = {
     return response.data;
   },
   create: async (projectId: string, data: CreateMemberRequest): Promise<MemberDetailResponse> => {
+    requireAssignableRole(data.role);
     const response = await apiService.post<MemberDetailResponse>(membersPath(projectId), data);
     return response.data;
   },
   update: async (projectId: string, membershipId: string, data: UpdateMemberRequest): Promise<MemberDetailResponse> => {
+    requireAssignableRole(data.role);
     const response = await apiService.put<MemberDetailResponse>(
       `${membersPath(projectId)}/${encodeURIComponent(membershipId)}`,
       data,

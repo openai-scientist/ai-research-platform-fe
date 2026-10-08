@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 
-import { Download, MoreVertical, Trash2 } from "lucide-react";
+import { Download, Eye, MoreVertical, Trash2 } from "lucide-react";
 
 import {
   AlertDialog,
@@ -25,26 +25,32 @@ import {
 import { useDeleteProjectFileMutation, useDownloadProjectFileMutation } from "@/hooks/use-project-files-query";
 import type { ProjectFileItem } from "@/lib/api/services/fetch-project-files";
 
+import { saveProjectFile } from "./project-file-download";
 import { perform } from "./workspace-ui";
 
 export function ProjectFileActions({
   projectId,
   file,
   canWrite,
+  onPreview,
 }: {
   projectId: string;
   file: ProjectFileItem;
   canWrite: boolean;
+  onPreview: (trigger: HTMLElement | null) => void;
 }) {
   const download = useDownloadProjectFileMutation(projectId);
   const remove = useDeleteProjectFileMutation(projectId);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const previewRequested = useRef(false);
 
   return (
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
+            ref={triggerRef}
             variant="ghost"
             size="icon-sm"
             aria-label={`Actions for ${file.filename}`}
@@ -58,23 +64,26 @@ export function ProjectFileActions({
         <DropdownMenuContent
           align="end"
           onCloseAutoFocus={(event) => {
-            if (confirmOpen) event.preventDefault();
+            if (confirmOpen || previewRequested.current) event.preventDefault();
+            previewRequested.current = false;
           }}
         >
           <DropdownMenuGroup>
+            <DropdownMenuItem
+              onSelect={() => {
+                previewRequested.current = true;
+                onPreview(triggerRef.current);
+              }}
+            >
+              <Eye />
+              Preview
+            </DropdownMenuItem>
             <DropdownMenuItem
               disabled={download.isPending || remove.isPending}
               onSelect={async () => {
                 const result = await perform(() => download.mutateAsync(file.id));
                 if (!result) return;
-                const url = URL.createObjectURL(result.blob);
-                const link = document.createElement("a");
-                link.href = url;
-                link.download = result.filename ?? file.filename;
-                document.body.append(link);
-                link.click();
-                link.remove();
-                window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+                saveProjectFile(result, file.filename);
               }}
             >
               <Download />

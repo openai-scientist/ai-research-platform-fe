@@ -86,6 +86,7 @@ type UsersProps = {
   readonly compactToolbar?: boolean;
   readonly description?: string;
   readonly getDetailsHref?: (user: UserRow) => string | undefined;
+  readonly getRoleChoices?: (user: UserRow) => readonly string[];
   readonly onChangeRole?: (user: UserRow, role: string) => void;
   readonly onToggleStatus?: (user: UserRow) => void;
   readonly roleOptions?: readonly string[];
@@ -110,6 +111,7 @@ export function Users({
   compactToolbar = false,
   description = "Manage your organization members and their access.",
   getDetailsHref,
+  getRoleChoices,
   onChangeRole,
   onToggleStatus,
   roleOptions = filters.role,
@@ -160,6 +162,7 @@ export function Users({
         joinedDateLabel,
         renderActions,
         onChangeRole,
+        getRoleChoices,
         onToggleStatus,
         roleChoices,
         showTeam: teamOptions.length > 0,
@@ -172,6 +175,7 @@ export function Users({
       joinedDateLabel,
       renderActions,
       onChangeRole,
+      getRoleChoices,
       onToggleStatus,
       roleChoices,
       teamOptions.length,
@@ -317,6 +321,7 @@ export function Users({
       table={table}
       getDetailsHref={getDetailsHref}
       onChangeRole={onChangeRole}
+      getRoleChoices={getRoleChoices}
       onToggleStatus={onToggleStatus}
       roleChoices={roleChoices}
       showTeam={teamOptions.length > 0}

@@ -11,7 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useManagerResearchQuery } from "@/hooks/use-manager-query";
 import { useProjectDetailQuery } from "@/hooks/use-projects-query";
 import type { ProjectItem } from "@/lib/api/services/fetch-project";
-import { ProjectStatus } from "@/types/enums";
+import { getProjectAccess } from "@/lib/auth/project-access";
 
 import { ProjectStatusBadge } from "../../_components/project-status-badge";
 import { BudgetUsageCard } from "./budget-usage-card";
@@ -23,12 +23,14 @@ import { ResearchLoopCard } from "./research-loop-card";
 import { ResearchPreviewDialog } from "./research-preview";
 import { useProjectPreview } from "./use-project-preview";
 
-export function ManagerOverview({ project: initialProject }: { readonly project: ProjectItem }) {
+export function ProjectOverview({ project: initialProject }: { readonly project: ProjectItem }) {
   const projectQuery = useProjectDetailQuery(initialProject.id);
   const research = useManagerResearchQuery(initialProject.id);
   const preview = useProjectPreview(initialProject.id);
   const project = projectQuery.data?.data ?? initialProject;
+  const access = getProjectAccess(project.my_role, project.status);
   const baseUrl = `/projects/${project.id}`;
+  if (!access.canRead) return null;
   if (research.isPending) return <Skeleton className="h-96 w-full" aria-label="Loading project overview" />;
   if (!research.data) {
     return (
@@ -45,7 +47,7 @@ export function ManagerOverview({ project: initialProject }: { readonly project:
     );
   }
   const dashboard = toManagerDashboard(project, research.data, preview.data);
-  const archived = project.status === ProjectStatus.Archived;
+  const canWrite = !projectQuery.isError && access.canWrite;
 
   return (
     <div className="flex flex-col gap-6">
@@ -60,23 +62,25 @@ export function ManagerOverview({ project: initialProject }: { readonly project:
             {dashboard.objective}
           </p>
         </div>
-        {!archived && (
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
-            <ResearchPreviewDialog projectId={project.id} canEdit={!archived} />
-            <Button asChild variant="outline">
-              <Link prefetch={false} href={`${baseUrl}/datasets#upload-dataset`}>
-                <Upload data-icon="inline-start" />
-                Upload dataset
-              </Link>
-            </Button>
-            <Button asChild>
-              <Link prefetch={false} href={`${baseUrl}/experiments/context#research-context`}>
-                <MessageCircleQuestionMark data-icon="inline-start" />
-                New research question
-              </Link>
-            </Button>
-          </div>
-        )}
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <ResearchPreviewDialog projectId={project.id} canEdit={canWrite} />
+          {canWrite && (
+            <>
+              <Button asChild variant="outline">
+                <Link prefetch={false} href={`${baseUrl}/datasets#upload-dataset`}>
+                  <Upload data-icon="inline-start" />
+                  Upload dataset
+                </Link>
+              </Button>
+              <Button asChild>
+                <Link prefetch={false} href={`${baseUrl}/experiments/context#research-context`}>
+                  <MessageCircleQuestionMark data-icon="inline-start" />
+                  New research question
+                </Link>
+              </Button>
+            </>
+          )}
+        </div>
       </div>
 
       <ProjectKpiStrip dashboard={dashboard} />

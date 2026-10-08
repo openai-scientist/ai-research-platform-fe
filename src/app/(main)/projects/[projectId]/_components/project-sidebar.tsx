@@ -3,6 +3,7 @@
 import type { ComponentProps } from "react";
 
 import { AppSidebar } from "@/app/(main)/dashboard/_components/sidebar/app-sidebar";
+import type { ProjectItem } from "@/lib/api/services/fetch-project";
 import type { AuthUser } from "@/lib/auth/auth-config";
 import type { ProjectSummary } from "@/lib/projects/project-data";
 import { getProjectSidebarItems } from "@/navigation/sidebar/project-sidebar-items";
@@ -17,7 +18,7 @@ export function ProjectSidebar({
   user,
   variant,
 }: {
-  readonly activeProject: ProjectSummary;
+  readonly activeProject: Pick<ProjectItem, "id" | "name" | "status" | "my_role">;
   readonly canCreate: boolean;
   readonly collapsible: ComponentProps<typeof AppSidebar>["collapsible"];
   readonly projects: readonly ProjectSummary[];
@@ -27,7 +28,7 @@ export function ProjectSidebar({
   return (
     <AppSidebar
       header={<ProjectSwitcher activeProject={activeProject} canCreate={canCreate} projects={projects} />}
-      items={getProjectSidebarItems(activeProject.id, user.role)}
+      items={getProjectSidebarItems(activeProject.id, activeProject.my_role)}
       showQuickCreate={false}
       user={{ ...user, avatar: "" }}
       variant={variant}

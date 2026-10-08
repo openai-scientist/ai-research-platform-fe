@@ -4,8 +4,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import type { InviteCandidate } from "@/lib/api/services/fetch-members";
 import { resolveAvatarUrl } from "@/lib/auth/avatar";
+import type { AssignableProjectRole } from "@/lib/auth/project-access";
 import { getInitials } from "@/lib/utils";
-import type { ProjectRole } from "@/types/enums";
 
 import { RoleSelect } from "./workspace-ui";
 
@@ -16,8 +16,8 @@ export function InviteMemberRole({
   pending,
 }: {
   user: InviteCandidate;
-  role: ProjectRole;
-  onRoleChange: (role: ProjectRole) => void;
+  role: AssignableProjectRole;
+  onRoleChange: (role: AssignableProjectRole) => void;
   pending: boolean;
 }) {
   return (

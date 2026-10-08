@@ -1,4 +1,4 @@
-import { PlatformRole, ProjectRole } from "@/types/enums";
+import { PlatformRole, type ProjectRole } from "@/types/enums";
 
 import type { CurrentUser } from "./types";
 
@@ -15,42 +15,35 @@ export const PUBLIC_AUTH_PATHS = [
   "/auth/reset-password",
 ];
 export const SESSION_INVALID_CODES = ["SESSION_EXPIRED", "UNAUTHENTICATED", "USER_SUSPENDED"];
-export const USER_ROLES = ["SYSTEM_ADMIN", "PROJECT_MANAGER", "RESEARCHER", "REVIEWER"] as const;
-export type UserRole = (typeof USER_ROLES)[number];
+export const PLATFORM_ROLE_LABELS: Record<PlatformRole, string> = {
+  [PlatformRole.PlatformAdmin]: "Admin",
+  [PlatformRole.User]: "User",
+};
 
 export type AuthUser = CurrentUser["user"] & {
   name: string;
-  // Adapter for existing screen props. Project permissions come from memberships.
-  role: UserRole;
+  projectRole: ProjectRole | null;
   memberships: CurrentUser["memberships"];
   session: CurrentUser["session"];
 };
 
 export function toAuthUser(current: CurrentUser, projectId?: string): AuthUser {
-  const projectRole = current.memberships.find((membership) => membership.project_id === projectId)?.role;
-  const roles: Record<ProjectRole, UserRole> = {
-    [ProjectRole.ProjectManager]: "PROJECT_MANAGER",
-    [ProjectRole.Researcher]: "RESEARCHER",
-    [ProjectRole.Reviewer]: "REVIEWER",
-  };
-  let role: UserRole = "RESEARCHER";
-  if (current.user.platform_role === PlatformRole.PlatformAdmin) role = "SYSTEM_ADMIN";
-  else if (projectRole) role = roles[projectRole];
+  const projectRole = current.memberships.find((membership) => membership.project_id === projectId)?.role ?? null;
   return {
     ...current.user,
     name: current.user.display_name ?? current.user.email,
-    role,
+    projectRole,
     memberships: current.memberships,
     session: current.session,
   };
 }
-export function canAccessProjects(role: UserRole) {
-  return USER_ROLES.includes(role);
+export function canAccessProjects(role: PlatformRole) {
+  return role === PlatformRole.User || role === PlatformRole.PlatformAdmin;
 }
-export function canCreateProject(role: UserRole) {
+export function canCreateProject(role: PlatformRole) {
   // Creating a project makes its creator project_manager, regardless of roles in other projects.
-  return USER_ROLES.includes(role);
+  return canAccessProjects(role);
 }
-export function getRoleHomePath(role: UserRole) {
-  return role === "SYSTEM_ADMIN" ? "/admin" : "/projects";
+export function getRoleHomePath(role: PlatformRole) {
+  return role === PlatformRole.PlatformAdmin ? "/admin" : "/projects";
 }

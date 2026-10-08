@@ -34,7 +34,7 @@ export function TopBarShell({
             <LayoutControls />
             <ThemeSwitcher />
             <AccountSwitcher
-              users={[{ id: user.email, name: user.name, email: user.email, avatar: "", role: user.role }]}
+              users={[{ id: user.email, name: user.name, email: user.email, avatar: "", role: user.platform_role }]}
             />
           </div>
         </div>

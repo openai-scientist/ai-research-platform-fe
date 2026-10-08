@@ -9,7 +9,7 @@ import {
   type ProjectMemberItem,
 } from "@/lib/api/services/fetch-members";
 import type { ListParams } from "@/lib/api/types";
-import type { ProjectRole } from "@/types/enums";
+import type { AssignableProjectRole } from "@/lib/auth/project-access";
 
 import { type ApiQueryOptions, useApiMutation, useApiQuery } from "./use-api";
 import { type InfiniteQueryOptions, useInfinityScroll } from "./use-infinity-scroll";
@@ -41,7 +41,7 @@ export function useAddMemberMutation(projectId: string) {
 }
 export function useUpdateMemberMutation(projectId: string) {
   return useApiMutation(
-    (data: { membershipId: string; role: ProjectRole }) =>
+    (data: { membershipId: string; role: AssignableProjectRole }) =>
       fetchMembers.update(projectId, data.membershipId, { role: data.role }),
     invalidation,
   );

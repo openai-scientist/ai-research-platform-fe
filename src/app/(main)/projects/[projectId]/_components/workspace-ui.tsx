@@ -11,7 +11,12 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { ProjectItem } from "@/lib/api/services/fetch-project";
-import { ProjectRole } from "@/types/enums";
+import {
+  ASSIGNABLE_PROJECT_ROLES,
+  type AssignableProjectRole,
+  isAssignableProjectRole,
+  PROJECT_ROLE_LABELS,
+} from "@/lib/auth/project-access";
 
 export interface WorkspaceProps {
   project: ProjectItem;
@@ -118,21 +123,29 @@ export function RoleSelect({
   disabled,
   label,
 }: {
-  value: ProjectRole;
-  onChange: (role: ProjectRole) => void;
+  value: AssignableProjectRole;
+  onChange: (role: AssignableProjectRole) => void;
   disabled?: boolean;
   label: string;
 }) {
   return (
-    <Select value={value} onValueChange={(role) => onChange(role as ProjectRole)} disabled={disabled}>
+    <Select
+      value={value}
+      onValueChange={(role) => {
+        if (isAssignableProjectRole(role)) onChange(role);
+      }}
+      disabled={disabled}
+    >
       <SelectTrigger aria-label={label}>
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
         <SelectGroup>
-          <SelectItem value={ProjectRole.ProjectManager}>Project Manager</SelectItem>
-          <SelectItem value={ProjectRole.Researcher}>Researcher</SelectItem>
-          <SelectItem value={ProjectRole.Reviewer}>Reviewer</SelectItem>
+          {ASSIGNABLE_PROJECT_ROLES.map((role) => (
+            <SelectItem key={role} value={role}>
+              {PROJECT_ROLE_LABELS[role]}
+            </SelectItem>
+          ))}
         </SelectGroup>
       </SelectContent>
     </Select>

@@ -28,7 +28,7 @@ export const getWorkspaceProjects = cache(async () => {
   let total = 0;
   do {
     const result = await readProjectApi<ProjectItem[]>(`/projects?include_archived=true&limit=100&offset=${offset}`);
-    projects.push(...result.data);
+    projects.push(...result.data.filter((project) => project.my_role !== null));
     offset += result.data.length;
     total = result.meta.pagination?.total ?? offset;
     if (!result.data.length) break;
@@ -52,7 +52,9 @@ export const getWorkspaceProject = cache(async (id: string) => {
     notFound();
   }
   try {
-    return (await readProjectApi<ProjectItem>(`/projects/${encodeURIComponent(id)}`)).data;
+    const project = (await readProjectApi<ProjectItem>(`/projects/${encodeURIComponent(id)}`)).data;
+    if (!project.my_role) redirect("/projects");
+    return project;
   } catch (error) {
     if (error instanceof ApiError && error.code === "NOT_FOUND") notFound();
     throw error;

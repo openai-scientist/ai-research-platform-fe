@@ -26,7 +26,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ t
     <TopBarShell homeUrl="/projects" user={user}>
       <GoogleConnectionFeedback />
       <WorkspaceProjects
-        canCreate={canCreateProject(user.role)}
+        canCreate={canCreateProject(user.platform_role)}
         initialInvitationsOpen={params.tab === "invitations"}
       />
     </TopBarShell>

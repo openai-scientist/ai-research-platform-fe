@@ -19,7 +19,7 @@ export const metadata: Metadata = {
 
 export default async function LoginPage() {
   const user = await getAuthenticatedUser();
-  if (user) redirect(getRoleHomePath(user.role));
+  if (user) redirect(getRoleHomePath(user.platform_role));
   const googleSignInAvailable = isGoogleSignInAvailable();
   return (
     <>
