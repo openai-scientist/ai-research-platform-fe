@@ -5,7 +5,7 @@ import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { cn } from "cn";
-import { MoreHorizontal, Plus } from "lucide-react";
+import { MoreHorizontal, Plus, Search } from "lucide-react";
 import { toast } from "sonner";
 
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import {
   useConnectionAccess,
   useConnectionActions,
@@ -172,12 +173,19 @@ export function ConnectionsSection({ project, canWrite, userId, header }: Worksp
             <FieldLabel htmlFor="connection-search" className="sr-only">
               Search connections
             </FieldLabel>
-            <Input
-              id="connection-search"
-              value={search}
-              placeholder="Search connections"
-              onChange={(event) => setSearch(event.target.value)}
-            />
+            <InputGroup>
+              <InputGroupInput
+                id="connection-search"
+                value={search}
+                placeholder="Search connections"
+                onChange={(event) => setSearch(event.target.value)}
+              />
+              <InputGroupAddon align="inline-end">
+                <span className="flex size-6 items-center justify-center">
+                  <Search className="size-4" aria-hidden="true" />
+                </span>
+              </InputGroupAddon>
+            </InputGroup>
             {search.trim().length > 0 && search.trim().length < 3 && (
               <FieldDescription>Enter at least 3 characters to search.</FieldDescription>
             )}
