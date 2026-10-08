@@ -7,12 +7,13 @@ import { AlertTriangle, ArrowDown, CircleCheck, CircleHelp, Cpu, Database, GitFo
 import { motion } from "motion/react";
 
 import type { GoalField, Risk } from "@/lib/run-stream/contract";
+import { SHOW_SCOPE_EXTRAS } from "@/lib/run-stream/features";
 import type { RunState, ScopeContent } from "@/lib/run-stream/run-state";
 
 import { AnimatedNumber } from "../animated-number";
 import { AgentAvatar, AgentCursor } from "../run-bits";
 import { useReveal } from "../workspace-context";
-import { Pane, PendingLines, Placeholder, Strike, TypeText } from "./scene-ui";
+import { Bone, Pane, PendingLines, Placeholder, Strike, TypeText } from "./scene-ui";
 
 const FIELDS: { field: GoalField; label: string }[] = [
   { field: "title", label: "Working title" },
@@ -114,10 +115,23 @@ function questionParts(question: string, phrases: string[]) {
   return parts;
 }
 
-function ScoreBar({ label, hint, value, delay }: { label: string; hint: string; value: number; delay: number }) {
+function ScoreBar({
+  label,
+  hint,
+  value,
+  reason,
+  delay,
+}: {
+  label: string;
+  hint: string;
+  value: number;
+  /** What in the topic or goal earned the score. */
+  reason?: string;
+  delay: number;
+}) {
   const tone = value >= 7 ? "bg-emerald-500" : value >= 5 ? "bg-amber-500" : "bg-rose-500";
   return (
-    <div className="grid grid-cols-[112px_minmax(0,1fr)_36px] items-center gap-2.5 text-xs">
+    <div className="grid grid-cols-[112px_minmax(0,1fr)_36px] items-center gap-x-2.5 gap-y-1 text-xs">
       <span className="flex flex-col leading-tight">
         <span className="font-medium">{label}</span>
         <span className="text-[11px] text-muted-foreground">{hint}</span>
@@ -129,9 +143,9 @@ function ScoreBar({ label, hint, value, delay }: { label: string; hint: string; 
           animate={{ width: `${value * 10}%` }}
           transition={{ delay, duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
         />
-        <span className="absolute -inset-y-1 left-1/2 w-px bg-foreground/40" title="The bar: 5 of 10" />
       </span>
       <span className="text-right font-mono font-semibold tabular-nums">{value}/10</span>
+      {reason && <span className="col-span-2 col-start-2 text-muted-foreground leading-snug">{reason}</span>}
     </div>
   );
 }
@@ -165,6 +179,53 @@ function Gauge({ value, threshold }: { value: number; threshold: number }) {
   );
 }
 
+/** Branches drawn before the sub-questions arrive. */
+const FRAME_BRANCHES = 4;
+
+/** The tree's place, held while the goal is split: the objective at the top, empty branches below. */
+function TreeFrame({ objective, active }: { objective?: string; active: boolean }) {
+  return (
+    <Pane
+      title={
+        <span className="inline-flex items-center gap-1.5">
+          <GitFork className="size-3.5 rotate-180 text-muted-foreground" />
+          Sub-question tree
+        </span>
+      }
+      aside={active ? "Splitting the goal into sub-questions" : "Stage 02"}
+    >
+      <div className="flex flex-col items-center">
+        <div className="w-full max-w-2xl rounded-lg bg-muted px-3.5 py-2.5 text-center text-muted-foreground text-xs leading-snug">
+          <span className="block font-semibold text-[10.5px] uppercase tracking-wide">Objective</span>
+          {objective ?? <Bone active={active} className="mx-auto mt-1 w-2/3" />}
+        </div>
+        <span aria-hidden className="h-4 w-px bg-border" />
+        <ol aria-hidden className="grid w-full gap-3 md:grid-cols-2 xl:grid-cols-4">
+          {Array.from({ length: FRAME_BRANCHES }, (_, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: empty branches have no ids
+            <li key={i} className="relative flex flex-col pt-4">
+              <span
+                className={cn(
+                  "absolute top-0 hidden h-px bg-border xl:block",
+                  i === 0 ? "left-1/2" : "-left-1.5",
+                  i === FRAME_BRANCHES - 1 ? "right-1/2" : "-right-1.5",
+                )}
+              />
+              <span className="absolute top-0 left-1/2 h-4 w-px bg-border" />
+              <span className="flex h-full flex-col gap-2.5 rounded-xl border border-dashed px-3.5 py-3">
+                <Bone active={active} className="h-5 w-10 rounded-md" />
+                <Bone active={active} />
+                <Bone active={active} className="w-3/4" />
+                <Bone active={active} className="mt-1 h-2 w-1/2" />
+              </span>
+            </li>
+          ))}
+        </ol>
+      </div>
+    </Pane>
+  );
+}
+
 export function ScopeScene({
   data,
   topic,
@@ -172,6 +233,7 @@ export function ScopeScene({
   estimates,
   dataLabel,
   live,
+  step,
 }: {
   data: ScopeContent;
   topic: string;
@@ -179,6 +241,8 @@ export function ScopeScene({
   estimates: RunState["estimates"];
   dataLabel: string;
   live: boolean;
+  /** The step running now, while the run is followed live. */
+  step: string | null;
 }) {
   const scene = useRef<HTMLDivElement>(null);
   const treeRef = useRef<HTMLDivElement>(null);
@@ -228,7 +292,7 @@ export function ScopeScene({
           <span className="ml-1">Everything below is written from this. You didn't list the sub-questions.</span>
         </span>
       </section>
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(300px,1fr)]">
+      <div className={cn("grid gap-4", SHOW_SCOPE_EXTRAS && "xl:grid-cols-[minmax(0,1.55fr)_minmax(300px,1fr)]")}>
         <Pane
           title={
             <span className="inline-flex items-center gap-1.5">
@@ -327,63 +391,65 @@ export function ScopeScene({
           )}
         </Pane>
 
-        <div className="flex min-w-0 flex-col gap-4">
-          <Pane title="What the run works with" aside="detected, not assumed">
-            {data.compute ? (
-              <dl className="flex flex-col gap-3 text-sm">
-                <div className="flex flex-col gap-1.5">
-                  <dt className="text-muted-foreground text-xs">Fields matched to your topic</dt>
-                  <dd className="flex flex-wrap gap-1.5">
-                    {data.domains.map((d, i) => (
-                      <motion.span
-                        key={d}
-                        initial={live ? { opacity: 0, scale: 0.8 } : false}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ delay: i * 0.12, type: "spring", stiffness: 420, damping: 22 }}
-                        className="inline-flex h-6 items-center rounded-md bg-pink-500/10 px-2 font-medium text-pink-700 text-xs ring-1 ring-pink-500/25 dark:text-pink-300"
-                      >
-                        {d}
-                      </motion.span>
-                    ))}
-                  </dd>
-                </div>
-                <div className="grid grid-cols-[28px_minmax(0,1fr)] items-start gap-2.5">
-                  <dt className="grid size-7 place-items-center rounded-md bg-muted">
-                    <Cpu className="size-4 text-muted-foreground" />
-                    <span className="sr-only">Compute</span>
-                  </dt>
-                  <dd className="min-w-0">
-                    <b className="font-medium text-[13px]">{data.compute.label}</b>
-                    <span className="block text-muted-foreground text-xs">{data.compute.detail}</span>
-                    <span className="mt-1 block text-[11px] text-muted-foreground">
-                      Saved as the compute profile. Every hypothesis is checked against it in stage 8.
-                    </span>
-                  </dd>
-                </div>
-                {dataLabel && (
-                  <div className="grid grid-cols-[28px_minmax(0,1fr)] items-center gap-2.5">
-                    <dt className="grid size-7 place-items-center rounded-md bg-muted">
-                      <Database className="size-4 text-muted-foreground" />
-                      <span className="sr-only">Data</span>
-                    </dt>
-                    <dd className="text-[13px]">{dataLabel}</dd>
+        {SHOW_SCOPE_EXTRAS && (
+          <div className="flex min-w-0 flex-col gap-4">
+            <Pane title="What the run works with" aside="detected, not assumed">
+              {data.compute ? (
+                <dl className="flex flex-col gap-3 text-sm">
+                  <div className="flex flex-col gap-1.5">
+                    <dt className="text-muted-foreground text-xs">Fields matched to your topic</dt>
+                    <dd className="flex flex-wrap gap-1.5">
+                      {data.domains.map((d, i) => (
+                        <motion.span
+                          key={d}
+                          initial={live ? { opacity: 0, scale: 0.8 } : false}
+                          animate={{ opacity: 1, scale: 1 }}
+                          transition={{ delay: i * 0.12, type: "spring", stiffness: 420, damping: 22 }}
+                          className="inline-flex h-6 items-center rounded-md bg-pink-500/10 px-2 font-medium text-pink-700 text-xs ring-1 ring-pink-500/25 dark:text-pink-300"
+                        >
+                          {d}
+                        </motion.span>
+                      ))}
+                    </dd>
                   </div>
-                )}
-              </dl>
-            ) : (
-              <PendingLines lines={3} />
-            )}
-          </Pane>
-          <Pane title="Numbers from memory" aside="unverified until a paper backs them" className="flex-1">
-            {estimates.length ? (
-              <EstimateList estimates={estimates} live={live} />
-            ) : (
-              <p className="text-muted-foreground text-xs">
-                Any figure the agents recall before reading appears here, marked unverified.
-              </p>
-            )}
-          </Pane>
-        </div>
+                  <div className="grid grid-cols-[28px_minmax(0,1fr)] items-start gap-2.5">
+                    <dt className="grid size-7 place-items-center rounded-md bg-muted">
+                      <Cpu className="size-4 text-muted-foreground" />
+                      <span className="sr-only">Compute</span>
+                    </dt>
+                    <dd className="min-w-0">
+                      <b className="font-medium text-[13px]">{data.compute.label}</b>
+                      <span className="block text-muted-foreground text-xs">{data.compute.detail}</span>
+                      <span className="mt-1 block text-[11px] text-muted-foreground">
+                        Saved as the compute profile. Every hypothesis is checked against it in stage 8.
+                      </span>
+                    </dd>
+                  </div>
+                  {dataLabel && (
+                    <div className="grid grid-cols-[28px_minmax(0,1fr)] items-center gap-2.5">
+                      <dt className="grid size-7 place-items-center rounded-md bg-muted">
+                        <Database className="size-4 text-muted-foreground" />
+                        <span className="sr-only">Data</span>
+                      </dt>
+                      <dd className="text-[13px]">{dataLabel}</dd>
+                    </div>
+                  )}
+                </dl>
+              ) : (
+                <PendingLines lines={3} />
+              )}
+            </Pane>
+            <Pane title="Numbers from memory" aside="unverified until a paper backs them" className="flex-1">
+              {estimates.length ? (
+                <EstimateList estimates={estimates} live={live} />
+              ) : (
+                <p className="text-muted-foreground text-xs">
+                  Any figure the agents recall before reading appears here, marked unverified.
+                </p>
+              )}
+            </Pane>
+          </div>
+        )}
       </div>
 
       <div ref={treeRef}>
@@ -524,13 +590,16 @@ export function ScopeScene({
             </div>
           </Pane>
         ) : (
-          <Placeholder>Your topic is split into sub-questions next</Placeholder>
+          <TreeFrame objective={objective} active={step === "decompose"} />
         )}
       </div>
 
       <div ref={scoreRef}>
         {data.evaluation ? (
-          <Pane title="Topic score" aside="rated like a conference area chair · below 5 the run stops">
+          <Pane
+            title="Topic score"
+            aside={`the mean of three scores, given before any search · below ${data.evaluation.threshold} the run stops`}
+          >
             <div className="grid items-center gap-5 lg:grid-cols-[auto_minmax(0,1fr)_minmax(0,1.1fr)]">
               <div className="flex flex-col items-center gap-2">
                 <div className="relative">
@@ -567,33 +636,38 @@ export function ScopeScene({
                   label="Novelty"
                   hint="not already answered"
                   value={data.evaluation.scores.novelty}
+                  reason={data.evaluation.reasons?.novelty}
                   delay={0.2}
                 />
                 <ScoreBar
                   label="Specificity"
                   hint="can be measured"
                   value={data.evaluation.scores.specificity}
+                  reason={data.evaluation.reasons?.specificity}
                   delay={0.35}
                 />
                 <ScoreBar
                   label="Feasibility"
-                  hint="doable with this compute"
+                  hint="doable within the goal's scope"
                   value={data.evaluation.scores.feasibility}
+                  reason={data.evaluation.reasons?.feasibility}
                   delay={0.5}
                 />
               </div>
-              <motion.p
-                initial={live ? { opacity: 0, y: 4 } : false}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 1.2 }}
-                className="grid grid-cols-[auto_minmax(0,1fr)] gap-2.5 rounded-lg bg-muted px-3 py-2.5 text-sm"
-              >
-                <AgentAvatar agent="pi" />
-                <span>
-                  <b className="block font-semibold text-xs">The PI's advice</b>
-                  {data.evaluation.advice}
-                </span>
-              </motion.p>
+              {data.evaluation.advice && (
+                <motion.p
+                  initial={live ? { opacity: 0, y: 4 } : false}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 1.2 }}
+                  className="grid grid-cols-[auto_minmax(0,1fr)] gap-2.5 rounded-lg bg-muted px-3 py-2.5 text-sm"
+                >
+                  <AgentAvatar agent="pi" />
+                  <span>
+                    <b className="block font-semibold text-xs">The PI's advice</b>
+                    {data.evaluation.advice}
+                  </span>
+                </motion.p>
+              )}
             </div>
           </Pane>
         ) : (

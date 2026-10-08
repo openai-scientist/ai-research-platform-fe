@@ -28,9 +28,12 @@ export function parseRunEvent(value: unknown): RunEvent | null {
   return { ...rest, ...(stage_key ? { stage_key } : {}), ...(actor ? { actor } : {}) } as RunEvent;
 }
 
+/** `history`: already stored when the page opened. `live`: happened while following (or while reconnecting). */
+export type RunEventOrigin = "history" | "live";
+
 interface RunEventHandlers {
   /** New events in `seq` order. An event is never delivered twice. */
-  onEvents: (events: RunEvent[]) => void;
+  onEvents: (events: RunEvent[], origin: RunEventOrigin) => void;
   /** The run finished and every event was delivered. */
   onEnded: () => void;
   onSessionEnded: (code: string) => void;
@@ -52,6 +55,8 @@ export function subscribeRunEvents(
   let syncing = false;
   let lastSeq = options.after;
   let attempt = 0;
+  // Until the stream has been open once, what the backend returns is the run's history.
+  let followed = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
   const controller = new AbortController();
   const stop = () => {
@@ -61,11 +66,11 @@ export function subscribeRunEvents(
     source?.close();
     source = null;
   };
-  const deliver = (events: RunEvent[]) => {
+  const deliver = (events: RunEvent[], origin: RunEventOrigin) => {
     const fresh = events.filter((event) => event.seq > lastSeq);
     if (!fresh.length) return;
     lastSeq = fresh[fresh.length - 1].seq;
-    handlers.onEvents(fresh);
+    handlers.onEvents(fresh, origin);
   };
   const catchUp = async () => {
     for (;;) {
@@ -73,7 +78,7 @@ export function subscribeRunEvents(
       if (disposed) return;
       const events = page.data.map(parseRunEvent);
       if (events.some((event) => event === null)) throw new Error("Unable to read the run's progress.");
-      deliver(events as RunEvent[]);
+      deliver(events as RunEvent[], followed ? "live" : "history");
       if (page.data.length < PAGE) return;
     }
   };
@@ -114,7 +119,9 @@ export function subscribeRunEvents(
     const current = new EventSource(url.href, { withCredentials: true });
     source = current;
     current.onopen = () => {
-      if (source === current) attempt = 0;
+      if (source !== current) return;
+      attempt = 0;
+      followed = true;
     };
     current.addEventListener("run-event", (message) => {
       if (disposed || source !== current) return;
@@ -124,7 +131,8 @@ export function subscribeRunEvents(
       } catch {
         event = null;
       }
-      if (event) deliver([event]);
+      // Events the stream replays before it opened are still the history.
+      if (event) deliver([event], followed ? "live" : "history");
       else {
         handlers.onError(new Error("Unable to read the run's progress. Reconnecting."));
         retry();

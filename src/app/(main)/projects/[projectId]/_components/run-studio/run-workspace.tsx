@@ -26,9 +26,10 @@ import { DropBar, GateSheet } from "./gate-sheet";
 import { NowCard, RunAside } from "./run-aside";
 import { FlightLayer, PulseDot, StatusPill } from "./run-bits";
 import { MODES, STAGE_SHORT } from "./run-meta";
+import { useStageHold } from "./stage-hold";
 import { StageScreen } from "./stage-screen";
 import { StageTrack } from "./stage-track";
-import { WorkspaceContext } from "./workspace-context";
+import { BusyContext, WorkspaceContext } from "./workspace-context";
 
 function stageName(session: RunSession, key: string | null) {
   if (!key) return "";
@@ -49,8 +50,6 @@ function RunWorkspace({ session }: { session: RunSession }) {
   const scroller = useRef<HTMLDivElement>(null);
   const live = liveStageKey(state);
   const [viewKey, setViewKey] = useState<string | null>(null);
-  const shown = viewKey ?? live ?? state.stageOrder[0] ?? null;
-  const isLiveView = shown === live;
   const [follow, setFollow] = useState(true);
   const [dropMode, setDropMode] = useState(false);
   const [dropped, setDropped] = useState<string[]>([]);
@@ -64,6 +63,11 @@ function RunWorkspace({ session }: { session: RunSession }) {
   const paused = state.lifecycle === "paused";
   // A run that failed has ended too: nothing is live and there is nothing to pause.
   const ended = state.completed || state.lifecycle === "failed";
+  // The live view finishes showing a stage before it follows the run to the next one.
+  const hold = useStageHold(live, ended, state.stages, Boolean(state.gate) || viewKey !== null);
+  const followed = hold.shown.key;
+  const shown = viewKey ?? followed ?? state.stageOrder[0] ?? null;
+  const isLiveView = shown === followed;
 
   // A review stop always brings you back to the live stage.
   const gateId = state.gate?.id;
@@ -243,12 +247,25 @@ function RunWorkspace({ session }: { session: RunSession }) {
           </div>
         </header>
 
-        <StageTrack state={state} viewKey={shown} onView={(key) => setViewKey(key === live ? null : key)} />
+        <StageTrack
+          state={state}
+          viewKey={shown}
+          onView={(key) => {
+            if (key === live) hold.release();
+            setViewKey(key === live || key === followed ? null : key);
+          }}
+        />
 
         <div className={cn("grid min-h-0 flex-1", asideOpen ? "lg:grid-cols-[minmax(0,1fr)_352px]" : "grid-cols-1")}>
           <div className="relative flex min-h-0 min-w-0 flex-col">
             <div className="border-b px-4 py-2.5 lg:hidden">
-              <NowCard state={state} holding={holding} onContinue={togglePause} compact />
+              <NowCard
+                state={state}
+                holding={holding}
+                onContinue={togglePause}
+                compact
+                typing={session.source === "api"}
+              />
               <Button variant="ghost" size="xs" className="mt-1.5" onClick={() => setDetailsOpen(true)}>
                 Steps and activity
               </Button>
@@ -289,19 +306,21 @@ function RunWorkspace({ session }: { session: RunSession }) {
                     transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
                     className="px-4 pt-5 pb-56 md:px-8"
                   >
-                    <StageScreen
-                      state={state}
-                      stageKey={shown}
-                      runLabel={session.label}
-                      live={isLiveView && !ended}
-                      scroller={scroller}
-                      onOpenReport={() => setViewKey("report")}
-                      onOpenFindings={() => {
-                        closeWorkspace();
-                        router.push(`/projects/${session.projectId}/findings`);
-                      }}
-                      onClose={closeWorkspace}
-                    />
+                    <BusyContext.Provider value={isLiveView ? hold.busyContext : null}>
+                      <StageScreen
+                        state={state}
+                        stageKey={shown}
+                        runLabel={session.label}
+                        live={isLiveView && !hold.shown.ended}
+                        scroller={scroller}
+                        onOpenReport={() => setViewKey("report")}
+                        onOpenFindings={() => {
+                          closeWorkspace();
+                          router.push(`/projects/${session.projectId}/findings`);
+                        }}
+                        onClose={closeWorkspace}
+                      />
+                    </BusyContext.Provider>
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -319,14 +338,38 @@ function RunWorkspace({ session }: { session: RunSession }) {
                     Viewing <b className="font-semibold text-foreground">{stageName(session, shown)}</b>
                     {state.stages[shown ?? ""]?.status === "done" ? ", finished" : ""}
                   </span>
-                  <Button size="sm" onClick={() => setViewKey(null)}>
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      hold.release();
+                      setViewKey(null);
+                    }}
+                  >
                     {!ended && <PulseDot className="bg-sky-400" />}
                     {ended ? "Back to" : "Live:"} {stageName(session, live)}
                     <ArrowRight />
                   </Button>
                 </motion.div>
               )}
-              {isLiveView && !follow && !ended && !state.gate && (
+              {isLiveView && hold.holding && live && followed !== live && (
+                <motion.div
+                  key="finishing"
+                  initial={{ y: 16, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  exit={{ y: 16, opacity: 0 }}
+                  className="absolute bottom-4 left-1/2 z-10 flex max-w-[calc(100%-2rem)] -translate-x-1/2 items-center gap-3 whitespace-nowrap rounded-full bg-card py-1.5 pr-1.5 pl-4 text-sm shadow-lg ring-1 ring-foreground/10"
+                >
+                  <span className="truncate text-muted-foreground">
+                    Finishing <b className="font-semibold text-foreground">{stageName(session, followed)}</b>
+                  </span>
+                  <Button size="sm" onClick={hold.release}>
+                    <PulseDot className="bg-sky-400" />
+                    {stageName(session, live)} started
+                    <ArrowRight />
+                  </Button>
+                </motion.div>
+              )}
+              {isLiveView && !hold.holding && !follow && !ended && !state.gate && (
                 <motion.div
                   initial={{ y: 16, opacity: 0 }}
                   animate={{ y: 0, opacity: 1 }}
@@ -372,7 +415,7 @@ function RunWorkspace({ session }: { session: RunSession }) {
 
           {asideOpen && (
             <aside className="min-h-0 border-l bg-sidebar max-lg:hidden">
-              <RunAside state={state} holding={holding} onContinue={togglePause} />
+              <RunAside state={state} holding={holding} onContinue={togglePause} typing={session.source === "api"} />
             </aside>
           )}
         </div>
@@ -381,7 +424,7 @@ function RunWorkspace({ session }: { session: RunSession }) {
             <SheetHeader className="sr-only">
               <SheetTitle>Steps and activity</SheetTitle>
             </SheetHeader>
-            <RunAside state={state} holding={holding} onContinue={togglePause} />
+            <RunAside state={state} holding={holding} onContinue={togglePause} typing={session.source === "api"} />
           </SheetContent>
         </Sheet>
       </motion.section>

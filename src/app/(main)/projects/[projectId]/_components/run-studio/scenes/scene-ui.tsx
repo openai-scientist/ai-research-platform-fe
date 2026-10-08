@@ -9,6 +9,7 @@ import type { AgentRole } from "@/lib/run-stream/contract";
 
 import { AgentAvatar, Caret } from "../run-bits";
 import { AGENTS } from "../run-meta";
+import { useBusy } from "../workspace-context";
 
 export function Pane({
   title,
@@ -135,6 +136,8 @@ export function TypeText({
     raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);
   }, [safeText, live, speed]);
+  // The live view does not move to the next stage while this is still being typed.
+  useBusy(live && shown < safeText.length);
   return (
     <span className={className}>
       {safeText.slice(0, shown)}
@@ -154,6 +157,16 @@ export function PendingLines({ lines = 2, className }: { lines?: number; classNa
         />
       ))}
     </span>
+  );
+}
+
+/** A bar holding the place of a value still to come; it pulses only while that part is being worked on. */
+export function Bone({ active, className }: { active: boolean; className?: string }) {
+  return (
+    <span
+      aria-hidden
+      className={cn("block h-2.5 rounded-full bg-muted", active && "motion-safe:animate-pulse", className)}
+    />
   );
 }
 

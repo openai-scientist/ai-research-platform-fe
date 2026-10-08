@@ -13,7 +13,7 @@ import type { AgentRole } from "@/lib/run-stream/contract";
 import type { RunState } from "@/lib/run-stream/run-state";
 import { GATE_TITLE, nextStop } from "@/lib/run-stream/selectors";
 
-import { AgentAvatar, Caret } from "./run-bits";
+import { AgentAvatar, Caret, TypedLine } from "./run-bits";
 import { AGENTS, RULE_IDS, RULES, TEAM } from "./run-meta";
 
 function Team({ active }: { active: AgentRole | null }) {
@@ -71,11 +71,14 @@ export function NowCard({
   holding,
   onContinue,
   compact,
+  typing = false,
 }: {
   state: RunState;
   holding: boolean;
   onContinue(): void;
   compact?: boolean;
+  /** Type out narration that arrives as whole lines (a backend run); a mock run streams it word by word. */
+  typing?: boolean;
 }) {
   const stage = state.currentStageKey ? state.stages[state.currentStageKey] : undefined;
   const steps = stage?.plan.steps ?? [];
@@ -157,7 +160,7 @@ export function NowCard({
             <p className="mt-0.5 min-h-5 text-sm leading-relaxed">
               {message ? (
                 <>
-                  {message.text}
+                  <TypedLine text={message.text} typing={typing} />
                   {!message.done && <Caret />}
                 </>
               ) : (
@@ -400,7 +403,17 @@ function Activity({ state }: { state: RunState }) {
   );
 }
 
-export function RunAside({ state, holding, onContinue }: { state: RunState; holding: boolean; onContinue(): void }) {
+export function RunAside({
+  state,
+  holding,
+  onContinue,
+  typing,
+}: {
+  state: RunState;
+  holding: boolean;
+  onContinue(): void;
+  typing?: boolean;
+}) {
   const stage = state.currentStageKey ? state.stages[state.currentStageKey] : undefined;
   const step = stage?.plan.steps.find((s) => s.id === stage.currentStepId);
   const ended = state.completed || state.lifecycle === "failed";
@@ -427,7 +440,7 @@ export function RunAside({ state, holding, onContinue }: { state: RunState; hold
         </TabsList>
         <TabsContent value="now" className="min-h-0 overflow-y-auto">
           <div className="flex flex-col gap-3.5 p-3.5">
-            <NowCard state={state} holding={holding} onContinue={onContinue} />
+            <NowCard state={state} holding={holding} onContinue={onContinue} typing={typing} />
             <Steps state={state} />
             <NextStop state={state} />
             <Rules state={state} />

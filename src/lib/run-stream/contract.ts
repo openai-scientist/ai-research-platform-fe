@@ -19,6 +19,8 @@ export type RunStage =
   | "read"
   | "synthesize"
   | "hypothesize"
+  /** Everything the run found, drawn as a discourse graph and a research canvas. */
+  | "map"
   | "experiment"
   | "interpret"
   | "report"
@@ -253,9 +255,11 @@ export interface RejectedPaper {
   id: string;
   title: string;
   venue: string;
-  /** The shared word that made it match. */
+  /** The shared word that made it match. Empty when the paper was set aside for another reason. */
   false_friend: string;
   reason: string;
+  /** Why it is out: judged off-topic, ranked below the shortlist cut, or never scored. */
+  decision?: "rejected" | "below_cutoff" | "unscored" | "prefiltered";
 }
 
 // ---------- read and synthesize ----------
@@ -278,6 +282,13 @@ export interface Cluster {
   title: string;
   claim: string;
   card_ids: string[];
+}
+
+/** Cards that bear on no school of thought, left out of the clusters with the reason. */
+export interface SetAside {
+  id: string;
+  card_ids: string[];
+  reason: string;
 }
 
 export interface Tension {
@@ -362,6 +373,103 @@ export interface Hypothesis {
   /** Why it should be true. */
   rationale: string;
   falsify: Falsifier;
+}
+
+// ---------- map ----------
+
+/**
+ * An entity of the scientific research canvas: five core types and two optional ones (assumption, expected
+ * contribution). A sub-question is a research question too. A hypothesis is a prediction still to be tested, never a
+ * claim; a claim is a statement, from the literature or proposed; evidence is what a claim is judged by.
+ */
+export type EntityType = "gap" | "question" | "hypothesis" | "claim" | "evidence" | "assumption" | "contribution";
+
+export interface MapNode {
+  id: string;
+  type: EntityType;
+  /** The record's own id, shown on the node, such as `SQ1`, `C1`, `G1` or `H1`. */
+  code: string;
+  /** What the node says, shown on it (clipped to a few lines). */
+  label: string;
+  /** The full statement, shown when the node is opened. */
+  text: string;
+  /** The stage of the run that produced it. */
+  stage: number;
+  /** For a claim: from the literature, or proposed by the run. */
+  origin?: "literature" | "proposed";
+  /** For evidence: the sample it comes from. */
+  detail?: string;
+  /** For evidence: the paper's citation. */
+  source?: string;
+  /** For a gap: the papers whose limitations point to it, each with what it left open. */
+  provenance?: { source: string; text: string }[];
+  /** Further facts shown when the node is opened, such as a hypothesis's method and falsifier. */
+  facts?: { label: string; value: string }[];
+}
+
+/**
+ * The eleven relations, each read from `from` to `to`: evidence `supports` or `contradicts` a claim; a claim
+ * `substantiates` a gap (only one that states a limitation) or `provides_rationale_for` a hypothesis; a gap
+ * `motivates` a question; a question `decomposes_into` sub-questions; a hypothesis `proposes_answer_to` a question,
+ * `addresses` a gap, `depends_on` an assumption and `informs` an expected contribution, which `targets` a gap.
+ */
+export type MapRelation =
+  | "supports"
+  | "contradicts"
+  | "substantiates"
+  | "motivates"
+  | "decomposes_into"
+  | "proposes_answer_to"
+  | "provides_rationale_for"
+  | "depends_on"
+  | "addresses"
+  | "informs"
+  | "targets";
+
+/**
+ * How far a relation can be trusted: `stated` by a record of the run, `derived` from other relations, or a judgement
+ * still `unreviewed` by anyone.
+ */
+export type RelationStatus = "stated" | "derived" | "unreviewed";
+
+export interface MapEdge {
+  id: string;
+  /** The node the relation reads from: evidence `supports` claim. It is never flipped for the layout. */
+  from: string;
+  to: string;
+  relation: MapRelation;
+  /** For `provides_rationale_for`: whether the claim speaks for the hypothesis or challenges it. */
+  polarity?: "supports" | "challenges";
+  status: RelationStatus;
+  /** Why the relation holds. */
+  rationale: string;
+  /** The record of the run it comes from, such as `Stage 8 · H1`. */
+  provenance: string;
+}
+
+/**
+ * The nine pieces of the AMJ Management Research Canvas (Dorobantu, Gruber, Ravasi & Wellman, 2024, AMJ 67(5),
+ * 1163–1174), with the puzzle at the centre.
+ */
+export type CanvasPieceId =
+  | "puzzle"
+  | "audience"
+  | "question"
+  | "theory"
+  | "setting"
+  | "design"
+  | "findings"
+  | "contributions"
+  | "boundaries";
+
+export interface CanvasPiece {
+  id: CanvasPieceId;
+  /** What the run puts in this piece, each line with the records it comes from. */
+  items: { text: string; refs?: string[] }[];
+  /** `pending` until the run has what this piece needs, such as findings before any experiment ran. */
+  status: "filled" | "pending";
+  /** Why the piece is pending, or a caveat on what it holds. */
+  note?: string;
 }
 
 export interface SearchNode {
@@ -566,7 +674,17 @@ export type RunEvent =
   | EventBase<"scope.approved", { at: string; note: string }>
   | EventBase<"problem.subquestion", { sub_question: SubQuestion }>
   | EventBase<"problem.risk", { risk: ScopeRisk }>
-  | EventBase<"topic.evaluated", { scores: TopicScores; overall: number; threshold: number; advice: string }>
+  | EventBase<
+      "topic.evaluated",
+      {
+        scores: TopicScores;
+        /** One sentence per score: what in the topic or goal earned it. */
+        reasons?: Partial<Record<keyof TopicScores, string>>;
+        overall: number;
+        threshold: number;
+        advice: string;
+      }
+    >
   // search: stages 3 and 4
   | EventBase<"search.strategy", { strategy: SearchStrategy }>
   | EventBase<"search.query", { query: SearchQuery }>
@@ -574,20 +692,31 @@ export type RunEvent =
   | EventBase<"literature.request", { query_id: string; source_id: string }>
   | EventBase<"literature.batch", { query_id: string; source_id: string; hits: number }>
   /** A paper found in several sources. `kept` is the source whose record survives: DOI first, then most citations. */
-  | EventBase<"literature.merged", { title: string; records: SourceRecord[]; kept: string }>
+  | EventBase<
+      "literature.merged",
+      /** `kept_record` is the record_id of the kept record, needed when one source has two records. */
+      { title: string; records: SourceRecord[]; kept: string; kept_record?: string }
+    >
   | EventBase<
       "literature.collected",
       {
         raw: number;
         unique: number;
         duplicates: number;
+        /** Queries added during the search from the topic's words: not in the plan, so not in its grid. */
+        expansion?: { queries: number; hits: number };
+        /** Duplicates that were the same record returned to another query; null when unknown. */
+        repeats?: number | null;
         files: { name: string; detail: string }[];
         /** ISO 8601 UTC. */
         collected_at: string;
       }
     >
   // screen: stage 5
-  | EventBase<"screen.criteria", { rules: string[]; relevance_min: number; quality_min: number }>
+  | EventBase<
+      "screen.criteria",
+      { rules: string[]; relevance_min: number; quality_min: number /** Papers to screen. */; candidates?: number }
+    >
   | EventBase<"screen.scored", { points: ScreenPoint[] }>
   | EventBase<"screen.rejected", { paper: RejectedPaper }>
   | EventBase<"screen.kept", { paper: ShortlistPaper }>
@@ -596,6 +725,7 @@ export type RunEvent =
   | EventBase<"estimate.checked", { check: EstimateCheck }>
   // synthesize: stage 7
   | EventBase<"synthesis.cluster", { cluster: Cluster }>
+  | EventBase<"synthesis.set_aside", { aside: SetAside }>
   | EventBase<"synthesis.tension", { tension: Tension }>
   | EventBase<"synthesis.gap", { gap: Gap }>
   /** The field at a glance, written once the clusters are set. */
@@ -607,6 +737,10 @@ export type RunEvent =
   | EventBase<"hypothesis.checked", { hypothesis_id: string; novelty: NoveltyCheck; feasibility: FeasibilityCheck }>
   | EventBase<"hypothesis.selected", { hypothesis_id: string; override_note?: string }>
   | EventBase<"idea.set_aside", { idea_id: string; statement: string; reason: string }>
+  // map: after the hypotheses
+  | EventBase<"map.node", { node: MapNode }>
+  | EventBase<"map.edge", { edge: MapEdge }>
+  | EventBase<"canvas.piece", { piece: CanvasPiece }>
   // experiment: stage 9 onwards
   | EventBase<"plan.locked", { plan_id: string; hypotheses: Hypothesis[]; design: TestDesign }>
   | EventBase<"experiment.hypotheses", { hypotheses: Hypothesis[] }>

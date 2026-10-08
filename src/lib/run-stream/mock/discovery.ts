@@ -173,6 +173,128 @@ export const RISKS: ScopeRisk[] = [
   { id: "R4", sq_id: "SQ4", text: "Screen time is often guessed, not logged", level: "low" },
 ];
 
+/**
+ * How each finding bears on the claim of its school of thought. Dewald 2010 contradicts part of C1: in its pooled
+ * studies, sleep length mattered less than sleepiness and quality.
+ */
+export const EVIDENCE_LINKS: {
+  card: string;
+  claim: string;
+  relation: "supports" | "contradicts";
+  rationale: string;
+}[] = [
+  { card: "okano2019", claim: "C1", relation: "supports", rationale: "Sleep explained nearly a quarter of grades." },
+  { card: "gilbert2010", claim: "C1", relation: "supports", rationale: "Poorer sleep went with lower GPA." },
+  { card: "curcio2006", claim: "C1", relation: "supports", rationale: "Sleep loss weakened academic results." },
+  { card: "wolfson1998", claim: "C1", relation: "supports", rationale: "Students with lower grades slept less." },
+  {
+    card: "dewald2010",
+    claim: "C1",
+    relation: "contradicts",
+    rationale:
+      "Sleep length linked to performance more weakly than sleepiness and quality, so more sleep alone may not help.",
+  },
+  {
+    card: "diekelmann2010",
+    claim: "C2",
+    relation: "supports",
+    rationale: "Sleep consolidated newly learned memories.",
+  },
+  {
+    card: "walker2006",
+    claim: "C2",
+    relation: "supports",
+    rationale: "Sleep stages each supported a kind of learning.",
+  },
+  { card: "pilcher1996", claim: "C2", relation: "supports", rationale: "Losing sleep clearly lowered performance." },
+  {
+    card: "hershner2014",
+    claim: "C3",
+    relation: "supports",
+    rationale: "Stress, screens and schedules drove short sleep.",
+  },
+  {
+    card: "lund2010",
+    claim: "C3",
+    relation: "supports",
+    rationale: "Stress was the strongest predictor of poor sleep.",
+  },
+  { card: "levenson2016", claim: "C3", relation: "supports", rationale: "Social media use went with disturbed sleep." },
+  { card: "baron1986", claim: "C4", relation: "supports", rationale: "Sets out the steps a mediation test follows." },
+];
+
+/** Which claims give each hypothesis its rationale, and which challenge it. */
+export const RATIONALES: {
+  claim: string;
+  hypothesis: string;
+  polarity: "supports" | "challenges";
+  rationale: string;
+}[] = [
+  {
+    claim: "C1",
+    hypothesis: "H1",
+    polarity: "supports",
+    rationale: "If more sleep goes with better grades, students sleeping 7 h or more should score higher.",
+  },
+  {
+    claim: "C2",
+    hypothesis: "H1",
+    polarity: "supports",
+    rationale: "Memory consolidation gives a reason sleep would raise exam scores.",
+  },
+  {
+    claim: "C3",
+    hypothesis: "H1",
+    polarity: "challenges",
+    rationale: "If stress and workload shape sleep, part of the sleep–score link may belong to them, not to sleep.",
+  },
+  {
+    claim: "C3",
+    hypothesis: "H2",
+    polarity: "supports",
+    rationale: "Stress and sleep move together in students, so stress can sit on the path from sleep to scores.",
+  },
+  {
+    claim: "C4",
+    hypothesis: "H2",
+    polarity: "supports",
+    rationale: "Mediation is how a path through stress is told apart from a direct effect.",
+  },
+  {
+    claim: "C3",
+    hypothesis: "H3",
+    polarity: "supports",
+    rationale: "Screens disturb student sleep, one route by which they could lower scores.",
+  },
+  {
+    claim: "C1",
+    hypothesis: "H4",
+    polarity: "supports",
+    rationale: "The sleep–grades link is shown mostly up to age 22; H4 asks whether it grows after 25.",
+  },
+  {
+    claim: "C3",
+    hypothesis: "H5",
+    polarity: "supports",
+    rationale: "Workload shapes sleep, so study hours may carry part of what looks like a sleep effect.",
+  },
+  {
+    claim: "C1",
+    hypothesis: "H6",
+    polarity: "supports",
+    rationale: "If sleep goes with grades, it is worth asking whether it does so equally for men and women.",
+  },
+];
+
+/** Who is studied and where: the research setting on the map's canvas. */
+export const SETTING: { text: string; refs: string[] }[] = [
+  { text: "Undergraduates at one university, the population the topic names.", refs: ["topic"] },
+  {
+    text: "This age group is where stress as the link is least tested, and exams come at regular, known times.",
+    refs: ["G2"],
+  },
+];
+
 export const TOPIC_SCORES: TopicScores = { novelty: 7, specificity: 9, feasibility: 9 };
 
 export const TOPIC_ADVICE =

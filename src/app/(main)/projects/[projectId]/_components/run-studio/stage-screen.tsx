@@ -17,6 +17,7 @@ import { DataScene } from "./scenes/data-scene";
 import { ExperimentScene } from "./scenes/experiment-scene";
 import { HypothesizeScene } from "./scenes/hypothesize-scene";
 import { InterpretScene } from "./scenes/interpret-scene";
+import { MapScene } from "./scenes/map-scene";
 import { PaperScene } from "./scenes/paper-scene";
 import { ReadScene } from "./scenes/read-scene";
 import { ReportScene } from "./scenes/report-scene";
@@ -300,6 +301,8 @@ export function StageScreen({
   const index = state.plan.findIndex((s) => s.key === stageKey);
   const { content } = stage;
   const notes = state.decisions.filter((d) => d.stageKey === stageKey);
+  // The step running now; frames waiting on it pulse, the others stay still.
+  const step = live ? stage.currentStepId : null;
 
   let scene: React.ReactNode = null;
   const decisionNotes = notes.map((n) => (
@@ -320,6 +323,7 @@ export function StageScreen({
           estimates={state.estimates}
           dataLabel={dataLabel}
           live={live}
+          step={step}
         />
         {decisionNotes}
       </>
@@ -329,11 +333,15 @@ export function StageScreen({
   if (content.stage === "screen")
     scene = (
       <>
-        <ScreenScene data={content} live={live} />
+        <ScreenScene data={content} live={live} step={step} />
         {decisionNotes}
       </>
     );
-  if (content.stage === "read") scene = <ReadScene data={content} estimates={state.estimates} live={live} />;
+  if (content.stage === "read") {
+    const screen = state.stages.screen?.content;
+    const shortlist = screen?.stage === "screen" ? screen.kept.filter((p) => !screen.dropped.includes(p.id)) : [];
+    scene = <ReadScene data={content} shortlist={shortlist} estimates={state.estimates} live={live} step={step} />;
+  }
   if (content.stage === "synthesize") {
     const read = state.stages.read?.content;
     const cards: KnowledgeCard[] = read?.stage === "read" ? read.cards : [];
@@ -347,8 +355,11 @@ export function StageScreen({
         stageKey={stageKey}
         decisions={state.decisions}
         live={live}
+        step={step}
       />
     );
+  if (content.stage === "map")
+    scene = <MapScene data={content} topic={state.topic} runLabel={runLabel} date={state.startedAt} live={live} />;
   if (content.stage === "experiment") scene = <ExperimentScene data={content} live={live} />;
   if (content.stage === "interpret")
     scene = (
@@ -387,6 +398,9 @@ export function StageScreen({
         showRound={state.plan.filter((s) => s.stage === "hypothesize").length > 1}
       />
       {endsHere && content.stage === "hypothesize" && <RunEnd state={state} count={set(content).length} />}
+      {endsHere && content.stage === "map" && (
+        <RunEnd state={state} count={content.nodes.filter((n) => n.type === "hypothesis").length} />
+      )}
       {scene}
     </div>
   );

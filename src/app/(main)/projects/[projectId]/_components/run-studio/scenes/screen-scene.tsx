@@ -6,12 +6,13 @@ import { cn } from "cn";
 import { Check, X } from "lucide-react";
 import { motion } from "motion/react";
 
+import { Button } from "@/components/ui/button";
 import type { RejectedPaper, ShortlistPaper } from "@/lib/run-stream/contract";
 import type { ScreenContent } from "@/lib/run-stream/run-state";
 
 import { AgentCursor, launchFlight } from "../run-bits";
 import { useReveal, useWorkspace } from "../workspace-context";
-import { Pane, Placeholder } from "./scene-ui";
+import { Bone, Pane, Placeholder } from "./scene-ui";
 
 const W = 420;
 const H = 290;
@@ -19,12 +20,59 @@ const PAD = { l: 34, r: 12, t: 12, b: 34 };
 const px = (v: number) => PAD.l + v * (W - PAD.l - PAD.r);
 const py = (v: number) => H - PAD.b - v * (H - PAD.t - PAD.b);
 
+/** Rejected papers shown before "Show all". */
+const REJECTED_SHOWN = 6;
+/** Wrong-field words labelled on the chart; more would cover the points. */
+const MAX_LABELS = 5;
+
+const bars = (data: ScreenContent) => ({
+  rMin: data.criteria?.relevanceMin ?? 0.7,
+  qMin: data.criteria?.qualityMin ?? 0.5,
+});
+
+/**
+ * Papers the reviewer rejected, each with a reason. Papers ranked below the shortlist cut, set aside before
+ * scoring, or never scored are not rejections.
+ */
+function rejectedPapers(data: ScreenContent) {
+  return data.rejected.filter((paper) => (paper.decision ?? "rejected") === "rejected");
+}
+
+/**
+ * Rejected although their scores fit, inside the keep zone, for a reason such as the right words in the wrong
+ * field. Every rejected paper is red; these are the ones drawn full size and labelled.
+ */
+function wrongField(data: ScreenContent) {
+  const { rMin, qMin } = bars(data);
+  const scores = new Map(data.points.map((p) => [p.id, p]));
+  return rejectedPapers(data).filter((paper) => {
+    const point = scores.get(paper.id);
+    return !!point && point.relevance >= rMin && point.quality >= qMin;
+  });
+}
+
+/** Wrong-field papers to label: at most a few, and never two labels on the same line. */
+function labelled(data: ScreenContent) {
+  const out: { paper: RejectedPaper; x: number; y: number }[] = [];
+  for (const paper of wrongField(data)) {
+    if (!paper.false_friend || out.length >= MAX_LABELS) continue;
+    const point = data.points.find((p) => p.id === paper.id);
+    if (!point) continue;
+    const y = py(point.quality);
+    if (out.some((l) => Math.abs(l.y - y) < 12)) continue;
+    out.push({ paper, x: px(point.relevance), y });
+  }
+  return out;
+}
+
 function Scatter({ data, hover, live }: { data: ScreenContent; hover: string | null; live: boolean }) {
   const kept = new Set(data.kept.map((p) => p.id));
-  const rejected = new Set(data.rejected.map((p) => p.id));
+  const rejected = new Set(wrongField(data).map((p) => p.id));
+  const rejectedLow = new Set(rejectedPapers(data).map((p) => p.id));
+  // Cleared both bars but ranked below the papers kept for reading: in the zone, but not what it is about.
+  const cut = new Set(data.rejected.filter((p) => p.decision === "below_cutoff").map((p) => p.id));
   const dropped = new Set(data.dropped);
-  const rMin = data.criteria?.relevanceMin ?? 0.7;
-  const qMin = data.criteria?.qualityMin ?? 0.5;
+  const { rMin, qMin } = bars(data);
   const firstNew = useRef(data.points.length);
   useEffect(() => {
     firstNew.current = data.points.length;
@@ -111,9 +159,11 @@ function Scatter({ data, hover, live }: { data: ScreenContent; hover: string | n
       {data.points.map((p, i) => {
         const isKept = kept.has(p.id);
         const isRejected = rejected.has(p.id);
+        const isCut = cut.has(p.id) && !isKept;
+        const isLow = rejectedLow.has(p.id) && !isRejected;
         const inZone = p.relevance >= rMin && p.quality >= qMin;
         const fresh = live && i >= firstNew.current;
-        const r = hover === p.id ? 6.5 : isKept || isRejected ? 4.2 : 3;
+        const r = hover === p.id ? 6.5 : isKept || isRejected ? 4.2 : isCut ? 2.6 : 3;
         return (
           <motion.circle
             key={p.id}
@@ -128,27 +178,34 @@ function Scatter({ data, hover, live }: { data: ScreenContent; hover: string | n
               isKept && !dropped.has(p.id) && "fill-emerald-500 stroke-card",
               isKept && dropped.has(p.id) && "fill-card stroke-amber-500",
               isRejected && "fill-rose-500 stroke-card",
-              !isKept && !isRejected && (inZone ? "fill-foreground/70" : "fill-muted-foreground/30"),
+              isCut && "fill-card stroke-emerald-600/45",
+              isLow && "fill-rose-500/45",
+              !isKept &&
+                !isRejected &&
+                !isCut &&
+                !isLow &&
+                (inZone ? "fill-foreground/70" : "fill-muted-foreground/30"),
             )}
             strokeWidth={isKept && dropped.has(p.id) ? 1.6 : 1.2}
           />
         );
       })}
-      {data.rejected.map((p) => {
-        const point = data.points.find((x) => x.id === p.id);
-        if (!point) return null;
+      {labelled(data).map(({ paper: p, x, y }) => {
+        // A label left of a point near the left edge would run off the chart, so it goes on the right.
+        const left = x > W / 2;
+        const word = p.false_friend.length > 24 ? `${p.false_friend.slice(0, 23)}…` : p.false_friend;
         return (
           <motion.g key={p.id} initial={live ? { opacity: 0 } : false} animate={{ opacity: 1 }}>
             <text
-              x={px(point.relevance) - 7}
-              y={py(point.quality) + 3}
-              textAnchor="end"
+              x={left ? x - 7 : x + 7}
+              y={y + 3}
+              textAnchor={left ? "end" : "start"}
               paintOrder="stroke"
               strokeWidth={3}
               strokeLinejoin="round"
               className="fill-rose-700 stroke-card font-semibold text-[8.5px] dark:fill-rose-300"
             >
-              “{p.false_friend}”
+              “{word}”
             </text>
           </motion.g>
         );
@@ -255,8 +312,27 @@ function ShortlistItem({
   );
 }
 
+/** Rows held for the shortlist before any paper is kept. */
+const FRAME_ROWS = 3;
+
+function PendingPaper({ index, active }: { index: number; active: boolean }) {
+  return (
+    <li aria-hidden className="grid grid-cols-[20px_minmax(0,1fr)] gap-x-2.5 border-b py-2.5 last:border-0">
+      <span className="pt-px font-mono text-[11px] text-muted-foreground/60 tabular-nums">
+        {String(index + 1).padStart(2, "0")}
+      </span>
+      <span className="flex min-w-0 flex-col gap-2 pt-1">
+        <Bone active={active} className="w-2/5" />
+        <Bone active={active} className="h-2 w-4/5" />
+        <Bone active={active} className="h-2 w-3/5" />
+      </span>
+    </li>
+  );
+}
+
 function RejectedItem({ paper, live }: { paper: RejectedPaper; live: boolean }) {
-  const parts = paper.title.split(new RegExp(`(${paper.false_friend})`, "i"));
+  const word = paper.false_friend.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const parts = word ? paper.title.split(new RegExp(`(${word})`, "i")) : [paper.title];
   return (
     <motion.li
       data-cursor={`rejected:${paper.id}`}
@@ -268,7 +344,7 @@ function RejectedItem({ paper, live }: { paper: RejectedPaper; live: boolean }) 
       <span className="flex min-w-0 flex-col gap-0.5">
         <span className="relative w-fit text-[12.5px] text-foreground leading-snug">
           {parts.map((part, i) =>
-            part.toLowerCase() === paper.false_friend.toLowerCase() ? (
+            word && part.toLowerCase() === paper.false_friend.toLowerCase() ? (
               <mark
                 // biome-ignore lint/suspicious/noArrayIndexKey: title fragments have no ids
                 key={i}
@@ -283,17 +359,32 @@ function RejectedItem({ paper, live }: { paper: RejectedPaper; live: boolean }) 
           )}
         </span>
         <span className="text-muted-foreground">
-          <i>{paper.venue}</i> · {paper.reason}
+          {paper.venue && (
+            <>
+              <i>{paper.venue}</i> ·{" "}
+            </>
+          )}
+          {paper.reason}
         </span>
       </span>
     </motion.li>
   );
 }
 
-export function ScreenScene({ data, live }: { data: ScreenContent; live: boolean }) {
+export function ScreenScene({
+  data,
+  live,
+  step,
+}: {
+  data: ScreenContent;
+  live: boolean;
+  /** The step running now, while the run is followed live. */
+  step: string | null;
+}) {
   const scene = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const [hover, setHover] = useState<string | null>(null);
+  const [allRejected, setAllRejected] = useState(false);
   const { dropMode, dropped, toggleDrop } = useWorkspace();
   const editing = dropMode && live;
   useReveal(listRef, data.kept.length, live);
@@ -322,12 +413,20 @@ export function ScreenScene({ data, live }: { data: ScreenContent; live: boolean
     );
   }, [data.kept, live]);
 
-  const rMin = data.criteria?.relevanceMin ?? 0.7;
-  const qMin = data.criteria?.qualityMin ?? 0.5;
+  const { rMin, qMin } = bars(data);
   const inZone = data.points.filter((p) => p.relevance >= rMin && p.quality >= qMin).length;
+  // Red papers first (with a shared word before the rest), then those rejected below a bar.
+  const wrong = wrongField(data).sort((a, b) => Number(!a.false_friend) - Number(!b.false_friend));
+  const red = new Set(wrong.map((p) => p.id));
+  const low = rejectedPapers(data).filter((p) => !red.has(p.id));
+  const rejections = [...wrong, ...low];
+  const wrongFieldOnly = !low.length && wrong.every((p) => p.false_friend);
+  const belowCut = data.rejected.filter((p) => p.decision === "below_cutoff").length;
+  const shownRejections = allRejected ? rejections : rejections.slice(0, REJECTED_SHOWN);
 
   let target: string | null = data.points.length ? "scatter" : null;
-  if (data.rejected.length) target = `rejected:${data.rejected[data.rejected.length - 1].id}`;
+  const lastShown = shownRejections[shownRejections.length - 1];
+  if (lastShown) target = `rejected:${lastShown.id}`;
   if (data.kept.length) target = `paper:${data.kept[data.kept.length - 1].id}`;
 
   return (
@@ -338,7 +437,7 @@ export function ScreenScene({ data, live }: { data: ScreenContent; live: boolean
           animate={{ opacity: 1, y: 0 }}
           className="flex flex-wrap items-center gap-1.5 text-xs"
         >
-          <span className="mr-1 text-muted-foreground">Six screening rules:</span>
+          <span className="mr-1 text-muted-foreground">Screening rules:</span>
           {data.criteria.rules.map((rule, i) => (
             <motion.span
               key={rule}
@@ -355,10 +454,15 @@ export function ScreenScene({ data, live }: { data: ScreenContent; live: boolean
       )}
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,1fr)]">
         <div className="flex min-w-0 flex-col gap-4">
-          {data.points.length ? (
+          {/* The chart is drawn once the bars are known, so each score lands on the axes it is read against. */}
+          {data.points.length || data.criteria ? (
             <Pane
               title="Relevance × quality"
-              aside={`${data.points.length} of 214 scored · ${inZone} in the keep zone`}
+              aside={
+                data.points.length || data.criteria?.candidates
+                  ? `${data.points.length} of ${data.criteria?.candidates ?? data.points.length} scored · ${inZone} in the keep zone`
+                  : "no paper scored yet"
+              }
             >
               <div data-cursor="scatter">
                 <Scatter data={data} hover={hover} live={live} />
@@ -368,14 +472,22 @@ export function ScreenScene({ data, live }: { data: ScreenContent; live: boolean
                   <i className="size-2 rounded-full bg-emerald-500" />
                   Kept · {data.kept.length - data.dropped.length}
                 </span>
+                {wrong.length > 0 && (
+                  <span className="inline-flex items-center gap-1.5">
+                    <i className="size-2 rounded-full bg-rose-500" />
+                    {wrong.every((p) => p.false_friend) ? "Wrong field" : "Rejected in the zone"} · {wrong.length}
+                  </span>
+                )}
                 <span className="inline-flex items-center gap-1.5">
-                  <i className="size-2 rounded-full bg-rose-500" />
-                  Wrong field · {data.rejected.length}
+                  <i className="size-2 rounded-full bg-rose-500/45" />
+                  Rejected below a bar · {data.points.length - inZone}
                 </span>
-                <span className="inline-flex items-center gap-1.5">
-                  <i className="size-2 rounded-full bg-muted-foreground/30" />
-                  Below a bar · {data.points.length - inZone}
-                </span>
+                {belowCut > 0 && (
+                  <span className="inline-flex items-center gap-1.5">
+                    <i className="size-2 rounded-full bg-card ring-1 ring-emerald-600/45 ring-inset" />
+                    Below the shortlist cut · {belowCut}
+                  </span>
+                )}
                 {data.dropped.length > 0 && (
                   <span className="inline-flex items-center gap-1.5">
                     <i className="size-2 rounded-full ring-[1.5px] ring-amber-500 ring-inset" />
@@ -387,13 +499,27 @@ export function ScreenScene({ data, live }: { data: ScreenContent; live: boolean
           ) : (
             <Placeholder>Every paper gets a relevance and a quality score</Placeholder>
           )}
-          {data.rejected.length > 0 && (
-            <Pane title="Same words, wrong field" aside="cross-domain rejection">
+          {rejections.length > 0 && (
+            <Pane
+              title={wrongFieldOnly ? "Same words, wrong field" : "Rejected"}
+              aside={
+                wrongFieldOnly
+                  ? "cross-domain rejection"
+                  : [wrong.length && `${wrong.length} in the keep zone`, low.length && `${low.length} below a bar`]
+                      .filter(Boolean)
+                      .join(" · ")
+              }
+            >
               <ul className="flex flex-col gap-1.5">
-                {data.rejected.map((p) => (
+                {shownRejections.map((p) => (
                   <RejectedItem key={p.id} paper={p} live={live} />
                 ))}
               </ul>
+              {rejections.length > REJECTED_SHOWN && (
+                <Button variant="ghost" size="xs" className="mt-2" onClick={() => setAllRejected((v) => !v)}>
+                  {allRejected ? "Show fewer" : `Show all ${rejections.length}`}
+                </Button>
+              )}
             </Pane>
           )}
         </div>
@@ -428,7 +554,26 @@ export function ScreenScene({ data, live }: { data: ScreenContent; live: boolean
               </ol>
             </Pane>
           ) : (
-            <Placeholder className="h-full">Papers that clear both bars are kept here</Placeholder>
+            <Pane
+              title="Shortlist"
+              aside="each kept with a reason"
+              className="flex flex-col xl:absolute xl:inset-0 [&>header]:shrink-0"
+              action={
+                <span className="rounded-full bg-background px-2 py-px font-mono font-semibold text-[11px] text-muted-foreground ring-1 ring-foreground/10">
+                  0
+                </span>
+              }
+            >
+              <ol className="-mx-1 flex flex-col px-1">
+                {Array.from({ length: FRAME_ROWS }, (_, i) => (
+                  // biome-ignore lint/suspicious/noArrayIndexKey: empty rows have no ids
+                  <PendingPaper key={i} index={i} active={step === "shortlist"} />
+                ))}
+              </ol>
+              <p className="mt-3 text-center text-muted-foreground text-xs">
+                Papers that clear both bars are kept here
+              </p>
+            </Pane>
           )}
         </div>
       </div>

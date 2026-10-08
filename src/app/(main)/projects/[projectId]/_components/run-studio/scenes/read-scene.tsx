@@ -6,13 +6,14 @@ import { cn } from "cn";
 import { BookOpen } from "lucide-react";
 import { motion } from "motion/react";
 
-import type { KnowledgeCard } from "@/lib/run-stream/contract";
+import type { KnowledgeCard, ShortlistPaper } from "@/lib/run-stream/contract";
+import { SHOW_SCOPE_EXTRAS } from "@/lib/run-stream/features";
 import type { ReadContent, RunState } from "@/lib/run-stream/run-state";
 
 import { AgentCursor, launchFlight } from "../run-bits";
 import { shortCite } from "../run-meta";
 import { useWorkspace } from "../workspace-context";
-import { Pane, Placeholder } from "./scene-ui";
+import { Bone, Pane, Placeholder } from "./scene-ui";
 import { EstimateList } from "./scope-scene";
 
 const FIELDS: { key: keyof Omit<KnowledgeCard, "id" | "paper_id" | "citation">; label: string }[] = [
@@ -51,7 +52,9 @@ function CardView({ card, index, fresh, wide }: { card: KnowledgeCard; index: nu
         className={cn("flex flex-1 flex-col gap-1.5 px-3 py-2.5", wide && "md:grid md:grid-cols-2 md:gap-x-6 2xl:flex")}
       >
         {FIELDS.map(({ key, label }, i) => {
-          const limit = key === "limitations";
+          const value = card[key];
+          // Cards are read from abstracts; a field the abstract does not support stays empty.
+          const limit = key === "limitations" && Boolean(value);
           return (
             <motion.div
               key={key}
@@ -68,7 +71,15 @@ function CardView({ card, index, fresh, wide }: { card: KnowledgeCard; index: nu
               <dt className={cn("text-muted-foreground", limit && "font-medium text-amber-800 dark:text-amber-300")}>
                 {label}
               </dt>
-              <dd className={cn("leading-snug", key === "findings" && "font-medium")}>{card[key]}</dd>
+              <dd
+                className={cn(
+                  "leading-snug",
+                  key === "findings" && value && "font-medium",
+                  !value && "text-muted-foreground/70 italic",
+                )}
+              >
+                {value || "Not in the abstract"}
+              </dd>
             </motion.div>
           );
         })}
@@ -77,14 +88,62 @@ function CardView({ card, index, fresh, wide }: { card: KnowledgeCard; index: nu
   );
 }
 
+/** A shortlisted paper whose card is still being read, in the place its card will take. */
+function PendingCard({
+  paper,
+  index,
+  active,
+  wide,
+}: {
+  paper: ShortlistPaper;
+  index: number;
+  active: boolean;
+  wide: boolean;
+}) {
+  return (
+    <article
+      className={cn(
+        "flex min-w-0 flex-col overflow-hidden rounded-xl border border-dashed text-sm",
+        wide && "md:col-span-2 2xl:col-span-1",
+      )}
+    >
+      <header className="flex items-center gap-2 border-b border-dashed px-3 py-2 text-muted-foreground">
+        <BookOpen className="size-3.5 shrink-0" />
+        <b className="truncate font-semibold text-xs">{paper.citation}</b>
+        <span className="ml-auto shrink-0 text-[11px] tabular-nums">
+          {active ? "Reading" : `Card ${String(index + 1).padStart(2, "0")}`}
+        </span>
+      </header>
+      <dl
+        className={cn("flex flex-1 flex-col gap-2 px-3 py-2.5", wide && "md:grid md:grid-cols-2 md:gap-x-6 2xl:flex")}
+      >
+        {FIELDS.map(({ key, label }) => (
+          <div key={key} className="grid grid-cols-[70px_minmax(0,1fr)] items-center gap-2 text-xs">
+            <dt className="text-muted-foreground/70">{label}</dt>
+            <dd>
+              <Bone active={active} className={key === "findings" ? "w-full" : "w-3/4"} />
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </article>
+  );
+}
+
 export function ReadScene({
   data,
+  shortlist,
   estimates,
   live,
+  step,
 }: {
   data: ReadContent;
+  /** The papers kept at the screen, each to become a card. */
+  shortlist: ShortlistPaper[];
   estimates: RunState["estimates"];
   live: boolean;
+  /** The step running now, while the run is followed live. */
+  step: string | null;
 }) {
   const scene = useRef<HTMLDivElement>(null);
   const tray = useRef<HTMLDivElement>(null);
@@ -105,6 +164,7 @@ export function ReadScene({
     }
     seen.current = data.cards.length;
     const card = data.cards[data.cards.length - 1];
+    if (!card.limitations) return;
     const timer = window.setTimeout(
       () => {
         launchFlight(
@@ -119,6 +179,12 @@ export function ReadScene({
     return () => window.clearTimeout(timer);
   }, [data.cards, live]);
 
+  // While cards are read, each shortlisted paper keeps the place its card will fill. A paper without an abstract
+  // gets no card, so the places go once the step ends.
+  const carded = new Set(data.cards.map((card) => card.paper_id));
+  const waiting = step === "extract" ? shortlist.filter((paper) => !carded.has(paper.id)) : [];
+  const total = data.cards.length + waiting.length;
+  const limited = data.cards.filter((card) => card.limitations);
   const checked = estimates.filter((e) => e.check).length;
   let target: string | null = data.cards.length ? `card:${data.cards[data.cards.length - 1].id}` : null;
   if (checked) target = `estimate:${estimates.filter((e) => e.check).pop()?.estimate.id}`;
@@ -132,42 +198,60 @@ export function ReadScene({
             card={card}
             index={i}
             fresh={live && i >= fresh}
-            wide={data.cards.length % 2 === 1 && i === data.cards.length - 1}
+            wide={total % 2 === 1 && i === total - 1}
           />
         ))}
-        {!data.cards.length && (
+        {waiting.map((paper, i) => (
+          <PendingCard
+            key={paper.id}
+            paper={paper}
+            index={data.cards.length + i}
+            active={i === 0}
+            wide={total % 2 === 1 && data.cards.length + i === total - 1}
+          />
+        ))}
+        {!total && (
           <Placeholder className="md:col-span-2 2xl:col-span-3">Each shortlisted paper becomes a card</Placeholder>
         )}
       </div>
       <aside className="flex min-w-0 flex-col gap-4 xl:sticky xl:top-3">
         <div ref={tray}>
-          <Pane title="Gap material" aside={`${data.cards.length} limitation${data.cards.length === 1 ? "" : "s"}`}>
-            {data.cards.length ? (
+          <Pane title="Gap material" aside={`${limited.length} limitation${limited.length === 1 ? "" : "s"}`}>
+            {limited.length ? (
               // Each card already shows its limitation in full; here they only collect, so the column stays short.
               <ul className="flex flex-wrap gap-1.5">
-                {data.cards.map((card, i) => (
-                  <motion.li
-                    key={card.id}
-                    data-tray={card.id}
-                    title={card.limitations}
-                    initial={live && i >= fresh ? { opacity: 0, scale: 0.8 } : false}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ delay: live && i >= fresh ? 0.25 + FIELDS.length * FIELD_STEP + 0.6 : 0 }}
-                    className="inline-flex h-6 items-center whitespace-nowrap rounded-md bg-amber-500/12 px-2 font-medium text-[11px] text-amber-800 dark:text-amber-300"
-                  >
-                    {shortCite(card.citation)}
-                  </motion.li>
-                ))}
+                {limited.map((card) => {
+                  const isNew = live && data.cards.indexOf(card) >= fresh;
+                  return (
+                    <motion.li
+                      key={card.id}
+                      data-tray={card.id}
+                      title={card.limitations}
+                      initial={isNew ? { opacity: 0, scale: 0.8 } : false}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ delay: isNew ? 0.25 + FIELDS.length * FIELD_STEP + 0.6 : 0 }}
+                      className="inline-flex h-6 items-center whitespace-nowrap rounded-md bg-amber-500/12 px-2 font-medium text-[11px] text-amber-800 dark:text-amber-300"
+                    >
+                      {shortCite(card.citation)}
+                    </motion.li>
+                  );
+                })}
               </ul>
             ) : (
-              <p className="text-muted-foreground text-xs">What each paper couldn't answer collects here.</p>
+              <p className="text-muted-foreground text-xs">
+                {data.cards.length
+                  ? "None of the abstracts states a limitation so far."
+                  : "What each paper couldn't answer collects here."}
+              </p>
             )}
           </Pane>
         </div>
-        <Pane title="Numbers from memory" aside="checked against cards">
-          <EstimateList estimates={estimates} live={live} />
-          {!estimates.length && <p className="text-muted-foreground text-xs">None were recalled.</p>}
-        </Pane>
+        {SHOW_SCOPE_EXTRAS && (
+          <Pane title="Numbers from memory" aside="checked against cards">
+            <EstimateList estimates={estimates} live={live} />
+            {!estimates.length && <p className="text-muted-foreground text-xs">None were recalled.</p>}
+          </Pane>
+        )}
       </aside>
       <AgentCursor
         agent={live ? "librarian" : null}
