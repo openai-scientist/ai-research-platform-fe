@@ -659,7 +659,7 @@ export function applyRunEvent(previous: RunState, event: RunEvent): RunState {
             },
           ];
           state.gate = {
-            id: raw.gate_id ?? "gate-1",
+            id: payload.gate?.id ?? payload.gate_id ?? "gate-1",
             kind: raw.kind ?? "screen",
             title: raw.title ?? "Review Paper Shortlist",
             why: raw.why ?? "Screening complete. Shortlist prepared for human review.",

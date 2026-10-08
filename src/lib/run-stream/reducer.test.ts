@@ -117,6 +117,57 @@ describe("applyRunEvent", () => {
     expect(content.sourcesUsed["result:h1"]).toBe(1);
   });
 
+  it("preserves the nested gate ID and review details when opening a gate", () => {
+    const gate = {
+      id: "publish-review-42",
+      kind: "publish" as const,
+      title: "Approve publication",
+      why: "Review the final report before publication.",
+      summary: ["The report is ready."],
+      options: [
+        {
+          id: "publish",
+          label: "Publish report",
+          description: "Approve the reviewed report.",
+          leads_to: "Publication",
+          confirm_label: "Publish",
+          recommended: true,
+          disabled: false,
+        },
+      ],
+      stop_index: 2,
+      stop_total: 3,
+      droppable: [],
+    };
+    const state = applyRunEvent(initialRunState("run-1"), event("gate.opened", { gate }));
+    expect(state.gate).toEqual(gate);
+  });
+
+  it("preserves the wire gate_id and fills missing review details for a flat gate payload", () => {
+    // Live engine events may use the flat payload instead of the nested mock contract.
+    const payload = { gate_id: "shortlist-review-17" } as unknown as RunEventOf<"gate.opened">["payload"];
+    const state = applyRunEvent(initialRunState("run-1"), event("gate.opened", payload));
+    expect(state.gate).toMatchObject({
+      id: "shortlist-review-17",
+      kind: "screen",
+      title: "Review Paper Shortlist",
+      stop_index: 1,
+      stop_total: 1,
+      droppable: [],
+    });
+    expect(state.gate?.options).toEqual([
+      {
+        id: "approve",
+        label: "Approve literature shortlist",
+        description: "Continue reading and synthesizing with the selected papers.",
+        leads_to: "Stage 6: Read and extract knowledge cards",
+        confirm_label: "Approve and continue",
+        recommended: true,
+        disabled: false,
+      },
+    ]);
+  });
+
   it("closes the gate and records the answer as a decision", () => {
     const gate = {
       id: "g1",
