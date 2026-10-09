@@ -379,6 +379,8 @@ export interface Falsifier {
   text: string;
   zone: [number | null, number | null];
   unit: string;
+  /** For a negligible-effect prediction (`≈ 0`): the band the result must land in; it is wrong anywhere outside. */
+  within?: [number, number];
 }
 
 export interface NoveltyCheck {
@@ -424,11 +426,13 @@ export interface Hypothesis {
   tension_ids?: string[];
   /** The debate threads it is built from, such as `T1`. */
   from?: string[];
+  /** For one built from several threads: what it takes from each. */
+  merge_note?: string;
   /** Fatal objections that still stand against what it is built from. */
   contested?: StandingObjection[];
   /** Caveats that still stand; they are also listed among its limitations. */
   caveats?: StandingObjection[];
-  /** Why the reviewer kept it despite a fatal objection. */
+  /** Why the reviewer kept it, although the debate had set it aside. */
   kept_by_reviewer?: string;
 }
 
@@ -797,7 +801,16 @@ export type RunEvent =
   | EventBase<"hypothesis.drafted", { hypothesis: Hypothesis }>
   | EventBase<"hypothesis.checked", { hypothesis_id: string; novelty: NoveltyCheck; feasibility: FeasibilityCheck }>
   | EventBase<"hypothesis.selected", { hypothesis_id: string; override_note?: string }>
-  | EventBase<"idea.set_aside", { idea_id: string; statement: string; reason: string }>
+  | EventBase<
+      "idea.set_aside",
+      {
+        idea_id: string;
+        /** `held_back`: a fatal objection stands; `not_used`: no objection stands, the set left it out. */
+        kind?: "held_back" | "not_used";
+        statement: string;
+        reason: string;
+      }
+    >
   // map: after the hypotheses
   | EventBase<"map.node", { node: MapNode }>
   | EventBase<"map.edge", { edge: MapEdge }>

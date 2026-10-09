@@ -187,7 +187,7 @@ export function DropBar({
   total: number;
   /** What is being dropped, such as "hypothesis in the set" or "paper in the shortlist". */
   noun: string;
-  /** Held-back ideas the person may keep, and how many they picked. */
+  /** Set-aside ideas the person may keep, and how many they picked. */
   keepable?: number;
   restored?: number;
   onReset(): void;
@@ -203,8 +203,8 @@ export function DropBar({
     >
       <span className="min-w-40 flex-1">
         <b className="font-semibold">Click a {noun} to drop it.</b>{" "}
-        {keepable > 0 && <>Click a held-back idea to keep it anyway. </>}
-        {kept} kept{restored > 0 ? `, ${restored} of them held back before` : ` of ${total}`}.
+        {keepable > 0 && <>Click a set-aside idea to keep it anyway. </>}
+        {kept} kept{restored > 0 ? `, ${restored} of them set aside before` : ` of ${total}`}.
       </span>
       <Button
         size="sm"

@@ -378,7 +378,7 @@ const PART_STEP = 0.35;
 
 type Aside = HypothesizeContent["asides"][number];
 
-/** An idea set aside. At a hypotheses gate in change mode, a held-back one can be kept despite its objection. */
+/** An idea set aside. At a hypotheses gate in change mode, one the debate left out can be kept anyway. */
 function AsideRow({
   aside,
   live,
@@ -406,7 +406,14 @@ function AsideRow({
             {aside.statement}
           </Strike>
         )}
-        <span className="ml-1.5 text-rose-700 dark:text-rose-300">{aside.reason}</span>
+        <span
+          className={cn(
+            "ml-1.5",
+            aside.kind === "not_used" ? "text-muted-foreground" : "text-rose-700 dark:text-rose-300",
+          )}
+        >
+          {aside.reason}
+        </span>
         {canKeep && (
           <motion.span
             layout
@@ -489,6 +496,7 @@ function Provenance({ h, fresh }: { h: Hypothesis; fresh: boolean }) {
           <span>in the debate</span>
         </span>
       ) : null}
+      {h.merge_note && <span className="text-muted-foreground leading-snug">{h.merge_note}</span>}
       {contested.length > 0 && (
         <div className="flex flex-col gap-1.5 rounded-lg bg-rose-500/8 px-2.5 py-2 ring-1 ring-rose-500/25">
           <span className="flex items-center gap-1.5 font-medium text-rose-700 dark:text-rose-300">
@@ -1046,9 +1054,7 @@ export function HypothesizeScene({
         )}
         {data.asides.length > 0 && (
           <div className="flex flex-col gap-2 rounded-xl border border-dashed px-3.5 py-3">
-            <span className="font-medium text-[11px] text-muted-foreground uppercase tracking-wide">
-              Set aside · named as limits instead
-            </span>
+            <span className="font-medium text-[11px] text-muted-foreground uppercase tracking-wide">Set aside</span>
             {data.asides.map((aside) => (
               <AsideRow key={aside.id} aside={aside} live={live} editing={editing} keepable={keepable} />
             ))}

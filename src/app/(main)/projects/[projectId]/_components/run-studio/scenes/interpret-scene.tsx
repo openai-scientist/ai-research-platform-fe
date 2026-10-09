@@ -10,7 +10,7 @@ import type { Falsifier, RecordedResult, Verdict } from "@/lib/run-stream/contra
 import type { FeedItem, InterpretContent } from "@/lib/run-stream/run-state";
 import { signed } from "@/lib/run-stream/selectors";
 
-import { zoneSpan } from "../falsify-line";
+import { wrongSpans } from "../falsify-line";
 import { DECISION_LABEL, ForkDiagram } from "../fork-diagram";
 import { AgentCursor, VerdictBadge } from "../run-bits";
 import { VERDICT } from "../run-meta";
@@ -21,11 +21,11 @@ import { Pane, Placeholder, SceneNote } from "./scene-ui";
 export function IntervalPlot({
   result,
   verdict,
-  zone,
+  falsify,
 }: {
   result: RecordedResult;
   verdict?: Verdict;
-  zone?: Falsifier["zone"];
+  falsify?: Falsifier;
 }) {
   if (result.estimate === null || result.ci_low === null || result.ci_high === null)
     return (
@@ -37,7 +37,7 @@ export function IntervalPlot({
   const x = (v: number) => 6 + ((v + 4) / 13) * 228;
   const stroke = verdict ? VERDICT[verdict].stroke : "stroke-blue-600";
   const fill = verdict ? VERDICT[verdict].fill : "fill-blue-600";
-  const span = zone ? zoneSpan(zone) : null;
+  const spans = falsify ? wrongSpans(falsify) : [];
   return (
     <div className="flex items-center gap-2.5">
       <svg
@@ -47,19 +47,21 @@ export function IntervalPlot({
         aria-label={`${signed(result.estimate)}, range ${signed(result.ci_low)} to ${signed(result.ci_high)}`}
       >
         <line x1={6} x2={234} y1={26} y2={26} className="stroke-border" />
-        {span &&
-          (span[0] === span[1] ? (
-            <line x1={x(span[0])} x2={x(span[0])} y1={8} y2={24} className="stroke-rose-500/60" strokeWidth={3} />
+        {spans.map(([a, b]) =>
+          a === b ? (
+            <line key={a} x1={x(a)} x2={x(a)} y1={8} y2={24} className="stroke-rose-500/60" strokeWidth={3} />
           ) : (
             <rect
-              x={x(span[0])}
-              width={x(span[1]) - x(span[0])}
+              key={`${a}-${b}`}
+              x={x(a)}
+              width={x(b) - x(a)}
               y={8}
               height={16}
               rx={2}
               className="fill-rose-500/12"
             />
-          ))}
+          ),
+        )}
         <line x1={x(0)} x2={x(0)} y1={4} y2={30} className="stroke-muted-foreground/60" strokeDasharray="2 2" />
         <text x={x(0)} y={33} textAnchor="middle" className="fill-muted-foreground font-mono text-[7px]">
           0
@@ -171,7 +173,7 @@ export function InterpretScene({
                   </td>
                   <td className="max-w-52 py-2.5 pr-3 text-muted-foreground text-xs">{row.hypothesis.falsify.text}</td>
                   <td className="py-2.5 pr-3">
-                    <IntervalPlot result={row.result} verdict={row.verdict} zone={row.hypothesis.falsify.zone} />
+                    <IntervalPlot result={row.result} verdict={row.verdict} falsify={row.hypothesis.falsify} />
                   </td>
                   <td data-cursor={`verdict:${row.hypothesis.id}`} className="py-2.5 pr-3">
                     {row.verdict ? (

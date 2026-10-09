@@ -138,9 +138,22 @@ describe("applyRunEvent", () => {
       stop_index: 2,
       stop_total: 3,
       droppable: [],
+      keepable: [],
     };
     const state = applyRunEvent(initialRunState("run-1"), event("gate.opened", { gate }));
     expect(state.gate).toEqual(gate);
+  });
+
+  it("keeps the ideas a flat hypotheses gate lets the person keep", () => {
+    // The backend relays the engine's flat payload; set-aside ideas arrive as `keepable` threads.
+    const payload = {
+      gate_id: "gate-s08-a1",
+      kind: "hypotheses",
+      droppable: ["H1", "H2"],
+      keepable: ["S2"],
+    } as unknown as RunEventOf<"gate.opened">["payload"];
+    const state = applyRunEvent(initialRunState("run-1"), event("gate.opened", payload));
+    expect(state.gate).toMatchObject({ id: "gate-s08-a1", kind: "hypotheses", keepable: ["S2"] });
   });
 
   it("preserves the wire gate_id and fills missing review details for a flat gate payload", () => {

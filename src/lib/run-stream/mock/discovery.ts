@@ -838,7 +838,7 @@ export interface MockDebate {
   /** Hypotheses written after the debate, in order. */
   hypotheses: string[];
   checks: Record<string, { novelty: NoveltyCheck; feasibility: FeasibilityCheck }>;
-  asides: { id: string; statement: string; reason: string }[];
+  asides: { id: string; kind?: "held_back" | "not_used"; statement: string; reason: string }[];
   keep: Record<string, string>;
 }
 
@@ -1056,11 +1056,13 @@ export const DEBATES: Record<"first" | "pivot", MockDebate> = {
     asides: [
       {
         id: "C5",
+        kind: "not_used",
         statement: "Caffeine changes the sleep effect.",
         reason: "Caffeine isn't measured in a typical student survey",
       },
       {
         id: "C6",
+        kind: "held_back",
         statement: "Exam timing explains the sleep effect.",
         reason:
           "Held back: the Methodologist's objection stands (the test cannot decide it). Exam timing isn't in a typical student survey.",

@@ -1213,7 +1213,7 @@ export class MockRun implements RunCommands {
               await this.wait(600);
               this.send(
                 "idea.set_aside",
-                { idea_id: aside.id, statement: aside.statement, reason: aside.reason },
+                { idea_id: aside.id, kind: aside.kind, statement: aside.statement, reason: aside.reason },
                 "pi",
               );
             }

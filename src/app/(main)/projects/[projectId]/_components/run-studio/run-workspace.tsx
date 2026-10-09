@@ -413,7 +413,12 @@ function RunWorkspace({ session }: { session: RunSession }) {
                     setKept([]);
                   }}
                   onApprove={async () => {
-                    if (await answer({ option_id: "drop", dropped, ...(kept.length ? { kept } : {}) })) {
+                    // Nothing dropped or kept is a plain approval; a "drop" with no items is refused.
+                    const change = dropped.length > 0 || kept.length > 0;
+                    const decision: GateAnswer = change
+                      ? { option_id: "drop", dropped, ...(kept.length ? { kept } : {}) }
+                      : { option_id: "approve" };
+                    if (await answer(decision)) {
                       setDropMode(false);
                       setKept([]);
                     }
