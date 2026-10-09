@@ -329,7 +329,7 @@ describe("mock run", () => {
     return events;
   }
 
-  it("ends once the hypotheses are picked, stopping only at the shortlist", async () => {
+  it("ends once the hypotheses are picked, stopping at the shortlist and at the hypotheses", async () => {
     const events = await play(
       "copilot",
       (gate) => ({ option_id: gate.options.find((o) => o.recommended)?.id ?? gate.options[0].id }),
@@ -341,7 +341,7 @@ describe("mock run", () => {
     const kinds = events
       .filter((e): e is RunEventOf<"gate.opened"> => e.type === "gate.opened")
       .map((e) => e.payload.gate.kind);
-    expect(kinds).toEqual(["screen"]);
+    expect(kinds).toEqual(["screen", "hypotheses"]);
     expect(state.plan.map((s) => s.stage)).toEqual(
       (SHOW_DATA_STAGE ? ["data"] : []).concat(["scope", "search", "screen", "read", "synthesize", "hypothesize"]),
     );
@@ -364,6 +364,28 @@ describe("mock run", () => {
     if (synth.stage !== "synthesize") throw new Error("wrong stage");
     expect(synth.overview).toBeTruthy();
     expect(synth.ranking.map((r) => r.gap_id)).toEqual(["G1", "G2", "G3"]);
+  });
+
+  it("keeps a held-back idea at the hypotheses stop, with its objection on record", async () => {
+    const events = await play(
+      "copilot",
+      (gate) =>
+        gate.kind === "hypotheses"
+          ? { option_id: "drop", dropped: [], kept: ["C6"], note: "Worth a cheap test." }
+          : { option_id: "approve" },
+      "hypotheses",
+    );
+    const opened = events.filter((e): e is RunEventOf<"gate.opened"> => e.type === "gate.opened");
+    expect(opened.at(-1)?.payload.gate.keepable).toEqual(["C6"]);
+    const state = replayRunEvents("run", events);
+    const h = state.stages["r1-hypothesize"].content;
+    if (h.stage !== "hypothesize") throw new Error("wrong stage");
+    const kept = h.drafts.H7;
+    expect(kept.selected).toBe(true);
+    expect(kept.hypothesis.from).toEqual(["C6"]);
+    expect(kept.hypothesis.contested?.[0]).toMatchObject({ by: "methodologist", severity: "fatal" });
+    expect(kept.hypothesis.kept_by_reviewer).toBe("Worth a cheap test.");
+    expect(state.decisions.at(-1)?.text).toBe("Approved the set keeping C6 despite the objection.");
   });
 
   it("plays a whole run in auto mode without stopping", async () => {

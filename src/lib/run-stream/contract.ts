@@ -264,6 +264,9 @@ export interface RejectedPaper {
 
 // ---------- read and synthesize ----------
 
+/** The six fields a knowledge card reads from an abstract. */
+export type CardField = "problem" | "method" | "data" | "metrics" | "findings" | "limitations";
+
 export interface KnowledgeCard {
   /** Cite key, such as `okano2019`. */
   id: string;
@@ -275,6 +278,11 @@ export interface KnowledgeCard {
   metrics: string;
   findings: string;
   limitations: string;
+  /**
+   * The abstract's own words behind each filled field, checked word for word by the engine. Missing on cards made
+   * before quotes existed and on the scripted run.
+   */
+  quotes?: Partial<Record<CardField, string[]>>;
 }
 
 export interface Cluster {
@@ -291,9 +299,18 @@ export interface SetAside {
   reason: string;
 }
 
+/** One side of a tension: what its cards find. */
+export interface TensionSide {
+  claim: string;
+  card_ids: string[];
+}
+
+/** A point where cards disagree. Newer runs give it an id (`X1`) and the cards on each of its two sides. */
 export interface Tension {
+  id?: string;
   between: [string, string];
   text: string;
+  sides?: [TensionSide, TensionSide];
 }
 
 export interface Gap {
@@ -312,7 +329,26 @@ export interface Opportunity {
 
 // ---------- hypothesize ----------
 
-export type DebateStance = "propose" | "test" | "challenge" | "refine" | "concede";
+/** `defend` is an author keeping its claim against a challenge, with a reason. */
+export type DebateStance = "propose" | "test" | "challenge" | "refine" | "defend" | "concede";
+
+/** How serious a challenge is: `fatal` stops the claim as written; a `caveat` is a limit worth recording. */
+export type ObjectionSeverity = "fatal" | "caveat";
+
+/** The only reasons a challenge may be fatal. */
+export type ObjectionFlaw = "unsupported" | "unfalsifiable" | "undecidable_test" | "already_established";
+
+/** An objection that still stands after the debate, carried by the hypothesis built on what it targets. */
+export interface StandingObjection {
+  by: AgentRole;
+  /** The debate thread it targets, such as `T1`. */
+  about: string;
+  severity: ObjectionSeverity;
+  flaw?: ObjectionFlaw | null;
+  field?: string | null;
+  card_id?: string | null;
+  text: string;
+}
 
 export interface DebateTurn {
   id: string;
@@ -322,6 +358,17 @@ export interface DebateTurn {
   reply_to?: string;
   /** Hypothesis or idea the turn is about. */
   about?: string;
+  /** Challenges this turn answers (an author's answer) or reviews (a critic's review). */
+  answers?: string[];
+  /** Why the author rewrote the claim. */
+  note?: string;
+  /** Part of a debate round: the critique, the authors' answers, or the critics' review of them. */
+  phase?: "critique" | "answer" | "review";
+  /** For a challenge: how serious it is, and for a fatal one its flaw and where it is. */
+  severity?: ObjectionSeverity;
+  flaw?: ObjectionFlaw;
+  field?: string;
+  card_id?: string;
 }
 
 /**
@@ -373,6 +420,16 @@ export interface Hypothesis {
   /** Why it should be true. */
   rationale: string;
   falsify: Falsifier;
+  /** Tensions of the synthesis this hypothesis settles, such as `X1`. */
+  tension_ids?: string[];
+  /** The debate threads it is built from, such as `T1`. */
+  from?: string[];
+  /** Fatal objections that still stand against what it is built from. */
+  contested?: StandingObjection[];
+  /** Caveats that still stand; they are also listed among its limitations. */
+  caveats?: StandingObjection[];
+  /** Why the reviewer kept it despite a fatal objection. */
+  kept_by_reviewer?: string;
 }
 
 // ---------- map ----------
@@ -527,6 +584,8 @@ export interface Gate {
   stop_total: number;
   /** Items the person may drop before approving: hypothesis ids for `hypotheses`, paper ids for `screen`. */
   droppable?: string[];
+  /** Held-back ideas the person may keep despite their objection (`hypotheses` gates). */
+  keepable?: string[];
 }
 
 export interface GateAnswer {
@@ -534,6 +593,8 @@ export interface GateAnswer {
   note?: string;
   /** Ids the person dropped. Only for `hypotheses` and `screen` gates. */
   dropped?: string[];
+  /** Held-back ideas the person keeps. Only for `hypotheses` gates. */
+  kept?: string[];
 }
 
 export type FigureData =

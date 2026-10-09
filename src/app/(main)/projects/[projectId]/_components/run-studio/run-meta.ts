@@ -221,9 +221,12 @@ export const LOCKED_PIPELINE = LAST_REACHED === undefined ? [] : SHOWN_PIPELINE.
 
 export const LOCKED_HINT = `Coming soon. For now a run ends once the hypotheses are picked${SHOW_MAP_STAGE ? " and mapped" : ""}.`;
 
-/** Stops a run in this mode really makes, given where runs end for now. */
+/** Stops a run in this mode really makes, given where runs end for now: a run that ends at the hypotheses still
+ * stops to have them approved. */
 export function stopsFor(mode: ReviewMode): GateKind[] {
-  return MODES[mode].stops.filter((k) => RUN_ENDS_AT === "paper" || k === "scope" || k === "screen");
+  return MODES[mode].stops.filter(
+    (k) => RUN_ENDS_AT === "paper" || k === "scope" || k === "screen" || k === "hypotheses",
+  );
 }
 
 export const VERDICT: Record<Verdict, { label: string; className: string; dot: string; stroke: string; fill: string }> =

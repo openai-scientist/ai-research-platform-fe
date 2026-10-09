@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { cn } from "cn";
-import { BookOpen } from "lucide-react";
-import { motion } from "motion/react";
+import { BookOpen, TextQuote } from "lucide-react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 
-import type { KnowledgeCard, ShortlistPaper } from "@/lib/run-stream/contract";
+import { Button } from "@/components/ui/button";
+import type { CardField, KnowledgeCard, ShortlistPaper } from "@/lib/run-stream/contract";
 import { SHOW_SCOPE_EXTRAS } from "@/lib/run-stream/features";
 import type { ReadContent, RunState } from "@/lib/run-stream/run-state";
 
@@ -16,7 +17,7 @@ import { useWorkspace } from "../workspace-context";
 import { Bone, Pane, Placeholder } from "./scene-ui";
 import { EstimateList } from "./scope-scene";
 
-const FIELDS: { key: keyof Omit<KnowledgeCard, "id" | "paper_id" | "citation">; label: string }[] = [
+const FIELDS: { key: CardField; label: string }[] = [
   { key: "problem", label: "Problem" },
   { key: "method", label: "Method" },
   { key: "data", label: "Data" },
@@ -27,8 +28,37 @@ const FIELDS: { key: keyof Omit<KnowledgeCard, "id" | "paper_id" | "citation">; 
 
 /** Seconds between fields while a card fills in. */
 const FIELD_STEP = 0.14;
+/** Seconds between the quotes of one card as they open, top field first. */
+const QUOTE_STEP = 0.05;
+
+/** The abstract's own words behind one field, opened under it. */
+function FieldQuotes({ quotes, order }: { quotes: string[]; order: number }) {
+  const still = useReducedMotion();
+  return (
+    <motion.span
+      initial={still ? false : { height: 0, opacity: 0 }}
+      animate={{ height: "auto", opacity: 1 }}
+      exit={still ? { opacity: 0 } : { height: 0, opacity: 0 }}
+      transition={{ duration: 0.28, delay: still ? 0 : order * QUOTE_STEP, ease: [0.16, 1, 0.3, 1] }}
+      className="block overflow-hidden"
+    >
+      {quotes.map((quote) => (
+        <q
+          key={quote}
+          className="mt-1 block border-foreground/20 border-l-2 pl-2 text-[11px] text-muted-foreground italic leading-snug"
+        >
+          {quote}
+        </q>
+      ))}
+    </motion.span>
+  );
+}
 
 function CardView({ card, index, fresh, wide }: { card: KnowledgeCard; index: number; fresh: boolean; wide: boolean }) {
+  const [quoted, setQuoted] = useState(false);
+  // Fields backed by the abstract's own words; cards from before quotes existed have none.
+  const quotes = card.quotes ?? {};
+  const backed = FIELDS.filter(({ key }) => card[key] && quotes[key]?.length).map(({ key }) => key);
   return (
     <motion.article
       data-card={card.id}
@@ -47,6 +77,19 @@ function CardView({ card, index, fresh, wide }: { card: KnowledgeCard; index: nu
         <span className="ml-auto shrink-0 text-[11px] text-muted-foreground tabular-nums">
           Card {String(index + 1).padStart(2, "0")}
         </span>
+        {backed.length > 0 && (
+          <Button
+            variant="ghost"
+            size="xs"
+            aria-pressed={quoted}
+            title="Every filled field is backed by these words from the abstract, checked word for word"
+            onClick={() => setQuoted((open) => !open)}
+            className={cn("-my-1 -mr-1.5", quoted && "bg-muted text-foreground")}
+          >
+            <TextQuote />
+            {quoted ? "Hide quotes" : "Quotes"}
+          </Button>
+        )}
       </header>
       <dl
         className={cn("flex flex-1 flex-col gap-1.5 px-3 py-2.5", wide && "md:grid md:grid-cols-2 md:gap-x-6 2xl:flex")}
@@ -79,6 +122,11 @@ function CardView({ card, index, fresh, wide }: { card: KnowledgeCard; index: nu
                 )}
               >
                 {value || "Not in the abstract"}
+                <AnimatePresence initial={false}>
+                  {quoted && value && quotes[key]?.length ? (
+                    <FieldQuotes key="quotes" quotes={quotes[key] ?? []} order={backed.indexOf(key)} />
+                  ) : null}
+                </AnimatePresence>
               </dd>
             </motion.div>
           );

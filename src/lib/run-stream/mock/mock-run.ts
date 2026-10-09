@@ -57,6 +57,7 @@ import {
   SUB_QUESTIONS,
   screenPoints,
   TENSION,
+  TENSIONS,
   TOPIC_ADVICE,
   TOPIC_SCORES,
 } from "./discovery";
@@ -244,8 +245,10 @@ export class MockRun implements RunCommands {
   }
 
   private gates() {
-    // A run that ends at hypotheses only has the stops of stages 1 to 7 left: nothing runs after stage 8.
-    return MODE_GATES[this.mode].filter((k) => !this.endsAtHypotheses || k === "scope" || k === "screen");
+    // A run that ends at hypotheses keeps the stops up to the hypotheses themselves: nothing runs after them.
+    return MODE_GATES[this.mode].filter(
+      (k) => !this.endsAtHypotheses || k === "scope" || k === "screen" || k === "hypotheses",
+    );
   }
 
   private gateOn(kind: GateKind) {
@@ -310,7 +313,14 @@ export class MockRun implements RunCommands {
 
   private async gate(
     kind: GateKind,
-    spec: { title: string; why: string; summary: string[]; options: GateOption[]; droppable?: string[] },
+    spec: {
+      title: string;
+      why: string;
+      summary: string[];
+      options: GateOption[];
+      droppable?: string[];
+      keepable?: string[];
+    },
     summarize: (answer: GateAnswer) => string,
   ): Promise<GateAnswer> {
     this.stopsOpened += 1;
@@ -1024,7 +1034,8 @@ export class MockRun implements RunCommands {
         cast: ["theorist"],
       },
       skills: SKILLS.synthesize,
-      summary: () => `${CLUSTERS.length} groups · 1 tension · ${GAPS.length} gaps`,
+      summary: () =>
+        `${CLUSTERS.length} groups · ${TENSIONS.length} tension${TENSIONS.length === 1 ? "" : "s"} · ${GAPS.length} gaps`,
       steps: [
         {
           id: "cluster",
@@ -1066,7 +1077,7 @@ export class MockRun implements RunCommands {
           say: "If stress and workload shape sleep, part of the sleep–grades link may be theirs.",
           run: async () => {
             await this.wait(900);
-            this.send("synthesis.tension", { tension: TENSION }, "theorist");
+            for (const tension of TENSIONS) this.send("synthesis.tension", { tension }, "theorist");
             await this.wait(900);
           },
         },
@@ -1244,15 +1255,30 @@ export class MockRun implements RunCommands {
                         },
                       ],
                       droppable: set,
+                      // The first round holds C6 back: an objection that it cannot be tested still stands.
+                      ...(round.n === 1 ? { keepable: ["C6"] } : {}),
                     },
-                    (a) =>
-                      a.dropped?.length
-                        ? `Approved the set without ${a.dropped.join(", ")}.`
-                        : `Approved ${set.join(", ")}.`,
+                    (a) => {
+                      const parts = [
+                        ...(a.dropped?.length ? [`without ${a.dropped.join(", ")}`] : []),
+                        ...(a.kept?.length ? [`keeping ${a.kept.join(", ")} despite the objection`] : []),
+                      ];
+                      return parts.length ? `Approved the set ${parts.join(" and ")}.` : `Approved ${set.join(", ")}.`;
+                    },
                   );
                   const dropped = (answer.dropped ?? []).filter((h) => set.includes(h));
                   this.dropped[round.n] = dropped;
                   this.sets[round.n] = set.filter((h) => !dropped.includes(h));
+                  if (round.n === 1 && answer.kept?.includes("C6")) {
+                    const kept = { ...HYPOTHESES.H7, kept_by_reviewer: answer.note ?? "Kept by you." };
+                    this.send("hypothesis.drafted", { hypothesis: kept }, "pi");
+                    this.send(
+                      "hypothesis.selected",
+                      { hypothesis_id: "H7", override_note: kept.kept_by_reviewer },
+                      "pi",
+                    );
+                    this.sets[round.n] = [...this.sets[round.n], "H7"];
+                  }
                 },
               },
             ]

@@ -335,7 +335,8 @@ export function applyRunEvent(previous: RunState, event: RunEvent): RunState {
       case "synthesis.tension": {
         const c = content(state, event, "synthesize");
         const { tension } = event.payload;
-        if (c && !c.tensions.some((t) => t.text === tension.text)) c.tensions.push(tension);
+        if (c && !c.tensions.some((t) => (tension.id ? t.id === tension.id : t.text === tension.text)))
+          c.tensions.push(tension);
         break;
       }
       case "synthesis.gap": {

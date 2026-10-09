@@ -347,10 +347,12 @@ export function StageScreen({
     const cards: KnowledgeCard[] = read?.stage === "read" ? read.cards : [];
     scene = <SynthesizeScene data={content} cards={cards} live={live} />;
   }
-  if (content.stage === "hypothesize")
+  if (content.stage === "hypothesize") {
+    const synthesis = state.stages.synthesize?.content;
     scene = (
       <HypothesizeScene
         data={content}
+        tensions={synthesis?.stage === "synthesize" ? synthesis.tensions : []}
         round={stage.plan.round ?? 1}
         stageKey={stageKey}
         decisions={state.decisions}
@@ -358,6 +360,7 @@ export function StageScreen({
         step={step}
       />
     );
+  }
   if (content.stage === "map")
     scene = <MapScene data={content} topic={state.topic} runLabel={runLabel} date={state.startedAt} live={live} />;
   if (content.stage === "experiment") scene = <ExperimentScene data={content} live={live} />;

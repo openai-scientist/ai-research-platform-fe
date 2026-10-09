@@ -300,7 +300,8 @@ export function ScopeScene({
               Research goal
             </span>
           }
-          aside={`${data.goal.length} of 5 parts · specific, measurable, doable`}
+          // The goal is the Strategist's proposal from your topic alone: no paper has been read when it is written.
+          aside={`${data.goal.length} of 5 parts · proposed by the Strategist before any paper is read`}
         >
           <dl className="flex flex-col">
             {FIELDS.map(({ field, label }) => {
@@ -598,7 +599,7 @@ export function ScopeScene({
         {data.evaluation ? (
           <Pane
             title="Topic score"
-            aside={`the mean of three scores, given before any search · below ${data.evaluation.threshold} the run stops`}
+            aside={`the model's own judgement before any literature search, not a finding · below ${data.evaluation.threshold} the run stops`}
           >
             <div className="grid items-center gap-5 lg:grid-cols-[auto_minmax(0,1fr)_minmax(0,1.1fr)]">
               <div className="flex flex-col items-center gap-2">
