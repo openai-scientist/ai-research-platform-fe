@@ -1,5 +1,5 @@
 import type { AgentRole, GateKind, ReviewMode, RuleId, RunStage, Verdict } from "@/lib/run-stream/contract";
-import { RUN_ENDS_AT, SHOW_DATA_STAGE } from "@/lib/run-stream/features";
+import { RUN_ENDS_AT, SHOW_DATA_STAGE, SHOW_MAP_STAGE } from "@/lib/run-stream/features";
 
 export interface AgentMeta {
   name: string;
@@ -174,6 +174,7 @@ export const STAGE_SHORT: Record<RunStage | "done", string> = {
   read: "Read",
   synthesize: "Synthesize",
   hypothesize: "Hypothesize",
+  map: "Map",
   experiment: "Experiment",
   interpret: "Interpret",
   report: "Report",
@@ -193,15 +194,24 @@ const FULL_PIPELINE: { stage: RunStage; title: string; text: string }[] = [
   { stage: "read", title: "Read and extract", text: "Each paper becomes a card; its limitations become gap material." },
   { stage: "synthesize", title: "Find the gaps", text: "Cards are grouped into schools of thought to find the gaps." },
   { stage: "hypothesize", title: "Hypothesize", text: "Agents debate; survivors say what would prove them wrong." },
+  {
+    stage: "map",
+    title: "Map the argument",
+    text: "The run is drawn as a discourse graph and a research canvas, ready to download.",
+  },
   { stage: "experiment", title: "Experiment", text: "Code is written, run in a sandbox and fixed; the best is kept." },
   { stage: "interpret", title: "Interpret", text: "Each result gets a verdict and a second opinion." },
   { stage: "report", title: "Build the report", text: "Code gathers every result, figure and how to reproduce it." },
   { stage: "write", title: "Write the paper", text: "The paper is written from the report, reviewed and checked." },
 ];
 
-const SHOWN_PIPELINE = FULL_PIPELINE.filter((p) => SHOW_DATA_STAGE || p.stage !== "data");
+const SHOWN_PIPELINE = FULL_PIPELINE.filter(
+  (p) => (SHOW_DATA_STAGE || p.stage !== "data") && (SHOW_MAP_STAGE || p.stage !== "map"),
+);
 const LAST_REACHED =
-  RUN_ENDS_AT === "hypotheses" ? SHOWN_PIPELINE.findIndex((p) => p.stage === "hypothesize") + 1 : undefined;
+  RUN_ENDS_AT === "hypotheses"
+    ? SHOWN_PIPELINE.findIndex((p) => p.stage === (SHOW_MAP_STAGE ? "map" : "hypothesize")) + 1
+    : undefined;
 
 /** Stages as the start screens describe them. */
 export const PIPELINE = SHOWN_PIPELINE.slice(0, LAST_REACHED);
@@ -209,7 +219,7 @@ export const PIPELINE = SHOWN_PIPELINE.slice(0, LAST_REACHED);
 /** Stages after the hypotheses that runs don't reach yet: shown, but locked. */
 export const LOCKED_PIPELINE = LAST_REACHED === undefined ? [] : SHOWN_PIPELINE.slice(LAST_REACHED);
 
-export const LOCKED_HINT = "Coming soon. For now a run ends once the hypotheses are picked.";
+export const LOCKED_HINT = `Coming soon. For now a run ends once the hypotheses are picked${SHOW_MAP_STAGE ? " and mapped" : ""}.`;
 
 /** Stops a run in this mode really makes, given where runs end for now. */
 export function stopsFor(mode: ReviewMode): GateKind[] {

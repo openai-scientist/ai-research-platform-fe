@@ -67,8 +67,9 @@ export function SynthesizeScene({
 
   const litGap = data.gaps.find((g) => g.id === (hoverGap ?? flash));
   const lit = new Set(litGap?.from ?? []);
-  const placed = new Set(data.clusters.flatMap((c) => c.card_ids));
+  const placed = new Set([...data.clusters, ...data.setAside].flatMap((c) => c.card_ids));
   const pool = cards.filter((c) => !placed.has(c.id));
+  const asideCount = data.setAside.reduce((n, a) => n + a.card_ids.length, 0);
   const tension = data.tensions[0];
   const betweenList = Array.isArray(tension?.between)
     ? tension.between
@@ -115,8 +116,9 @@ export function SynthesizeScene({
             className="flex items-center gap-1.5 text-emerald-700 text-xs dark:text-emerald-300"
           >
             <CircleCheck className="size-3.5" />
-            All {cards.length} cards sorted into {data.clusters.length} schools of thought. Grouped by approach, not
-            listed paper by paper.
+            {asideCount
+              ? `All ${cards.length} cards accounted for: ${cards.length - asideCount} in ${data.clusters.length} schools of thought, ${asideCount} set aside with a reason.`
+              : `All ${cards.length} cards sorted into ${data.clusters.length} schools of thought. Grouped by approach, not listed paper by paper.`}
           </motion.p>
         )}
         <div className="grid gap-3 md:grid-cols-2">
@@ -162,6 +164,27 @@ export function SynthesizeScene({
             <Placeholder className="md:col-span-2">The cards are grouped by approach</Placeholder>
           )}
         </div>
+        {data.setAside.length > 0 && (
+          <Pane title="Set aside" aside={`${asideCount} card${asideCount === 1 ? "" : "s"} in no school of thought`}>
+            <ul className="flex flex-col gap-2">
+              {data.setAside.map((aside) => (
+                <motion.li
+                  key={aside.id}
+                  initial={live ? { opacity: 0, y: 6 } : false}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex flex-col gap-1.5"
+                >
+                  <div className="flex flex-wrap gap-1.5">
+                    {aside.card_ids.map((id) => (
+                      <Chip key={id} id={id} label={label(id)} lit={lit.has(id)} />
+                    ))}
+                  </div>
+                  <p className="text-muted-foreground text-xs leading-snug">{aside.reason}</p>
+                </motion.li>
+              ))}
+            </ul>
+          </Pane>
+        )}
       </LayoutGroup>
 
       {data.overview ? (

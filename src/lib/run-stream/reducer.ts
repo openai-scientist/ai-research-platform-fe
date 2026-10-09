@@ -12,6 +12,13 @@ function content<S extends RunStage>(state: Draft<RunState>, event: RunEvent, st
   return found.content as Draft<ContentOf<S>>;
 }
 
+/** Adds an item, or replaces the one with its id: a stage that runs again sends its parts again. */
+function upsert<T extends { id: string }>(list: T[], item: T) {
+  const at = list.findIndex((x) => x.id === item.id);
+  if (at === -1) list.push(item);
+  else list[at] = item;
+}
+
 function pushFeed(
   state: Draft<RunState>,
   event: RunEvent,
@@ -196,12 +203,12 @@ export function applyRunEvent(previous: RunState, event: RunEvent): RunState {
       }
       case "problem.subquestion": {
         const c = content(state, event, "scope");
-        if (c) c.subQuestions.push(event.payload.sub_question);
+        if (c) upsert(c.subQuestions, event.payload.sub_question);
         break;
       }
       case "problem.risk": {
         const c = content(state, event, "scope");
-        if (c) c.risks.push(event.payload.risk);
+        if (c) upsert(c.risks, event.payload.risk);
         break;
       }
       case "topic.evaluated": {
@@ -213,12 +220,12 @@ export function applyRunEvent(previous: RunState, event: RunEvent): RunState {
       // ---------- search ----------
       case "search.strategy": {
         const c = content(state, event, "search");
-        if (c) c.strategies.push(event.payload.strategy);
+        if (c) upsert(c.strategies, event.payload.strategy);
         break;
       }
       case "search.query": {
         const c = content(state, event, "search");
-        if (c) c.queries.push(event.payload.query);
+        if (c) upsert(c.queries, event.payload.query);
         break;
       }
       case "search.sources": {
@@ -231,7 +238,9 @@ export function applyRunEvent(previous: RunState, event: RunEvent): RunState {
       case "literature.request": {
         const c = content(state, event, "search");
         if (!c) break;
-        c.cells[`${event.payload.query_id}:${event.payload.source_id}`] = null;
+        const cell = `${event.payload.query_id}:${event.payload.source_id}`;
+        if (cell in c.cells) break;
+        c.cells[cell] = null;
         c.requests += 1;
         break;
       }
@@ -242,7 +251,10 @@ export function applyRunEvent(previous: RunState, event: RunEvent): RunState {
       }
       case "literature.merged": {
         const c = content(state, event, "search");
-        if (c) c.merged.push({ ...event.payload });
+        if (!c) break;
+        const at = c.merged.findIndex((m) => m.title === event.payload.title);
+        if (at === -1) c.merged.push({ ...event.payload });
+        else c.merged[at] = { ...event.payload };
         break;
       }
       case "literature.collected": {
@@ -259,6 +271,7 @@ export function applyRunEvent(previous: RunState, event: RunEvent): RunState {
           rules: event.payload.rules,
           relevanceMin: event.payload.relevance_min,
           qualityMin: event.payload.quality_min,
+          candidates: event.payload.candidates,
         };
         break;
       }
@@ -273,8 +286,9 @@ export function applyRunEvent(previous: RunState, event: RunEvent): RunState {
             quality?: number;
           };
           if (Array.isArray(payload.points)) {
-            c.points.push(...payload.points);
-          } else if (payload.paper_id) {
+            const known = new Set(c.points.map((p) => p.id));
+            c.points.push(...payload.points.filter((p) => !known.has(p.id)));
+          } else if (payload.paper_id && !c.points.some((p) => p.id === payload.paper_id)) {
             c.points.push({
               id: payload.paper_id,
               relevance: payload.score ?? payload.relevance ?? 8.0,
@@ -286,19 +300,19 @@ export function applyRunEvent(previous: RunState, event: RunEvent): RunState {
       }
       case "screen.rejected": {
         const c = content(state, event, "screen");
-        if (c) c.rejected.push(event.payload.paper);
+        if (c) upsert(c.rejected, event.payload.paper);
         break;
       }
       case "screen.kept": {
         const c = content(state, event, "screen");
-        if (c) c.kept.push(event.payload.paper);
+        if (c) upsert(c.kept, event.payload.paper);
         break;
       }
 
       // ---------- read ----------
       case "card.extracted": {
         const c = content(state, event, "read");
-        if (c) c.cards.push(event.payload.card);
+        if (c) upsert(c.cards, event.payload.card);
         break;
       }
       case "estimate.checked": {
@@ -310,17 +324,23 @@ export function applyRunEvent(previous: RunState, event: RunEvent): RunState {
       // ---------- synthesize ----------
       case "synthesis.cluster": {
         const c = content(state, event, "synthesize");
-        if (c) c.clusters.push(event.payload.cluster);
+        if (c) upsert(c.clusters, event.payload.cluster);
+        break;
+      }
+      case "synthesis.set_aside": {
+        const c = content(state, event, "synthesize");
+        if (c) upsert(c.setAside, event.payload.aside);
         break;
       }
       case "synthesis.tension": {
         const c = content(state, event, "synthesize");
-        if (c) c.tensions.push(event.payload.tension);
+        const { tension } = event.payload;
+        if (c && !c.tensions.some((t) => t.text === tension.text)) c.tensions.push(tension);
         break;
       }
       case "synthesis.gap": {
         const c = content(state, event, "synthesize");
-        if (c) c.gaps.push(event.payload.gap);
+        if (c) upsert(c.gaps, event.payload.gap);
         break;
       }
       case "synthesis.overview": {
@@ -337,7 +357,7 @@ export function applyRunEvent(previous: RunState, event: RunEvent): RunState {
       // ---------- hypothesize ----------
       case "debate.turn": {
         const h = content(state, event, "hypothesize");
-        if (h) h.turns.push(event.payload.turn);
+        if (h) upsert(h.turns, event.payload.turn);
         break;
       }
       case "hypothesis.drafted": {
@@ -370,6 +390,23 @@ export function applyRunEvent(previous: RunState, event: RunEvent): RunState {
             statement: event.payload.statement,
             reason: event.payload.reason,
           });
+        break;
+      }
+
+      // ---------- map ----------
+      case "map.node": {
+        const m = content(state, event, "map");
+        if (m) upsert(m.nodes, event.payload.node);
+        break;
+      }
+      case "map.edge": {
+        const m = content(state, event, "map");
+        if (m) upsert(m.edges, event.payload.edge);
+        break;
+      }
+      case "canvas.piece": {
+        const m = content(state, event, "map");
+        if (m) upsert(m.pieces, event.payload.piece);
         break;
       }
 
@@ -692,6 +729,12 @@ export function applyRunEvent(previous: RunState, event: RunEvent): RunState {
           note?: string;
         };
         const kind = state.gate?.kind ?? "screen";
+        const gateId = payload.gate_id ?? state.gate?.id;
+        // The platform records an answer the moment it is given; the engine may report it again.
+        if (gateId && state.decisions.some((d) => d.gateId === gateId)) {
+          if (state.gate?.id === gateId) state.gate = null;
+          break;
+        }
         state.gate = null;
         const answerNote = payload.answer?.note ?? payload.note ?? undefined;
         const answerDropped = payload.answer?.dropped ?? payload.dropped ?? [];
@@ -707,6 +750,7 @@ export function applyRunEvent(previous: RunState, event: RunEvent): RunState {
           kind: "decision" as const,
           stageKey: event.stage_key,
           note: answerNote,
+          gateId,
         };
         state.decisions.push(item);
         state.feed.push(item);

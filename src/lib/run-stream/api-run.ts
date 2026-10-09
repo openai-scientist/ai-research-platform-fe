@@ -4,22 +4,26 @@ import { fetchRuns } from "@/lib/api/services/fetch-runs";
 import { subscribeRunEvents } from "@/lib/realtime/run-events";
 
 import type { GateAnswer, RunCommands, RunEvent } from "./contract";
+import { RunPacer } from "./pacer";
 
 const showError = (error: unknown) =>
   toast.error(error instanceof Error ? error.message : "Something went wrong. Please try again.");
 
 /**
  * A run on the backend. Reads its events, follows the live stream, and sends the person's answers and pauses.
- * The backend paces the stream, so events are shown as they arrive.
+ * The history shows at once; live events go through a pacer, because the engine sends parts of a stage in bursts.
  */
 export class ApiRun implements RunCommands {
   private stop: (() => void) | null = null;
+  private readonly pacer: RunPacer;
 
   constructor(
     private readonly projectId: string,
     private readonly runId: string,
-    private readonly receive: (events: RunEvent[]) => void,
-  ) {}
+    receive: (events: RunEvent[]) => void,
+  ) {
+    this.pacer = new RunPacer(receive);
+  }
 
   /** `live` follows the stream; a finished run is only read. */
   start(live: boolean) {
@@ -28,7 +32,7 @@ export class ApiRun implements RunCommands {
       this.runId,
       { after: 0, live },
       {
-        onEvents: this.receive,
+        onEvents: (events, origin) => (origin === "history" ? this.pacer.now(events) : this.pacer.push(events)),
         onEnded: () => {
           // Nothing to do: the last events have already marked the run as finished.
         },
@@ -41,6 +45,7 @@ export class ApiRun implements RunCommands {
   dispose() {
     this.stop?.();
     this.stop = null;
+    this.pacer.dispose();
   }
 
   async answerGate(gateId: string, answer: GateAnswer) {

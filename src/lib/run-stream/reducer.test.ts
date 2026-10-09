@@ -186,6 +186,113 @@ describe("applyRunEvent", () => {
     expect(state.gate).toBeNull();
     expect(state.decisions.map((d) => d.text)).toEqual(["Approved publishing."]);
   });
+
+  it("records an answer once when the engine reports it again", () => {
+    const gate = {
+      id: "g1",
+      kind: "screen" as const,
+      title: "",
+      why: "",
+      summary: [],
+      options: [],
+      stop_index: 1,
+      stop_total: 1,
+    };
+    const state = replayRunEvents("run-1", [
+      event("gate.opened", { gate }),
+      event("gate.resolved", { gate_id: "g1", answer: { option_id: "approve" }, summary: "Approved the shortlist." }),
+      event("gate.resolved", { gate_id: "g1", answer: { option_id: "approve" }, summary: "Approved the shortlist." }),
+    ]);
+    expect(state.decisions).toHaveLength(1);
+    expect(state.feed.filter((f) => f.kind === "decision")).toHaveLength(1);
+  });
+
+  it("keeps one copy of each part when a stage sends its parts again", () => {
+    const screenPlan = { ...dataPlan, key: "screen", stage: "screen" as const };
+    const readPlan = { ...dataPlan, key: "read", stage: "read" as const };
+    const paper = {
+      id: "p1",
+      title: "T",
+      venue: "V",
+      false_friend: "",
+      reason: "off topic",
+      decision: "rejected" as const,
+    };
+    const card = {
+      id: "card-p1",
+      paper_id: "p1",
+      citation: "A, 2020",
+      problem: "",
+      method: "",
+      data: "",
+      metrics: "",
+      findings: "",
+      limitations: "",
+    };
+    const state = replayRunEvents("run-1", [
+      event("stage.started", { plan: screenPlan }),
+      event("screen.scored", { points: [{ id: "p1", relevance: 0.2, quality: 0.5 }] }, { stage_key: "screen" }),
+      event("screen.scored", { points: [{ id: "p1", relevance: 0.2, quality: 0.5 }] }, { stage_key: "screen" }),
+      event("screen.rejected", { paper }, { stage_key: "screen" }),
+      event("screen.rejected", { paper }, { stage_key: "screen" }),
+      event("stage.started", { plan: readPlan }),
+      event("card.extracted", { card }, { stage_key: "read" }),
+      event("card.extracted", { card: { ...card, findings: "newer" } }, { stage_key: "read" }),
+    ]);
+    const screen = state.stages.screen.content;
+    const read = state.stages.read.content;
+    if (screen.stage !== "screen" || read.stage !== "read") throw new Error("wrong stage");
+    expect(screen.points).toHaveLength(1);
+    expect(screen.rejected).toHaveLength(1);
+    expect(read.cards).toEqual([{ ...card, findings: "newer" }]);
+  });
+
+  it("draws the map once, even when its parts are sent again", () => {
+    const plan = { ...dataPlan, key: "map", stage: "map" as const };
+    const node = { id: "RQ:topic", type: "question" as const, code: "RQ", label: "Q", text: "Q?", stage: 1 };
+    const edge = {
+      id: "e1",
+      from: "RQ:topic",
+      to: "RQ:SQ1",
+      relation: "decomposes_into" as const,
+      status: "stated" as const,
+      rationale: "Covers the topic.",
+      provenance: "Stage 2",
+    };
+    const piece = { id: "puzzle" as const, status: "filled" as const, items: [{ text: "Q?" }] };
+    const state = replayRunEvents("run-1", [
+      event("stage.started", { plan }),
+      event("map.node", { node }, { stage_key: "map" }),
+      event("map.node", { node: { ...node, label: "Newer" } }, { stage_key: "map" }),
+      event("map.edge", { edge }, { stage_key: "map" }),
+      event("map.edge", { edge }, { stage_key: "map" }),
+      event("canvas.piece", { piece }, { stage_key: "map" }),
+      event("canvas.piece", { piece }, { stage_key: "map" }),
+    ]);
+    const map = state.stages.map.content;
+    if (map.stage !== "map") throw new Error("wrong stage");
+    expect(map.nodes).toEqual([{ ...node, label: "Newer" }]);
+    expect(map.edges).toEqual([edge]);
+    expect(map.pieces).toEqual([piece]);
+  });
+
+  it("keeps the cards set aside from the clusters, once each, with the reason", () => {
+    const plan = { ...dataPlan, key: "synthesize", stage: "synthesize" as const };
+    const aside = { id: "A1", card_ids: ["card-p3"], reason: "studies another task" };
+    const state = replayRunEvents("run-1", [
+      event("stage.started", { plan }),
+      event(
+        "synthesis.cluster",
+        { cluster: { id: "C1", title: "T", claim: "", card_ids: ["card-p1", "card-p2"] } },
+        { stage_key: "synthesize" },
+      ),
+      event("synthesis.set_aside", { aside }, { stage_key: "synthesize" }),
+      event("synthesis.set_aside", { aside }, { stage_key: "synthesize" }),
+    ]);
+    const synthesis = state.stages.synthesize.content;
+    if (synthesis.stage !== "synthesize") throw new Error("wrong stage");
+    expect(synthesis.setAside).toEqual([aside]);
+  });
 });
 
 describe("mock run", () => {

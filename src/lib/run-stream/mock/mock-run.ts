@@ -25,7 +25,7 @@ import type {
   StagePlan,
   StagePlanStep,
 } from "../contract";
-import { RUN_ENDS_AT, SHOW_DATA_STAGE } from "../features";
+import { RUN_ENDS_AT, SHOW_DATA_STAGE, SHOW_MAP_STAGE } from "../features";
 import {
   CARDS,
   CLUSTERS,
@@ -36,6 +36,7 @@ import {
   designFor,
   ESTIMATE_CHECKS,
   ESTIMATES,
+  EVIDENCE_LINKS,
   GAPS,
   GOAL,
   HITS,
@@ -43,10 +44,12 @@ import {
   OVERVIEW,
   QUERIES,
   RANKING,
+  RATIONALES,
   REJECTED,
   RISKS,
   SCOPE_ADJUSTED,
   SCREEN_RULES,
+  SETTING,
   SHORTLIST,
   SKILLS,
   SOURCES,
@@ -57,6 +60,7 @@ import {
   TOPIC_ADVICE,
   TOPIC_SCORES,
 } from "./discovery";
+import { canvasPieces, type MapInput, type MapStep, mapSteps } from "./map";
 import { buildPaper, COMMENTS, type FinalResult, REVISIONS, TYPED_NUMBER } from "./paper-script";
 import {
   CODE,
@@ -143,9 +147,10 @@ export class MockRun implements RunCommands {
     readonly mode: ReviewMode,
     private readonly emit: (event: RunEvent) => void,
     private readonly input: RunInput = { topic: SAMPLE_TOPIC, domains: DOMAINS },
-    private readonly options: { withData: boolean; endsAt: "hypotheses" | "paper" } = {
+    private readonly options: { withData: boolean; endsAt: "hypotheses" | "paper"; withMap?: boolean } = {
       withData: SHOW_DATA_STAGE,
       endsAt: RUN_ENDS_AT,
+      withMap: SHOW_MAP_STAGE,
     },
   ) {}
 
@@ -156,6 +161,11 @@ export class MockRun implements RunCommands {
   /** The run stops once hypotheses are picked, as pipeline stages 1 to 8 do. */
   private get endsAtHypotheses() {
     return this.options.endsAt === "hypotheses";
+  }
+
+  /** A run that ends at the hypotheses draws them on a map before it ends. */
+  private get withMap() {
+    return this.endsAtHypotheses && Boolean(this.options.withMap);
   }
 
   start() {
@@ -260,6 +270,7 @@ export class MockRun implements RunCommands {
         has_gate: false,
         pipeline: [8],
       });
+      if (this.withMap) stages.push({ key: "map", stage: "map", title: "Map the argument", has_gate: false });
       return stages;
     }
     for (const r of this.rounds) {
@@ -368,6 +379,7 @@ export class MockRun implements RunCommands {
       await this.runStage(this.synthesizeStage());
       if (this.endsAtHypotheses) {
         await this.runStage(this.hypothesizeStage(this.rounds[0]));
+        if (this.withMap) await this.runStage(this.mapStage());
         this.stageKey = undefined;
         this.send("run.completed", {});
         return;
@@ -385,6 +397,119 @@ export class MockRun implements RunCommands {
     } catch (error) {
       if (!(error instanceof Stopped)) throw error;
     }
+  }
+
+  // ---------- map: after the hypotheses ----------
+
+  private mapInput(): MapInput {
+    return {
+      topic: this.input.topic,
+      domains: this.input.domains,
+      goal: GOAL,
+      subQuestions: SUB_QUESTIONS,
+      risks: RISKS,
+      cards: this.cards(),
+      clusters: CLUSTERS,
+      tension: TENSION,
+      overview: OVERVIEW,
+      gaps: GAPS,
+      hypotheses: (this.sets[1] ?? []).map((id) => HYPOTHESES[id]),
+      asides: DEBATES.first.asides,
+      setting: SETTING,
+      evidenceLinks: EVIDENCE_LINKS,
+      rationales: RATIONALES,
+    };
+  }
+
+  private mapStage(): StageSpec {
+    const run = this.mapInput();
+    const steps = mapSteps(run);
+    const pieces = canvasPieces(run);
+    const step = (id: MapStep["id"]) => steps.find((s) => s.id === id) as MapStep;
+    const placed = new Set<string>();
+    const drawn = new Set<string>();
+    // Nodes appear one by one, each relation right after the node that completes it.
+    const draw = async ({ items }: MapStep, actor: AgentRole, pace: number) => {
+      for (const item of items) {
+        if ("node" in item) {
+          await this.wait(pace);
+          placed.add(item.node.id);
+          this.send("map.node", { node: item.node }, actor);
+        } else {
+          await this.wait(140);
+          drawn.add(item.edge.id);
+          this.send("map.edge", { edge: item.edge }, actor);
+        }
+      }
+    };
+    const count = (id: MapStep["id"], type: string) =>
+      step(id).items.filter((i) => "node" in i && i.node.type === type).length;
+    return {
+      plan: {
+        key: "map",
+        stage: "map",
+        title: "Map the argument",
+        reads: ["Sub-question tree", "Knowledge cards", "Gap map", "Hypotheses"],
+        purpose:
+          "Everything the run found is drawn as one semantic graph, from the evidence to what each hypothesis would contribute, and laid out on the nine pieces of a research canvas. Both can be downloaded.",
+        cast: ["strategist", "librarian", "theorist", "reporter"],
+      },
+      summary: () =>
+        `${placed.size} entities · ${drawn.size} relations · ${pieces.filter((p) => p.status === "filled").length} of 9 canvas pieces filled; findings wait for the experiment`,
+      steps: [
+        {
+          id: "questions",
+          title: "Lay out the questions",
+          actor: "strategist",
+          explain: "Your topic and the sub-questions it decomposes into, from stages 1 and 2.",
+          say: () => `Your question and its ${count("questions", "question") - 1} sub-questions.`,
+          run: () => draw(step("questions"), "strategist", 650),
+        },
+        {
+          id: "foundation",
+          title: "Lay the research foundation",
+          actor: "librarian",
+          explain:
+            "The findings from stage 6, the claims they support or contradict, and the gaps from stage 7. Why the gaps are worth closing.",
+          say: () =>
+            `${count("foundation", "evidence")} findings behind ${count("foundation", "claim")} claims, and ${count("foundation", "gap")} gaps still open.`,
+          run: () => draw(step("foundation"), "librarian", 380),
+        },
+        {
+          id: "reasoning",
+          title: "Tie in the hypotheses",
+          actor: "theorist",
+          artifact: "Semantic graph",
+          explain:
+            "Each hypothesis from stage 8: the sub-question it proposes an answer to, the gap it addresses, and the claims that give it a rationale or challenge it.",
+          say: () => `${count("reasoning", "hypothesis")} hypotheses, each tied to its question, gap and claims.`,
+          run: () => draw(step("reasoning"), "theorist", 600),
+        },
+        {
+          id: "contribution",
+          title: "State what each would contribute",
+          actor: "theorist",
+          explain: "What each hypothesis would add if it holds. Expected only: nothing has been tested.",
+          say: () => `${count("contribution", "contribution")} expected contributions, none shown yet.`,
+          run: () => draw(step("contribution"), "theorist", 500),
+        },
+        {
+          id: "canvas",
+          title: "Fill the research canvas",
+          actor: "reporter",
+          artifact: "Research canvas",
+          explain:
+            "The nine pieces of the AMJ Management Research Canvas, filled from the run. Findings stay open until something is tested.",
+          say: "Eight pieces filled. Findings stay open: nothing has been tested yet.",
+          run: async () => {
+            for (const piece of pieces) {
+              await this.wait(900);
+              this.send("canvas.piece", { piece }, "reporter");
+            }
+          },
+        },
+      ],
+    };
   }
 
   // ---------- data ----------

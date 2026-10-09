@@ -1,6 +1,6 @@
 "use client";
 
-import { type RefObject, useEffect, useLayoutEffect, useState } from "react";
+import { type RefObject, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { cn } from "cn";
 import { motion } from "motion/react";
@@ -221,6 +221,43 @@ export function FlightLayer() {
 }
 
 /** Streaming text caret. */
+/** Characters a line types per second. */
+const TYPE_RATE = 120;
+
+/**
+ * Types out a line that grows or is replaced while it is shown. What is there when it first renders shows at
+ * once, so reopening a run does not replay its narration.
+ */
+export function TypedLine({ text, typing }: { text: string; typing: boolean }) {
+  const [shown, setShown] = useState(text.length);
+  const shownRef = useRef(text.length);
+  const previous = useRef(text);
+  useEffect(() => {
+    const before = previous.current;
+    previous.current = text;
+    const instant =
+      !typing || typeof window === "undefined" || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (instant || text === before) {
+      shownRef.current = text.length;
+      setShown(text.length);
+      return;
+    }
+    // A line that grows keeps typing from where it is; a new line starts over.
+    const from = text.startsWith(before) ? Math.min(shownRef.current, before.length) : 0;
+    const t0 = performance.now();
+    let frame = 0;
+    const step = (now: number) => {
+      const next = Math.min(text.length, from + Math.round(((now - t0) / 1000) * TYPE_RATE));
+      shownRef.current = next;
+      setShown(next);
+      if (next < text.length) frame = requestAnimationFrame(step);
+    };
+    frame = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(frame);
+  }, [text, typing]);
+  return <>{text.slice(0, shown)}</>;
+}
+
 export function Caret({ className }: { className?: string }) {
   return (
     <span

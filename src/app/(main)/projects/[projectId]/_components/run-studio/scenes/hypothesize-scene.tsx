@@ -13,7 +13,7 @@ import { FalsifyLine } from "../falsify-line";
 import { AgentAvatar, AgentCursor, PulseDot } from "../run-bits";
 import { AGENTS } from "../run-meta";
 import { useReveal, useWorkspace } from "../workspace-context";
-import { Pane, Placeholder, SceneNote, Strike, TypeText } from "./scene-ui";
+import { Bone, Pane, Placeholder, SceneNote, Strike, TypeText } from "./scene-ui";
 
 const LANES: { agent: AgentRole; asks: string }[] = [
   { agent: "theorist", asks: "Proposes claims from the gaps" },
@@ -28,6 +28,23 @@ const STANCE: Record<DebateStance, { label: string; className: string }> = {
   refine: { label: "Refines", className: "bg-emerald-500/12 text-emerald-700 dark:text-emerald-300" },
   concede: { label: "Concedes", className: "bg-muted text-muted-foreground" },
 };
+
+/** "3 proposals · 3 answers · ranked by the PI": what a debate of whole positions held. */
+function debateSummary(turns: DebateTurn[]) {
+  const proposals = turns.filter((t) => t.stance === "propose").length;
+  const answers = turns.filter((t) => t.stance === "refine").length;
+  const parts = [`${proposals} ${proposals === 1 ? "proposal" : "proposals"}`];
+  if (answers) parts.push(`${answers} ${answers === 1 ? "answer" : "answers"}`);
+  if (turns.some((t) => t.actor === "pi")) parts.push("ranked by the PI");
+  return parts.join(" · ");
+}
+
+/** Turns that name the idea they argue about form threads; whole positions (one per perspective) do not. */
+function debateAside(turns: DebateTurn[], threads: number) {
+  if (!turns.length) return "Three perspectives debate the gaps first";
+  if (!turns.some((t) => t.about)) return debateSummary(turns);
+  return `${threads} ${threads === 1 ? "idea" : "ideas"} · ${turns.length} turns · every idea must survive all three`;
+}
 
 /** Turns grouped by the idea they argue about, in the order the ideas came up. */
 function threadsOf(turns: DebateTurn[]) {
@@ -195,6 +212,23 @@ function Thread({
   );
 }
 
+/** Turns held in the debate before the first one is said. */
+const FRAME_TURNS = 2;
+
+/** A turn's place in the debate, before anyone has spoken. */
+function PendingTurn({ active }: { active: boolean }) {
+  return (
+    <div aria-hidden className="grid grid-cols-[28px_minmax(0,1fr)] gap-2.5">
+      <span className="size-7 rounded-full bg-muted" />
+      <span className="flex min-w-0 flex-col gap-2 pt-1">
+        <Bone active={active} className="h-2 w-1/4" />
+        <Bone active={active} />
+        <Bone active={active} className="w-3/5" />
+      </span>
+    </div>
+  );
+}
+
 /** Seconds between the four parts of a hypothesis while it is written. */
 const PART_STEP = 0.35;
 
@@ -342,7 +376,8 @@ function HypothesisCard({
           </motion.li>
         ))}
       </ol>
-      {novelty && feasibility && (
+      {/* The novelty check can come alone: the engine does not judge feasibility, and none is made up here. */}
+      {novelty && (
         <motion.div
           data-cursor={`check:${h.id}`}
           initial={live ? { opacity: 0, height: 0 } : false}
@@ -373,12 +408,14 @@ function HypothesisCard({
               <span className="font-mono tabular-nums">{Math.round(novelty.similarity * 100)}% alike</span>
             </span>
           </span>
-          <span className="flex items-start gap-2">
-            <CircleCheck
-              className={cn("mt-px size-3.5 shrink-0", feasibility.ok ? "text-emerald-600" : "text-rose-600")}
-            />
-            <span className="text-muted-foreground">{feasibility.note}</span>
-          </span>
+          {feasibility && (
+            <span className="flex items-start gap-2">
+              <CircleCheck
+                className={cn("mt-px size-3.5 shrink-0", feasibility.ok ? "text-emerald-600" : "text-rose-600")}
+              />
+              <span className="text-muted-foreground">{feasibility.note}</span>
+            </span>
+          )}
         </motion.div>
       )}
       {draft.overrideNote && (
@@ -397,12 +434,15 @@ export function HypothesizeScene({
   stageKey,
   decisions,
   live,
+  step,
 }: {
   data: HypothesizeContent;
   round: number;
   stageKey: string;
   decisions: FeedItem[];
   live: boolean;
+  /** The step running now, while the run is followed live. */
+  step: string | null;
 }) {
   const scene = useRef<HTMLDivElement>(null);
   const draftsRef = useRef<HTMLDivElement>(null);
@@ -443,11 +483,9 @@ export function HypothesizeScene({
 
   return (
     <div ref={scene} className="relative flex flex-col gap-4">
-      {data.turns.length ? (
-        <Pane
-          title="Debate"
-          aside={`${threads.length} ideas · ${data.turns.length} turns · every idea must survive all three`}
-        >
+      {/* The three lanes stand from the start; the turns fill in below them. */}
+      {data.turns.length || !drafts.length ? (
+        <Pane title="Debate" aside={debateAside(data.turns, threads.length)}>
           <div className="mb-4 grid gap-2 sm:grid-cols-3">
             {LANES.map((lane) => {
               const speaking = debating && lastTurn?.actor === lane.agent;
@@ -484,6 +522,11 @@ export function HypothesizeScene({
             })}
           </div>
           <div className="flex flex-col gap-3.5">
+            {!data.turns.length &&
+              Array.from({ length: FRAME_TURNS }, (_, i) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: turns not yet said have no ids
+                <PendingTurn key={i} active={step === "debate"} />
+              ))}
             {threads.map((thread) => (
               <Thread
                 key={thread.id}

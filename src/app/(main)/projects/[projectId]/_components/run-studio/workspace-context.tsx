@@ -25,6 +25,18 @@ export function useWorkspace() {
   return value;
 }
 
+/** Where a stage's long animations register while they run, so the live view waits for them before moving on. */
+export const BusyContext = createContext<{ add(): () => void } | null>(null);
+
+/** Counts this component as busy while `active` (outside a stage screen it does nothing). */
+export function useBusy(active: boolean) {
+  const busy = useContext(BusyContext);
+  useEffect(() => {
+    if (!active || !busy) return;
+    return busy.add();
+  }, [active, busy]);
+}
+
 /** Scrolls the element into view when `key` changes, if this stage is live and the workspace follows. */
 export function useReveal(ref: RefObject<HTMLElement | null>, key: unknown, live: boolean) {
   const { follow } = useWorkspace();

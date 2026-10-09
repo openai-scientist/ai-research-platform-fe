@@ -1,5 +1,6 @@
 import type {
   AgentRole,
+  CanvasPiece,
   Cluster,
   CodeLine,
   ComputeProfile,
@@ -19,6 +20,8 @@ import type {
   KnowledgeCard,
   LiteratureSource,
   LogLevel,
+  MapEdge,
+  MapNode,
   NodeOutcome,
   NoveltyCheck,
   Opportunity,
@@ -38,6 +41,7 @@ import type {
   SearchNode,
   SearchQuery,
   SearchStrategy,
+  SetAside,
   ShortlistPaper,
   Skill,
   SourceRecord,
@@ -74,7 +78,13 @@ export interface ScopeContent {
   adjusted: { field: GoalField; from: string; to: string; reason: string }[];
   subQuestions: SubQuestion[];
   risks: ScopeRisk[];
-  evaluation?: { scores: TopicScores; overall: number; threshold: number; advice: string };
+  evaluation?: {
+    scores: TopicScores;
+    reasons?: Partial<Record<keyof TopicScores, string>>;
+    overall: number;
+    threshold: number;
+    advice: string;
+  };
   approved?: { at: string; note: string };
 }
 
@@ -87,11 +97,13 @@ export interface SearchContent {
   /** Hits per `${queryId}:${sourceId}`; null while the request is out. */
   cells: Record<string, number | null>;
   requests: number;
-  merged: { title: string; records: SourceRecord[]; kept: string }[];
+  merged: { title: string; records: SourceRecord[]; kept: string; kept_record?: string }[];
   collected?: {
     raw: number;
     unique: number;
     duplicates: number;
+    expansion?: { queries: number; hits: number };
+    repeats?: number | null;
     files: { name: string; detail: string }[];
     collected_at: string;
   };
@@ -99,7 +111,7 @@ export interface SearchContent {
 
 export interface ScreenContent {
   stage: "screen";
-  criteria?: { rules: string[]; relevanceMin: number; qualityMin: number };
+  criteria?: { rules: string[]; relevanceMin: number; qualityMin: number; candidates?: number };
   points: ScreenPoint[];
   rejected: RejectedPaper[];
   kept: ShortlistPaper[];
@@ -115,10 +127,19 @@ export interface ReadContent {
 export interface SynthesizeContent {
   stage: "synthesize";
   clusters: Cluster[];
+  setAside: SetAside[];
   tensions: Tension[];
   gaps: Gap[];
   overview?: string;
   ranking: Opportunity[];
+}
+
+/** The run drawn as a discourse graph and as the nine pieces of a research canvas. */
+export interface MapContent {
+  stage: "map";
+  nodes: MapNode[];
+  edges: MapEdge[];
+  pieces: CanvasPiece[];
 }
 
 export interface DraftState {
@@ -222,6 +243,7 @@ export type StageContent =
   | ReadContent
   | SynthesizeContent
   | HypothesizeContent
+  | MapContent
   | ExperimentContent
   | InterpretContent
   | ReportContent
@@ -247,6 +269,8 @@ export interface FeedItem {
   stageKey?: string;
   /** The person's note, for decisions made at a review stop. */
   note?: string;
+  /** The review stop a decision answered. */
+  gateId?: string;
 }
 
 export interface RunState {
@@ -312,9 +336,11 @@ export function emptyContent(plan: StagePlan): StageContent {
     case "read":
       return { stage: "read", cards: [] };
     case "synthesize":
-      return { stage: "synthesize", clusters: [], tensions: [], gaps: [], ranking: [] };
+      return { stage: "synthesize", clusters: [], setAside: [], tensions: [], gaps: [], ranking: [] };
     case "hypothesize":
       return { stage: "hypothesize", turns: [], drafts: {}, order: [], asides: [], dropped: [] };
+    case "map":
+      return { stage: "map", nodes: [], edges: [], pieces: [] };
     case "experiment":
       return {
         stage: "experiment",

@@ -1,11 +1,12 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
 
 import { cn } from "cn";
 import { ArrowRight, Check, FileText, Merge } from "lucide-react";
 import { motion } from "motion/react";
 
+import { Button } from "@/components/ui/button";
 import type { SearchContent } from "@/lib/run-stream/run-state";
 
 import { AnimatedNumber } from "../animated-number";
@@ -52,27 +53,40 @@ function WordMeter({ words }: { words: number }) {
 /** "2026-10-06T07:48:12Z" → "07:48 UTC". */
 const utcTime = (iso: string) => `${iso.slice(11, 16)} UTC`;
 
-/** Why the kept record won: a DOI first, then citations. */
-function keptWhy(m: SearchContent["merged"][number]) {
-  const kept = m.records.find((r) => r.source === m.kept);
+type Merged = SearchContent["merged"][number];
+type MergedRecord = Merged["records"][number];
+
+/** One source can return a paper twice under different ids, so the record id decides when it is known. */
+const isKept = (m: Merged, r: MergedRecord) => (m.kept_record ? r.record_id === m.kept_record : r.source === m.kept);
+
+/** Merged papers shown before "Show all". */
+const MERGED_SHOWN = 6;
+
+/** Why the kept record won: the most citations, then the longer abstract. */
+function keptWhy(m: Merged) {
+  const kept = m.records.find((r) => isKept(m, r));
   if (!kept) return "first found";
-  const othersLackDoi = m.records.some((r) => r !== kept && !r.has_doi);
-  const mostCited = m.records.every((r) => r.citations <= kept.citations);
-  if (othersLackDoi && kept.has_doi && mostCited) return "it has a DOI and the most citations";
-  if (othersLackDoi && kept.has_doi) return "it has a DOI";
-  return "the most citations";
+  const tied = m.records.some((r) => r !== kept && r.citations === kept.citations);
+  return tied ? "tied on citations, so the longer abstract" : "the most citations";
 }
 
 export function SearchScene({ data, live }: { data: SearchContent; live: boolean }) {
   const scene = useRef<HTMLDivElement>(null);
   const collectRef = useRef<HTMLDivElement>(null);
   const mergeRef = useRef<HTMLDivElement>(null);
+  const [allMerged, setAllMerged] = useState(false);
   const sent = Object.keys(data.cells);
   useReveal(collectRef, sent.length > 0, live);
   useReveal(mergeRef, data.merged.length + (data.collected ? 1 : 0), live);
 
   const total = data.queries.length * data.sources.length;
-  const raw = Object.values(data.cells).reduce<number>((a, v) => a + (v ?? 0), 0);
+  // The grid counts the plan's queries as they run; the final total also has the extra queries.
+  const raw = data.collected?.raw ?? Object.values(data.cells).reduce<number>((a, v) => a + (v ?? 0), 0);
+  const extra = data.collected?.expansion;
+  // Duplicates that were another source's record of a listed paper; the engine counts the rest.
+  const mergedRecords = data.merged.reduce((n, m) => n + m.records.length - 1, 0);
+  const repeats = data.collected?.repeats;
+  const shownMerged = allMerged ? data.merged : data.merged.slice(0, MERGED_SHOWN);
   const lastCell = sent[sent.length - 1];
   const order = data.sources.map((s) => s.name);
   const bySourceOrder = (records: SearchContent["merged"][number]["records"]) =>
@@ -81,7 +95,7 @@ export function SearchScene({ data, live }: { data: SearchContent; live: boolean
 
   let target: string | null = data.queries.length ? `query:${data.queries[data.queries.length - 1].id}` : null;
   if (lastCell) target = `cell:${lastCell}`;
-  if (data.merged.length) target = `merged:${data.merged.length - 1}`;
+  if (shownMerged.length) target = `merged:${shownMerged.length - 1}`;
   if (data.collected) target = "files";
 
   return (
@@ -286,7 +300,8 @@ export function SearchScene({ data, live }: { data: SearchContent; live: boolean
           {data.merged.length || data.collected ? (
             <Pane title="Merging duplicates" className="flex-1">
               <p className="-mt-2 mb-3 text-muted-foreground text-xs">
-                Same DOI, arXiv ID or title. Keeps the record with a DOI, then the most citations.
+                Same DOI, arXiv ID or title. Keeps the record with the most citations, then the longer abstract; the
+                others fill its gaps, such as a missing DOI.
               </p>
               <div className="mb-3 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 text-center">
                 <span className="rounded-lg bg-muted/70 px-2 py-2">
@@ -306,8 +321,14 @@ export function SearchScene({ data, live }: { data: SearchContent; live: boolean
                   <span className="text-muted-foreground text-xs">unique papers</span>
                 </span>
               </div>
+              {extra && extra.queries > 0 && (
+                <p className="-mt-1 mb-3 text-muted-foreground text-xs">
+                  The hits include {extra.hits.toLocaleString("en-US")} from {extra.queries} extra{" "}
+                  {extra.queries === 1 ? "query" : "queries"} built from the topic's words, outside the plan above.
+                </p>
+              )}
               <ul className="flex flex-col gap-2">
-                {data.merged.map((m, i) => (
+                {shownMerged.map((m, i) => (
                   <motion.li
                     key={m.title}
                     data-cursor={`merged:${i}`}
@@ -318,7 +339,7 @@ export function SearchScene({ data, live }: { data: SearchContent; live: boolean
                     <span className="line-clamp-2 font-medium text-[12.5px] leading-snug">{m.title}</span>
                     <ul className="flex flex-col gap-1">
                       {bySourceOrder(m.records).map((r, k) => {
-                        const kept = r.source === m.kept;
+                        const kept = isKept(m, r);
                         return (
                           <motion.li
                             key={r.record_id}
@@ -366,6 +387,20 @@ export function SearchScene({ data, live }: { data: SearchContent; live: boolean
                   </motion.li>
                 ))}
               </ul>
+              {data.merged.length > MERGED_SHOWN && (
+                <Button variant="ghost" size="xs" className="mt-2 self-start" onClick={() => setAllMerged((v) => !v)}>
+                  {allMerged ? "Show fewer" : `Show all ${data.merged.length} merged papers`}
+                </Button>
+              )}
+              {data.collected && repeats != null && (
+                <p className="mt-3 text-muted-foreground text-xs">
+                  {data.collected.duplicates.toLocaleString("en-US")} duplicates in all:{" "}
+                  {mergedRecords.toLocaleString("en-US")} records merged into the {data.merged.length} papers above
+                  {repeats > 0 &&
+                    `, and ${repeats.toLocaleString("en-US")} times a source returned the same record to another query`}
+                  .
+                </p>
+              )}
             </Pane>
           ) : (
             <Placeholder>Papers found more than once are merged</Placeholder>
