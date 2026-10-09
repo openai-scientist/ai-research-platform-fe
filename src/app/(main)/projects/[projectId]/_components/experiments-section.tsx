@@ -23,18 +23,6 @@ export function ExperimentsSection({ project, canWrite }: WorkspaceProps) {
       );
     }
   }, [project.id, selectedRun, router]);
-  // A run starts from a topic, so the research context has no place here. Old links go to its own page.
-  const toContext = searchParams.get("tab") === "context";
-  useEffect(() => {
-    const openContext = () => {
-      if (toContext || window.location.hash === "#research-context") {
-        router.replace(`/projects/${project.id}/experiments/context#research-context`, { scroll: false });
-      }
-    };
-    openContext();
-    window.addEventListener("hashchange", openContext);
-    return () => window.removeEventListener("hashchange", openContext);
-  }, [project.id, router, toContext]);
-  if (selectedRun || toContext) return null;
+  if (selectedRun) return null;
   return <RunStudio projectId={project.id} canWrite={canWrite} />;
 }

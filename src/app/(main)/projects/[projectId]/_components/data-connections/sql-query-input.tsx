@@ -6,10 +6,10 @@ import { Columns3, Database, Table2 } from "lucide-react";
 
 import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
-import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { showConnectionError } from "@/hooks/use-data-connections";
 
+import { ConnectionOptionsSkeleton } from "./connection-options-skeleton";
 import { type SqlSuggestion, sqlCompletionContext } from "./sql-completion";
 import type { ConnectionFlowState } from "./use-connection-flow";
 import { useSqlSuggestions } from "./use-sql-suggestions";
@@ -192,10 +192,7 @@ export function SqlQueryInput({ flow }: { flow: ConnectionFlowState }) {
         <Command shouldFilter={false} value={selected?.key ?? ""} onValueChange={setActiveKey}>
           <CommandList id={listId} aria-label="SQL suggestions">
             {suggestions.loading ? (
-              <div className="flex items-center gap-2 p-3 text-muted-foreground text-xs">
-                <Spinner />
-                Loading suggestions…
-              </div>
+              <ConnectionOptionsSkeleton label="Loading SQL suggestions" />
             ) : (
               <CommandGroup heading={context?.kind === "table" ? "Tables and schemas" : "Columns"}>
                 {suggestions.items.map((item, index) => (

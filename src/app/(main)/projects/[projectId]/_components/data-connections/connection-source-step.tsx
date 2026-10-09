@@ -9,10 +9,11 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import { ConnectionCatalogBrowser } from "./connection-catalog-browser";
 import { SqlQueryInput } from "./sql-query-input";
+import { TimeSeriesSourceStep } from "./time-series-source-step";
 import type { ConnectionFlowState } from "./use-connection-flow";
 
 export function ConnectionSourceControls({ flow }: { flow: ConnectionFlowState }) {
-  if (flow.isGoogle) return null;
+  if (flow.isGoogle || flow.isTimeSeries) return null;
   return (
     <div className="flex shrink-0 items-center gap-2">
       <Tabs
@@ -56,6 +57,7 @@ export function ConnectionCatalogRefresh({ flow }: { flow: ConnectionFlowState }
 }
 
 export function ConnectionSourceStep({ flow }: { flow: ConnectionFlowState }) {
+  if (flow.isTimeSeries) return <TimeSeriesSourceStep key={flow.connection?.id} flow={flow} />;
   return (
     <section
       className="flex h-full min-h-0 min-w-0 flex-col"

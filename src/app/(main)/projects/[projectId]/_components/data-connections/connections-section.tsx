@@ -28,11 +28,15 @@ import {
   useGoogleConnectionsAvailable,
   useInfiniteDataConnections,
 } from "@/hooks/use-data-connections";
-import { type ConnectionItem, isGoogleConnection } from "@/lib/api/services/fetch-data-connections";
+import {
+  type ConnectionItem,
+  isGoogleConnection,
+  isTimeSeriesConnection,
+} from "@/lib/api/services/fetch-data-connections";
 
 import { WorkspaceFormDialog } from "../workspace-form-dialog";
 import { ListState, LoadMore, perform, type WorkspaceProps } from "../workspace-ui";
-import { CONNECTION_PROVIDERS, ConnectionLogo, connectionStatus } from "./connection-display";
+import { CONNECTION_PROVIDERS, ConnectionLogo, connectionStatus, connectionTarget } from "./connection-display";
 import { ConnectionFlow } from "./connection-flow";
 import type { GoogleConnectionResume } from "./google-connection-state";
 import { GoogleReconnectButton } from "./google-reconnect-button";
@@ -48,6 +52,7 @@ function RenameConnection({
   onClose: () => void;
 }) {
   const [name, setName] = useState(connection.name);
+  const maxNameLength = isTimeSeriesConnection(connection.kind) ? 160 : 120;
   const actions = useConnectionActions(projectId);
   const access = useConnectionAccess(projectId);
   return (
@@ -65,8 +70,8 @@ function RenameConnection({
       noValidate
       onSubmit={async () => {
         const trimmed = name.trim();
-        if (trimmed.length < 2 || trimmed.length > 120) {
-          toast.error("Connection name must contain 2 to 120 characters.");
+        if (trimmed.length < 2 || trimmed.length > maxNameLength) {
+          toast.error(`Connection name must contain 2 to ${maxNameLength} characters.`);
           return;
         }
         return Boolean(
@@ -80,7 +85,7 @@ function RenameConnection({
           <Input
             id="connection-rename-name"
             value={name}
-            maxLength={120}
+            maxLength={maxNameLength}
             disabled={actions.rename.isPending}
             onChange={(event) => setName(event.target.value)}
           />
@@ -180,7 +185,7 @@ export function ConnectionsSection({ project, canWrite, userId, header }: Worksp
                 placeholder="Search connections"
                 onChange={(event) => setSearch(event.target.value)}
               />
-              <InputGroupAddon align="inline-end">
+              <InputGroupAddon align="inline-start">
                 <span className="flex size-6 items-center justify-center">
                   <Search className="size-4" aria-hidden="true" />
                 </span>
@@ -225,6 +230,9 @@ export function ConnectionsSection({ project, canWrite, userId, header }: Worksp
                     </div>
                   </CardHeader>
                   <CardContent className="flex flex-wrap items-center justify-between gap-2">
+                    {isTimeSeriesConnection(connection.kind) && (
+                      <p className="w-full break-all text-muted-foreground text-xs">{connectionTarget(connection)}</p>
+                    )}
                     {isGoogleConnection(connection.kind) && typeof connection.config.account_email === "string" && (
                       <p className="w-full break-all text-muted-foreground text-xs">
                         {connection.config.account_email}

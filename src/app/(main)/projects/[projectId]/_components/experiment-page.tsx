@@ -20,8 +20,8 @@ export async function ExperimentPage({
   section,
 }: {
   projectId: string;
-  runId?: string;
-  section?: RunSection | "current" | "history";
+  runId: string;
+  section?: RunSection;
 }) {
   const user = await getAuthenticatedUser(projectId);
   if (!user) redirect("/auth/login");
@@ -54,17 +54,9 @@ export async function ExperimentPage({
             </BreadcrumbItem>
           </BreadcrumbList>
         </Breadcrumb>
-        <h1 className="break-words font-heading text-3xl tracking-tight">
-          {runId ? `Run ${runId.slice(0, 8)}` : "Research context"}
-        </h1>
+        <h1 className="break-words font-heading text-3xl tracking-tight">Run {runId.slice(0, 8)}</h1>
       </div>
-      <WorkspaceSection
-        project={project}
-        section={runId ? "run" : "research-context"}
-        userId={user.id}
-        runId={runId}
-        experimentSection={section}
-      />
+      <WorkspaceSection project={project} section="run" userId={user.id} runId={runId} experimentSection={section} />
     </div>
   );
 }

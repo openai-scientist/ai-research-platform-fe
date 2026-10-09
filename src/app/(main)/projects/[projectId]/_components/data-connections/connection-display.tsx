@@ -1,16 +1,42 @@
 import Image from "next/image";
 
 import { cn } from "cn";
-import { siGooglebigquery, siPostgresql } from "simple-icons";
+import { siGooglebigquery, siInfluxdb, siPostgresql, siPrometheus } from "simple-icons";
 
-import type { ConnectionItem, ConnectionKind } from "@/lib/api/services/fetch-data-connections";
+import {
+  type ConnectionItem,
+  type ConnectionKind,
+  type ConnectionSource,
+  isTimeSeriesConnection,
+} from "@/lib/api/services/fetch-data-connections";
 
 // Official Google Workspace product logos, bundled locally to preserve their shapes and colors.
 import googleDriveLogo from "./google-drive.svg";
 import googleSheetsLogo from "./google-sheets.svg";
 import { MYSQL_DOLPHIN_ICON } from "./mysql-dolphin";
 
+const databaseBadgeColor = "border-sky-500/20 bg-sky-500/10 text-sky-700 dark:text-sky-300";
+const timeSeriesBadgeColor = "border-violet-500/20 bg-violet-500/10 text-violet-700 dark:text-violet-300";
+
 export const CONNECTION_PROVIDERS = {
+  prometheus: {
+    label: "Prometheus",
+    description: "Read metrics and counters from a public Prometheus server.",
+    category: "Time series",
+    icon: siPrometheus,
+    viewBox: "0 0 24 24",
+    color: "text-orange-600",
+    badgeColor: timeSeriesBadgeColor,
+  },
+  influxdb: {
+    label: "InfluxDB",
+    description: "Read measurements from InfluxDB 1.8, 2.x or 3 Core.",
+    category: "Time series",
+    icon: siInfluxdb,
+    viewBox: "0 0 24 24",
+    color: "text-primary",
+    badgeColor: timeSeriesBadgeColor,
+  },
   postgres: {
     label: "PostgreSQL",
     description: "Connect PostgreSQL or Supabase.",
@@ -18,7 +44,7 @@ export const CONNECTION_PROVIDERS = {
     icon: siPostgresql,
     viewBox: "0 0 24 24",
     color: "text-sky-600",
-    badgeColor: "border-sky-500/20 bg-sky-500/10 text-sky-700 dark:text-sky-300",
+    badgeColor: databaseBadgeColor,
   },
   mysql: {
     label: "MySQL",
@@ -27,7 +53,7 @@ export const CONNECTION_PROVIDERS = {
     icon: MYSQL_DOLPHIN_ICON,
     viewBox: "0 0 128 128",
     color: "text-cyan-600",
-    badgeColor: "border-cyan-500/20 bg-cyan-500/10 text-cyan-700 dark:text-cyan-300",
+    badgeColor: databaseBadgeColor,
   },
   bigquery: {
     label: "BigQuery",
@@ -113,9 +139,16 @@ export function connectionStatus(connection: ConnectionItem) {
 }
 
 export function connectionTarget(connection: ConnectionItem) {
+  if (isTimeSeriesConnection(connection.kind)) return String(connection.config.url ?? "");
   if (connection.kind === "google_sheets") return String(connection.config.title ?? "Spreadsheet");
   if (connection.kind === "google_drive") return String(connection.config.folder_name ?? "Folder");
   return connection.kind === "bigquery"
     ? [connection.config.project_id, connection.config.location].filter(Boolean).join(" · ")
     : [connection.config.host, connection.config.database].filter(Boolean).join(" · ");
+}
+
+export function connectionSourceLabel(source: ConnectionSource) {
+  if (source.type === "table") return `${source.schema}.${source.name}`;
+  if (source.type === "timeseries") return source.name;
+  return "SELECT query";
 }

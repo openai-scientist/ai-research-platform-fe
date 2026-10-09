@@ -18,6 +18,7 @@ import {
   type CreateConnectionRequest,
   fetchDataConnections,
   isGoogleConnection,
+  isTimeSeriesConnection,
   sameConnectionSource,
 } from "@/lib/api/services/fetch-data-connections";
 import { type DatasetItem, fetchDatasets } from "@/lib/api/services/fetch-datasets";
@@ -26,6 +27,14 @@ import { ApiError } from "@/types/api";
 import { createConnectionInput, EMPTY_CONNECTION_DRAFT } from "./connection-form";
 import { beginGoogleConnection, type GoogleConnectionResume } from "./google-connection-state";
 import { openGooglePicker } from "./google-picker";
+import {
+  buildTimeSeriesSource,
+  createTimeSeriesDraft,
+  selectTimeSeriesMetric,
+  type TimeSeriesDraft,
+  validateTimeSeriesSelection,
+  validateTimeSeriesSource,
+} from "./time-series-source";
 
 export type ConnectionStep = 0 | 1 | 2 | 3 | 4;
 
@@ -42,11 +51,16 @@ export function useConnectionFlow(
   const access = useConnectionAccess(projectId);
   const [step, setStep] = useState<ConnectionStep>(initialConnection ? 2 : 0);
   const [kind, setKind] = useState<ConnectionKind>(initialConnection?.kind ?? googleResume?.kind ?? "postgres");
-  const [draft, setDraft] = useState({
+  const [storedDraft, setDraft] = useState({
     ...EMPTY_CONNECTION_DRAFT,
     name: googleResume?.name ?? "",
     googleTarget: googleResume?.target ?? "",
   });
+  // Fast Refresh can retain the draft from before time series fields were added.
+  const draft =
+    typeof storedDraft.url === "string" && typeof storedDraft.token === "string"
+      ? storedDraft
+      : { ...EMPTY_CONNECTION_DRAFT, ...storedDraft, url: storedDraft.url ?? "", token: storedDraft.token ?? "" };
   const [grantId, setGrantId] = useState(googleResume?.grantId);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [connection, setConnection] = useState(initialConnection);
@@ -59,6 +73,7 @@ export function useConnectionFlow(
   const [tableSearch, setTableSearch] = useState("");
   const [mode, setMode] = useState<"table" | "query">("table");
   const [sql, setSql] = useState("");
+  const [timeSeriesDraft, setTimeSeriesDraft] = useState(createTimeSeriesDraft);
   const [preview, setPreview] = useState<ConnectionPreview | null>(null);
   const [datasetName, setDatasetName] = useState("");
   const [description, setDescription] = useState("");
@@ -74,17 +89,11 @@ export function useConnectionFlow(
     connectionId: string;
     previousIds: ReadonlySet<string>;
   } | null>(null);
-  const source = useMemo<ConnectionSource | null>(
-    () =>
-      mode === "query" && !isGoogleConnection(kind)
-        ? sql.trim()
-          ? { type: "query", sql: sql.trim() }
-          : null
-        : schema && table
-          ? { type: "table", schema, name: table }
-          : null,
-    [mode, sql, schema, table, kind],
-  );
+  const source = useMemo<ConnectionSource | null>(() => {
+    if (isTimeSeriesConnection(kind)) return table ? buildTimeSeriesSource(kind, table, timeSeriesDraft) : null;
+    if (mode === "query" && !isGoogleConnection(kind)) return sql.trim() ? { type: "query", sql: sql.trim() } : null;
+    return schema && table ? { type: "table", schema, name: table } : null;
+  }, [mode, sql, schema, table, kind, timeSeriesDraft]);
 
   const loadCatalog = useCallback(
     async (item: ConnectionItem) => {
@@ -95,7 +104,9 @@ export function useConnectionFlow(
       setTable("");
       setColumns([]);
       setPreview(null);
-      const result = await fetchDataConnections.getSchemas(projectId, item.id);
+      const result = isTimeSeriesConnection(item.kind)
+        ? { data: ["default"] }
+        : await fetchDataConnections.getSchemas(projectId, item.id);
       setCatalogLoaded(true);
       setSchemas(result.data);
       if (result.data.length === 1) {
@@ -152,6 +163,9 @@ export function useConnectionFlow(
         ...previous,
         port: next === "mysql" ? "3306" : "5432",
         password: "",
+        token: "",
+        username: "",
+        url: "",
         serviceAccountJson: "",
         googleTarget: "",
       }));
@@ -180,7 +194,7 @@ export function useConnectionFlow(
       }
       setConnection(savedConnection);
       setGrantId(undefined);
-      setDraft((previous) => ({ ...previous, password: "", serviceAccountJson: "" }));
+      setDraft((previous) => ({ ...previous, password: "", token: "", serviceAccountJson: "" }));
       setStep(2);
       toast.success("Connection saved.");
       await queryClient.invalidateQueries({ queryKey: connectionKeys.lists(projectId) });
@@ -275,21 +289,29 @@ export function useConnectionFlow(
       setTable(value);
       setColumns([]);
       setPreview(null);
-      setColumns((await fetchDataConnections.getColumns(projectId, connection.id, schema, value)).data);
+      const loaded = (await fetchDataConnections.getColumns(projectId, connection.id, schema, value)).data;
+      setColumns(loaded);
+      if (isTimeSeriesConnection(kind)) {
+        setTimeSeriesDraft((previous) => selectTimeSeriesMetric(kind, value, loaded, previous));
+      }
     });
 
   const previewSource = () =>
     run(async () => {
       if (!connection || !source)
         throw new Error(
-          isGoogleConnection(kind) ? "Choose a file or spreadsheet tab." : "Choose a table or enter a SELECT query.",
+          isGoogleConnection(kind) ? "Choose a file or spreadsheet tab." : "Choose a source before previewing.",
         );
       if (source.type === "query" && source.sql.length > 20_000)
         throw new Error("SQL queries may contain at most 20,000 characters.");
+      if (source.type === "timeseries" && isTimeSeriesConnection(kind)) {
+        validateTimeSeriesSource(kind, source);
+        validateTimeSeriesSelection(kind, source, columns);
+      }
       setPreview(null);
       const result = await fetchDataConnections.preview(projectId, connection.id, source);
       setPreview(result.data);
-      if (!datasetName.trim()) setDatasetName(source.type === "table" ? source.name : `${connection.name} query`);
+      if (!datasetName.trim()) setDatasetName(source.type === "query" ? `${connection.name} query` : source.name);
       setStep(3);
     });
 
@@ -319,7 +341,8 @@ export function useConnectionFlow(
   const importDataset = () =>
     run(async () => {
       if (reconcileRequired) return;
-      if (!connection || !source || !preview) throw new Error("Preview your source before importing.");
+      if (!connection || !source || !preview?.rows.length)
+        throw new Error("Preview a source with rows before importing.");
       const name = datasetName.trim();
       if (name.length < 2 || name.length > 160) throw new Error("Dataset name must contain 2 to 160 characters.");
       if (description.length > 5000) throw new Error("Description must contain at most 5,000 characters.");
@@ -362,6 +385,12 @@ export function useConnectionFlow(
     kind,
     googleAvailable,
     isGoogle: isGoogleConnection(kind),
+    isTimeSeries: isTimeSeriesConnection(kind),
+    timeSeriesDraft,
+    setTimeSeriesDraft: (value: TimeSeriesDraft) => {
+      setTimeSeriesDraft(value);
+      setPreview(null);
+    },
     grantId,
     pickerOpen,
     chooseGoogleSource,
@@ -381,7 +410,7 @@ export function useConnectionFlow(
     setTableSearch,
     mode,
     setMode: (value: "table" | "query") => {
-      if (value === "query" && isGoogleConnection(kind)) return;
+      if (value === "query" && (isGoogleConnection(kind) || isTimeSeriesConnection(kind))) return;
       setMode(value);
       setPreview(null);
     },

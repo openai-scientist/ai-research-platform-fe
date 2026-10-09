@@ -12,6 +12,7 @@ import type { z } from "zod";
 import { AuthTextField } from "@/components/auth/auth-text-field";
 import { Button } from "@/components/ui/button";
 import { FieldGroup } from "@/components/ui/field";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/hooks/use-auth";
 import { useAuthCooldown } from "@/hooks/use-auth-cooldown";
 import type { LoginRequest, VerificationPending } from "@/lib/api/services/fetch-auth";
@@ -67,7 +68,7 @@ export function LoginForm({ googleSignInAvailable }: { googleSignInAvailable: Pr
   return (
     <div className="flex flex-col gap-6">
       <AuthStepHeading title="Login to your account" description="Please enter your details to login." />
-      <Suspense fallback={null}>
+      <Suspense fallback={<Skeleton className="h-10 w-full" aria-label="Loading sign-in options" />}>
         <GoogleSignInOption availability={googleSignInAvailable} disabled={busy} />
       </Suspense>
       <form

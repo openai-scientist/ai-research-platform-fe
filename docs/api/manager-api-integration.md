@@ -2,6 +2,9 @@
 
 Đối chiếu với commit `f2aab64` và OpenAPI đang chạy tại `http://localhost:6789/openapi.json` ngày 2026-10-03.
 
+Cập nhật 2026-10-09: run bắt đầu từ topic, domains và review mode. FE đã bỏ luồng context cũ;
+các kết quả kiểm tra cuối tài liệu chỉ ghi nhận phiên bản ngày 2026-10-03.
+
 ## Màn hình
 
 Màn trong ảnh là `ManagerOverview`, không phải màn onboarding `ProjectOverview`.
@@ -23,20 +26,19 @@ Mọi đường dẫn dưới đây có prefix `/api/v1`. Các service dùng Axi
 | Archive, restore, complete, reopen | POST `/projects/{id}/{action}` | `fetchProject`, mutations trong `use-projects-query.ts` |
 | Quản lý members | GET/POST `/projects/{id}/members`; PUT/DELETE membership | `fetchMembers`, `use-members-query.ts` |
 | Dataset và versions, upload/download | `/projects/{id}/datasets/...` | `fetchDatasets`, `use-datasets-query.ts` |
-| Research context và versions | GET/PUT `/projects/{id}/research-context` | `fetchResearchContext`, `use-research-context-query.ts` |
 | Runs, start/sync/abandon | `/projects/{id}/runs/...` | `fetchRuns`, `use-runs-query.ts` |
 | Duyệt frame | `/projects/{id}/runs/{runId}/frame-review` | `fetchFrameReviews`, `use-frame-reviews-query.ts` |
 | Artifacts, download | `/projects/{id}/runs/{runId}/artifacts/...` | `fetchArtifacts`, `use-artifacts-query.ts` |
 | Comments | `/projects/{id}/runs/{runId}/comments/...` | `fetchComments`, `use-comments-query.ts` |
 | Audit của project | GET `/audit?project_id={id}` | `useManagerAuditQuery` luôn gắn project ID |
-| Dữ liệu tổng hợp cho overview | Runs + context version + dataset của run gần nhất | `fetchManager.getResearch`, `useManagerResearchQuery` |
+| Dữ liệu tổng hợp cho overview | Runs + dataset của run gần nhất nếu có | `fetchManager.getResearch`, `useManagerResearchQuery` |
 
 ## Dữ liệu hiển thị
 
 - Tổng hợp toàn bộ các trang runs bằng `limit`/`offset`, không coi trang đầu là toàn bộ dữ liệu.
 - KPI experiment và biểu đồ tuần lấy từ trạng thái run. `queued` được tính là đang chờ/chạy;
   `budget_exceeded` nằm trong nhóm dừng thất bại của run, không mang nghĩa kết quả nghiên cứu âm tính.
-- Context và dataset version khớp với run gần nhất. Khi chưa có run, đọc context mới nhất.
+- Câu hỏi nghiên cứu lấy từ topic của run gần nhất. Chỉ đọc dataset khi run có dataset_id.
 - Budget hiển thị `cost_usd` và `budget_usd` của run gần nhất, không dự đoán chi phí.
 - Backend hiện chưa có endpoint riêng cho hypothesis/candidates, research stage, official outcomes,
   warnings và tiến độ report. Theo yêu cầu, các mục này dùng mock data của màn Manager cũ,
@@ -44,7 +46,7 @@ Mọi đường dẫn dưới đây có prefix `/api/v1`. Các service dùng Axi
 - Mock được tách theo project; thao tác frontend cập nhật React Query và giữ qua điều hướng trong
   phiên trang hiện tại. Reload trang sẽ khởi tạo lại mock. Không gửi ID mock sang backend.
 - Datasets hỗ trợ upload CSV, sửa thông tin, upload version mới, xem lịch sử và tải file.
-- Experiments hỗ trợ lưu context với base_version, chọn dataset version/budget, tạo run, sync/abandon,
+- Experiments hỗ trợ nhập topic, domains, review mode và budget để tạo run, sync/abandon,
   duyệt frame (approve/edit/reject/unknown), tải artifacts và tạo/sửa/xóa comments.
 - Members hỗ trợ thêm tài khoản bằng email, sửa role, xóa membership qua API.
 - Settings hỗ trợ sửa metadata, archive/restore/complete/reopen và xem audit theo project_id.
@@ -57,7 +59,7 @@ Mọi đường dẫn dưới đây có prefix `/api/v1`. Các service dùng Axi
 ## Phạm vi kiểm tra
 
 Đã đọc lịch sử commit, code và schema OpenAPI thật. Unit tests bao gồm kiểm tra phân trang,
-context version khớp run, lỗi API không bị mock và dữ liệu thật không bị sample insights ghi đè.
+dataset khớp run, lỗi API không bị mock và dữ liệu thật không bị sample insights ghi đè.
 Kết quả build/test và kiểm tra trình duyệt được ghi trong báo cáo giao hàng của lượt làm việc.
 
 Kết quả hiện tại:

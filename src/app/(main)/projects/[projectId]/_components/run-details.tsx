@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { useQueryClient } from "@tanstack/react-query";
@@ -168,22 +167,18 @@ export function RunDetails({
             <>
               <ManagementStatusBadge status={run.status} />
               <dl className="flex flex-wrap gap-x-8 gap-y-3 text-sm">
-                <div>
-                  <dt className="text-muted-foreground">Dataset</dt>
-                  <dd>Version {run.dataset_version_number}</dd>
-                </div>
-                <div>
-                  <dt className="text-muted-foreground">Research context</dt>
-                  <dd>
-                    <Link
-                      prefetch={false}
-                      className="underline underline-offset-4"
-                      href={`/projects/${project.id}/experiments/context?version=${run.research_context_version}`}
-                    >
-                      Version {run.research_context_version}
-                    </Link>
-                  </dd>
-                </div>
+                {run.dataset_version_number !== null && (
+                  <div>
+                    <dt className="text-muted-foreground">Dataset</dt>
+                    <dd>Version {run.dataset_version_number}</dd>
+                  </div>
+                )}
+                {run.topic && (
+                  <div>
+                    <dt className="text-muted-foreground">Research topic</dt>
+                    <dd className="max-w-xl break-words">{run.topic}</dd>
+                  </div>
+                )}
                 <div>
                   <dt className="text-muted-foreground">Cost / budget</dt>
                   <dd>

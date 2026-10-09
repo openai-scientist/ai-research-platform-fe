@@ -17,15 +17,17 @@ import { ApiError } from "@/types/api";
 import { useInfinityScroll } from "./use-infinity-scroll";
 
 const reasonHints: Record<string, string> = {
-  host_not_allowed: "Use a public database host. Localhost and private addresses are not supported.",
+  host_not_allowed: "Use a public host. Localhost and private addresses are not supported.",
   unreachable: "The data source could not be reached. Check access and try again.",
   timeout: "The data source took too long to respond. Try again.",
   tls_unavailable: "This server does not support TLS. Select disable only if you accept an unencrypted connection.",
-  tls_verify_failed: "Check the certificate, or use require for a server with a self-signed certificate.",
-  source_not_found: "Reload the source list. The file or table may have been renamed or removed.",
+  tls_verify_failed: "Check the server certificate and hostname.",
+  source_not_found: "Reload the source list and columns. The source may have been renamed or removed.",
   access_revoked: "Reconnect this connection using the original Google account.",
-  rate_limited: "Google is limiting requests. Please try again later.",
-  source_too_large: "Choose a source within the dataset size limit.",
+  rate_limited: "The source is limiting requests. Please try again later.",
+  source_too_large:
+    "Choose a smaller source. For time series, narrow the range, increase the bucket or choose fewer tags.",
+  too_many_points: "Choose a larger bucket or a shorter time range. Prometheus allows at most 11,000 buckets.",
   query_timeout: "Narrow the query before trying again.",
   scan_limit_exceeded: "Filter by partition or select fewer columns. The scan limit is 1 GiB.",
   cell_too_large: "Exclude the affected column or shorten it in your SELECT query.",

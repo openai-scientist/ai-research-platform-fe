@@ -3,8 +3,10 @@
 import type { Dispatch, SetStateAction } from "react";
 
 import { cn } from "cn";
+import { TriangleAlert } from "lucide-react";
 
 import { PasswordInput } from "@/components/password-input";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
@@ -16,7 +18,10 @@ import {
   type ConnectionSsl,
   type CreateConnectionRequest,
   isGoogleConnection,
+  isTimeSeriesConnection,
 } from "@/lib/api/services/fetch-data-connections";
+
+import { createTimeSeriesConnection } from "./time-series-connection";
 
 const CONNECTION_INPUT_CLASSNAME = "h-11 bg-background md:h-10";
 
@@ -32,6 +37,8 @@ export interface ConnectionDraft {
   location: string;
   serviceAccountJson: string;
   googleTarget: string;
+  url: string;
+  token: string;
 }
 export const EMPTY_CONNECTION_DRAFT: ConnectionDraft = {
   name: "",
@@ -45,11 +52,14 @@ export const EMPTY_CONNECTION_DRAFT: ConnectionDraft = {
   location: "",
   serviceAccountJson: "",
   googleTarget: "",
+  url: "",
+  token: "",
 };
 
-function connectionName(value: string) {
+function connectionName(value: string, maxLength = 120) {
   const name = value.trim();
-  if (name.length < 2 || name.length > 120) throw new Error("Connection name must contain 2 to 120 characters.");
+  if (name.length < 2 || name.length > maxLength)
+    throw new Error(`Connection name must contain 2 to ${maxLength} characters.`);
   return name;
 }
 
@@ -72,7 +82,8 @@ export function createConnectionInput(
       ? { name, kind, config: { spreadsheet: target }, grant_id: grantId }
       : { name, kind, config: { folder: target }, grant_id: grantId };
   }
-  const name = connectionName(draft.name);
+  const name = connectionName(draft.name, isTimeSeriesConnection(kind) ? 160 : 120);
+  if (isTimeSeriesConnection(kind)) return createTimeSeriesConnection(kind, draft, name);
   if (kind === "bigquery") {
     if (!draft.serviceAccountJson.trim() || draft.serviceAccountJson.length > 16_384) {
       throw new Error("Provide a service account JSON key containing at most 16,384 characters.");
@@ -130,6 +141,19 @@ export function ConnectionGuidance({
   ssl: ConnectionSsl;
   compact?: boolean;
 }) {
+  if (isTimeSeriesConnection(kind)) {
+    return (
+      <div className="flex flex-col gap-3 text-pretty text-muted-foreground text-xs leading-relaxed">
+        <h3 className="font-semibold text-foreground">Before you connect</h3>
+        <p>Use a public URL. Localhost, private networks and cloud metadata addresses are not supported.</p>
+        <p>
+          Enter the server URL before its API path. Do not append /api/v1 or /query. Use the final URL after redirects.
+        </p>
+        <p>Use read-only credentials. HTTPS requires a publicly trusted certificate.</p>
+        <p>Credentials are never returned. Only the name can be changed after saving.</p>
+      </div>
+    );
+  }
   if (isGoogleConnection(kind)) {
     return (
       <div className="flex flex-col gap-3 text-pretty text-muted-foreground text-xs leading-relaxed">
@@ -222,6 +246,7 @@ export function ConnectionForm({
   disabled: boolean;
 }) {
   const update = (key: keyof ConnectionDraft, value: string) => setDraft((previous) => ({ ...previous, [key]: value }));
+  const maxNameLength = isTimeSeriesConnection(kind) ? 160 : 120;
   const input = (key: keyof ConnectionDraft, label: string, required = false, type = "text") => {
     const Control = type === "password" ? PasswordInput : Input;
     return (
@@ -234,7 +259,7 @@ export function ConnectionForm({
           id={`connection-${key}`}
           type={type}
           value={draft[key]}
-          maxLength={key === "name" ? 120 : undefined}
+          maxLength={key === "name" ? maxNameLength : undefined}
           disabled={disabled}
           aria-required={required}
           autoComplete={key === "password" ? "new-password" : "off"}
@@ -247,7 +272,54 @@ export function ConnectionForm({
   return (
     <FieldGroup className={cn(kind !== "bigquery" && "grid grid-cols-1 gap-4 md:grid-cols-2")}>
       {input("name", "Connection name", true)}
-      {kind === "bigquery" ? (
+      {isTimeSeriesConnection(kind) && (
+        <>
+          <Field>
+            <FieldLabel htmlFor="connection-url">
+              Server URL <span className="text-destructive">*</span>
+            </FieldLabel>
+            <Input
+              id="connection-url"
+              type="url"
+              value={draft.url}
+              maxLength={2048}
+              disabled={disabled}
+              aria-required
+              autoComplete="off"
+              placeholder="https://metrics.example.com"
+              className={CONNECTION_INPUT_CLASSNAME}
+              onChange={(event) => update("url", event.target.value)}
+            />
+            <FieldDescription>Public URL, before /api/v1 or /query. Redirects are not followed.</FieldDescription>
+            {draft.url.trim().toLowerCase().startsWith("http://") &&
+              (draft.token || draft.username || draft.password) && (
+                <Alert>
+                  <TriangleAlert />
+                  <AlertTitle>Credentials will travel without encryption</AlertTitle>
+                  <AlertDescription>Use HTTPS to protect your token or password.</AlertDescription>
+                </Alert>
+              )}
+          </Field>
+          {kind === "influxdb" && input("database", "Database or bucket", true)}
+          {input(
+            "token",
+            kind === "prometheus" ? "Token or Basic auth password (optional)" : "Token (optional)",
+            false,
+            "password",
+          )}
+          {input(
+            "username",
+            kind === "prometheus" ? "Basic auth username (optional)" : "InfluxDB 1.8 username (optional)",
+          )}
+          {kind === "influxdb" && input("password", "InfluxDB 1.8 password (optional)", false, "password")}
+          <FieldDescription className="md:col-span-2">
+            {kind === "prometheus"
+              ? "Leave credentials blank for public servers. A token alone uses Bearer auth; with a username it uses Basic auth."
+              : "Use a token for InfluxDB 2.x/3, or a username and password together for 1.8. Do not combine them."}
+          </FieldDescription>
+        </>
+      )}
+      {kind === "bigquery" && (
         <>
           {input("projectId", "Google Cloud project ID")}
           {input("location", "Location")}
@@ -269,7 +341,8 @@ export function ConnectionForm({
             <FieldDescription>Paste the JSON key. It stays in this form until you connect or leave.</FieldDescription>
           </Field>
         </>
-      ) : (
+      )}
+      {!isTimeSeriesConnection(kind) && kind !== "bigquery" && (
         <>
           {input("host", "Host", true)}
           {input("port", "Port", false, "number")}

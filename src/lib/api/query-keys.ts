@@ -29,10 +29,6 @@ export const projectKeys = {
   dataset: (id: string, datasetId: string) => ["projects", "detail", id, "datasets", datasetId] as const,
   datasetVersions: (id: string, datasetId: string, params?: ListParams) =>
     ["projects", "detail", id, "datasets", datasetId, "versions", params] as const,
-  context: (id: string) => ["projects", "detail", id, "context"] as const,
-  contextVersions: (id: string, params?: ListParams) =>
-    ["projects", "detail", id, "context", "versions", params] as const,
-  contextVersion: (id: string, version: number) => ["projects", "detail", id, "context", "version", version] as const,
   runLists: (id: string) => ["projects", "detail", id, "runs", "list"] as const,
   runs: (id: string, params?: ListParams) => ["projects", "detail", id, "runs", "list", params] as const,
   run: (id: string, runId: string) => ["projects", "detail", id, "runs", runId] as const,

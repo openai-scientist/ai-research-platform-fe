@@ -96,15 +96,12 @@ describe("session API client", () => {
     expect(adapter.mock.calls.filter(([config]) => config.method === "post")).toHaveLength(2);
   });
 
-  it.each(["VALIDATION_ERROR", "RESEARCH_CONTEXT_CONFLICT", "INTERNAL_ERROR"])(
-    "does not replay %s mutations",
-    async (code) => {
-      api.setCsrfToken("csrf");
-      adapter.mockImplementation(async (config) => respond(config, failure(code), 500));
-      await expect(api.post("/projects")).rejects.toBeInstanceOf(ApiError);
-      expect(adapter).toHaveBeenCalledTimes(1);
-    },
-  );
+  it.each(["VALIDATION_ERROR", "RUN_ACTIVE", "INTERNAL_ERROR"])("does not replay %s mutations", async (code) => {
+    api.setCsrfToken("csrf");
+    adapter.mockImplementation(async (config) => respond(config, failure(code), 500));
+    await expect(api.post("/projects")).rejects.toBeInstanceOf(ApiError);
+    expect(adapter).toHaveBeenCalledTimes(1);
+  });
 
   it.each([200, 401, 403])("invalidates session by code for HTTP %s", async (status) => {
     const dispatchEvent = vi.fn();

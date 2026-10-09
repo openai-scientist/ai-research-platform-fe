@@ -7,11 +7,8 @@ import { RunStatus } from "@/types/enums";
 import { fetchManager } from "./fetch-manager";
 import type { RunItem } from "./fetch-runs";
 
-const mocks = vi.hoisted(() => ({ runs: vi.fn(), latest: vi.fn(), version: vi.fn(), dataset: vi.fn() }));
+const mocks = vi.hoisted(() => ({ runs: vi.fn(), dataset: vi.fn() }));
 vi.mock("./fetch-runs", () => ({ fetchRuns: { getList: mocks.runs } }));
-vi.mock("./fetch-research-context", () => ({
-  fetchResearchContext: { getLatest: mocks.latest, getVersion: mocks.version },
-}));
 vi.mock("./fetch-datasets", () => ({ fetchDatasets: { getById: mocks.dataset } }));
 
 function page(data: RunItem[], total = data.length): ApiResult<RunItem[]> {
@@ -29,8 +26,6 @@ const run: RunItem = {
   dataset_id: "dataset-1",
   dataset_version_id: "version-2",
   dataset_version_number: 2,
-  research_context_id: "context-1",
-  research_context_version: 3,
   created_by_user_id: "pm-1",
   status: RunStatus.Completed,
   auto_review: false,
@@ -49,37 +44,45 @@ describe("manager research API boundaries", () => {
     mocks.dataset.mockResolvedValue({ data: { id: "dataset-1" } });
   });
 
-  it("collects all run pages and reads the exact context version of the latest run", async () => {
+  it("collects all run pages and reads the dataset of the latest run", async () => {
     mocks.runs.mockResolvedValueOnce(page([run], 2)).mockResolvedValueOnce(page([{ ...run, id: "run-2" }], 2));
-    mocks.version.mockResolvedValue({ data: { version_number: 3 } });
     const signal = new AbortController().signal;
     const result = await fetchManager.getResearch("project-1", signal);
     expect(result.runs).toHaveLength(2);
     expect(mocks.runs).toHaveBeenNthCalledWith(2, "project-1", { limit: 100, offset: 1 }, signal);
-    expect(mocks.version).toHaveBeenCalledWith("project-1", 3, signal);
-    expect(mocks.latest).not.toHaveBeenCalled();
     expect(mocks.dataset).toHaveBeenCalledWith("project-1", "dataset-1", signal);
   });
 
-  it("keeps an empty backend project empty when no context exists", async () => {
+  it("keeps an empty backend project empty", async () => {
     mocks.runs.mockResolvedValue(page([]));
-    mocks.latest.mockRejectedValue(new ApiError(404, "RESEARCH_CONTEXT_NOT_FOUND", "No context"));
-    expect(await fetchManager.getResearch("project-1")).toEqual({ runs: [], context: null, dataset: null });
+    expect(await fetchManager.getResearch("project-1")).toEqual({ runs: [], dataset: null });
+    expect(mocks.dataset).not.toHaveBeenCalled();
+  });
+
+  it("loads topic runs without requesting a dataset when none is attached", async () => {
+    const topicRun = {
+      ...run,
+      topic: "How does study time affect exam scores?",
+      dataset_id: null,
+      dataset_version_id: null,
+      dataset_version_number: null,
+    };
+    mocks.runs.mockResolvedValue(page([topicRun]));
+    expect(await fetchManager.getResearch("project-1")).toEqual({ runs: [topicRun], dataset: null });
     expect(mocks.dataset).not.toHaveBeenCalled();
   });
 
   it.each([new ApiError(403, "ROLE_REQUIRED", "Access denied"), new Error("Network unavailable")])(
-    "propagates context errors instead of returning mock data: %s",
+    "propagates dataset errors instead of returning mock data: %s",
     async (error) => {
-      mocks.runs.mockResolvedValue(page([]));
-      mocks.latest.mockRejectedValue(error);
+      mocks.runs.mockResolvedValue(page([run]));
+      mocks.dataset.mockRejectedValue(error);
       await expect(fetchManager.getResearch("project-1")).rejects.toBe(error);
     },
   );
 
   it("stops pagination on an empty page even if the advertised total is stale", async () => {
     mocks.runs.mockResolvedValue(page([], 100));
-    mocks.latest.mockResolvedValue({ data: { version_number: 1 } });
     await fetchManager.getResearch("project-1");
     expect(mocks.runs).toHaveBeenCalledTimes(1);
   });

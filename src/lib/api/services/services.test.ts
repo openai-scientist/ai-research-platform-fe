@@ -15,7 +15,6 @@ import { fetchInvitations } from "./fetch-invitations";
 import { fetchMembers } from "./fetch-members";
 import { fetchNotifications } from "./fetch-notifications";
 import { fetchProject } from "./fetch-project";
-import { fetchResearchContext } from "./fetch-research-context";
 import { fetchRuns } from "./fetch-runs";
 
 // These paths and verbs come from the backend handoff, including PATCH project and no DELETE project.
@@ -164,35 +163,6 @@ const contracts: Contract[] = [
     signal,
   },
   {
-    name: "research context",
-    method: "get",
-    url: `${project}/research-context`,
-    call: () => fetchResearchContext.getLatest(p, signal),
-    signal,
-  },
-  {
-    name: "save research context",
-    method: "put",
-    url: `${project}/research-context`,
-    call: () => fetchResearchContext.save(p, { body: "# Study", base_version: 2 }),
-    body: { body: "# Study", base_version: 2 },
-  },
-  {
-    name: "research context versions",
-    method: "get",
-    url: `${project}/research-context/versions`,
-    call: () => fetchResearchContext.getVersions(p, list, signal),
-    params: list,
-    signal,
-  },
-  {
-    name: "research context version",
-    method: "get",
-    url: `${project}/research-context/versions/2`,
-    call: () => fetchResearchContext.getVersion(p, 2, signal),
-    signal,
-  },
-  {
     name: "run list",
     method: "get",
     url: `${project}/runs`,
@@ -205,8 +175,19 @@ const contracts: Contract[] = [
     name: "create run",
     method: "post",
     url: `${project}/runs`,
-    call: () => fetchRuns.create(p, { dataset_version_id: "version", budget_usd: "10" }),
-    body: { dataset_version_id: "version", budget_usd: "10" },
+    call: () =>
+      fetchRuns.create(p, {
+        topic: "How does study time affect exam scores?",
+        domains: ["education"],
+        review_mode: "copilot",
+        budget_usd: "10",
+      }),
+    body: {
+      topic: "How does study time affect exam scores?",
+      domains: ["education"],
+      review_mode: "copilot",
+      budget_usd: "10",
+    },
   },
   ...(["sync", "abandon"] as const).map((action) => ({
     name: `run ${action}`,

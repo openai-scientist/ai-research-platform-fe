@@ -11,8 +11,9 @@ import { toast } from "sonner";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
 import { resolveAvatarUrl } from "@/lib/auth/avatar";
 import type { DataTableFeatures } from "@/lib/data-table-features";
 import { getInitials } from "@/lib/utils";
@@ -40,6 +41,31 @@ async function copyEmail(email: string) {
   } catch {
     toast.error("Could not copy the email.");
   }
+}
+
+export function UsersGridSkeleton({ label }: { label: string }) {
+  return (
+    <div role="status" aria-label={label} className="grid gap-4 px-4 sm:grid-cols-2 xl:grid-cols-3">
+      {["first", "second", "third"].map((key) => (
+        <Card key={key} aria-hidden="true">
+          <CardHeader className="flex flex-row items-center gap-3">
+            <Skeleton className="size-12 rounded-full" />
+            <div className="flex min-w-0 flex-1 flex-col gap-2">
+              <Skeleton className="h-5 w-3/4" />
+              <Skeleton className="h-4 w-1/2" />
+            </div>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            <Skeleton className="h-8 w-full" />
+            <Skeleton className="h-4 w-2/3" />
+          </CardContent>
+          <CardFooter>
+            <Skeleton className="h-8 w-24" />
+          </CardFooter>
+        </Card>
+      ))}
+    </div>
+  );
 }
 
 export function UsersGrid({

@@ -10,7 +10,7 @@ export function toManagerDashboard(
   data: ManagerResearchData,
   preview?: ProjectPreview,
 ): ProjectDashboard {
-  const { runs, context, dataset } = data;
+  const { runs, dataset } = data;
   const latest = runs[0];
   const count = (...states: RunStatus[]) => runs.filter((run) => states.includes(run.status)).length;
   const activity = new Map<string, ProjectDashboard["experimentActivity"][number]>();
@@ -27,8 +27,13 @@ export function toManagerDashboard(
   return {
     live: true,
     objective: project.objective ?? project.description ?? "No objective provided.",
-    datasetVersion: latest && dataset ? `${dataset.name} v${latest.dataset_version_number}` : "No dataset selected",
-    researchQuestion: context?.body ?? "No research context yet.",
+    datasetVersion:
+      latest && dataset
+        ? latest.dataset_version_number !== null
+          ? `${dataset.name} v${latest.dataset_version_number}`
+          : dataset.name
+        : "No dataset selected",
+    researchQuestion: latest?.topic ?? "No research topic yet.",
     sampleInsights: Boolean(preview),
     activeHypothesis: preview?.activeHypothesis ?? {
       id: "",

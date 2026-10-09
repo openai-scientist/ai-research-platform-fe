@@ -8,9 +8,8 @@ import { ArrowLeft, ArrowRight, Check, Database, Table2 } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 
 import { ThemeSwitcher } from "@/app/(main)/dashboard/_components/header/theme-switcher";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -18,17 +17,14 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  type ConnectionItem,
-  type ConnectionKind,
-  isGoogleConnection,
-} from "@/lib/api/services/fetch-data-connections";
+import { type ConnectionItem, isGoogleConnection } from "@/lib/api/services/fetch-data-connections";
 import type { DatasetItem } from "@/lib/api/services/fetch-datasets";
 import type { ProjectItem } from "@/lib/api/services/fetch-project";
 
-import { CONNECTION_PROVIDERS, ConnectionLogo } from "./connection-display";
+import { CONNECTION_PROVIDERS, ConnectionLogo, connectionSourceLabel } from "./connection-display";
 import { ConnectionForm, ConnectionGuidance } from "./connection-form";
 import { ConnectionPreviewStep } from "./connection-preview-step";
+import { ConnectionProviderPicker } from "./connection-provider-picker";
 import { ConnectionCatalogRefresh, ConnectionSourceControls, ConnectionSourceStep } from "./connection-source-step";
 import type { GoogleConnectionResume } from "./google-connection-state";
 import { GoogleReconnectButton } from "./google-reconnect-button";
@@ -38,7 +34,7 @@ const STAGES = [
   {
     label: "Provider",
     title: "Choose your data provider",
-    purpose: "Choose the database, spreadsheet or folder that holds your research data.",
+    purpose: "Choose the database, Google source or time series server that holds your research data.",
     output: "Data provider",
   },
   {
@@ -75,6 +71,12 @@ function flowStages(flow: ConnectionFlowState) {
 
 function currentStage(flow: ConnectionFlowState) {
   const stage = STAGES[flow.step];
+  if (flow.isTimeSeries && flow.step === 2)
+    return {
+      ...stage,
+      purpose: "Choose a metric or measurement, fields, tags and a time range.",
+      output: "Time series source",
+    };
   return flow.isGoogle && flow.step === 2
     ? { ...stage, purpose: "Choose a file or spreadsheet tab to import.", output: "Table source" }
     : stage;
@@ -145,7 +147,7 @@ function FlowContext({ flow, project }: { flow: ConnectionFlowState; project: Pr
       ? [
           {
             label: "Source",
-            value: flow.source.type === "table" ? `${flow.source.schema}.${flow.source.name}` : "SELECT query",
+            value: connectionSourceLabel(flow.source),
           },
         ]
       : []),
@@ -383,89 +385,93 @@ export function ConnectionFlow({
               className={cn(
                 "flex min-h-0 min-w-0 flex-col px-4 md:px-8",
                 flow.step === 2 ? "gap-3 pt-4" : "gap-6 pt-6",
+                flow.step === 2 && flow.isTimeSeries && "px-3 md:px-4",
               )}
             >
-              <header
-                className={cn(
-                  "grid shrink-0 gap-3 border-b",
-                  flow.step === 2
-                    ? "grid-cols-1 items-center pb-3 lg:grid-cols-[minmax(0,1fr)_auto]"
-                    : "grid-cols-[auto_minmax(0,1fr)] items-start pb-5",
-                  (flow.step === 1 || flow.step === 3 || flow.step === 4) && "xl:grid-cols-[auto_minmax(0,1fr)_auto]",
-                )}
-              >
-                {flow.step !== 2 && (
-                  <span className="pt-1 font-mono text-muted-foreground text-xs">
-                    {String(stages.findIndex((item) => item.step === flow.step) + 1).padStart(2, "0")}/
-                    {String(stages.length).padStart(2, "0")}
-                  </span>
-                )}
-                <div className="min-w-0">
-                  <div className="flex min-w-0 flex-wrap items-center gap-3">
-                    <h1 className="min-w-0 break-words font-semibold text-lg">
-                      {flow.step === 2 ? (flow.connection?.name ?? stage.title) : stage.title}
-                    </h1>
-                    {flow.step === 2 && flow.connection && (
-                      <span
-                        className="inline-flex min-w-0 items-center gap-2 text-muted-foreground text-sm"
-                        title={CONNECTION_PROVIDERS[flow.kind].label}
-                      >
-                        <span className="shrink-0 [&_img]:size-5 [&_svg]:size-5">
-                          <ConnectionLogo kind={flow.kind} />
-                        </span>
-                        <span>{CONNECTION_PROVIDERS[flow.kind].label}</span>
-                      </span>
-                    )}
-                  </div>
-                  {flow.step !== 2 && (
-                    <>
-                      <p className="mt-1 max-w-[68ch] text-pretty text-muted-foreground text-sm">{stage.purpose}</p>
-                      <div className="mt-3 grid gap-2 text-xs sm:flex sm:flex-wrap sm:items-center">
-                        <span className="flex items-center gap-2">
-                          <span className="min-w-15 text-muted-foreground sm:min-w-0">Builds on</span>
-                          <span className="rounded-md bg-muted px-2 py-1">{from}</span>
-                        </span>
-                        <ArrowRight className="hidden size-3.5 text-muted-foreground sm:block" aria-hidden="true" />
-                        <span className="flex items-center gap-2">
-                          <span className="min-w-15 text-muted-foreground sm:min-w-0">Creates</span>
-                          <span className="inline-flex items-center gap-1.5 rounded-md bg-sky-500/5 px-2 py-1 ring-1 ring-sky-500/35">
-                            {flow.step === 4 ? (
-                              <Database className="size-3" aria-hidden="true" />
-                            ) : (
-                              <Table2 className="size-3" aria-hidden="true" />
-                            )}
-                            {stage.output}
-                          </span>
-                        </span>
-                      </div>
-                    </>
+              {!(flow.step === 2 && flow.isTimeSeries) && (
+                <header
+                  className={cn(
+                    "grid shrink-0 gap-3 border-b",
+                    flow.step === 2
+                      ? "grid-cols-1 items-center pb-3 lg:grid-cols-[minmax(0,1fr)_auto]"
+                      : "grid-cols-[auto_minmax(0,1fr)] items-start pb-5",
+                    (flow.step === 1 || flow.step === 3 || flow.step === 4) && "xl:grid-cols-[auto_minmax(0,1fr)_auto]",
                   )}
-                </div>
-                {flow.step !== 0 && (
-                  <div
-                    className={cn(
-                      "flex flex-wrap items-center justify-end gap-3 justify-self-end",
-                      flow.step === 2 ? "col-span-1" : "col-span-2 xl:col-span-1",
+                >
+                  {flow.step !== 2 && (
+                    <span className="pt-1 font-mono text-muted-foreground text-xs">
+                      {String(stages.findIndex((item) => item.step === flow.step) + 1).padStart(2, "0")}/
+                      {String(stages.length).padStart(2, "0")}
+                    </span>
+                  )}
+                  <div className="min-w-0">
+                    <div className="flex min-w-0 flex-wrap items-center gap-3">
+                      <h1 className="min-w-0 break-words font-semibold text-lg">
+                        {flow.step === 2 ? (flow.connection?.name ?? stage.title) : stage.title}
+                      </h1>
+                      {flow.step === 2 && flow.connection && (
+                        <span
+                          className="inline-flex min-w-0 items-center gap-2 text-muted-foreground text-sm"
+                          title={CONNECTION_PROVIDERS[flow.kind].label}
+                        >
+                          <span className="shrink-0 [&_img]:size-5 [&_svg]:size-5">
+                            <ConnectionLogo kind={flow.kind} />
+                          </span>
+                          <span>{CONNECTION_PROVIDERS[flow.kind].label}</span>
+                        </span>
+                      )}
+                    </div>
+                    {flow.step !== 2 && (
+                      <>
+                        <p className="mt-1 max-w-[68ch] text-pretty text-muted-foreground text-sm">{stage.purpose}</p>
+                        <div className="mt-3 grid gap-2 text-xs sm:flex sm:flex-wrap sm:items-center">
+                          <span className="flex items-center gap-2">
+                            <span className="min-w-15 text-muted-foreground sm:min-w-0">Builds on</span>
+                            <span className="rounded-md bg-muted px-2 py-1">{from}</span>
+                          </span>
+                          <ArrowRight className="hidden size-3.5 text-muted-foreground sm:block" aria-hidden="true" />
+                          <span className="flex items-center gap-2">
+                            <span className="min-w-15 text-muted-foreground sm:min-w-0">Creates</span>
+                            <span className="inline-flex items-center gap-1.5 rounded-md bg-sky-500/5 px-2 py-1 ring-1 ring-sky-500/35">
+                              {flow.step === 4 ? (
+                                <Database className="size-3" aria-hidden="true" />
+                              ) : (
+                                <Table2 className="size-3" aria-hidden="true" />
+                              )}
+                              {stage.output}
+                            </span>
+                          </span>
+                        </div>
+                      </>
                     )}
-                  >
-                    {flow.step === 2 && <ConnectionSourceControls flow={flow} />}
-                    {flow.needsReauthorization && flow.connection && canWrite && (
-                      <GoogleReconnectButton
-                        projectId={project.id}
-                        connectionId={flow.connection.id}
-                        accountEmail={String(flow.connection.config.account_email ?? "")}
-                        disabled={flow.busy}
-                      />
-                    )}
-                    <FlowActions flow={flow} placement="header" />
-                    {flow.step === 2 && <ConnectionCatalogRefresh flow={flow} />}
                   </div>
-                )}
-              </header>
+                  {flow.step !== 0 && (
+                    <div
+                      className={cn(
+                        "flex flex-wrap items-center justify-end gap-3 justify-self-end",
+                        flow.step === 2 ? "col-span-1" : "col-span-2 xl:col-span-1",
+                      )}
+                    >
+                      {flow.step === 2 && <ConnectionSourceControls flow={flow} />}
+                      {flow.needsReauthorization && flow.connection && canWrite && (
+                        <GoogleReconnectButton
+                          projectId={project.id}
+                          connectionId={flow.connection.id}
+                          accountEmail={String(flow.connection.config.account_email ?? "")}
+                          disabled={flow.busy}
+                        />
+                      )}
+                      {!(flow.isTimeSeries && flow.step === 2) && <FlowActions flow={flow} placement="header" />}
+                      {flow.step === 2 && <ConnectionCatalogRefresh flow={flow} />}
+                    </div>
+                  )}
+                </header>
+              )}
               <div
                 className={cn(
                   "min-h-0 flex-1 px-1 pt-1",
-                  flow.step === 2 || flow.step === 3
+                  flow.step === 0 && "flex flex-col",
+                  flow.step === 0 || flow.step === 2 || flow.step === 3
                     ? "overflow-hidden pb-4"
                     : "overflow-y-auto overscroll-contain pb-8",
                 )}
@@ -475,6 +481,7 @@ export function ConnectionFlow({
                     key={flow.step}
                     className={cn(
                       "flex min-w-0 flex-col gap-5",
+                      flow.step === 0 && "min-h-0 flex-1",
                       (flow.step === 2 || flow.step === 3) && "h-full min-h-0",
                     )}
                     initial={reduceMotion ? false : { opacity: 0, y: 8 }}
@@ -483,39 +490,15 @@ export function ConnectionFlow({
                     transition={{ duration: reduceMotion ? 0 : 0.3, ease: [0.16, 1, 0.3, 1] }}
                   >
                     {flow.step === 0 ? (
-                      <>
-                        <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
-                          {(Object.keys(CONNECTION_PROVIDERS) as ConnectionKind[])
-                            .filter((kind) => !isGoogleConnection(kind) || flow.googleAvailable)
-                            .map((kind) => {
-                              const provider = CONNECTION_PROVIDERS[kind];
-                              return (
-                                <button
-                                  type="button"
-                                  key={kind}
-                                  disabled={flow.disabled}
-                                  onClick={() => flow.chooseKind(kind)}
-                                  className="rounded-xl text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
-                                >
-                                  <Card className="h-full transition-colors hover:bg-muted/50">
-                                    <CardHeader>
-                                      <ConnectionLogo kind={kind} />
-                                      <CardTitle className="mt-3">{provider.label}</CardTitle>
-                                      <CardDescription>{provider.description}</CardDescription>
-                                    </CardHeader>
-                                    <CardFooter className="justify-between">
-                                      <Badge variant="outline" className={provider.badgeColor}>
-                                        {provider.category}
-                                      </Badge>
-                                      <ArrowRight className="size-4 text-muted-foreground" aria-hidden="true" />
-                                    </CardFooter>
-                                  </Card>
-                                </button>
-                              );
-                            })}
+                      <ScrollArea
+                        type="always"
+                        className="min-h-0 flex-1 [&_[data-slot=scroll-area-viewport]]:overscroll-contain"
+                      >
+                        <div className="flex flex-col gap-5 p-1 pr-4 pb-4">
+                          <ConnectionProviderPicker flow={flow} />
+                          <p className="text-muted-foreground text-xs">Supabase uses PostgreSQL. MariaDB uses MySQL.</p>
                         </div>
-                        <p className="text-muted-foreground text-xs">Supabase uses PostgreSQL. MariaDB uses MySQL.</p>
-                      </>
+                      </ScrollArea>
                     ) : flow.step === 1 && !isGoogleConnection(flow.kind) ? (
                       <section
                         className="mx-auto flex w-full max-w-4xl flex-col gap-4 p-4"
@@ -539,7 +522,9 @@ export function ConnectionFlow({
                     ) : (
                       <Card className={cn("w-full", flow.step === 3 && "h-full min-h-0 flex-1")}>
                         <CardContent className={cn("flex min-w-0 flex-col gap-5", flow.step === 3 && "min-h-0 flex-1")}>
-                          {flow.step === 3 && <ConnectionPreviewStep preview={flow.preview} />}
+                          {flow.step === 3 && (
+                            <ConnectionPreviewStep preview={flow.preview} timeSeries={flow.isTimeSeries} />
+                          )}
                           {flow.step === 4 && (
                             <>
                               <FieldGroup>
@@ -582,7 +567,7 @@ export function ConnectionFlow({
                     )}
                   </motion.div>
                 </AnimatePresence>
-                <div className={cn("lg:hidden", (flow.step === 2 || flow.step === 3) && "hidden")}>
+                <div className={cn("shrink-0 lg:hidden", (flow.step === 2 || flow.step === 3) && "hidden")}>
                   <Button variant="ghost" onClick={() => setDetails((value) => !value)} aria-expanded={details}>
                     {details ? "Hide context" : "View context"}
                   </Button>
@@ -601,11 +586,7 @@ export function ConnectionFlow({
                       {flow.source && (
                         <div>
                           <dt className="text-muted-foreground text-xs">Source</dt>
-                          <dd className="break-all">
-                            {flow.source.type === "table"
-                              ? `${flow.source.schema}.${flow.source.name}`
-                              : "SELECT query"}
-                          </dd>
+                          <dd className="break-all">{connectionSourceLabel(flow.source)}</dd>
                         </div>
                       )}
                     </dl>

@@ -9,14 +9,6 @@ import type { ListParams } from "../types";
 export { RunStatus } from "@/types/enums";
 
 export interface CreateRunRequest {
-  dataset_version_id: string;
-  research_context_version?: number | null;
-  budget_usd?: string | number | null;
-  auto_review?: boolean;
-}
-
-/** Body for a run that starts from a topic and ends once the hypotheses are picked. */
-export interface StartRunRequest {
   topic: string;
   domains: string[];
   review_mode: ReviewMode;
@@ -26,11 +18,9 @@ export interface StartRunRequest {
 export interface RunItem {
   id: string;
   project_id: string;
-  dataset_id: string;
-  dataset_version_id: string;
-  dataset_version_number: number;
-  research_context_id: string;
-  research_context_version: number;
+  dataset_id: string | null;
+  dataset_version_id: string | null;
+  dataset_version_number: number | null;
   created_by_user_id: string;
   status: RunStatus;
   auto_review: boolean;
@@ -65,7 +55,7 @@ export const fetchRuns = {
     const response = await apiService.get<RunDetailResponse>(runPath(projectId, runId), undefined, { signal });
     return response.data;
   },
-  create: async (projectId: string, data: CreateRunRequest | StartRunRequest): Promise<RunDetailResponse> => {
+  create: async (projectId: string, data: CreateRunRequest): Promise<RunDetailResponse> => {
     const response = await apiService.post<RunDetailResponse>(`${projectPath(projectId)}/runs`, data);
     return response.data;
   },

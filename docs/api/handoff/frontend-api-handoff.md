@@ -179,7 +179,7 @@ Dùng `my_role` trong `ProjectItem` (hoặc `memberships` từ `/auth/me`) cùng
 | Xem mọi thứ trong project, tải file | ✓ | ✓ | ✓ | ✓ |
 | Bình luận, sửa bình luận của mình | ✓ | ✓ | ✓ | ✓ |
 | Xoá bình luận | mọi bình luận | mọi bình luận | của mình | của mình |
-| Tải dataset, lưu research context | ✓ | ✓ | ✓ | ✗ |
+| Tải dataset | ✓ | ✓ | ✓ | ✗ |
 | Bắt đầu run, sync run, duyệt frame | ✓ | ✓ | ✓ | ✗ |
 | Abandon run | ✓ | ✓ | ✗ | ✗ |
 | Sửa project, quản lý thành viên, archive, complete | ✓ | ✓ | ✗ | ✗ |
@@ -268,7 +268,7 @@ await api<DatasetItem>(`/projects/${projectId}/datasets`, { method: "POST", body
 - Dòng đầu là header; tên cột không rỗng, không trùng, tối đa 2000 cột, mỗi tên tối đa 200 ký tự.
 - Có ít nhất 1 dòng dữ liệu; mọi dòng có cùng số cột với header.
 
-Mỗi lần upload file mới cho một dataset là một **version mới**; version cũ không bao giờ bị ghi đè. `DatasetItem.latest_version.column_names` là danh sách cột — dùng để gợi ý khi người dùng khai báo biến trong research context.
+Mỗi lần upload file mới cho một dataset là một **version mới**; version cũ không bao giờ bị ghi đè. `DatasetItem.latest_version.column_names` là danh sách cột.
 
 Tải file: mở thẳng URL download (cùng cookie) bằng `window.location` hoặc thẻ `<a href>`; BE trả header `Content-Disposition: attachment`.
 
@@ -279,37 +279,14 @@ Tải file: mở thẳng URL download (cùng cookie) bằng `window.location` ho
 | 415 | `UNSUPPORTED_FILE_TYPE` | không phải `.csv` |
 | 422 | `INVALID_DATASET` | CSV không hợp lệ; `message` nói rõ lý do, hiển thị thẳng cho người dùng |
 
-## 7. Research context
+## 7. Khởi tạo nghiên cứu
 
-Mô tả nghiên cứu của project. Mỗi lần lưu tạo một version mới.
-
-| Method | Path | Body / Query | `data` |
-|---|---|---|---|
-| `GET` | `/projects/{project_id}/research-context` | — | `ResearchContextItem` (mới nhất) |
-| `PUT` | `/projects/{project_id}/research-context` | `ResearchContextSave` | `ResearchContextItem` (201) |
-| `GET` | `/projects/{project_id}/research-context/versions` | `limit`, `offset` | `ResearchContextSummary[]` |
-| `GET` | `/projects/{project_id}/research-context/versions/{version_number}` | — | `ResearchContextItem` |
-
-```json
-{
-  "body": "# Câu hỏi nghiên cứu\nThời gian học có ảnh hưởng tới điểm thi không?",
-  "front_matter": {
-    "domain": "education",
-    "objectives": ["Đo ảnh hưởng của thời gian học"],
-    "variables": { "exam_score": { "role": "outcome" }, "study_hours": { "role": "exposure" } }
-  },
-  "base_version": 3
-}
-```
-
-- `body`: Markdown, bắt buộc, tối đa 50 000 ký tự.
-- `front_matter`: tuỳ chọn. Các khoá cấp 1 cố định: `domain`, `objectives`, `variables`, `design`, `assumptions`, `constraints`, `concepts`, `notes`. Nội dung bên trong do Popper kiểm tra khi chạy run.
-- `base_version`: số version mà người dùng đang sửa (`0` nếu chưa có version nào). Nếu người khác đã lưu version mới hơn → `409 RESEARCH_CONTEXT_CONFLICT`: FE tải lại bản mới nhất và cho người dùng gộp thay đổi.
-- Project chưa có context: `GET` trả `404 RESEARCH_CONTEXT_NOT_FOUND` → hiển thị form trống.
+Run bắt đầu trực tiếp từ topic, domains và review mode. Không cần lưu tài liệu context trước khi chạy.
+FE dùng màn Research flow để nhập topic và tạo run theo hợp đồng ở mục 8.
 
 ## 8. Run
 
-Một run = một lần gửi 1 version dataset + 1 version research context sang Popper để nghiên cứu.
+Một run = một lần gửi topic và domains sang Popper để nghiên cứu. Dataset của run có thể là null.
 
 | Method | Path | Body / Query | `data` |
 |---|---|---|---|
@@ -323,16 +300,17 @@ Bắt đầu run:
 
 ```json
 {
-  "dataset_version_id": "7b0c...",
-  "research_context_version": 3,
-  "budget_usd": "5.00",
-  "auto_review": false
+  "topic": "How does study time affect exam scores?",
+  "domains": ["education"],
+  "review_mode": "copilot",
+  "budget_usd": "5.00"
 }
 ```
 
-- `research_context_version`: bỏ trống = dùng version mới nhất.
+- `topic`: câu hỏi nghiên cứu, 12–2000 ký tự.
+- `domains`: danh sách lĩnh vực, có thể để rỗng.
 - `budget_usd`: trần chi phí; bỏ trống = mặc định của server (5 USD), tối đa 20 USD.
-- `auto_review: true`: Popper tự chạy tiếp, không dừng lại chờ người duyệt frame.
+- `review_mode`: `copilot` chờ người dùng ở các cổng duyệt; `auto` chạy tự động.
 - `201`: Popper đã nhận. `202`: Popper chưa xác nhận kịp, run ở `queued` → vẫn coi là tạo thành công, hiển thị run và cho người dùng bấm "Làm mới" (gọi `sync`).
 
 Trạng thái run (`RunItem.status`):
@@ -364,8 +342,6 @@ Mỗi project chỉ có **một run chưa kết thúc**. Tạo run khi đang có
 | 409 | `PROJECT_COMPLETED` | project đã completed, phải reopen trước |
 | 409 | `RUN_DISPATCHING` | run vừa tạo, đang gửi đi; thử `sync`/`abandon` lại sau khoảng 1 phút |
 | 409 | `RUN_FINISHED` | `abandon` một run đã kết thúc |
-| 422 | `RESEARCH_CONTEXT_REQUIRED` | chưa có research context |
-| 422 | `UNKNOWN_COLUMNS` | context khai báo biến không có trong cột dataset; `message` liệt kê tên |
 | 422 | `BUDGET_OUT_OF_RANGE` | budget ≤ 0 hoặc vượt mức tối đa |
 | 500 | `RUN_START_FAILED` | lỗi bất ngờ khi gửi; run đã được đánh `failed` |
 | 502 | `POPPER_UNAVAILABLE`, `POPPER_BAD_RESPONSE` | Popper lỗi; thử lại sau |
@@ -561,25 +537,14 @@ interface DatasetItem {
   latest_version: DatasetVersionItem | null;
 }
 
-interface FrontMatter {
-  domain?: string | null; objectives?: unknown[] | null; variables?: Record<string, unknown> | null;
-  design?: Record<string, unknown> | null; assumptions?: unknown[] | null;
-  constraints?: Record<string, unknown> | null; concepts?: unknown[] | null; notes?: Record<string, unknown> | null;
-}
-interface ResearchContextSummary {
-  id: string; project_id: string; version_number: number; created_by_user_id: string; created_at: string;
-}
-interface ResearchContextItem extends ResearchContextSummary { body: string; front_matter: FrontMatter | null }
-interface ResearchContextSave { body: string; front_matter?: FrontMatter | null; base_version?: number | null }
-
 interface RunCreate {
-  dataset_version_id: string; research_context_version?: number | null;
-  budget_usd?: string | number | null; auto_review?: boolean;
+  topic: string; domains: string[]; review_mode: "copilot" | "auto";
+  budget_usd?: string | null;
 }
 interface RunItem {
   id: string; project_id: string;
-  dataset_id: string; dataset_version_id: string; dataset_version_number: number;
-  research_context_id: string; research_context_version: number;
+  topic: string | null; domains: string[]; review_mode: string | null;
+  dataset_id: string | null; dataset_version_id: string | null; dataset_version_number: number | null;
   created_by_user_id: string; status: RunStatus; auto_review: boolean;
   budget_usd: string; cost_usd: string;   // chuỗi số thập phân
   failure_message: string | null;
@@ -639,9 +604,9 @@ Trang đăng nhập      → POST /auth/login
 Đổi mật khẩu         → POST /auth/change-password
 Khởi động app        → GET /auth/me (401 → trang đăng nhập)
 Danh sách project    → GET /projects                          | tạo: POST /projects
-Trang project        → GET /projects/{id} + /members + /datasets + /research-context + /runs
+Trang project        → GET /projects/{id} + /members + /datasets + /runs
 Tab Dataset          → upload: POST …/datasets (multipart)    | version mới: POST …/versions
-Tab Research context → GET …/research-context → sửa → PUT (kèm base_version)
+Research flow        → Nhập topic, domains, review_mode → POST …/runs
 Bắt đầu run          → POST …/runs → mở trang run
 Trang run            → GET …/runs/{run_id} (lặp 10–15s khi chưa kết thúc) | Làm mới: POST …/sync
 Duyệt frame          → GET …/frame-review → POST …/frame-review

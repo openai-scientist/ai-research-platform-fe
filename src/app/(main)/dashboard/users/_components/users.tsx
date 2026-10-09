@@ -23,7 +23,7 @@ import { getLocalStorageValue, setLocalStorageValue } from "@/lib/local-storage.
 
 import { filters, type UserRow } from "./data";
 import { createUsersColumns } from "./users-columns";
-import { UsersGrid } from "./users-grid";
+import { UsersGrid, UsersGridSkeleton } from "./users-grid";
 import { UsersTable } from "./users-table";
 
 const VIEW_STORAGE_KEY = "users-view";
@@ -310,9 +310,7 @@ export function Users({
   );
 
   const grid = server?.busy ? (
-    <div className="flex h-24 items-center justify-center text-muted-foreground text-sm" role="status">
-      Loading {entityLabel}...
-    </div>
+    <UsersGridSkeleton label={`Loading ${entityLabel}`} />
   ) : (
     <UsersGrid
       roleChangeDisabled={roleChangeDisabled}

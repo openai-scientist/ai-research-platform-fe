@@ -5,14 +5,24 @@ import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { ConnectionPreview } from "@/lib/api/services/fetch-data-connections";
 
-export function ConnectionPreviewStep({ preview }: { preview: ConnectionPreview | null }) {
+export function ConnectionPreviewStep({
+  preview,
+  timeSeries = false,
+}: {
+  preview: ConnectionPreview | null;
+  timeSeries?: boolean;
+}) {
   if (!preview) return null;
   if (!preview.rows.length)
     return (
       <Empty>
         <EmptyHeader>
-          <EmptyTitle>No rows returned</EmptyTitle>
-          <EmptyDescription>Choose another table or adjust your SELECT query before importing.</EmptyDescription>
+          <EmptyTitle>{timeSeries ? "No points in this time range" : "No rows returned"}</EmptyTitle>
+          <EmptyDescription>
+            {timeSeries
+              ? "Adjust the time range or bucket before importing."
+              : "Choose another table or adjust your SELECT query before importing."}
+          </EmptyDescription>
         </EmptyHeader>
       </Empty>
     );

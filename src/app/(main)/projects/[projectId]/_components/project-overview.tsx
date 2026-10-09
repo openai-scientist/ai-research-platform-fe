@@ -7,12 +7,12 @@ import { MessageCircleQuestionMark, Upload } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Empty, EmptyContent, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
-import { Skeleton } from "@/components/ui/skeleton";
 import { useManagerResearchQuery } from "@/hooks/use-manager-query";
 import { useProjectDetailQuery } from "@/hooks/use-projects-query";
 import type { ProjectItem } from "@/lib/api/services/fetch-project";
 import { getProjectAccess } from "@/lib/auth/project-access";
 
+import { PageSkeleton } from "../../../_components/page-skeleton";
 import { ProjectStatusBadge } from "../../_components/project-status-badge";
 import { BudgetUsageCard } from "./budget-usage-card";
 import { ExperimentActivityCard } from "./experiment-activity-card";
@@ -31,7 +31,7 @@ export function ProjectOverview({ project: initialProject }: { readonly project:
   const access = getProjectAccess(project.my_role, project.status);
   const baseUrl = `/projects/${project.id}`;
   if (!access.canRead) return null;
-  if (research.isPending) return <Skeleton className="h-96 w-full" aria-label="Loading project overview" />;
+  if (research.isPending) return <PageSkeleton label="Loading project overview" />;
   if (!research.data) {
     return (
       <Empty>
@@ -73,7 +73,7 @@ export function ProjectOverview({ project: initialProject }: { readonly project:
                 </Link>
               </Button>
               <Button asChild>
-                <Link prefetch={false} href={`${baseUrl}/experiments/context#research-context`}>
+                <Link prefetch={false} href={`${baseUrl}/experiments`}>
                   <MessageCircleQuestionMark data-icon="inline-start" />
                   New research question
                 </Link>

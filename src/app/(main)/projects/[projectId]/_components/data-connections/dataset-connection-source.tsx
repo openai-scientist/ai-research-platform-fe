@@ -12,12 +12,18 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { showConnectionError, useConnectionAccess, useInfiniteDataConnections } from "@/hooks/use-data-connections";
 import { collectPages } from "@/lib/api/infinite-pagination";
 import { projectKeys } from "@/lib/api/query-keys";
-import { isGoogleConnection, sameConnectionSource } from "@/lib/api/services/fetch-data-connections";
+import {
+  type ConnectionSource,
+  isGoogleConnection,
+  isTimeSeriesConnection,
+  sameConnectionSource,
+} from "@/lib/api/services/fetch-data-connections";
 import {
   type DatasetItem,
   type DatasetVersionItem,
@@ -28,8 +34,10 @@ import { ApiError } from "@/types/api";
 
 import { WorkspaceFormDialog } from "../workspace-form-dialog";
 import { LoadMore } from "../workspace-ui";
-import { CONNECTION_PROVIDERS } from "./connection-display";
+import { CONNECTION_PROVIDERS, connectionSourceLabel } from "./connection-display";
 import { GoogleReconnectButton } from "./google-reconnect-button";
+import { TimeSeriesRefreshDialog } from "./time-series-refresh-dialog";
+import { TIME_SERIES_AGGREGATES, TIME_SERIES_BUCKETS } from "./time-series-source";
 
 export function DatasetVersionOrigin({ version, compact = false }: { version: DatasetVersionItem; compact?: boolean }) {
   const origin = version.source_type === "connection" ? version.source : null;
@@ -41,7 +49,7 @@ export function DatasetVersionOrigin({ version, compact = false }: { version: Da
       </span>
       <span className="min-w-0 break-words text-muted-foreground">
         {compact && <span aria-hidden="true">· </span>}
-        {origin.source.type === "table" ? `${origin.source.schema}.${origin.source.name}` : "SELECT query"}
+        {connectionSourceLabel(origin.source)}
       </span>
       <time
         dateTime={origin.fetched_at}
@@ -86,13 +94,21 @@ function ReplacementConnection({
         <Field>
           <FieldLabel htmlFor="refresh-connection">Connection</FieldLabel>
           <Select value={id || undefined} disabled={pending || query.isPending} onValueChange={setId}>
-            <SelectTrigger id="refresh-connection" className="w-full">
-              <SelectValue placeholder="Choose a connection" />
-            </SelectTrigger>
+            {query.isPending ? (
+              <Skeleton className="h-8 w-full" role="status" aria-label="Loading connections" />
+            ) : (
+              <SelectTrigger id="refresh-connection" className="w-full">
+                <SelectValue placeholder="Choose a connection" />
+              </SelectTrigger>
+            )}
             <SelectContent>
               <SelectGroup>
                 {query.connections
-                  .filter((connection) => sourceType !== "query" || !isGoogleConnection(connection.kind))
+                  .filter(
+                    (connection) =>
+                      !isTimeSeriesConnection(connection.kind) &&
+                      (sourceType !== "query" || !isGoogleConnection(connection.kind)),
+                  )
                   .map((connection) => (
                     <SelectItem key={connection.id} value={connection.id}>
                       {connection.name} · {CONNECTION_PROVIDERS[connection.kind].label}
@@ -142,6 +158,40 @@ export function DatasetConnectionSource({ dataset }: { dataset: DatasetItem }) {
           <code>{source.sql}</code>
         </pre>
       )}
+      {source?.type === "timeseries" && (
+        <dl className="grid gap-x-6 gap-y-2 text-xs sm:grid-cols-2">
+          <div>
+            <dt className="text-muted-foreground">Fields</dt>
+            <dd className="break-words">{source.fields.join(", ") || "value"}</dd>
+          </div>
+          {source.tags.length > 0 && (
+            <div>
+              <dt className="text-muted-foreground">Split by</dt>
+              <dd className="break-words">{source.tags.join(", ")}</dd>
+            </div>
+          )}
+          <div>
+            <dt className="text-muted-foreground">From (UTC)</dt>
+            <dd>
+              <time dateTime={source.start}>{new Date(source.start).toLocaleString("en-US", { timeZone: "UTC" })}</time>
+            </dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">Until (UTC, exclusive)</dt>
+            <dd>
+              <time dateTime={source.end}>{new Date(source.end).toLocaleString("en-US", { timeZone: "UTC" })}</time>
+            </dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">Aggregation</dt>
+            <dd>
+              {source.bucket && source.aggregate
+                ? `${TIME_SERIES_BUCKETS[source.bucket].label} · ${TIME_SERIES_AGGREGATES[source.aggregate]}`
+                : "Raw data"}
+            </dd>
+          </div>
+        </dl>
+      )}
     </section>
   );
 }
@@ -161,8 +211,10 @@ export function DatasetConnectionActions({
   const [pending, setPending] = useState(false);
   const [missingConnection, setMissingConnection] = useState(false);
   const [needsReconciliation, setNeedsReconciliation] = useState(false);
+  const [timeSeriesRefreshOpen, setTimeSeriesRefreshOpen] = useState(false);
   const locked = useRef(false);
   const pendingRefresh = useRef<{ baseline: number; input: ImportConnectionSource } | null>(null);
+  const refreshLabel = origin?.source.type === "timeseries" ? "Fetch new data" : "Refresh data";
 
   async function reconcile() {
     const previous = pendingRefresh.current;
@@ -186,14 +238,22 @@ export function DatasetConnectionActions({
     return Boolean(completed);
   }
 
-  async function refresh(connectionId: string) {
-    if (!origin || !canWrite || locked.current || access.rateLimited || !access.configured || needsReconciliation)
+  async function refresh(connectionId: string, source: ConnectionSource | undefined = origin?.source) {
+    if (
+      !origin ||
+      !source ||
+      !canWrite ||
+      locked.current ||
+      access.rateLimited ||
+      !access.configured ||
+      needsReconciliation
+    )
       return false;
     locked.current = true;
     setPending(true);
     try {
       const current = (await fetchDatasets.getById(projectId, dataset.id)).data;
-      const input = { connection_id: connectionId, source: origin.source };
+      const input = { connection_id: connectionId, source };
       pendingRefresh.current = { baseline: current.latest_version?.version_number ?? 0, input };
       try {
         await fetchDatasets.importConnectionVersion(projectId, dataset.id, input);
@@ -247,10 +307,13 @@ export function DatasetConnectionActions({
                 <Button
                   variant="outline"
                   disabled={pending || access.rateLimited}
-                  onClick={() => void refresh(origin.connection_id)}
+                  onClick={() => {
+                    if (origin.source.type === "timeseries") setTimeSeriesRefreshOpen(true);
+                    else void refresh(origin.connection_id);
+                  }}
                 >
                   {pending ? <Spinner data-icon="inline-start" /> : <RefreshCw data-icon="inline-start" />}{" "}
-                  {pending ? "Refreshing…" : "Refresh data"}
+                  {pending ? "Refreshing…" : refreshLabel}
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
@@ -259,7 +322,7 @@ export function DatasetConnectionActions({
             </Tooltip>
           )
         ))}
-      {missingConnection && canWrite && access.configured && (
+      {missingConnection && canWrite && access.configured && origin.source.type !== "timeseries" && (
         <ReplacementConnection
           projectId={projectId}
           pending={pending}
@@ -267,6 +330,26 @@ export function DatasetConnectionActions({
           sourceType={origin.source.type}
         />
       )}
+      {timeSeriesRefreshOpen &&
+        canWrite &&
+        access.configured &&
+        origin.source.type === "timeseries" &&
+        isTimeSeriesConnection(origin.connection_kind) && (
+          <TimeSeriesRefreshDialog
+            projectId={projectId}
+            kind={origin.connection_kind}
+            connectionId={origin.connection_id}
+            source={origin.source}
+            pending={pending}
+            locked={needsReconciliation}
+            onClose={() => setTimeSeriesRefreshOpen(false)}
+            onRefresh={async (connectionId, source) => {
+              const completed = await refresh(connectionId, source);
+              if (completed) setTimeSeriesRefreshOpen(false);
+              return completed;
+            }}
+          />
+        )}
       {origin &&
         canWrite &&
         access.configured &&

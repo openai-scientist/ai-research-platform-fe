@@ -20,7 +20,6 @@ export const actionLabels: Record<string, string> = {
   "dataset.created": "Dataset created",
   "dataset.updated": "Dataset updated",
   "dataset.version_added": "Dataset version added",
-  "research_context.saved": "Research context saved",
   "run.created": "Run created",
   "run.abandoned": "Run abandoned",
   "comment.deleted": "Comment deleted",

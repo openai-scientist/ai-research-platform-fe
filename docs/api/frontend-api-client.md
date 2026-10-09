@@ -49,7 +49,6 @@ Download trả `{ blob, filename, contentType }`. Có hàm lấy URL trực ti�
 | Project | `fetch-project.ts` | `use-projects-query.ts` | 8 |
 | Thành viên | `fetch-members.ts` | `use-members-query.ts` | 4 |
 | Dataset và version | `fetch-datasets.ts` | `use-datasets-query.ts` | 7 |
-| Research context | `fetch-research-context.ts` | `use-research-context-query.ts` | 4 |
 | Run | `fetch-runs.ts` | `use-runs-query.ts` | 5 |
 | Frame review | `fetch-frame-reviews.ts` | `use-frame-reviews-query.ts` | 3 |
 | Artifact | `fetch-artifacts.ts` | `use-artifacts-query.ts` | 2 |
@@ -77,8 +76,12 @@ await addMember.mutateAsync({ email: "researcher@example.com", role: "researcher
 const upload = useCreateDatasetMutation(projectId, setUploadProgress);
 await upload.mutateAsync({ name: "Exam scores", file });
 
-const saveContext = useSaveResearchContextMutation(projectId);
-await saveContext.mutateAsync({ body: markdown, base_version: currentVersion });
+const createRun = useCreateRunMutation(projectId);
+await createRun.mutateAsync({
+  topic: "How does study time affect exam scores?",
+  domains: ["education"],
+  review_mode: "copilot",
+});
 
 const run = useRunDetailQuery(projectId, runId);
 const sync = useSyncRunMutation(projectId, runId);
@@ -100,8 +103,8 @@ Mutation thành công invalidate cache liên quan, gồm danh sách/detail, auth
 - `ApiError` giữ `status`, `code`, `message`, `details`, `requestId`, `retryAfter`. UI rẽ nhánh theo code và dùng message backend.
 - Hook báo lỗi qua Sonner. Không cần toast lỗi thêm cho cùng thao tác; nếu dùng `mutateAsync`, bên gọi vẫn cần catch rejection để thực hiện logic nghiệp vụ.
 - Không tự retry lỗi HTTP 4xx. Login/register bị RATE_LIMITED sẽ bị chặn gửi lại trong thời gian Retry-After, giữ message backend.
-- `RESEARCH_CONTEXT_NOT_FOUND` và `FRAME_REVIEW_NOT_FOUND` không toast mặc định; query vẫn giữ error để UI biểu diễn trạng thái chưa có dữ liệu.
-- Khi `RESEARCH_CONTEXT_CONFLICT`, UI dùng query refetch rồi cho người dùng gộp thay đổi; không tự ghi đè. Khi `REVIEW_NOT_PENDING`, refetch frame và run. Không tự gửi lại quyết định khi Popper chưa xác nhận.
+- `FRAME_REVIEW_NOT_FOUND` không toast mặc định; query vẫn giữ error để UI biểu diễn trạng thái chưa có dữ liệu.
+- Khi `REVIEW_NOT_PENDING`, refetch frame và run. Không tự gửi lại quyết định khi Popper chưa xác nhận.
 - Query truyền AbortSignal xuống Axios qua request options của core. Client phát sự kiện `auth:expired` khi nhận mã phiên không hợp lệ; cùng một luồng xử lý áp dụng cho lỗi HTTP và envelope `success: false`. CSRF request cũ không ghi đè token sau khi phiên được thay thế.
 - Hooks auth mới chỉ phụ trách API và cache. `useAuth` hiện tại vẫn phụ trách Redux, điều hướng và đồng bộ tab. Khi nối màn hình auth nên tiếp tục dùng luồng này hoặc ghép đầy đủ các trách nhiệm đó; không gọi đồng thời cả hai mutation cho cùng thao tác.
 - Không bổ sung WebSocket/SSE, health/internal API, quên mật khẩu hoặc xác minh email vì ngoài hợp đồng frontend.

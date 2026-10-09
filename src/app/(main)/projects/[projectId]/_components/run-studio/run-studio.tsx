@@ -414,9 +414,7 @@ function PastRunRow({ run }: { run: RunItem }) {
       </span>
       <ManagementStatusBadge status={run.status} />
       <span className="min-w-0 max-md:col-span-3 max-md:row-start-2">
-        <b className="block truncate font-medium">
-          {run.topic ?? `Context v${run.research_context_version} · dataset v${run.dataset_version_number}`}
-        </b>
+        <b className="block truncate font-medium">{run.topic ?? run.label ?? `Run ${run.id.slice(0, 8)}`}</b>
         <span className="text-muted-foreground text-xs">
           ${run.cost_usd} of ${run.budget_usd} ·{" "}
           {run.topic

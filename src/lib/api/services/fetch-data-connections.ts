@@ -6,14 +6,46 @@ import { projectPath } from "../request";
 import type { ListParams } from "../types";
 
 export type GoogleConnectionKind = "google_sheets" | "google_drive";
-export type ConnectionKind = "postgres" | "mysql" | "bigquery" | GoogleConnectionKind;
+export type TimeSeriesConnectionKind = "prometheus" | "influxdb";
+export type ConnectionKind = "postgres" | "mysql" | "bigquery" | GoogleConnectionKind | TimeSeriesConnectionKind;
+export function isTimeSeriesConnection(kind: ConnectionKind): kind is TimeSeriesConnectionKind {
+  return kind === "prometheus" || kind === "influxdb";
+}
 export function isGoogleConnection(kind: ConnectionKind): kind is GoogleConnectionKind {
   return kind === "google_sheets" || kind === "google_drive";
 }
 export type ConnectionSsl = "require" | "verify-full" | "disable";
-export type ConnectionSource = { type: "table"; schema: string; name: string } | { type: "query"; sql: string };
+export type TimeSeriesBucket = "1m" | "5m" | "15m" | "1h" | "6h" | "1d" | "1w";
+export type TimeSeriesAggregate = "mean" | "sum" | "min" | "max" | "count" | "increase";
+export interface TimeSeriesSource {
+  type: "timeseries";
+  name: string;
+  fields: string[];
+  tags: string[];
+  start: string;
+  end: string;
+  bucket: TimeSeriesBucket | null;
+  aggregate: TimeSeriesAggregate | null;
+}
+export type ConnectionSource =
+  | { type: "table"; schema: string; name: string }
+  | { type: "query"; sql: string }
+  | TimeSeriesSource;
 
 export function sameConnectionSource(left: ConnectionSource, right: ConnectionSource) {
+  if (left.type === "timeseries" && right.type === "timeseries") {
+    return (
+      left.name === right.name &&
+      Date.parse(left.start) === Date.parse(right.start) &&
+      Date.parse(left.end) === Date.parse(right.end) &&
+      left.bucket === right.bucket &&
+      left.aggregate === right.aggregate &&
+      left.fields.length === right.fields.length &&
+      left.fields.every((field, index) => field === right.fields[index]) &&
+      left.tags.length === right.tags.length &&
+      left.tags.every((tag, index) => tag === right.tags[index])
+    );
+  }
   return left.type === "table" && right.type === "table"
     ? left.schema === right.schema && left.name === right.name
     : left.type === "query" && right.type === "query" && left.sql === right.sql;
@@ -44,7 +76,14 @@ export type CreateConnectionRequest =
       secret: { service_account_json: string };
     }
   | { name: string; kind: "google_sheets"; config: { spreadsheet: string }; grant_id: string }
-  | { name: string; kind: "google_drive"; config: { folder: string }; grant_id: string };
+  | { name: string; kind: "google_drive"; config: { folder: string }; grant_id: string }
+  | { name: string; kind: "prometheus"; config: { url: string }; secret?: { username?: string; token?: string } }
+  | {
+      name: string;
+      kind: "influxdb";
+      config: { url: string; database: string };
+      secret?: { token?: string; username?: string; password?: string };
+    };
 export interface ConnectionTable {
   schema: string;
   name: string;
@@ -54,6 +93,7 @@ export interface ConnectionTable {
 export interface ConnectionColumn {
   name: string;
   type: string;
+  role: "time" | "field" | "tag" | null;
 }
 export interface GooglePickerCredentials {
   access_token: string;
@@ -65,6 +105,19 @@ export interface ConnectionPreview {
   rows: (string | null)[][];
   truncated: boolean;
 }
+export type LiveWindow = "15m" | "1h" | "6h" | "24h";
+export interface ConnectionLiveRequest {
+  name: string;
+  fields: string[];
+  tags: string[];
+  aggregate: TimeSeriesAggregate;
+  last: LiveWindow;
+}
+export interface ConnectionLiveData extends ConnectionPreview {
+  start: string;
+  end: string;
+  bucket: string;
+}
 export interface ConnectionListParams extends ListParams {
   q?: string;
 }
@@ -74,6 +127,19 @@ const connectionPath = (projectId: string, id: string) => `${connectionsPath(pro
 const remoteTimeout = 75_000;
 
 export const fetchDataConnections = {
+  live: (projectId: string, id: string, input: ConnectionLiveRequest, signal?: AbortSignal) =>
+    connectionRequest(
+      projectId,
+      async () =>
+        (
+          await apiService.post<ApiResult<ConnectionLiveData>>(`${connectionPath(projectId, id)}/live`, input, {
+            timeout: remoteTimeout,
+            signal,
+          })
+        ).data,
+      signal,
+      id,
+    ),
   getGooglePicker: (projectId: string, grantId: string, signal?: AbortSignal) =>
     connectionRequest(
       projectId,

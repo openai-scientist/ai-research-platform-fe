@@ -110,7 +110,7 @@ export function ResearchLoopCard({ dashboard }: { readonly dashboard: ProjectDas
     >
       <div className="flex min-w-0 flex-col gap-4">
         <div>
-          <p className="text-muted-foreground text-xs">{dashboard.live ? "Research context" : "Research question"}</p>
+          <p className="text-muted-foreground text-xs">Research question</p>
           <p className="mt-1 line-clamp-2 font-heading text-xl leading-snug" title={dashboard.researchQuestion}>
             {dashboard.researchQuestion}
           </p>

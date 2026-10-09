@@ -21,11 +21,11 @@ const project: ProjectItem = {
 };
 
 describe("sample insights alongside backend data", () => {
-  it("fills unsupported insights without replacing real empty runs, context, dataset or budget", () => {
+  it("fills unsupported insights without replacing real empty runs, dataset or budget", () => {
     const sample = createProjectPreview();
-    const result = toManagerDashboard(project, { runs: [], context: null, dataset: null }, sample);
+    const result = toManagerDashboard(project, { runs: [], dataset: null }, sample);
     expect(result.experimentStats.total).toBe(0);
-    expect(result.researchQuestion).toBe("No research context yet.");
+    expect(result.researchQuestion).toBe("No research topic yet.");
     expect(result.datasetVersion).toBe("No dataset selected");
     expect(result.budgets.resources.limit).toBe(0);
     expect(result.outcomes).toEqual(sample.outcomes);

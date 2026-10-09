@@ -22,7 +22,6 @@ Hook chạy trong Client Component bên trong `QueryProvider`. Query bảo vệ 
 | `useInfiniteMembers(projectId, options?)` | `use-members-query.ts` | `members` |
 | `useInfiniteDatasets(projectId, options?)` | `use-datasets-query.ts` | `datasets` |
 | `useInfiniteDatasetVersions(projectId, datasetId, options?)` | `use-datasets-query.ts` | `versions` |
-| `useInfiniteResearchContextVersions(projectId, options?)` | `use-research-context-query.ts` | `versions` |
 | `useInfiniteRuns(projectId, options?)` | `use-runs-query.ts` | `runs` |
 | `useInfiniteComments(projectId, runId, filters?, options?)` | `use-comments-query.ts` | `comments` |
 | `useInfiniteNotifications(filters?, options?)` | `use-notifications-query.ts` | `notifications` |
@@ -87,7 +86,6 @@ Container phải có chiều cao giới hạn và `overflow-y-auto` để phát 
 - Scroll chỉ tải tiếp khi còn trang và không có request đang chạy. Sự kiện cuộn liên tiếp được chặn bằng ref và `cancelRefetch: false`.
 - Khi tải trang tiếp theo thất bại, scroll không tự lặp retry; gọi `loadMore()` để thử lại có chủ đích. Dữ liệu các trang đã tải vẫn nằm trong cache. Query không tự retry lỗi HTTP 4xx, bao gồm rate limit.
 - Không gắn cả `useUsersQuery` và `useInfiniteUsers` cho cùng danh sách nếu chỉ cần một cách tải.
-- Mutation lưu research context cũng invalidate danh sách versions để dữ liệu infinite cập nhật.
 
 Mẫu xử lý dựa trên [TanStack Query Infinite Queries](https://tanstack.com/query/latest/docs/framework/react/guides/infinite-queries), với envelope/session của backend hiện tại.
 

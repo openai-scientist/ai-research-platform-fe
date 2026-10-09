@@ -13,7 +13,6 @@ import { DatasetsSection } from "./datasets-section";
 import { ExperimentsSection } from "./experiments-section";
 import { MembersSection } from "./members-section";
 import { ProjectFilesSection } from "./project-files-section";
-import { ResearchContextSection } from "./research-context-section";
 import { FindingsSection } from "./research-preview";
 import { RunDetails } from "./run-details";
 import { SettingsSection } from "./settings-section";
@@ -44,7 +43,7 @@ export function WorkspaceSection({
   userId: string;
   runId?: string;
   datasetId?: string;
-  experimentSection?: RunSection | "current" | "history";
+  experimentSection?: RunSection;
   membersHeader?: ReactNode;
   connectionsHeader?: ReactNode;
   filesHeader?: ReactNode;
@@ -63,16 +62,7 @@ export function WorkspaceSection({
   if (section === "dataset-detail" && datasetId)
     return <DatasetDetails key={datasetId} {...props} datasetId={datasetId} />;
   if (section === "run" && runId)
-    return (
-      <RunDetails
-        key={runId}
-        {...props}
-        runId={runId}
-        section={experimentSection === "current" || experimentSection === "history" ? undefined : experimentSection}
-      />
-    );
-  if (section === "research-context")
-    return <ResearchContextSection {...props} section={experimentSection === "history" ? "history" : "current"} />;
+    return <RunDetails key={runId} {...props} runId={runId} section={experimentSection} />;
   if (section === "members") return <MembersSection {...props} header={membersHeader} />;
   if (section === "connections") return <ConnectionsSection {...props} header={connectionsHeader} />;
   if (section === "files") return <ProjectFilesSection key={project.id} {...props} header={filesHeader} />;

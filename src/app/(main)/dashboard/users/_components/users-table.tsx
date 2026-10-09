@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/pagination";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { DataTableFeatures } from "@/lib/data-table-features";
 
@@ -56,6 +57,11 @@ export function UsersTable({
 
   return (
     <div className="flex flex-1 flex-col gap-4" aria-busy={busy}>
+      {busy && (
+        <span role="status" className="sr-only">
+          {loadingLabel}
+        </span>
+      )}
       {grid ?? (
         <div>
           <Table className="**:data-[slot='table-cell']:px-4 **:data-[slot='table-head']:px-4">
@@ -72,13 +78,16 @@ export function UsersTable({
             </TableHeader>
 
             <TableBody>
-              {busy ? (
-                <TableRow>
-                  <TableCell colSpan={table.getVisibleLeafColumns().length} className="h-24 text-center">
-                    {loadingLabel}
-                  </TableCell>
-                </TableRow>
-              ) : null}
+              {busy &&
+                ["first", "second", "third", "fourth", "fifth"].map((key) => (
+                  <TableRow key={key} aria-hidden="true">
+                    {table.getVisibleLeafColumns().map((column) => (
+                      <TableCell key={column.id} className="px-3 py-4">
+                        <Skeleton className="h-5 w-full min-w-8 max-w-48" />
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))}
               {!busy && table.getRowModel().rows.length > 0
                 ? table.getRowModel().rows.map((row) => (
                     <TableRow

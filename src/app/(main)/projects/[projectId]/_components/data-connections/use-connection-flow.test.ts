@@ -19,6 +19,7 @@ const {
   invalidate,
   showError,
   access,
+  restoreDraft,
 } = vi.hoisted(() => ({
   effects: [] as (() => void)[],
   updates: [] as { initial: unknown; set: ReturnType<typeof vi.fn> }[],
@@ -32,12 +33,17 @@ const {
   invalidate: vi.fn(),
   showError: vi.fn(),
   access: vi.fn(),
+  restoreDraft: vi.fn<(initial: unknown) => unknown>(),
 }));
 
 vi.mock("react", async (importOriginal) => ({
   ...(await importOriginal<typeof import("react")>()),
   useState: (initial: unknown) => {
-    const value = typeof initial === "function" ? initial() : initial;
+    const initialValue = typeof initial === "function" ? initial() : initial;
+    const value =
+      initialValue && typeof initialValue === "object" && "googleTarget" in initialValue
+        ? restoreDraft(initialValue)
+        : initialValue;
     const set = vi.fn();
     updates.push({ initial: value, set });
     return [value, set];
@@ -79,6 +85,7 @@ describe("resuming Google connection creation", () => {
     vi.clearAllMocks();
     effects.length = 0;
     updates.length = 0;
+    restoreDraft.mockImplementation((value) => value);
     access.mockReturnValue({ configured: true, rateLimited: false, waitSeconds: 0, revokedConnectionIds: new Set() });
     create.mockResolvedValue({ data: saved });
     getSchemas.mockResolvedValue({ data: ["Spreadsheet"] });
@@ -87,6 +94,52 @@ describe("resuming Google connection creation", () => {
     getGooglePicker.mockResolvedValue({ data: { access_token: "short-lived", api_key: "key", app_id: "123" } });
     openPicker.mockResolvedValue({ id: "folder-id", name: "Study" });
     getList.mockResolvedValue({ data: [], meta: { pagination: null } });
+  });
+
+  it("fills URL and token missing from a draft preserved by Fast Refresh without losing input", () => {
+    restoreDraft.mockImplementation((value) => {
+      const previous = value as Record<string, unknown>;
+      return Object.fromEntries(
+        Object.entries({ ...previous, name: "My source", username: "reader" }).filter(
+          ([key]) => key !== "url" && key !== "token",
+        ),
+      );
+    });
+    const flow = useRenderConnectionFlow(null);
+    expect(flow.draft.url.trim()).toBe("");
+    expect(flow.draft.token).toBe("");
+    expect(flow.draft.name).toBe("My source");
+    expect(flow.draft.username).toBe("reader");
+  });
+
+  it("normalizes undefined time series fields and keeps populated credentials", () => {
+    restoreDraft.mockImplementation((value) => ({ ...(value as object), url: undefined, token: undefined }));
+    expect(useRenderConnectionFlow(null).draft).toMatchObject({ url: "", token: "" });
+    restoreDraft.mockImplementation((value) => ({
+      ...(value as object),
+      url: "https://metrics.example.com",
+      token: "read-only-token",
+    }));
+    expect(useRenderConnectionFlow(null).draft).toMatchObject({
+      url: "https://metrics.example.com",
+      token: "read-only-token",
+    });
+  });
+
+  it.each(["prometheus", "influxdb"] as const)("bypasses schema browsing for %s", async (kind) => {
+    const flow = useConnectionFlow("project-id", { ...saved, kind }, vi.fn(), true, "user-id", false);
+    for (const setup of effects) setup();
+    await vi.waitFor(() => expect(getTables).toHaveBeenCalledOnce());
+    expect(getSchemas).not.toHaveBeenCalled();
+    expect(getTables).toHaveBeenCalledWith("project-id", "connection-id", "default");
+    expect(flow.isTimeSeries).toBe(true);
+  });
+
+  it("does not browse time series without contributor access", () => {
+    useConnectionFlow("project-id", { ...saved, kind: "prometheus" }, vi.fn(), false, "user-id", false);
+    for (const setup of effects) setup();
+    expect(getTables).not.toHaveBeenCalled();
+    expect(getSchemas).not.toHaveBeenCalled();
   });
 
   it.each(["google_drive", "google_sheets"] as const)(
