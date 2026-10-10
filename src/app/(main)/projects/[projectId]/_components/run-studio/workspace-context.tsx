@@ -15,6 +15,9 @@ export interface WorkspaceContextValue {
   dropMode: boolean;
   dropped: string[];
   toggleDrop(id: string): void;
+  /** Held-back ideas picked for keeping despite their objection, in the same mode. */
+  kept: string[];
+  toggleKeep(id: string): void;
 }
 
 export const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);

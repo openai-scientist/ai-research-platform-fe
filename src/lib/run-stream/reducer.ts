@@ -335,7 +335,8 @@ export function applyRunEvent(previous: RunState, event: RunEvent): RunState {
       case "synthesis.tension": {
         const c = content(state, event, "synthesize");
         const { tension } = event.payload;
-        if (c && !c.tensions.some((t) => t.text === tension.text)) c.tensions.push(tension);
+        if (c && !c.tensions.some((t) => (tension.id ? t.id === tension.id : t.text === tension.text)))
+          c.tensions.push(tension);
         break;
       }
       case "synthesis.gap": {
@@ -387,6 +388,7 @@ export function applyRunEvent(previous: RunState, event: RunEvent): RunState {
         if (h)
           h.asides.push({
             id: event.payload.idea_id,
+            kind: event.payload.kind,
             statement: event.payload.statement,
             reason: event.payload.reason,
           });
@@ -682,6 +684,7 @@ export function applyRunEvent(previous: RunState, event: RunEvent): RunState {
           stop_index?: number;
           stop_total?: number;
           droppable?: string[];
+          keepable?: string[];
         };
         const raw = payload.gate ?? (payload.gate_id ? payload : null);
         if (raw) {
@@ -715,6 +718,8 @@ export function applyRunEvent(previous: RunState, event: RunEvent): RunState {
             stop_index: raw.stop_index ?? 1,
             stop_total: raw.stop_total ?? 1,
             droppable: Array.isArray(raw.droppable) ? raw.droppable : [],
+            // Ideas the debate set aside that the person may keep anyway (hypotheses gate).
+            keepable: Array.isArray(raw.keepable) ? raw.keepable : [],
           };
         }
         break;

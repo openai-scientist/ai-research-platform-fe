@@ -155,7 +155,7 @@ export interface HypothesizeContent {
   turns: DebateTurn[];
   drafts: Record<string, DraftState>;
   order: string[];
-  asides: { id: string; statement: string; reason: string }[];
+  asides: { id: string; kind?: "held_back" | "not_used"; statement: string; reason: string }[];
   dropped: string[];
 }
 

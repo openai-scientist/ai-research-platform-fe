@@ -772,10 +772,32 @@ export const CLUSTERS: Cluster[] = [
   },
 ];
 
-export const TENSION: Tension = {
-  between: ["C1", "C3"],
-  text: "C1 reads sleep as the cause of better grades. C3 shows stress and workload shape sleep itself, so part of the C1 link may belong to them.",
-};
+/** Where the cards disagree, each side with the cards behind it. */
+export const TENSIONS: Tension[] = [
+  {
+    id: "X1",
+    between: ["C1", "C3"],
+    text: "C1 reads sleep as the cause of better grades. C3 shows stress and workload shape sleep itself, so part of the C1 link may belong to them.",
+    sides: [
+      { claim: "Students who sleep more get better grades.", card_ids: ["okano2019", "curcio2006"] },
+      { claim: "Stress and workload drive both short sleep and weak grades.", card_ids: ["hershner2014", "lund2010"] },
+    ],
+  },
+  {
+    id: "X2",
+    between: ["C1", "C2"],
+    text: "C2's memory gains come from lab sleep loss; C1 looks at everyday sleep. Whether ordinary sleep length works through memory in students is untested.",
+    sides: [
+      { claim: "Everyday sleep length tracks grades.", card_ids: ["okano2019", "gilbert2010"] },
+      {
+        claim: "Memory suffers after lab sleep loss, not ordinary variation.",
+        card_ids: ["walker2006", "pilcher1996"],
+      },
+    ],
+  },
+];
+
+export const TENSION: Tension = TENSIONS[0];
 
 export const OVERVIEW =
   "Most of the evidence links more and better sleep to better grades, but in school-age samples or without study time measured. A smaller line explains why sleep should help learning, and another shows stress and screens shaping sleep itself. No paper here puts sleep, stress and study time in one model of undergraduates.";
@@ -816,7 +838,7 @@ export interface MockDebate {
   /** Hypotheses written after the debate, in order. */
   hypotheses: string[];
   checks: Record<string, { novelty: NoveltyCheck; feasibility: FeasibilityCheck }>;
-  asides: { id: string; statement: string; reason: string }[];
+  asides: { id: string; kind?: "held_back" | "not_used"; statement: string; reason: string }[];
   keep: Record<string, string>;
 }
 
@@ -832,6 +854,7 @@ export const DEBATES: Record<"first" | "pivot", MockDebate> = {
       },
       {
         id: "t2",
+        phase: "critique",
         actor: "methodologist",
         stance: "test",
         about: "H1",
@@ -840,11 +863,36 @@ export const DEBATES: Record<"first" | "pivot", MockDebate> = {
       },
       {
         id: "t3",
+        phase: "critique",
+        severity: "fatal",
+        flaw: "undecidable_test",
+        field: "falsification_criteria",
         actor: "skeptic",
         stance: "challenge",
         about: "H1",
         reply_to: "t1",
         text: "Strong students may simply sleep more. Make the test strict: if the range touches zero, H1 fails.",
+      },
+      {
+        id: "t3b",
+        phase: "answer",
+        actor: "theorist",
+        stance: "refine",
+        about: "H1",
+        reply_to: "t3",
+        answers: ["t3"],
+        note: "Fair: strong students may sleep more, so prior grades are now held equal, and the test is strict.",
+        text: "C1 is consistent: more sleep, better grades. First claim: students sleeping 7 h or more score higher, with prior grades, study, stress and screens held equal; if the range touches zero, it fails.",
+      },
+      {
+        id: "t3c",
+        actor: "skeptic",
+        stance: "concede",
+        about: "H1",
+        reply_to: "t3b",
+        answers: ["t3"],
+        phase: "review",
+        text: "Holding prior grades equal and failing at zero makes the test decide. Resolved.",
       },
       {
         id: "t4",
@@ -855,6 +903,10 @@ export const DEBATES: Record<"first" | "pivot", MockDebate> = {
       },
       {
         id: "t5",
+        phase: "critique",
+        severity: "fatal",
+        flaw: "unsupported",
+        field: "statement",
         actor: "skeptic",
         stance: "challenge",
         about: "H2",
@@ -863,11 +915,24 @@ export const DEBATES: Record<"first" | "pivot", MockDebate> = {
       },
       {
         id: "t6",
+        phase: "answer",
         actor: "theorist",
         stance: "refine",
         about: "H2",
         reply_to: "t5",
+        answers: ["t5"],
+        note: "The order of stress and sleep can't be read from one survey, so the claim no longer says which comes first.",
         text: "Then H2 only claims an indirect path exists. If its range includes zero it fails, and the paper says the order is unknown.",
+      },
+      {
+        id: "t6b",
+        actor: "skeptic",
+        stance: "concede",
+        about: "H2",
+        reply_to: "t6",
+        answers: ["t5"],
+        phase: "review",
+        text: "An indirect path with the order left open is what the cards support. Resolved.",
       },
       {
         id: "t7",
@@ -875,6 +940,24 @@ export const DEBATES: Record<"first" | "pivot", MockDebate> = {
         stance: "propose",
         about: "H3",
         text: "G3: screens are tied to sleep, rarely to grades. Third claim: more screen time lowers scores on its own.",
+      },
+      {
+        id: "t7b",
+        phase: "critique",
+        actor: "methodologist",
+        stance: "concede",
+        about: "H3",
+        reply_to: "t7",
+        text: "Daily screen time is in the survey, so this can be tested as stated.",
+      },
+      {
+        id: "t7c",
+        phase: "critique",
+        actor: "skeptic",
+        stance: "concede",
+        about: "H3",
+        reply_to: "t7",
+        text: "No objection: the controls already cover the obvious confounders.",
       },
       {
         id: "t8",
@@ -885,11 +968,34 @@ export const DEBATES: Record<"first" | "pivot", MockDebate> = {
       },
       {
         id: "t9",
+        phase: "critique",
+        severity: "caveat",
         actor: "skeptic",
         stance: "challenge",
         about: "H4",
         reply_to: "t8",
         text: "Few undergraduates are over 25. Expect a very wide range.",
+      },
+      {
+        id: "t9b",
+        phase: "answer",
+        actor: "methodologist",
+        stance: "defend",
+        about: "H4",
+        reply_to: "t9",
+        answers: ["t9"],
+        text: "A wide range still answers the question: the paper reports it with its interval and says the group is small.",
+      },
+      {
+        id: "t9c",
+        actor: "skeptic",
+        stance: "challenge",
+        about: "H4",
+        reply_to: "t9b",
+        answers: ["t9"],
+        phase: "review",
+        severity: "caveat",
+        text: "A wide interval is still a weak test; report H4 as exploratory.",
       },
       {
         id: "t10",
@@ -900,6 +1006,10 @@ export const DEBATES: Record<"first" | "pivot", MockDebate> = {
       },
       {
         id: "t11",
+        phase: "critique",
+        severity: "fatal",
+        flaw: "undecidable_test",
+        field: "method",
         actor: "methodologist",
         stance: "challenge",
         about: "C5",
@@ -908,11 +1018,20 @@ export const DEBATES: Record<"first" | "pivot", MockDebate> = {
       },
       {
         id: "t12",
+        phase: "answer",
         actor: "theorist",
         stance: "concede",
         about: "C5",
         reply_to: "t11",
+        answers: ["t11"],
         text: "Agreed. They go in the paper as limits instead.",
+      },
+      {
+        id: "t13",
+        actor: "pi",
+        stance: "test",
+        about: "Verdict",
+        text: "1. Theorist (8/10): each claim ties to a gap and names the result that sinks it.\n2. Methodologist (7/10): kept every claim measurable with one survey.\n3. Skeptic (6/10): objections tightened H1 and H2, but H4 stays weak.",
       },
     ],
     hypotheses: ["H1", "H2", "H3", "H4"],
@@ -937,13 +1056,16 @@ export const DEBATES: Record<"first" | "pivot", MockDebate> = {
     asides: [
       {
         id: "C5",
+        kind: "not_used",
         statement: "Caffeine changes the sleep effect.",
         reason: "Caffeine isn't measured in a typical student survey",
       },
       {
         id: "C6",
+        kind: "held_back",
         statement: "Exam timing explains the sleep effect.",
-        reason: "Exam timing isn't measured in a typical student survey",
+        reason:
+          "Held back: the Methodologist's objection stands (the test cannot decide it). Exam timing isn't in a typical student survey.",
       },
     ],
     keep: { H4: "Kept anyway: a clear answer either way is useful. The Skeptic's objection stays on record." },

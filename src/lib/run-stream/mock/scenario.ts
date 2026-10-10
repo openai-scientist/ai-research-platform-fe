@@ -170,6 +170,7 @@ export const REFERENCES = [
 export const HYPOTHESES: Record<string, Hypothesis> = {
   H1: {
     id: "H1",
+    from: ["H1"],
     statement: "Students who sleep 7 h or more score higher.",
     short: "Sleep ≥ 7 h",
     prediction: "> 0",
@@ -191,6 +192,7 @@ export const HYPOTHESES: Record<string, Hypothesis> = {
   },
   H2: {
     id: "H2",
+    from: ["H2"],
     statement: "Stress carries part of the sleep effect.",
     short: "Via stress",
     prediction: "> 0",
@@ -203,6 +205,7 @@ export const HYPOTHESES: Record<string, Hypothesis> = {
     gap: "G2",
     novelty: "Stress as the link is mostly tested in school-age adolescents, not in undergraduates.",
     rationale: "Short sleep raises next-day stress, and stress lowers exam performance.",
+    tension_ids: ["X1"],
     falsify: {
       text: "Wrong if the 95% range of the indirect effect includes 0.",
       zone: [null, 0],
@@ -211,6 +214,7 @@ export const HYPOTHESES: Record<string, Hypothesis> = {
   },
   H3: {
     id: "H3",
+    from: ["H3"],
     statement: "More screen time lowers exam scores.",
     short: "Screen time",
     prediction: "< 0",
@@ -231,6 +235,15 @@ export const HYPOTHESES: Record<string, Hypothesis> = {
   },
   H4: {
     id: "H4",
+    from: ["H4"],
+    caveats: [
+      {
+        by: "skeptic",
+        about: "H4",
+        severity: "caveat",
+        text: "A wide interval is still a weak test; report H4 as exploratory.",
+      },
+    ],
     statement: "The sleep effect is stronger for students over 25.",
     short: "Age > 25",
     prediction: "> 0",
@@ -286,6 +299,38 @@ export const HYPOTHESES: Record<string, Hypothesis> = {
     falsify: {
       text: "Wrong if the 95% range of the difference in effects includes 0.",
       zone: [0, 0],
+      unit: "points",
+    },
+  },
+  /** The held-back idea C6, as it joins the set when the person keeps it at the hypotheses stop. */
+  H7: {
+    id: "H7",
+    from: ["C6"],
+    contested: [
+      {
+        by: "methodologist",
+        about: "C6",
+        severity: "fatal",
+        flaw: "undecidable_test",
+        field: "method",
+        text: "Exam timing isn't in a typical student survey, so no test here can decide it.",
+      },
+    ],
+    statement: "Students whose exams fall early in the week gain less from sleep.",
+    short: "Exam timing",
+    prediction: "< 0",
+    outcome: "exam_score",
+    exposure: "sleep × early-week exam",
+    estimand: "Difference in effects",
+    method: "Interaction model",
+    report_key: "h7_timing_interaction",
+    sub_question: "SQ1",
+    gap: "G1",
+    novelty: "Exam timing is named as a limit in Curcio 2006 but never tested.",
+    rationale: "Weekend sleep shifts leave less recovery before an early-week exam.",
+    falsify: {
+      text: "Wrong if the 95% range of the difference in effects includes 0.",
+      zone: [0, null],
       unit: "points",
     },
   },

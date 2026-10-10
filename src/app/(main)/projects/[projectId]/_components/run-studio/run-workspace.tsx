@@ -53,6 +53,7 @@ function RunWorkspace({ session }: { session: RunSession }) {
   const [follow, setFollow] = useState(true);
   const [dropMode, setDropMode] = useState(false);
   const [dropped, setDropped] = useState<string[]>([]);
+  const [kept, setKept] = useState<string[]>([]);
   const [minimized, setMinimized] = useState(false);
   const [asideOpen, setAsideOpen] = useState(true);
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -145,14 +146,16 @@ function RunWorkspace({ session }: { session: RunSession }) {
       toggleDrop: (id: string) =>
         setDropped((list) => {
           if (list.includes(id)) return list.filter((x) => x !== id);
-          if (droppable.length - list.length <= 1) {
+          if (droppable.length - list.length + kept.length <= 1) {
             toast.error(dropsPapers ? "Keep at least one paper." : "Keep at least one hypothesis.");
             return list;
           }
           return [...list, id];
         }),
+      kept,
+      toggleKeep: (id: string) => setKept((list) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id])),
     }),
-    [session, state, follow, dropMode, dropped, droppable.length, dropsPapers],
+    [session, state, follow, dropMode, dropped, kept, droppable.length, dropsPapers],
   );
 
   const W = typeof window === "undefined" ? 0 : window.innerWidth;
@@ -400,12 +403,25 @@ function RunWorkspace({ session }: { session: RunSession }) {
               )}
               {state.gate && dropMode && (
                 <DropBar
-                  kept={droppable.length - dropped.length}
+                  kept={droppable.length - dropped.length + kept.length}
                   total={droppable.length}
                   noun={dropsPapers ? "paper in the shortlist" : "hypothesis in the set"}
-                  onReset={() => setDropped([])}
+                  keepable={state.gate.keepable?.length ?? 0}
+                  restored={kept.length}
+                  onReset={() => {
+                    setDropped([]);
+                    setKept([]);
+                  }}
                   onApprove={async () => {
-                    if (await answer({ option_id: "drop", dropped })) setDropMode(false);
+                    // Nothing dropped or kept is a plain approval; a "drop" with no items is refused.
+                    const change = dropped.length > 0 || kept.length > 0;
+                    const decision: GateAnswer = change
+                      ? { option_id: "drop", dropped, ...(kept.length ? { kept } : {}) }
+                      : { option_id: "approve" };
+                    if (await answer(decision)) {
+                      setDropMode(false);
+                      setKept([]);
+                    }
                   }}
                   pending={answering}
                 />

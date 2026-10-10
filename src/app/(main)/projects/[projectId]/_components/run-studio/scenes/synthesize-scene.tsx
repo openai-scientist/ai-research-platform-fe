@@ -6,7 +6,7 @@ import { cn } from "cn";
 import { ArrowLeftRight, CircleCheck, Lightbulb, Target } from "lucide-react";
 import { LayoutGroup, motion } from "motion/react";
 
-import type { KnowledgeCard } from "@/lib/run-stream/contract";
+import type { KnowledgeCard, Tension } from "@/lib/run-stream/contract";
 import type { SynthesizeContent } from "@/lib/run-stream/run-state";
 
 import { AgentCursor } from "../run-bits";
@@ -21,10 +21,23 @@ const TONES = [
   { badge: "bg-teal-500/12 text-teal-700 dark:text-teal-300", chip: "bg-teal-500/10 ring-teal-500/25" },
 ];
 
-function Chip({ id, label, tone, lit }: { id: string; label: string; tone?: string; lit: boolean }) {
+function Chip({
+  id,
+  label,
+  tone,
+  lit,
+  shared = true,
+}: {
+  id: string;
+  label: string;
+  tone?: string;
+  lit: boolean;
+  /** The chip is the card itself, which moves from the pool to its cluster; a citation of it elsewhere does not. */
+  shared?: boolean;
+}) {
   return (
     <motion.span
-      layoutId={`syn-${id}`}
+      layoutId={shared ? `syn-${id}` : undefined}
       title={id}
       transition={{ layout: { type: "spring", stiffness: 220, damping: 28 } }}
       className={cn(
@@ -35,6 +48,131 @@ function Chip({ id, label, tone, lit }: { id: string; label: string; tone?: stri
     >
       {label}
     </motion.span>
+  );
+}
+
+/** The clusters a tension lies between; older runs may send them as one string. */
+function betweenOf(tension: Tension): string[] {
+  if (Array.isArray(tension.between)) return tension.between;
+  const text = tension.between as unknown;
+  return typeof text === "string" ? (text.match(/C\d+/g) ?? ["C1", "C2"]) : ["C1", "C2"];
+}
+
+type Tone = (typeof TONES)[number];
+
+/**
+ * One tension: the two clusters pulling apart, what is in dispute, and each side's finding with the cards behind it.
+ * Runs from before sides were recorded show the two clusters' claims instead, labelled as such.
+ */
+function TensionView({
+  tension,
+  cursor,
+  live,
+  clusters,
+  toneOf,
+  label,
+  lit,
+}: {
+  tension: Tension;
+  cursor: boolean;
+  live: boolean;
+  clusters: SynthesizeContent["clusters"];
+  toneOf(clusterId: string): Tone;
+  label(cardId: string): string;
+  lit: Set<string>;
+}) {
+  const between = betweenOf(tension);
+  const [left, right] = [between[0] ?? "C1", between[1] ?? "C2"];
+  const line = (direction: 1 | -1) => (
+    <svg viewBox="0 0 120 12" className="h-3 flex-1" aria-hidden="true">
+      <motion.line
+        x1={4}
+        x2={116}
+        y1={6}
+        y2={6}
+        className="stroke-orange-500"
+        strokeWidth={2}
+        strokeDasharray="5 4"
+        initial={{ strokeDashoffset: 0 }}
+        animate={{ strokeDashoffset: [0, -18 * direction] }}
+        transition={{ duration: 0.9, repeat: Number.POSITIVE_INFINITY, ease: "linear" }}
+      />
+    </svg>
+  );
+  return (
+    <motion.div
+      data-cursor={cursor ? "tension" : undefined}
+      initial={live ? { opacity: 0, y: 8 } : false}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+      className="flex flex-col gap-3"
+    >
+      <div className="flex items-center gap-2">
+        {tension.id && (
+          <b className="inline-flex h-6 items-center rounded-md bg-orange-500/12 px-2 font-mono font-semibold text-orange-700 text-xs dark:text-orange-300">
+            {tension.id}
+          </b>
+        )}
+        <b
+          className={cn(
+            "inline-flex h-6 items-center rounded-md px-2 font-mono font-semibold text-xs",
+            toneOf(left).badge,
+          )}
+        >
+          {left}
+        </b>
+        {line(1)}
+        <ArrowLeftRight className="size-3.5 text-orange-600" />
+        {line(-1)}
+        <b
+          className={cn(
+            "inline-flex h-6 items-center rounded-md px-2 font-mono font-semibold text-xs",
+            toneOf(right).badge,
+          )}
+        >
+          {right}
+        </b>
+      </div>
+      <p className="text-sm leading-relaxed">{tension.text}</p>
+      <div className="grid grid-cols-2 gap-2 text-xs">
+        {tension.sides
+          ? tension.sides.map((side, i) => (
+              <motion.span
+                key={side.claim}
+                initial={live ? { opacity: 0, x: i ? 8 : -8 } : false}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: live ? 0.2 : 0, duration: 0.35 }}
+                className="flex flex-col gap-1.5 rounded-lg bg-muted/60 px-2.5 py-2"
+              >
+                <span className="font-medium text-[10.5px] text-muted-foreground uppercase tracking-wide">
+                  Side {i + 1}
+                </span>
+                <span className="leading-snug">{side.claim}</span>
+                <span className="mt-auto flex flex-wrap gap-1">
+                  {side.card_ids.map((id) => (
+                    <Chip
+                      key={id}
+                      id={id}
+                      label={label(id)}
+                      tone={toneOf(between[i] ?? left).chip}
+                      lit={lit.has(id)}
+                      shared={false}
+                    />
+                  ))}
+                </span>
+              </motion.span>
+            ))
+          : [left, right].map((id) => {
+              const cluster = clusters.find((c) => c.id === id);
+              return (
+                <span key={id} className="rounded-lg bg-muted/60 px-2.5 py-2">
+                  <b className="block font-medium">{cluster?.title}</b>
+                  <span className="text-muted-foreground">{cluster?.claim}</span>
+                </span>
+              );
+            })}
+      </div>
+    </motion.div>
   );
 }
 
@@ -71,11 +209,7 @@ export function SynthesizeScene({
   const pool = cards.filter((c) => !placed.has(c.id));
   const asideCount = data.setAside.reduce((n, a) => n + a.card_ids.length, 0);
   const tension = data.tensions[0];
-  const betweenList = Array.isArray(tension?.between)
-    ? tension.between
-    : typeof tension?.between === "string"
-      ? ((tension.between as string).match(/C\d+/g) ?? ["C1", "C2"])
-      : ["C1", "C2"];
+  const betweenList = data.tensions.flatMap(betweenOf);
   const cite = new Map((cards ?? []).map((c) => [c.id, shortCite(c.citation)]));
   const label = (id: string) => cite.get(id) ?? id;
   const toneOf = (clusterId: string) =>
@@ -189,7 +323,7 @@ export function SynthesizeScene({
 
       {data.overview ? (
         <Pane title="The field at a glance" aside="written from all the cards">
-          <p data-cursor="overview" className="max-w-[90ch] font-(family-name:--font-lora) text-[15px] leading-relaxed">
+          <p data-cursor="overview" className="font-(family-name:--font-lora) max-w-[90ch] text-[15px] leading-relaxed">
             <TypeText text={data.overview} live={live} speed={160} />
           </p>
         </Pane>
@@ -199,67 +333,25 @@ export function SynthesizeScene({
 
       <div ref={gapsRef} className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
         {tension ? (
-          <Pane title="Where they pull apart" aside="the gaps hide here">
-            <div data-cursor="tension" className="flex flex-col gap-3">
-              <div className="flex items-center gap-2">
-                <b
-                  className={cn(
-                    "inline-flex h-6 items-center rounded-md px-2 font-mono font-semibold text-xs",
-                    toneOf(betweenList[0] ?? "C1").badge,
-                  )}
-                >
-                  {betweenList[0] ?? "C1"}
-                </b>
-                <svg viewBox="0 0 120 12" className="h-3 flex-1" aria-hidden="true">
-                  <motion.line
-                    x1={4}
-                    x2={116}
-                    y1={6}
-                    y2={6}
-                    className="stroke-orange-500"
-                    strokeWidth={2}
-                    strokeDasharray="5 4"
-                    initial={{ strokeDashoffset: 0 }}
-                    animate={{ strokeDashoffset: [0, -18] }}
-                    transition={{ duration: 0.9, repeat: Number.POSITIVE_INFINITY, ease: "linear" }}
-                  />
-                </svg>
-                <ArrowLeftRight className="size-3.5 text-orange-600" />
-                <svg viewBox="0 0 120 12" className="h-3 flex-1" aria-hidden="true">
-                  <motion.line
-                    x1={4}
-                    x2={116}
-                    y1={6}
-                    y2={6}
-                    className="stroke-orange-500"
-                    strokeWidth={2}
-                    strokeDasharray="5 4"
-                    initial={{ strokeDashoffset: 0 }}
-                    animate={{ strokeDashoffset: [0, 18] }}
-                    transition={{ duration: 0.9, repeat: Number.POSITIVE_INFINITY, ease: "linear" }}
-                  />
-                </svg>
-                <b
-                  className={cn(
-                    "inline-flex h-6 items-center rounded-md px-2 font-mono font-semibold text-xs",
-                    toneOf(betweenList[1] ?? "C2").badge,
-                  )}
-                >
-                  {betweenList[1] ?? "C2"}
-                </b>
-              </div>
-              <p className="text-sm leading-relaxed">{tension.text}</p>
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                {betweenList.map((id) => {
-                  const cluster = data.clusters.find((c) => c.id === id);
-                  return (
-                    <span key={id} className="rounded-lg bg-muted/60 px-2.5 py-2">
-                      <b className="block font-medium">{cluster?.title}</b>
-                      <span className="text-muted-foreground">{cluster?.claim}</span>
-                    </span>
-                  );
-                })}
-              </div>
+          <Pane
+            title="Where they pull apart"
+            aside={
+              data.tensions.length > 1 ? `${data.tensions.length} tensions · the gaps hide here` : "the gaps hide here"
+            }
+          >
+            <div className="flex flex-col gap-4">
+              {data.tensions.map((t, i) => (
+                <TensionView
+                  key={t.id ?? t.text}
+                  tension={t}
+                  cursor={i === data.tensions.length - 1}
+                  live={live}
+                  clusters={data.clusters}
+                  toneOf={toneOf}
+                  label={label}
+                  lit={lit}
+                />
+              ))}
             </div>
           </Pane>
         ) : (
