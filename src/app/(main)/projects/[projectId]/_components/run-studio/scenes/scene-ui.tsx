@@ -3,11 +3,12 @@
 import { type ReactNode, useEffect, useState } from "react";
 
 import { cn } from "cn";
+import { CircleCheck, CornerDownRight, type LucideIcon, Undo2 } from "lucide-react";
 import { motion } from "motion/react";
 
 import type { AgentRole } from "@/lib/run-stream/contract";
 
-import { AgentAvatar, Caret } from "../run-bits";
+import { Caret } from "../run-bits";
 import { AGENTS } from "../run-meta";
 import { useBusy } from "../workspace-context";
 
@@ -75,30 +76,34 @@ export function SceneNote({
   text: string;
   note?: string;
 }) {
-  const you = actor === "you";
+  const who = actor === "you" ? "You" : (AGENTS[actor]?.name ?? actor);
+  const { Icon, tone } = decisionMark(text);
+  // "Approved the hypotheses." reads on from the name: "You approved the hypotheses."
+  const verb = /^[A-Z][a-z]+ed\b/.test(text);
   return (
     <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      className={cn(
-        "grid max-w-2xl grid-cols-[auto_1fr] gap-2.5 rounded-xl border px-3 py-2.5 text-sm",
-        you ? "border-amber-500/40 bg-amber-500/10" : "bg-card",
-      )}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      aria-label={title}
+      className="flex max-w-2xl items-start gap-2 border-t pt-2.5 text-muted-foreground text-sm"
     >
-      {you ? (
-        <span className="grid size-5 place-items-center rounded-full bg-amber-500/20 font-semibold text-[9px] text-amber-800 dark:text-amber-300">
-          You
-        </span>
-      ) : (
-        <AgentAvatar agent={actor} size="sm" />
-      )}
-      <div>
-        <b className={cn("font-semibold text-xs", !you && (AGENTS[actor]?.text ?? ""))}>{title}</b>
-        <p>{text}</p>
-        {note && <p className="mt-0.5 text-muted-foreground text-xs italic">Note: “{note}”</p>}
+      <Icon className={cn("mt-0.5 size-4 shrink-0", tone)} aria-hidden />
+      <div className="min-w-0">
+        <p>
+          <span className="font-medium text-foreground">{who}</span>
+          {verb ? ` ${text.charAt(0).toLowerCase()}${text.slice(1)}` : ` · ${text}`}
+        </p>
+        {note && <p className="mt-1 border-l-2 pl-2 text-xs italic">“{note}”</p>}
       </div>
     </motion.div>
   );
+}
+
+/** Approving goes on; asking again goes back; anything else is a plain record. */
+function decisionMark(text: string): { Icon: LucideIcon; tone: string } {
+  if (text.startsWith("Approved")) return { Icon: CircleCheck, tone: "text-emerald-600 dark:text-emerald-400" };
+  if (text.startsWith("Asked")) return { Icon: Undo2, tone: "text-amber-600 dark:text-amber-400" };
+  return { Icon: CornerDownRight, tone: "text-muted-foreground" };
 }
 
 /** Types `text` out at `speed` characters a second while live; shows it whole otherwise. */
