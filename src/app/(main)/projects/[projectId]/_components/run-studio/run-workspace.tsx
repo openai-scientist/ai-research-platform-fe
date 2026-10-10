@@ -14,11 +14,9 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useRunsQuery } from "@/hooks/use-runs-query";
 import type { GateAnswer } from "@/lib/run-stream/contract";
-import { RUN_SOURCE, SHOW_REVIEW_MODE } from "@/lib/run-stream/features";
+import { SHOW_REVIEW_MODE } from "@/lib/run-stream/features";
 import { type RunSession, useProjectRun, useRunSession, useRunStudio } from "@/lib/run-stream/run-store";
 import { displayStatus, liveStageKey } from "@/lib/run-stream/selectors";
 
@@ -45,7 +43,6 @@ function RunWorkspace({ session }: { session: RunSession }) {
   const answerGate = useRunStudio((s) => s.answerGate);
   const pause = useRunStudio((s) => s.pause);
   const resume = useRunStudio((s) => s.resume);
-  const setSpeed = useRunStudio((s) => s.setSpeed);
   const openFrom = useRunStudio((s) => s.openFrom);
   const scroller = useRef<HTMLDivElement>(null);
   const live = liveStageKey(state);
@@ -192,29 +189,6 @@ function RunWorkspace({ session }: { session: RunSession }) {
             </span>
           )}
           <div className="flex items-center gap-2 max-md:w-full max-md:justify-between">
-            {session.source === "mock" && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span>
-                    <ToggleGroup
-                      type="single"
-                      size="sm"
-                      variant="outline"
-                      value={String(session.speed)}
-                      onValueChange={(v) => v && setSpeed(runId, Number(v))}
-                      aria-label="Mock playback speed"
-                    >
-                      {[1, 2, 4].map((s) => (
-                        <ToggleGroupItem key={s} value={String(s)} className="px-2 font-mono text-xs">
-                          {s}×
-                        </ToggleGroupItem>
-                      ))}
-                    </ToggleGroup>
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent>Playback speed of the mock stream</TooltipContent>
-              </Tooltip>
-            )}
             <span className="flex items-center gap-2 whitespace-nowrap text-xs">
               <Switch
                 id="pause-each-step"
@@ -262,13 +236,7 @@ function RunWorkspace({ session }: { session: RunSession }) {
         <div className={cn("grid min-h-0 flex-1", asideOpen ? "lg:grid-cols-[minmax(0,1fr)_352px]" : "grid-cols-1")}>
           <div className="relative flex min-h-0 min-w-0 flex-col">
             <div className="border-b px-4 py-2.5 lg:hidden">
-              <NowCard
-                state={state}
-                holding={holding}
-                onContinue={togglePause}
-                compact
-                typing={session.source === "api"}
-              />
+              <NowCard state={state} holding={holding} onContinue={togglePause} compact typing />
               <Button variant="ghost" size="xs" className="mt-1.5" onClick={() => setDetailsOpen(true)}>
                 Steps and activity
               </Button>
@@ -431,7 +399,7 @@ function RunWorkspace({ session }: { session: RunSession }) {
 
           {asideOpen && (
             <aside className="min-h-0 border-l bg-sidebar max-lg:hidden">
-              <RunAside state={state} holding={holding} onContinue={togglePause} typing={session.source === "api"} />
+              <RunAside state={state} holding={holding} onContinue={togglePause} typing />
             </aside>
           )}
         </div>
@@ -440,7 +408,7 @@ function RunWorkspace({ session }: { session: RunSession }) {
             <SheetHeader className="sr-only">
               <SheetTitle>Steps and activity</SheetTitle>
             </SheetHeader>
-            <RunAside state={state} holding={holding} onContinue={togglePause} typing={session.source === "api"} />
+            <RunAside state={state} holding={holding} onContinue={togglePause} typing />
           </SheetContent>
         </Sheet>
       </motion.section>
@@ -451,7 +419,7 @@ function RunWorkspace({ session }: { session: RunSession }) {
 /** With runs on the backend, brings back the project's latest run after a reload or on another device. */
 function useLatestRun(projectId: string, known: boolean) {
   const attachRun = useRunStudio((s) => s.attachRun);
-  const latest = useRunsQuery(projectId, { limit: 1 }, { enabled: RUN_SOURCE === "api" && !known });
+  const latest = useRunsQuery(projectId, { limit: 1 }, { enabled: !known });
   const run = latest.data?.data[0];
   useEffect(() => {
     // Runs started from a dataset have no topic and keep their own page.

@@ -8,19 +8,15 @@ import { RunStatus } from "@/types/enums";
 
 import { ApiRun } from "./api-run";
 import type { GateAnswer, ReviewMode, RunCommands, RunEvent, RunInput } from "./contract";
-import { RUN_SOURCE } from "./features";
-import { MockRun } from "./mock/mock-run";
 import { applyRunEvent } from "./reducer";
 import { initialRunState, type RunState } from "./run-state";
 
+/** A run on the backend, followed through its events. */
 export interface RunSession {
   runId: string;
   projectId: string;
   /** Short label shown in the UI, such as `RUN-3F9C`. */
   label: string;
-  /** `mock` runs play in the browser; `api` runs live on the backend. */
-  source: "mock" | "api";
-  speed: number;
   state: RunState;
 }
 
@@ -39,15 +35,12 @@ interface RunStudioState {
   answerGate(runId: string, gateId: string, answer: GateAnswer): Promise<boolean>;
   pause(runId: string): void;
   resume(runId: string): void;
-  /** Playback speed of a mock run. */
-  setSpeed(runId: string, speed: number): void;
   openWorkspace(runId: string, from?: Element | null): void;
   closeWorkspace(): void;
 }
 
 interface Stream extends RunCommands {
   dispose(): void;
-  setSpeed?(speed: number): void;
 }
 
 const labelOf = (runId: string) => `RUN-${runId.slice(0, 4).toUpperCase()}`;
@@ -109,14 +102,6 @@ export const useRunStudio = create<RunStudioState>()((set, get) => {
     openRunId: null,
     openFrom: null,
     async startRun(projectId, mode, input) {
-      if (RUN_SOURCE === "mock") {
-        const runId = crypto.randomUUID();
-        const label = labelOf(runId);
-        const run = new MockRun(label, mode, (event) => receive({ ...event, run_id: runId }), input);
-        track({ runId, projectId, label, source: "mock", speed: 1, state: initialRunState(runId) }, run, true);
-        run.start();
-        return runId;
-      }
       try {
         const { data: run } = await fetchRuns.create(projectId, {
           topic: input.topic,
@@ -153,8 +138,6 @@ export const useRunStudio = create<RunStudioState>()((set, get) => {
           runId: run.id,
           projectId,
           label: run.label ?? labelOf(run.id),
-          source: "api",
-          speed: 1,
           // What the run already says about itself, until its events arrive.
           state: {
             ...initialRunState(run.id),
@@ -180,13 +163,6 @@ export const useRunStudio = create<RunStudioState>()((set, get) => {
     },
     resume(runId) {
       streams.get(runId)?.resume();
-    },
-    setSpeed(runId, speed) {
-      streams.get(runId)?.setSpeed?.(speed);
-      set((store) => {
-        const session = store.sessions[runId];
-        return session ? { sessions: { ...store.sessions, [runId]: { ...session, speed } } } : {};
-      });
     },
     openWorkspace(runId, from) {
       set({ openRunId: runId, openFrom: from ? from.getBoundingClientRect() : null });

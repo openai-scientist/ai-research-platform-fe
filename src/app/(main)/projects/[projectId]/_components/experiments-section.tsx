@@ -9,7 +9,7 @@ import { researchRunUrl } from "@/lib/research-workspace";
 import { RunStudio } from "./run-studio/run-studio";
 import type { WorkspaceProps } from "./workspace-ui";
 
-// Runs come from a mock or the backend; `NEXT_PUBLIC_RUN_STREAM_SOURCE` picks which (see run-stream/features.ts).
+// Runs live on the backend; the workspace follows them through their events.
 export function ExperimentsSection({ project, canWrite }: WorkspaceProps) {
   const router = useRouter();
   const searchParams = useSearchParams();

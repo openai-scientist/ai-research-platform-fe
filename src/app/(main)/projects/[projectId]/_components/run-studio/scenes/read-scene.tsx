@@ -8,14 +8,12 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 
 import { Button } from "@/components/ui/button";
 import type { CardField, KnowledgeCard, ShortlistPaper } from "@/lib/run-stream/contract";
-import { SHOW_SCOPE_EXTRAS } from "@/lib/run-stream/features";
-import type { ReadContent, RunState } from "@/lib/run-stream/run-state";
+import type { ReadContent } from "@/lib/run-stream/run-state";
 
 import { AgentCursor, launchFlight } from "../run-bits";
 import { shortCite } from "../run-meta";
 import { useWorkspace } from "../workspace-context";
 import { Bone, Pane, Placeholder } from "./scene-ui";
-import { EstimateList } from "./scope-scene";
 
 const FIELDS: { key: CardField; label: string }[] = [
   { key: "problem", label: "Problem" },
@@ -181,14 +179,12 @@ function PendingCard({
 export function ReadScene({
   data,
   shortlist,
-  estimates,
   live,
   step,
 }: {
   data: ReadContent;
   /** The papers kept at the screen, each to become a card. */
   shortlist: ShortlistPaper[];
-  estimates: RunState["estimates"];
   live: boolean;
   /** The step running now, while the run is followed live. */
   step: string | null;
@@ -233,9 +229,7 @@ export function ReadScene({
   const waiting = step === "extract" ? shortlist.filter((paper) => !carded.has(paper.id)) : [];
   const total = data.cards.length + waiting.length;
   const limited = data.cards.filter((card) => card.limitations);
-  const checked = estimates.filter((e) => e.check).length;
-  let target: string | null = data.cards.length ? `card:${data.cards[data.cards.length - 1].id}` : null;
-  if (checked) target = `estimate:${estimates.filter((e) => e.check).pop()?.estimate.id}`;
+  const target = data.cards.length ? `card:${data.cards[data.cards.length - 1].id}` : null;
 
   return (
     <div ref={scene} className="relative grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
@@ -294,18 +288,12 @@ export function ReadScene({
             )}
           </Pane>
         </div>
-        {SHOW_SCOPE_EXTRAS && (
-          <Pane title="Numbers from memory" aside="checked against cards">
-            <EstimateList estimates={estimates} live={live} />
-            {!estimates.length && <p className="text-muted-foreground text-xs">None were recalled.</p>}
-          </Pane>
-        )}
       </aside>
       <AgentCursor
         agent={live ? "librarian" : null}
         container={scene}
         target={target}
-        version={`${data.cards.length}-${checked}`}
+        version={`${data.cards.length}`}
       />
     </div>
   );

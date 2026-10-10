@@ -296,9 +296,11 @@ export function SearchScene({ data, live }: { data: SearchContent; live: boolean
           )}
         </div>
 
-        <div ref={mergeRef} className="flex min-w-0 flex-col">
+        {/* Side by side, the collecting column sets the height and the merge list scrolls inside it, so the
+            cards on the left keep their own height. */}
+        <div ref={mergeRef} className="relative flex min-w-0 flex-col">
           {data.merged.length || data.collected ? (
-            <Pane title="Merging duplicates" className="flex-1">
+            <Pane title="Merging duplicates" className="flex flex-1 flex-col xl:absolute xl:inset-0">
               <p className="-mt-2 mb-3 text-muted-foreground text-xs">
                 Same DOI, arXiv ID or title. Keeps the record with the most citations, then the longer abstract; the
                 others fill its gaps, such as a missing DOI.
@@ -321,86 +323,88 @@ export function SearchScene({ data, live }: { data: SearchContent; live: boolean
                   <span className="text-muted-foreground text-xs">unique papers</span>
                 </span>
               </div>
-              {extra && extra.queries > 0 && (
-                <p className="-mt-1 mb-3 text-muted-foreground text-xs">
-                  The hits include {extra.hits.toLocaleString("en-US")} from {extra.queries} extra{" "}
-                  {extra.queries === 1 ? "query" : "queries"} built from the topic's words, outside the plan above.
-                </p>
-              )}
-              <ul className="flex flex-col gap-2">
-                {shownMerged.map((m, i) => (
-                  <motion.li
-                    key={m.title}
-                    data-cursor={`merged:${i}`}
-                    initial={live ? { opacity: 0, y: 6 } : false}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="flex flex-col gap-1.5 rounded-lg border px-3 py-2 text-xs"
-                  >
-                    <span className="line-clamp-2 font-medium text-[12.5px] leading-snug">{m.title}</span>
-                    <ul className="flex flex-col gap-1">
-                      {bySourceOrder(m.records).map((r, k) => {
-                        const kept = isKept(m, r);
-                        return (
-                          <motion.li
-                            key={r.record_id}
-                            initial={live ? { y: (k - (m.records.length - 1) / 2) * -10, opacity: 0 } : false}
-                            animate={{ y: 0, opacity: kept ? 1 : 0.55 }}
-                            transition={{ delay: live ? 0.15 + k * 0.1 : 0, duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
-                            className={cn(
-                              "grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 rounded-md px-2 py-1 transition-colors duration-500",
-                              kept ? "bg-cyan-500/10 ring-1 ring-cyan-500/30" : "bg-muted/60",
-                            )}
-                          >
-                            <span className="flex min-w-0 items-center gap-1.5">
-                              {kept ? (
-                                <Check className="size-3 shrink-0 text-cyan-700 dark:text-cyan-300" />
-                              ) : (
-                                <Merge className="size-3 shrink-0 text-muted-foreground" />
-                              )}
-                              <span className={cn("truncate", kept && "font-medium")}>{r.source}</span>
-                            </span>
-                            <span
+              <div className="-mr-2 flex min-h-0 flex-1 flex-col overflow-y-auto pr-2">
+                {extra && extra.queries > 0 && (
+                  <p className="mb-3 text-muted-foreground text-xs">
+                    The hits include {extra.hits.toLocaleString("en-US")} from {extra.queries} extra{" "}
+                    {extra.queries === 1 ? "query" : "queries"} built from the topic's words, outside the plan above.
+                  </p>
+                )}
+                <ul className="flex flex-col gap-2">
+                  {shownMerged.map((m, i) => (
+                    <motion.li
+                      key={m.title}
+                      data-cursor={`merged:${i}`}
+                      initial={live ? { opacity: 0, y: 6 } : false}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="flex flex-col gap-1.5 rounded-lg border px-3 py-2 text-xs"
+                    >
+                      <span className="line-clamp-2 font-medium text-[12.5px] leading-snug">{m.title}</span>
+                      <ul className="flex flex-col gap-1">
+                        {bySourceOrder(m.records).map((r, k) => {
+                          const kept = isKept(m, r);
+                          return (
+                            <motion.li
+                              key={r.record_id}
+                              initial={live ? { y: (k - (m.records.length - 1) / 2) * -10, opacity: 0 } : false}
+                              animate={{ y: 0, opacity: kept ? 1 : 0.55 }}
+                              transition={{ delay: live ? 0.15 + k * 0.1 : 0, duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
                               className={cn(
-                                "inline-flex h-4 items-center rounded px-1 text-[10px]",
-                                r.has_doi
-                                  ? "bg-emerald-500/12 text-emerald-700 dark:text-emerald-300"
-                                  : "bg-muted text-muted-foreground",
+                                "grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 rounded-md px-2 py-1 transition-colors duration-500",
+                                kept ? "bg-cyan-500/10 ring-1 ring-cyan-500/30" : "bg-muted/60",
                               )}
                             >
-                              {r.has_doi ? "DOI" : "No DOI"}
-                            </span>
-                            <span className="w-24 text-right text-muted-foreground tabular-nums">
-                              {r.citations.toLocaleString("en-US")} citations
-                            </span>
-                          </motion.li>
-                        );
-                      })}
-                    </ul>
-                    <motion.span
-                      initial={live ? { opacity: 0, y: 3 } : false}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: live ? 0.6 + m.records.length * 0.1 : 0 }}
-                      className="text-[11px] text-muted-foreground"
-                    >
-                      {m.records.length} records → 1. Kept {m.kept}: {keptWhy(m)}.
-                    </motion.span>
-                  </motion.li>
-                ))}
-              </ul>
-              {data.merged.length > MERGED_SHOWN && (
-                <Button variant="ghost" size="xs" className="mt-2 self-start" onClick={() => setAllMerged((v) => !v)}>
-                  {allMerged ? "Show fewer" : `Show all ${data.merged.length} merged papers`}
-                </Button>
-              )}
-              {data.collected && repeats != null && (
-                <p className="mt-3 text-muted-foreground text-xs">
-                  {data.collected.duplicates.toLocaleString("en-US")} duplicates in all:{" "}
-                  {mergedRecords.toLocaleString("en-US")} records merged into the {data.merged.length} papers above
-                  {repeats > 0 &&
-                    `, and ${repeats.toLocaleString("en-US")} times a source returned the same record to another query`}
-                  .
-                </p>
-              )}
+                              <span className="flex min-w-0 items-center gap-1.5">
+                                {kept ? (
+                                  <Check className="size-3 shrink-0 text-cyan-700 dark:text-cyan-300" />
+                                ) : (
+                                  <Merge className="size-3 shrink-0 text-muted-foreground" />
+                                )}
+                                <span className={cn("truncate", kept && "font-medium")}>{r.source}</span>
+                              </span>
+                              <span
+                                className={cn(
+                                  "inline-flex h-4 items-center rounded px-1 text-[10px]",
+                                  r.has_doi
+                                    ? "bg-emerald-500/12 text-emerald-700 dark:text-emerald-300"
+                                    : "bg-muted text-muted-foreground",
+                                )}
+                              >
+                                {r.has_doi ? "DOI" : "No DOI"}
+                              </span>
+                              <span className="w-24 text-right text-muted-foreground tabular-nums">
+                                {r.citations.toLocaleString("en-US")} citations
+                              </span>
+                            </motion.li>
+                          );
+                        })}
+                      </ul>
+                      <motion.span
+                        initial={live ? { opacity: 0, y: 3 } : false}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: live ? 0.6 + m.records.length * 0.1 : 0 }}
+                        className="text-[11px] text-muted-foreground"
+                      >
+                        {m.records.length} records → 1. Kept {m.kept}: {keptWhy(m)}.
+                      </motion.span>
+                    </motion.li>
+                  ))}
+                </ul>
+                {data.merged.length > MERGED_SHOWN && (
+                  <Button variant="ghost" size="xs" className="mt-2 self-start" onClick={() => setAllMerged((v) => !v)}>
+                    {allMerged ? "Show fewer" : `Show all ${data.merged.length} merged papers`}
+                  </Button>
+                )}
+                {data.collected && repeats != null && (
+                  <p className="mt-3 text-muted-foreground text-xs">
+                    {data.collected.duplicates.toLocaleString("en-US")} duplicates in all:{" "}
+                    {mergedRecords.toLocaleString("en-US")} records merged into the {data.merged.length} papers above
+                    {repeats > 0 &&
+                      `, and ${repeats.toLocaleString("en-US")} times a source returned the same record to another query`}
+                    .
+                  </p>
+                )}
+              </div>
             </Pane>
           ) : (
             <Placeholder>Papers found more than once are merged</Placeholder>

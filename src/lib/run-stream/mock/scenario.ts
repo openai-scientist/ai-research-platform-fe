@@ -1,11 +1,49 @@
-// Example data for the mock research run: a sleep and exam-score study on 1,240 students.
-// Every value here is what Popper would report through the event stream.
+// Example data for the mock stages after the hypotheses (experiment, interpret, report, write): a sleep and
+// exam-score study on 1,240 students. Every value here is what Popper would report through the event stream.
 
-import type { DataColumn, DataIssue, Hypothesis, Verdict } from "../contract";
+import type { DataColumn, DataIssue, Hypothesis, RoundKind, Skill, TestDesign, Verdict } from "../contract";
 
-/** The topic of the sample run. The mock plays this run whatever topic is typed. */
+/** The topic of the example study the mock stages play. */
 export const SAMPLE_TOPIC =
   "Does getting more sleep go with higher exam scores in our undergraduates, and what explains it?";
+
+export const DOMAINS = ["Sleep science", "Educational psychology", "Survey statistics"];
+
+/** The hypotheses each round tests: the first set, and the one tried after a pivot. */
+export const ROUND_SETS: Record<Exclude<RoundKind, "refine">, string[]> = {
+  first: ["H1", "H2", "H3", "H4"],
+  pivot: ["H5", "H6"],
+};
+
+export const EXPERIMENT_SKILLS: Skill[] = [
+  {
+    id: "experiment/regression",
+    name: "Regression and mediation",
+    category: "experiment",
+    matched: ["exam score", "stress"],
+  },
+  { id: "tooling/sandbox", name: "Python sandbox", category: "tooling", matched: [] },
+];
+
+/** The analysis a set of hypotheses calls for: what varies, what is measured, what is held fixed. */
+export function designFor(set: string[]): TestDesign {
+  const independent: Record<string, string> = {
+    H1: "sleep ≥ 7 h",
+    H2: "stress_level (1–3)",
+    H3: "screen_time",
+    H4: "age > 25",
+    H5: "study_hours",
+    H6: "gender",
+  };
+  const chosen = set.map((h) => independent[h]).filter(Boolean);
+  if (!chosen.includes("sleep ≥ 7 h")) chosen.unshift("sleep ≥ 7 h");
+  const all = ["stress_level", "study_hours", "screen_time", "age", "gender"];
+  return {
+    independent: chosen,
+    dependent: ["exam_score"],
+    controls: all.filter((c) => !chosen.some((x) => x.startsWith(c))),
+  };
+}
 
 export const DATASET = { name: "student_wellbeing.csv", version: 1, rows: 1240, columns: 8 } as const;
 

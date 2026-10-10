@@ -3,12 +3,11 @@
 import { Fragment, useRef } from "react";
 
 import { cn } from "cn";
-import { AlertTriangle, ArrowDown, CircleCheck, CircleHelp, Cpu, Database, GitFork, Target, X } from "lucide-react";
+import { AlertTriangle, ArrowDown, CircleCheck, GitFork, Target } from "lucide-react";
 import { motion } from "motion/react";
 
 import type { GoalField, Risk } from "@/lib/run-stream/contract";
-import { SHOW_SCOPE_EXTRAS } from "@/lib/run-stream/features";
-import type { RunState, ScopeContent } from "@/lib/run-stream/run-state";
+import type { ScopeContent } from "@/lib/run-stream/run-state";
 
 import { AnimatedNumber } from "../animated-number";
 import { AgentAvatar, AgentCursor } from "../run-bits";
@@ -28,75 +27,6 @@ const RISK_TONE: Record<Risk, string> = {
   medium: "bg-amber-500/12 text-amber-800 dark:text-amber-300",
   high: "bg-rose-500/12 text-rose-700 dark:text-rose-300",
 };
-
-/** Numbers recalled from memory, with what the literature later said about them. Rule 6. */
-export function EstimateList({ estimates, live }: { estimates: RunState["estimates"]; live: boolean }) {
-  if (!estimates.length) return null;
-  return (
-    <ul className="flex flex-col gap-2">
-      {estimates.map(({ estimate, check }) => (
-        <motion.li
-          key={estimate.id}
-          layout
-          data-cursor={`estimate:${estimate.id}`}
-          initial={live ? { opacity: 0, y: 6 } : false}
-          animate={{ opacity: 1, y: 0 }}
-          className={cn(
-            "flex flex-col gap-1.5 rounded-lg border px-3 py-2.5 text-sm transition-colors duration-500",
-            !check && "border-amber-500/50 border-dashed",
-            check?.status === "verified" && "border-emerald-500/40 bg-emerald-500/5",
-            check?.status === "unsupported" && "border-rose-500/30 bg-rose-500/5",
-          )}
-        >
-          <span className="flex items-start gap-2">
-            <b className="mt-px inline-flex h-5 shrink-0 items-center rounded bg-muted px-1.5 font-mono font-semibold text-[11px]">
-              {estimate.id}
-            </b>
-            <span
-              className={cn(
-                "decoration-1 transition-[text-decoration-color,color] duration-700",
-                check?.status === "unsupported"
-                  ? "text-muted-foreground line-through decoration-rose-500"
-                  : "decoration-transparent",
-              )}
-            >
-              {estimate.text}
-            </span>
-          </span>
-          {check ? (
-            <motion.span
-              initial={{ opacity: 0, y: 3 }}
-              animate={{ opacity: 1, y: 0 }}
-              className={cn(
-                "flex items-start gap-1.5 text-xs",
-                check.status === "verified"
-                  ? "text-emerald-700 dark:text-emerald-300"
-                  : "text-rose-700 dark:text-rose-300",
-              )}
-            >
-              {check.status === "verified" ? (
-                <CircleCheck className="mt-px size-3.5 shrink-0" />
-              ) : (
-                <X className="mt-px size-3.5 shrink-0" />
-              )}
-              <span>
-                <b className="font-semibold">
-                  {check.status === "verified" ? `Backed by ${check.source}` : "Not backed, dropped"}
-                </b>
-                <span className="text-muted-foreground"> · {check.note}</span>
-              </span>
-            </motion.span>
-          ) : (
-            <span className="flex items-center gap-1.5 text-amber-800 text-xs dark:text-amber-300">
-              <CircleHelp className="size-3.5" />
-              Unverified · checked against the papers in Read
-            </span>
-          )}
-        </motion.li>
-      ))}
-    </ul>
-  );
-}
 
 function questionParts(question: string, phrases: string[]) {
   const parts: { text: string; phrase?: string }[] = [];
@@ -230,16 +160,12 @@ export function ScopeScene({
   data,
   topic,
   domains,
-  estimates,
-  dataLabel,
   live,
   step,
 }: {
   data: ScopeContent;
   topic: string;
   domains: string[];
-  estimates: RunState["estimates"];
-  dataLabel: string;
   live: boolean;
   /** The step running now, while the run is followed live. */
   step: string | null;
@@ -260,7 +186,6 @@ export function ScopeScene({
   let agent: "strategist" | "pi" = "strategist";
   const lastGoal = data.goal[data.goal.length - 1];
   if (lastGoal) target = `goal:${lastGoal.field}`;
-  if (estimates.length && data.goal.length === 2) target = `estimate:${estimates[estimates.length - 1].estimate.id}`;
   if (adjusted) target = "goal:scope";
   if (data.approved) {
     target = "approved";
@@ -292,7 +217,7 @@ export function ScopeScene({
           <span className="ml-1">Everything below is written from this. You didn't list the sub-questions.</span>
         </span>
       </section>
-      <div className={cn("grid gap-4", SHOW_SCOPE_EXTRAS && "xl:grid-cols-[minmax(0,1.55fr)_minmax(300px,1fr)]")}>
+      <div className="grid gap-4">
         <Pane
           title={
             <span className="inline-flex items-center gap-1.5">
@@ -391,66 +316,6 @@ export function ScopeScene({
             </motion.div>
           )}
         </Pane>
-
-        {SHOW_SCOPE_EXTRAS && (
-          <div className="flex min-w-0 flex-col gap-4">
-            <Pane title="What the run works with" aside="detected, not assumed">
-              {data.compute ? (
-                <dl className="flex flex-col gap-3 text-sm">
-                  <div className="flex flex-col gap-1.5">
-                    <dt className="text-muted-foreground text-xs">Fields matched to your topic</dt>
-                    <dd className="flex flex-wrap gap-1.5">
-                      {data.domains.map((d, i) => (
-                        <motion.span
-                          key={d}
-                          initial={live ? { opacity: 0, scale: 0.8 } : false}
-                          animate={{ opacity: 1, scale: 1 }}
-                          transition={{ delay: i * 0.12, type: "spring", stiffness: 420, damping: 22 }}
-                          className="inline-flex h-6 items-center rounded-md bg-pink-500/10 px-2 font-medium text-pink-700 text-xs ring-1 ring-pink-500/25 dark:text-pink-300"
-                        >
-                          {d}
-                        </motion.span>
-                      ))}
-                    </dd>
-                  </div>
-                  <div className="grid grid-cols-[28px_minmax(0,1fr)] items-start gap-2.5">
-                    <dt className="grid size-7 place-items-center rounded-md bg-muted">
-                      <Cpu className="size-4 text-muted-foreground" />
-                      <span className="sr-only">Compute</span>
-                    </dt>
-                    <dd className="min-w-0">
-                      <b className="font-medium text-[13px]">{data.compute.label}</b>
-                      <span className="block text-muted-foreground text-xs">{data.compute.detail}</span>
-                      <span className="mt-1 block text-[11px] text-muted-foreground">
-                        Saved as the compute profile. Every hypothesis is checked against it in stage 8.
-                      </span>
-                    </dd>
-                  </div>
-                  {dataLabel && (
-                    <div className="grid grid-cols-[28px_minmax(0,1fr)] items-center gap-2.5">
-                      <dt className="grid size-7 place-items-center rounded-md bg-muted">
-                        <Database className="size-4 text-muted-foreground" />
-                        <span className="sr-only">Data</span>
-                      </dt>
-                      <dd className="text-[13px]">{dataLabel}</dd>
-                    </div>
-                  )}
-                </dl>
-              ) : (
-                <PendingLines lines={3} />
-              )}
-            </Pane>
-            <Pane title="Numbers from memory" aside="unverified until a paper backs them" className="flex-1">
-              {estimates.length ? (
-                <EstimateList estimates={estimates} live={live} />
-              ) : (
-                <p className="text-muted-foreground text-xs">
-                  Any figure the agents recall before reading appears here, marked unverified.
-                </p>
-              )}
-            </Pane>
-          </div>
-        )}
       </div>
 
       <div ref={treeRef}>
@@ -679,7 +544,7 @@ export function ScopeScene({
         agent={live ? agent : null}
         container={scene}
         target={target}
-        version={`${data.goal.length}-${data.subQuestions.length}-${data.risks.length}-${estimates.length}`}
+        version={`${data.goal.length}-${data.subQuestions.length}-${data.risks.length}`}
       />
     </div>
   );

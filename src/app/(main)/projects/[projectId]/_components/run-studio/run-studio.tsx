@@ -22,7 +22,6 @@ import {
 import { motion } from "motion/react";
 
 import { ManagementStatusBadge } from "@/components/management-status-badge";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldTitle } from "@/components/ui/field";
 import { useInfiniteRuns } from "@/hooks/use-runs-query";
@@ -30,7 +29,7 @@ import { projectKeys } from "@/lib/api/query-keys";
 import type { RunItem } from "@/lib/api/services/fetch-runs";
 import { researchRunUrl } from "@/lib/research-workspace";
 import type { ReviewMode, RunInput } from "@/lib/run-stream/contract";
-import { RUN_SOURCE, SHOW_DATA_STAGE, SHOW_REVIEW_MODE } from "@/lib/run-stream/features";
+import { SHOW_DATA_STAGE, SHOW_REVIEW_MODE } from "@/lib/run-stream/features";
 import { DATASET } from "@/lib/run-stream/mock/scenario";
 import { type RunSession, useProjectRun, useRunStudio } from "@/lib/run-stream/run-store";
 import { displayStatus, finalResults, GATE_TITLE, nextStop, signed } from "@/lib/run-stream/selectors";
@@ -123,11 +122,6 @@ function TopicComposer({
       <div className="flex flex-col gap-5 p-5 md:p-6">
         <span className="flex items-center gap-2 font-medium text-muted-foreground text-xs uppercase tracking-wide">
           Next research run
-          {RUN_SOURCE === "mock" && (
-            <Badge variant="outline" className="normal-case tracking-normal">
-              Mock stream
-            </Badge>
-          )}
         </span>
         <TopicInput
           draft={draft}
@@ -254,12 +248,9 @@ export function LiveRunCard({ session, onOpen }: { session: RunSession; onOpen(f
   const h1 = finalResults(state).H1;
   const failed = state.lifecycle === "failed";
   const locked = state.plan.length ? LOCKED_PIPELINE.filter((p) => !state.plan.some((s) => s.stage === p.stage)) : [];
-  const started =
-    session.source === "mock"
-      ? "started today · mock stream"
-      : state.startedAt
-        ? `started ${new Date(state.startedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
-        : "starting";
+  const started = state.startedAt
+    ? `started ${new Date(state.startedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
+    : "starting";
   return (
     <motion.section
       ref={card}

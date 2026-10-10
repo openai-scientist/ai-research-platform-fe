@@ -7,7 +7,6 @@ import { ArrowRight, Check, CircleCheck, FileText } from "lucide-react";
 import { motion } from "motion/react";
 
 import type { Figure, KnowledgeCard } from "@/lib/run-stream/contract";
-import { SHOW_DATA_STAGE } from "@/lib/run-stream/features";
 import type { RunState, StageState } from "@/lib/run-stream/run-state";
 import { liveStageKey, pipelineLabel } from "@/lib/run-stream/selectors";
 
@@ -310,21 +309,9 @@ export function StageScreen({
   ));
   if (content.stage === "data") scene = <DataScene data={content} live={live} />;
   if (content.stage === "scope") {
-    const data = state.stages.data?.content;
-    let dataLabel = SHOW_DATA_STAGE ? (state.dataset?.name ?? "") : "";
-    if (data?.stage === "data" && data.version)
-      dataLabel = `${data.file} v${data.version.version} · ${data.version.rows.toLocaleString("en-US")} rows`;
     scene = (
       <>
-        <ScopeScene
-          data={content}
-          topic={state.topic}
-          domains={state.domains}
-          estimates={state.estimates}
-          dataLabel={dataLabel}
-          live={live}
-          step={step}
-        />
+        <ScopeScene data={content} topic={state.topic} domains={state.domains} live={live} step={step} />
         {decisionNotes}
       </>
     );
@@ -340,7 +327,7 @@ export function StageScreen({
   if (content.stage === "read") {
     const screen = state.stages.screen?.content;
     const shortlist = screen?.stage === "screen" ? screen.kept.filter((p) => !screen.dropped.includes(p.id)) : [];
-    scene = <ReadScene data={content} shortlist={shortlist} estimates={state.estimates} live={live} step={step} />;
+    scene = <ReadScene data={content} shortlist={shortlist} live={live} step={step} />;
   }
   if (content.stage === "synthesize") {
     const read = state.stages.read?.content;

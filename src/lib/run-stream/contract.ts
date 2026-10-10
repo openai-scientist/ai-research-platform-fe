@@ -384,12 +384,21 @@ export interface Falsifier {
 }
 
 export interface NoveltyCheck {
+  /** False when a paper found already tests the prediction. */
   novel: boolean;
+  /** The paper the verdict names, or the closest by word overlap when it names none. */
   closest: string;
-  /** 0 to 1, against the closest shortlisted paper. */
+  /** 0 to 1: the share of the hypothesis's words that paper holds. */
   similarity: number;
   /** False when the novelty search found nothing and only the run's own papers were compared. */
   searched?: boolean;
+  /**
+   * The model's reading of the closest papers: `tested` (one already tests the prediction), `related` (one studies the
+   * same exposure or outcome without testing it) or `new`. Absent on runs checked by word overlap alone.
+   */
+  verdict?: "tested" | "related" | "new";
+  /** One sentence on what in the paper decides the verdict. */
+  reason?: string;
 }
 
 export interface FeasibilityCheck {

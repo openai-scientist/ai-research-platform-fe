@@ -17,6 +17,7 @@ import {
 import { AnimatePresence, MotionConfig, motion } from "motion/react";
 
 import { Button } from "@/components/ui/button";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import type {
   AgentRole,
   DebateStance,
@@ -457,10 +458,30 @@ function AsideRow({
 
 /** When the novelty search found nothing, only the run's own papers were compared: no match there is not a green light. */
 function noveltyVerdict(novelty: NoveltyCheck): { label: string; tone: string } {
+  if (novelty.verdict === "tested") return { label: "Already tested", tone: "text-amber-800 dark:text-amber-300" };
   if (!novelty.novel) return { label: "Close match found", tone: "text-amber-800 dark:text-amber-300" };
   if (novelty.searched === false)
-    return { label: "No close match in this run's papers", tone: "text-muted-foreground" };
+    return {
+      label:
+        novelty.verdict === "related" ? "Related work in this run's papers" : "No close match in this run's papers",
+      tone: "text-muted-foreground",
+    };
+  if (novelty.verdict === "related")
+    return { label: "Related work, not yet tested", tone: "text-sky-700 dark:text-sky-300" };
+  if (novelty.verdict === "new")
+    return { label: "No prior test found", tone: "text-emerald-700 dark:text-emerald-300" };
   return { label: "No close match found", tone: "text-emerald-700 dark:text-emerald-300" };
+}
+
+/** How the novelty check was made, so the verdict is read for what it is. */
+function noveltyFootnote(novelty: NoveltyCheck): string {
+  if (novelty.verdict)
+    return novelty.searched === false
+      ? "The search for other papers found nothing, so the model read only this run's closest papers and judged whether one tests this prediction. Not proof of novelty."
+      : "The model read the closest papers the search found and judged whether one tests this prediction. Not proof of novelty.";
+  return novelty.searched === false
+    ? "The search for other papers found nothing, so only this run's papers were checked, by word overlap. A heuristic, not proof of novelty."
+    : "Checked against the papers this run retrieved, by word overlap. A heuristic, not proof of novelty.";
 }
 
 function ObjectionLine({ o }: { o: StandingObjection }) {
@@ -476,14 +497,9 @@ function ObjectionLine({ o }: { o: StandingObjection }) {
   );
 }
 
-/**
- * Where a hypothesis comes from in the debate and what still stands against it: the debate threads it is built from,
- * a fatal objection that stands (and, if you kept it anyway, your reason), and the caveats kept as limitations.
- */
+/** Where a hypothesis comes from in the debate: the threads it is built from and, when merged, what each gave. */
 function Provenance({ h, fresh }: { h: Hypothesis; fresh: boolean }) {
-  const contested = h.contested ?? [];
-  const caveats = h.caveats ?? [];
-  if (!h.from?.length && !contested.length && !caveats.length) return null;
+  if (!h.from?.length && !h.merge_note) return null;
   return (
     <motion.div
       initial={fresh ? { opacity: 0, y: 4 } : false}
@@ -506,6 +522,25 @@ function Provenance({ h, fresh }: { h: Hypothesis; fresh: boolean }) {
         </span>
       ) : null}
       {h.merge_note && <span className="text-muted-foreground leading-snug">{h.merge_note}</span>}
+    </motion.div>
+  );
+}
+
+/**
+ * What still stands against a hypothesis after the debate: a fatal objection (and, if you kept it anyway, your reason)
+ * and the caveats kept as limitations. It follows the four parts, so its length never pushes the claim down.
+ */
+function Standing({ h, fresh }: { h: Hypothesis; fresh: boolean }) {
+  const contested = h.contested ?? [];
+  const caveats = h.caveats ?? [];
+  if (!contested.length && !caveats.length) return null;
+  return (
+    <motion.div
+      initial={fresh ? { opacity: 0, y: 4 } : false}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: fresh ? 0.2 + 4 * PART_STEP : 0, duration: 0.35 }}
+      className="flex flex-col gap-2 text-xs"
+    >
       {contested.length > 0 && (
         <div className="flex flex-col gap-1.5 rounded-lg bg-rose-500/8 px-2.5 py-2 ring-1 ring-rose-500/25">
           <span className="flex items-center gap-1.5 font-medium text-rose-700 dark:text-rose-300">
@@ -542,44 +577,56 @@ function Provenance({ h, fresh }: { h: Hypothesis; fresh: boolean }) {
   );
 }
 
-/** The tensions of the literature a hypothesis settles, each with the finding on either side. */
-function Settles({ tensions, fresh }: { tensions: Tension[]; fresh: boolean }) {
-  if (!tensions.length) return null;
+/**
+ * A tension of the literature the hypothesis settles, as a badge in its header. Several hypotheses can settle the same
+ * tension, so the tension and the finding on either side open on hover or focus instead of filling every card.
+ */
+function SettlesBadge({ tension: t, delay }: { tension: Tension; delay: number | null }) {
   return (
-    <div className="flex flex-col gap-2">
-      {tensions.map((t, i) => (
-        <motion.div
-          key={t.id}
-          initial={fresh ? { opacity: 0, y: 4 } : false}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: fresh ? 0.15 + i * 0.1 : 0, duration: 0.35 }}
-          className="flex flex-col gap-1.5 rounded-lg bg-orange-500/8 px-2.5 py-2 text-xs ring-1 ring-orange-500/20"
+    <HoverCard openDelay={120} closeDelay={80}>
+      <HoverCardTrigger asChild>
+        <motion.button
+          type="button"
+          initial={delay === null ? false : { opacity: 0, scale: 0.85 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ type: "spring", stiffness: 420, damping: 26, delay: delay ?? 0 }}
+          // Hovering or opening it is not a click on the card, which drops the hypothesis while you edit the set.
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+          aria-label={`Settles tension ${t.id}: predicts which side holds, and when`}
+          className="inline-flex h-5 cursor-help items-center gap-1 rounded-md bg-orange-500/10 px-1.5 font-medium text-[11px] text-orange-800 ring-1 ring-orange-500/20 transition-colors duration-200 hover:bg-orange-500/18 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500/50 data-[state=open]:bg-orange-500/18 dark:text-orange-300"
         >
-          <span className="flex items-center gap-1.5 font-medium text-orange-800 dark:text-orange-300">
-            <Scale className="size-3.5" />
-            Settles {t.id}
-            <span className="font-normal text-muted-foreground">· predicts which side holds, and when</span>
-          </span>
-          <span className="leading-snug">{t.text}</span>
-          {t.sides && (
-            <span className="grid gap-1.5 sm:grid-cols-2">
-              {t.sides.map((side, j) => (
-                <span
-                  key={side.claim}
-                  className="rounded-md bg-card/70 px-2 py-1 leading-snug ring-1 ring-foreground/5"
-                >
-                  <b className="mr-1 font-mono font-semibold text-[10.5px] text-muted-foreground">{j ? "B" : "A"}</b>
-                  {side.claim}
-                  <span className="ml-1 text-muted-foreground">
-                    ({side.card_ids.length} card{side.card_ids.length === 1 ? "" : "s"})
-                  </span>
+          <Scale className="size-3" />
+          Settles {t.id}
+        </motion.button>
+      </HoverCardTrigger>
+      <HoverCardContent
+        align="start"
+        sideOffset={6}
+        className="w-[min(26rem,calc(100vw-2rem))] p-3 text-xs duration-200 ease-out"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <span className="flex items-center gap-1.5 font-medium text-orange-800 dark:text-orange-300">
+          <Scale className="size-3.5" />
+          Settles {t.id}
+          <span className="font-normal text-muted-foreground">· predicts which side holds, and when</span>
+        </span>
+        <p className="mt-1.5 leading-snug">{t.text}</p>
+        {t.sides && (
+          <span className="mt-2 grid gap-1.5">
+            {t.sides.map((side, j) => (
+              <span key={side.claim} className="rounded-md bg-muted/60 px-2 py-1.5 leading-snug">
+                <b className="mr-1 font-mono font-semibold text-[10.5px] text-muted-foreground">{j ? "B" : "A"}</b>
+                {side.claim}
+                <span className="ml-1 text-muted-foreground">
+                  ({side.card_ids.length} card{side.card_ids.length === 1 ? "" : "s"})
                 </span>
-              ))}
-            </span>
-          )}
-        </motion.div>
-      ))}
-    </div>
+              </span>
+            ))}
+          </span>
+        )}
+      </HoverCardContent>
+    </HoverCard>
   );
 }
 
@@ -661,8 +708,11 @@ function HypothesisCard({
       role={editing ? "button" : undefined}
       tabIndex={editing ? 0 : undefined}
       aria-pressed={editing ? dropped : undefined}
+      // Eight rows of the set's grid (header, provenance, the four parts, what still stands, the novelty check), shared
+      // with the card beside it so each part starts at the same height in both. A part a card lacks keeps its row,
+      // empty; each row carries its own top space so an empty one adds none.
       className={cn(
-        "relative flex h-full min-w-0 flex-col gap-3 overflow-hidden rounded-xl bg-card px-4 py-3.5 text-sm ring-1 transition-shadow duration-500",
+        "relative row-span-8 grid min-w-0 grid-rows-subgrid gap-y-0 overflow-hidden rounded-xl bg-card px-4 py-3.5 text-sm ring-1 transition-shadow duration-500",
         draft.selected && !dropped ? "shadow-sm ring-foreground/30" : "ring-foreground/10",
         editing && "cursor-pointer hover:ring-foreground",
       )}
@@ -689,6 +739,9 @@ function HypothesisCard({
           answers <b className="font-mono text-foreground">{h.sub_question}</b> · predicts{" "}
           <b className="font-mono text-foreground">{h.prediction}</b>
         </span>
+        {tensions.map((t, i) => (
+          <SettlesBadge key={t.id} tension={t} delay={fresh ? 0.2 + i * 0.08 : null} />
+        ))}
         <span className="ml-auto">
           {dropped ? (
             <span className="font-semibold text-amber-800 text-xs dark:text-amber-300">Dropped by you</span>
@@ -706,16 +759,17 @@ function HypothesisCard({
           )}
         </span>
       </header>
-      <Settles tensions={tensions} fresh={fresh} />
-      <Provenance h={h} fresh={fresh} />
-      <ol className="flex flex-col gap-2.5">
+      <div className="min-w-0 pt-3 empty:pt-0">
+        <Provenance h={h} fresh={fresh} />
+      </div>
+      <ol className="contents">
         {parts.map((part, i) => (
           <motion.li
             key={part.n}
             initial={fresh ? { opacity: 0, y: 4 } : false}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: fresh ? 0.2 + i * PART_STEP : 0, duration: 0.35 }}
-            className="grid grid-cols-[20px_minmax(0,1fr)] gap-2.5"
+            className={cn("grid grid-cols-[20px_minmax(0,1fr)] content-start gap-2.5", i ? "pt-2.5" : "pt-3")}
           >
             <span
               className={cn(
@@ -732,6 +786,9 @@ function HypothesisCard({
           </motion.li>
         ))}
       </ol>
+      <div className="min-w-0 pt-3 empty:pt-0">
+        <Standing h={h} fresh={fresh} />
+      </div>
       {/* The novelty check can come alone: the engine does not judge feasibility, and none is made up here. */}
       {novelty && (
         <motion.div
@@ -739,14 +796,18 @@ function HypothesisCard({
           initial={live ? { opacity: 0, height: 0 } : false}
           animate={{ opacity: 1, height: "auto" }}
           transition={{ delay: live ? 0.9 : 0, duration: 0.35 }}
-          className="mt-auto flex flex-col gap-1.5 overflow-hidden border-t pt-2.5 text-xs"
+          className="mt-3 flex flex-col gap-1.5 self-end overflow-hidden border-t pt-2.5 text-xs"
         >
           <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <ScanSearch className="size-3.5 text-cyan-600" />
-            {/* A word-overlap check against the papers this run retrieved: it can find a close match, never prove
-                that nothing like the hypothesis was published. */}
+            {/* A check against the papers this run retrieved: it can find a prior test, never prove that nothing like
+                the hypothesis was published. */}
             <b
-              title="Word overlap with the papers this run retrieved; a heuristic, not proof of novelty"
+              title={
+                novelty.verdict
+                  ? "The model's reading of the closest papers this run retrieved; not proof of novelty"
+                  : "Word overlap with the papers this run retrieved; a heuristic, not proof of novelty"
+              }
               className={cn("font-semibold", noveltyVerdict(novelty).tone)}
             >
               {noveltyVerdict(novelty).label}
@@ -764,11 +825,8 @@ function HypothesisCard({
               <span className="font-mono tabular-nums">{Math.round(novelty.similarity * 100)}% word overlap</span>
             </span>
           </span>
-          <span className="text-[11px] text-muted-foreground">
-            {novelty.searched === false
-              ? "The search for other papers found nothing, so only this run's papers were checked, by word overlap. A heuristic, not proof of novelty."
-              : "Checked against the papers this run retrieved, by word overlap. A heuristic, not proof of novelty."}
-          </span>
+          {novelty.reason && <span className="text-muted-foreground">{novelty.reason}</span>}
+          <span className="text-[11px] text-muted-foreground">{noveltyFootnote(novelty)}</span>
           {feasibility && (
             <span className="flex items-start gap-2">
               <CircleCheck
@@ -940,8 +998,13 @@ export function HypothesizeScene({
                 ))}
               </div>
               <div className="grid @4xl:grid-cols-[minmax(0,1fr)_minmax(300px,380px)] gap-5">
+                {/* The conversation scrolls in its own column, no taller than the summary beside it, so the hypotheses
+                    below stay in reach. */}
                 <div
-                  className={cn("flex min-w-0 flex-col gap-3.5", view !== "conversation" && "@4xl:flex hidden")}
+                  className={cn(
+                    "-mr-2 flex max-h-[calc(100dvh-6rem)] min-w-0 flex-col gap-3.5 overflow-y-auto pr-2",
+                    view !== "conversation" && "@4xl:flex hidden",
+                  )}
                   role="tabpanel"
                   aria-label="Conversation"
                 >
@@ -965,10 +1028,11 @@ export function HypothesizeScene({
                       flash={flash?.id === thread.id ? flash.n : undefined}
                     />
                   ))}
+                  <div ref={debateEnd} />
                 </div>
                 <aside
                   className={cn(
-                    "@4xl:sticky @4xl:top-4 -m-1 @4xl:max-h-[calc(100dvh-6rem)] min-w-0 @4xl:self-start @4xl:overflow-y-auto p-1",
+                    "@4xl:sticky @4xl:top-4 -m-1 max-h-[calc(100dvh-6rem)] min-w-0 @4xl:self-start overflow-y-auto p-1",
                     view !== "summary" && "@4xl:block hidden",
                   )}
                   role="tabpanel"
@@ -986,7 +1050,6 @@ export function HypothesizeScene({
               </div>
             </div>
           </MotionConfig>
-          <div ref={debateEnd} />
         </Pane>
       ) : (
         <Placeholder>Three perspectives debate the gaps first</Placeholder>

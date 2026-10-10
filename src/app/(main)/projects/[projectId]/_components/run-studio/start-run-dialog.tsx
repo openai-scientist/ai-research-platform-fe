@@ -22,8 +22,8 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import type { GateKind, ReviewMode, RunInput } from "@/lib/run-stream/contract";
-import { RUN_SOURCE, SHOW_DATA_STAGE, SHOW_REVIEW_MODE } from "@/lib/run-stream/features";
-import { DATASET, SAMPLE_TOPIC } from "@/lib/run-stream/mock/scenario";
+import { SHOW_DATA_STAGE, SHOW_REVIEW_MODE } from "@/lib/run-stream/features";
+import { DATASET } from "@/lib/run-stream/mock/scenario";
 
 import { MODES, PIPELINE, STAGE_SHORT, STOP_INFO } from "./run-meta";
 
@@ -216,18 +216,8 @@ export function TopicInput({
         <FieldDescription className="min-w-0 basis-full sm:basis-0 sm:flex-1">
           Write it as one question. You don't list sub-questions; Popper derives them.
         </FieldDescription>
-        {!draft.topic && (
-          <Button variant="outline" size="xs" onClick={() => draft.setTopic(SAMPLE_TOPIC)}>
-            Use the sample topic
-          </Button>
-        )}
         <span className="font-mono text-[11px] text-muted-foreground tabular-nums">{draft.words} words</span>
       </div>
-      {RUN_SOURCE === "mock" && draft.topic.trim() && draft.topic.trim() !== SAMPLE_TOPIC && (
-        <span className="text-muted-foreground text-xs">
-          Mock stream: the run plays the sample study on sleep, whatever topic you type.
-        </span>
-      )}
     </Field>
   );
 }

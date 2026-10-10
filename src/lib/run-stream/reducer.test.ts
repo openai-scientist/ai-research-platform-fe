@@ -5,7 +5,7 @@ import { SHOW_DATA_STAGE } from "./features";
 import { MockRun } from "./mock/mock-run";
 import { applyRunEvent, replayRunEvents } from "./reducer";
 import { initialRunState } from "./run-state";
-import { finalResults, liveStageKey, nextStop } from "./selectors";
+import { finalResults, nextStop } from "./selectors";
 
 let seq = 0;
 function event<T extends RunEventType>(
@@ -308,16 +308,12 @@ describe("applyRunEvent", () => {
   });
 });
 
-describe("mock run", () => {
+describe("mock stages after the hypotheses", () => {
   afterEach(() => {
     vi.useRealTimers();
   });
 
-  async function play(
-    mode: ReviewMode,
-    answer: (gate: RunEventOf<"gate.opened">["payload"]["gate"]) => GateAnswer,
-    endsAt: "hypotheses" | "paper" = "paper",
-  ) {
+  async function play(mode: ReviewMode, answer: (gate: RunEventOf<"gate.opened">["payload"]["gate"]) => GateAnswer) {
     vi.useFakeTimers({ toFake: ["setTimeout", "performance"] });
     const events: RunEvent[] = [];
     let run: MockRun | undefined;
@@ -332,7 +328,7 @@ describe("mock run", () => {
         }
       },
       undefined,
-      { withData: SHOW_DATA_STAGE, endsAt },
+      { withData: SHOW_DATA_STAGE },
     );
     run.setSpeed(50);
     run.start();
@@ -342,70 +338,15 @@ describe("mock run", () => {
     return events;
   }
 
-  it("ends once the hypotheses are picked, stopping at the shortlist and at the hypotheses", async () => {
-    const events = await play(
-      "copilot",
-      (gate) => ({ option_id: gate.options.find((o) => o.recommended)?.id ?? gate.options[0].id }),
-      "hypotheses",
-    );
-    const state = replayRunEvents("run", events);
-    expect(state.completed).toBe(true);
-    expect(state.paperTitle).toBeUndefined();
-    const kinds = events
-      .filter((e): e is RunEventOf<"gate.opened"> => e.type === "gate.opened")
-      .map((e) => e.payload.gate.kind);
-    expect(kinds).toEqual(["screen", "hypotheses"]);
-    expect(state.plan.map((s) => s.stage)).toEqual(
-      (SHOW_DATA_STAGE ? ["data"] : []).concat(["scope", "search", "screen", "read", "synthesize", "hypothesize"]),
-    );
-    expect(liveStageKey(state)).toBe("r1-hypothesize");
-    const h = state.stages["r1-hypothesize"].content;
-    if (h.stage !== "hypothesize") throw new Error("wrong stage");
-    expect(Object.values(h.drafts).filter((d) => d.selected)).toHaveLength(4);
-    expect(events.some((e) => e.type === "plan.locked")).toBe(false);
-
-    // Stage 1 is approved before stage 2; stage 4 keeps the record with a DOI; stage 7 ranks the gaps.
-    const scope = state.stages.scope.content;
-    if (scope.stage !== "scope") throw new Error("wrong stage");
-    expect(scope.approved?.at).toMatch(/Z$/);
-    const approvedAt = events.findIndex((e) => e.type === "scope.approved");
-    expect(approvedAt).toBeLessThan(events.findIndex((e) => e.type === "problem.subquestion"));
-    const search = state.stages.search.content;
-    if (search.stage !== "search") throw new Error("wrong stage");
-    for (const m of search.merged) expect(m.records.find((r) => r.source === m.kept)?.has_doi).toBe(true);
-    const synth = state.stages.synthesize.content;
-    if (synth.stage !== "synthesize") throw new Error("wrong stage");
-    expect(synth.overview).toBeTruthy();
-    expect(synth.ranking.map((r) => r.gap_id)).toEqual(["G1", "G2", "G3"]);
-  });
-
-  it("keeps a held-back idea at the hypotheses stop, with its objection on record", async () => {
-    const events = await play(
-      "copilot",
-      (gate) =>
-        gate.kind === "hypotheses"
-          ? { option_id: "drop", dropped: [], kept: ["C6"], note: "Worth a cheap test." }
-          : { option_id: "approve" },
-      "hypotheses",
-    );
-    const opened = events.filter((e): e is RunEventOf<"gate.opened"> => e.type === "gate.opened");
-    expect(opened.at(-1)?.payload.gate.keepable).toEqual(["C6"]);
-    const state = replayRunEvents("run", events);
-    const h = state.stages["r1-hypothesize"].content;
-    if (h.stage !== "hypothesize") throw new Error("wrong stage");
-    const kept = h.drafts.H7;
-    expect(kept.selected).toBe(true);
-    expect(kept.hypothesis.from).toEqual(["C6"]);
-    expect(kept.hypothesis.contested?.[0]).toMatchObject({ by: "methodologist", severity: "fatal" });
-    expect(kept.hypothesis.kept_by_reviewer).toBe("Worth a cheap test.");
-    expect(state.decisions.at(-1)?.text).toBe("Approved the set keeping C6 despite the objection.");
-  });
-
-  it("plays a whole run in auto mode without stopping", async () => {
+  it("plays experiment, interpret, report and write in auto mode without stopping", async () => {
     const events = await play("auto", () => ({ option_id: "unused" }));
     const state = replayRunEvents("run", events);
     expect(state.completed).toBe(true);
     expect(events.some((e) => e.type === "gate.opened")).toBe(false);
+    // Stages 1 to 9 always come from a real run: the mock plays none of them.
+    expect([...new Set(state.plan.map((s) => s.stage))]).toEqual(
+      (SHOW_DATA_STAGE ? ["data"] : []).concat(["experiment", "interpret", "report", "write"]),
+    );
     // The PI pivots once, so round 2 tests H5 and H6.
     expect(Object.keys(finalResults(state)).sort()).toEqual(["H1", "H2", "H3", "H5", "H6"]);
     const write = state.stages.write.content;
@@ -414,64 +355,28 @@ describe("mock run", () => {
     expect(write.fixedNumbers["typed-1"]?.value).toBe("6.1");
   });
 
-  it("stops at every copilot gate and honours dropped papers and hypotheses", async () => {
-    let firstHypothesesStop = true;
-    const events = await play("copilot", (gate) => {
-      if (gate.kind === "screen") return { option_id: "drop", dropped: ["walker2006"] };
-      if (gate.kind === "hypotheses" && firstHypothesesStop) {
-        firstHypothesesStop = false;
-        return { option_id: "drop", dropped: ["H4"] };
-      }
-      return { option_id: gate.options.find((o) => o.recommended)?.id ?? gate.options[0].id };
-    });
+  it("stops at each decision and at publishing in copilot mode", async () => {
+    const events = await play("copilot", (gate) => ({
+      option_id: gate.options.find((o) => o.recommended)?.id ?? gate.options[0].id,
+    }));
     const state = replayRunEvents("run", events);
     expect(state.completed).toBe(true);
     const kinds = events
       .filter((e): e is RunEventOf<"gate.opened"> => e.type === "gate.opened")
       .map((e) => e.payload.gate.kind);
-    expect(kinds).toEqual(["screen", "hypotheses", "decision", "hypotheses", "decision", "publish"]);
-    expect(Object.keys(finalResults(state))).not.toContain("H4");
+    expect(kinds).toEqual(["decision", "decision", "publish"]);
     expect(nextStop(state)).toBeNull();
-
-    const screen = state.stages.screen.content;
-    const read = state.stages.read.content;
-    const synthesis = state.stages.synthesize.content;
-    if (screen.stage !== "screen" || read.stage !== "read" || synthesis.stage !== "synthesize")
-      throw new Error("wrong stage");
-    expect(screen.dropped).toEqual(["walker2006"]);
-    // A removed paper is never read, so it can't feed a cluster either.
-    expect(read.cards.map((c) => c.id)).not.toContain("walker2006");
-    expect(synthesis.clusters.flatMap((c) => c.card_ids)).not.toContain("walker2006");
   });
 
-  it("scopes, reads and debates before any plan is locked", async () => {
+  it("locks the plan in the experiment stage, before the first version of any analysis", async () => {
     const events = await play("full", (gate) => ({
       option_id: gate.options.find((o) => o.recommended)?.id ?? gate.options[0].id,
     }));
-    const state = replayRunEvents("run", events);
-    const first = events.find((e): e is RunEventOf<"gate.opened"> => e.type === "gate.opened");
-    expect(first?.payload.gate.kind).toBe("scope");
-
-    const scope = state.stages.scope.content;
-    if (scope.stage !== "scope") throw new Error("wrong stage");
-    expect(scope.subQuestions.map((sq) => sq.id)).toEqual(["SQ1", "SQ2", "SQ3", "SQ4"]);
-    expect(scope.goal.find((g) => g.field === "scope")?.value).toMatch(/^Sleep, stress, study time and screen time/);
-    // Rule 6: every number recalled while scoping is checked against the papers.
-    expect(state.estimates.map((e) => e.check?.status)).toEqual(["verified", "unsupported"]);
-
-    const hypothesize = state.stages["r1-hypothesize"].content;
-    if (hypothesize.stage !== "hypothesize") throw new Error("wrong stage");
-    expect(hypothesize.turns.length).toBeGreaterThan(0);
-    expect(Object.values(hypothesize.drafts).every((d) => d.novelty && d.hypothesis.falsify.text)).toBe(true);
-
-    // The plan is locked in the experiment stage, before the first version of any analysis.
     const lockAt = events.findIndex((e) => e.type === "plan.locked");
     const firstNode = events.findIndex((e) => e.type === "node.created");
     expect(lockAt).toBeGreaterThan(-1);
     expect(lockAt).toBeLessThan(firstNode);
     expect(events[lockAt].stage_key).toBe("r1-experiment");
-    // Rule 3 is checked by the data stage, which is hidden for now.
-    expect(Object.keys(state.rules).map(Number).sort()).toEqual(SHOW_DATA_STAGE ? [1, 2, 3, 4, 5, 6] : [1, 2, 4, 5, 6]);
-    expect(Boolean(state.stages.data)).toBe(SHOW_DATA_STAGE);
+    expect(Boolean(replayRunEvents("run", events).stages.data)).toBe(SHOW_DATA_STAGE);
   });
 });
