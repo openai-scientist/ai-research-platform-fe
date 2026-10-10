@@ -22,6 +22,7 @@ import type {
   DebateStance,
   DebateTurn,
   Hypothesis,
+  NoveltyCheck,
   StandingObjection,
   Tension,
 } from "@/lib/run-stream/contract";
@@ -454,6 +455,14 @@ function AsideRow({
   );
 }
 
+/** When the novelty search found nothing, only the run's own papers were compared: no match there is not a green light. */
+function noveltyVerdict(novelty: NoveltyCheck): { label: string; tone: string } {
+  if (!novelty.novel) return { label: "Close match found", tone: "text-amber-800 dark:text-amber-300" };
+  if (novelty.searched === false)
+    return { label: "No close match in this run's papers", tone: "text-muted-foreground" };
+  return { label: "No close match found", tone: "text-emerald-700 dark:text-emerald-300" };
+}
+
 function ObjectionLine({ o }: { o: StandingObjection }) {
   return (
     <li className="grid grid-cols-[auto_1fr] items-start gap-2">
@@ -738,12 +747,9 @@ function HypothesisCard({
                 that nothing like the hypothesis was published. */}
             <b
               title="Word overlap with the papers this run retrieved; a heuristic, not proof of novelty"
-              className={cn(
-                "font-semibold",
-                novelty.novel ? "text-emerald-700 dark:text-emerald-300" : "text-amber-800 dark:text-amber-300",
-              )}
+              className={cn("font-semibold", noveltyVerdict(novelty).tone)}
             >
-              {novelty.novel ? "No close match found" : "Close match found"}
+              {noveltyVerdict(novelty).label}
             </b>
             <span className="text-muted-foreground">closest: {novelty.closest}</span>
             <span className="ml-auto flex items-center gap-1.5">
@@ -759,7 +765,9 @@ function HypothesisCard({
             </span>
           </span>
           <span className="text-[11px] text-muted-foreground">
-            Checked against the papers this run retrieved, by word overlap. A heuristic, not proof of novelty.
+            {novelty.searched === false
+              ? "The search for other papers found nothing, so only this run's papers were checked, by word overlap. A heuristic, not proof of novelty."
+              : "Checked against the papers this run retrieved, by word overlap. A heuristic, not proof of novelty."}
           </span>
           {feasibility && (
             <span className="flex items-start gap-2">

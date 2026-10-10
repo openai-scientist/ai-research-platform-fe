@@ -388,6 +388,8 @@ export interface NoveltyCheck {
   closest: string;
   /** 0 to 1, against the closest shortlisted paper. */
   similarity: number;
+  /** False when the novelty search found nothing and only the run's own papers were compared. */
+  searched?: boolean;
 }
 
 export interface FeasibilityCheck {
