@@ -210,9 +210,13 @@ function TopicComposer({
 
 /** The end of a run that stops at pipeline stage 8: the hypotheses it picked. */
 function HypothesesReady({ state }: { state: RunSession["state"] }) {
-  const stage = Object.values(state.stages).find((s) => s.content.stage === "hypothesize");
+  // The last round of hypotheses, without those left out at the review stop or when the run was accepted.
+  const key = [...state.stageOrder].reverse().find((k) => state.stages[k]?.content.stage === "hypothesize");
+  const content = key ? state.stages[key].content : undefined;
   const picked =
-    stage?.content.stage === "hypothesize" ? Object.values(stage.content.drafts).filter((d) => d.selected) : [];
+    content?.stage === "hypothesize"
+      ? Object.values(content.drafts).filter((d) => d.selected && !content.dropped.includes(d.hypothesis.id))
+      : [];
   return (
     <div className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-3 rounded-lg bg-muted/70 px-3.5 py-3 text-sm">
       <CircleCheck className="mt-0.5 size-4.5 text-emerald-600" />
@@ -407,7 +411,11 @@ function PastRunRow({ run }: { run: RunItem }) {
       <span className="min-w-0 max-md:col-span-3 max-md:row-start-2">
         <b className="block truncate font-medium">{run.topic ?? run.label ?? `Run ${run.id.slice(0, 8)}`}</b>
         <span className="text-muted-foreground text-xs">
-          ${run.cost_usd} of ${run.budget_usd} ·{" "}
+          {/* Pipeline runs report no cost yet: a $0 spent would read as free. */}
+          {run.pipeline_key
+            ? `$${run.budget_usd} budget · cost not tracked yet`
+            : `$${run.cost_usd} of $${run.budget_usd}`}{" "}
+          ·{" "}
           {run.topic
             ? "from a topic to hypotheses"
             : run.auto_review

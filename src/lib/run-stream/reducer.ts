@@ -12,6 +12,15 @@ function content<S extends RunStage>(state: Draft<RunState>, event: RunEvent, st
   return found.content as Draft<ContentOf<S>>;
 }
 
+/** The content of the last stage of this kind, wherever the run is now. */
+function latest<S extends RunStage>(state: Draft<RunState>, stage: S): Draft<ContentOf<S>> | null {
+  for (const key of [...state.stageOrder].reverse()) {
+    const found = state.stages[key]?.content;
+    if (found?.stage === stage) return found as Draft<ContentOf<S>>;
+  }
+  return null;
+}
+
 /** Adds an item, or replaces the one with its id: a stage that runs again sends its parts again. */
 function upsert<T extends { id: string }>(list: T[], item: T) {
   const at = list.findIndex((x) => x.id === item.id);
@@ -82,6 +91,7 @@ export function applyRunEvent(previous: RunState, event: RunEvent): RunState {
       case "step.started": {
         const stage = event.stage_key ? state.stages[event.stage_key] : undefined;
         if (stage) stage.currentStepId = event.payload.step_id;
+        state.stepStartedAt = event.ts;
         // Narration belongs to a step; a new step starts with none.
         if (state.message?.done) state.message = null;
         break;
@@ -381,6 +391,20 @@ export function applyRunEvent(previous: RunState, event: RunEvent): RunState {
         if (!draft) break;
         draft.selected = true;
         draft.overrideNote = event.payload.override_note;
+        break;
+      }
+      case "review.finding": {
+        const h = content(state, event, "hypothesize");
+        if (!h) break;
+        const { finding } = event.payload;
+        const at = h.findings.findIndex((f) => f.finding_id === finding.finding_id);
+        if (at === -1) h.findings.push(finding);
+        else h.findings[at] = finding;
+        break;
+      }
+      case "review.sent": {
+        const h = content(state, event, "hypothesize");
+        if (h) h.sent = event.payload.findings;
         break;
       }
       case "idea.set_aside": {
@@ -685,6 +709,8 @@ export function applyRunEvent(previous: RunState, event: RunEvent): RunState {
           stop_total?: number;
           droppable?: string[];
           keepable?: string[];
+          selection?: Gate["selection"];
+          review?: Gate["review"];
         };
         const raw = payload.gate ?? (payload.gate_id ? payload : null);
         if (raw) {
@@ -720,6 +746,8 @@ export function applyRunEvent(previous: RunState, event: RunEvent): RunState {
             droppable: Array.isArray(raw.droppable) ? raw.droppable : [],
             // Ideas the debate set aside that the person may keep anyway (hypotheses gate).
             keepable: Array.isArray(raw.keepable) ? raw.keepable : [],
+            ...(Array.isArray(raw.selection) ? { selection: raw.selection } : {}),
+            ...(raw.review ? { review: raw.review } : {}),
           };
         }
         break;
@@ -764,7 +792,8 @@ export function applyRunEvent(previous: RunState, event: RunEvent): RunState {
             const c = content(state, event, "screen");
             if (c) c.dropped = answerDropped;
           } else {
-            const h = content(state, event, "hypothesize");
+            // Hypotheses are also picked when the run is accepted, on the last stage.
+            const h = content(state, event, "hypothesize") ?? latest(state, "hypothesize");
             if (h) h.dropped = answerDropped;
           }
         }

@@ -5,17 +5,21 @@ import { useState } from "react";
 import { cn } from "cn";
 import { ArrowRight, Check, ChevronDown, ChevronUp, Info } from "lucide-react";
 import { motion } from "motion/react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import type { Decision, Gate, GateAnswer } from "@/lib/run-stream/contract";
+import type { Decision, Gate, GateAnswer, OwnFinding } from "@/lib/run-stream/contract";
 
 import { ForkDiagram } from "./fork-diagram";
+import { RevisePicker } from "./revise-picker";
 import { PulseDot } from "./run-bits";
 import { MODES } from "./run-meta";
 
 const DECISIONS: Decision[] = ["proceed", "refine", "pivot"];
+
 const asDecision = (id: string) => DECISIONS.find((d) => d === id);
 
 /** A review stop: why the run stopped, what is ready, what each choice leads to. */
@@ -43,7 +47,22 @@ export function GateSheet({
   const [choice, setChoice] = useState(preferred?.id ?? "");
   const [hover, setHover] = useState<string | null>(null);
   const [note, setNote] = useState("");
+  // Items left out of a selection; everything starts picked.
+  const [left, setLeft] = useState<string[]>([]);
+  // Findings to send back for revision; the blocking and major ones start picked.
+  const [sendBack, setSendBack] = useState<string[]>(
+    () => gate.review?.findings.filter((f) => f.severity !== "minor").map((f) => f.finding_id) ?? [],
+  );
+  const [own, setOwn] = useState<OwnFinding[]>([]);
+  const revising = choice === "revise" && Boolean(gate.review);
+  const sendCount = sendBack.length + own.length;
   const option = gate.options.find((o) => o.id === choice);
+  const picked = (gate.selection ?? []).filter((item) => !left.includes(item.id));
+  const toggle = (id: string) => {
+    if (left.includes(id)) setLeft(left.filter((x) => x !== id));
+    else if (picked.length <= 1) toast.error("Keep at least one hypothesis.");
+    else setLeft([...left, id]);
+  };
   const shownDecision = asDecision(hover ?? choice);
 
   if (minimized)
@@ -70,7 +89,24 @@ export function GateSheet({
       onStartDrop();
       return;
     }
-    onAnswer({ option_id: option.id, ...(note.trim() ? { note: note.trim() } : {}) });
+    if (revising) {
+      if (!sendCount) {
+        toast.error("Pick a finding or add one of your own to send back.");
+        return;
+      }
+      onAnswer({
+        option_id: option.id,
+        findings: sendBack,
+        own,
+        ...(note.trim() ? { note: note.trim() } : {}),
+      });
+      return;
+    }
+    onAnswer({
+      option_id: option.id,
+      ...(gate.selection && left.length ? { dropped: left } : {}),
+      ...(note.trim() ? { note: note.trim() } : {}),
+    });
   };
 
   return (
@@ -125,36 +161,86 @@ export function GateSheet({
               </ul>
             )
           )}
-          <RadioGroup value={choice} onValueChange={setChoice} className="gap-2" aria-label={gate.title}>
-            {gate.options.map((o) => (
-              <label
-                key={o.id}
-                htmlFor={`gate-${o.id}`}
-                onMouseEnter={() => !o.disabled && setHover(o.id)}
-                onMouseLeave={() => setHover(null)}
-                className={cn(
-                  "grid cursor-pointer grid-cols-[auto_1fr] gap-x-3 gap-y-1 rounded-xl border px-3.5 py-3 transition-[background-color,border-color,box-shadow] hover:bg-muted/60",
-                  choice === o.id && "border-foreground ring-1 ring-foreground",
-                  o.disabled && "cursor-not-allowed opacity-50",
-                )}
-              >
-                <RadioGroupItem id={`gate-${o.id}`} value={o.id} disabled={o.disabled} className="row-span-3 mt-0.5" />
-                <span className="flex flex-wrap items-center gap-2 font-semibold text-sm">
-                  {o.label}
-                  {o.recommended && (
-                    <span className="rounded-full bg-muted px-1.5 py-px font-medium text-[11px] text-muted-foreground">
-                      PI recommends
+          {gate.selection ? (
+            <fieldset className="flex flex-col gap-1.5">
+              <legend className="mb-1.5 flex w-full items-baseline justify-between gap-2 text-xs">
+                <span className="font-medium">Take forward</span>
+                <span className="text-muted-foreground tabular-nums">
+                  {picked.length} of {gate.selection.length} picked
+                </span>
+              </legend>
+              {gate.selection.map((item) => {
+                const on = !left.includes(item.id);
+                return (
+                  <label
+                    key={item.id}
+                    htmlFor={`pick-${item.id}`}
+                    className={cn(
+                      "grid cursor-pointer grid-cols-[auto_auto_minmax(0,1fr)] items-start gap-x-3 rounded-xl border px-3.5 py-2.5 text-sm transition-colors hover:bg-muted/60",
+                      on ? "border-foreground/15" : "border-dashed",
+                    )}
+                  >
+                    <Checkbox
+                      id={`pick-${item.id}`}
+                      checked={on}
+                      onCheckedChange={() => toggle(item.id)}
+                      className="mt-0.5"
+                    />
+                    <span
+                      className={cn(
+                        "inline-flex h-5 items-center rounded-md px-1.5 font-mono font-semibold text-[11px] transition-colors",
+                        on ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground",
+                      )}
+                    >
+                      {item.id}
                     </span>
+                    <span className={cn("leading-snug transition-colors", !on && "text-muted-foreground line-through")}>
+                      {item.label}
+                    </span>
+                  </label>
+                );
+              })}
+            </fieldset>
+          ) : (
+            <RadioGroup value={choice} onValueChange={setChoice} className="gap-2" aria-label={gate.title}>
+              {gate.options.map((o) => (
+                <label
+                  key={o.id}
+                  htmlFor={`gate-${o.id}`}
+                  onMouseEnter={() => !o.disabled && setHover(o.id)}
+                  onMouseLeave={() => setHover(null)}
+                  className={cn(
+                    "grid cursor-pointer grid-cols-[auto_1fr] gap-x-3 gap-y-1 rounded-xl border px-3.5 py-3 transition-[background-color,border-color,box-shadow] hover:bg-muted/60",
+                    choice === o.id && "border-foreground ring-1 ring-foreground",
+                    o.disabled && "cursor-not-allowed opacity-50",
                   )}
-                </span>
-                <span className="text-muted-foreground text-xs">{o.description}</span>
-                <span className="flex items-center gap-1.5 text-xs">
-                  <ArrowRight className="size-3 text-muted-foreground" />
-                  {o.leads_to}
-                </span>
-              </label>
-            ))}
-          </RadioGroup>
+                >
+                  <RadioGroupItem
+                    id={`gate-${o.id}`}
+                    value={o.id}
+                    disabled={o.disabled}
+                    className="row-span-3 mt-0.5"
+                  />
+                  <span className="flex flex-wrap items-center gap-2 font-semibold text-sm">
+                    {o.label}
+                    {o.recommended && (
+                      <span className="rounded-full bg-muted px-1.5 py-px font-medium text-[11px] text-muted-foreground">
+                        PI recommends
+                      </span>
+                    )}
+                  </span>
+                  <span className="text-muted-foreground text-xs">{o.description}</span>
+                  <span className="flex items-center gap-1.5 text-xs">
+                    <ArrowRight className="size-3 text-muted-foreground" />
+                    {o.leads_to}
+                  </span>
+                </label>
+              ))}
+            </RadioGroup>
+          )}
+          {revising && gate.review && (
+            <RevisePicker review={gate.review} picked={sendBack} onPick={setSendBack} own={own} onOwn={setOwn} />
+          )}
           <Input
             value={note}
             onChange={(e) => setNote(e.target.value)}
@@ -165,7 +251,13 @@ export function GateSheet({
         <div className="flex items-center gap-3 border-t bg-popover px-5 py-3.5">
           <span className="flex-1 text-muted-foreground text-xs">Nothing runs until you confirm.</span>
           <Button onClick={confirm} disabled={!option || option.disabled || pending}>
-            {pending ? "Sending…" : (option?.confirm_label ?? "Confirm")}
+            {pending
+              ? "Sending…"
+              : gate.selection
+                ? `${option?.confirm_label ?? "Confirm"} ${picked.length}`
+                : revising
+                  ? `${option?.confirm_label ?? "Send back"} ${sendCount}`
+                  : (option?.confirm_label ?? "Confirm")}
           </Button>
         </div>
       </motion.div>

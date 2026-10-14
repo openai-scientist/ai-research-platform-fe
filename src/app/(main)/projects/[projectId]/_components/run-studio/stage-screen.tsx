@@ -30,6 +30,13 @@ import { WriteScene } from "./scenes/write-scene";
 const set = (content: Extract<StageState["content"], { stage: "hypothesize" }>) =>
   Object.values(content.drafts).filter((d) => d.selected);
 
+/** Hypotheses left out, at the review stop or when the run was accepted, from the last round of hypotheses. */
+function dropped(state: RunState) {
+  const key = [...state.stageOrder].reverse().find((k) => state.stages[k]?.content.stage === "hypothesize");
+  const content = key ? state.stages[key].content : undefined;
+  return content?.stage === "hypothesize" ? content.dropped.length : 0;
+}
+
 /** Counts up from zero after a delay, so the trail fills in left to right. */
 function CountUp({ value, delay }: { value: number; delay: number }) {
   const [shown, setShown] = useState(0);
@@ -196,7 +203,11 @@ function StageHeader({
           {showRound && plan.round && (
             <span className="rounded-md bg-muted px-1.5 py-0.5 font-medium font-mono text-[11.5px] text-muted-foreground">
               Round {plan.round}
-              {plan.round_kind === "pivot" ? " · new direction" : plan.round_kind === "refine" ? " · rerun" : ""}
+              {
+                { pivot: " · new direction", refine: " · rerun", revise: " · revision", first: "" }[
+                  plan.round_kind ?? "first"
+                ]
+              }
             </span>
           )}
         </h2>
@@ -349,7 +360,12 @@ export function StageScreen({
     );
   }
   if (content.stage === "map")
-    scene = <MapScene data={content} topic={state.topic} runLabel={runLabel} date={state.startedAt} live={live} />;
+    scene = (
+      <>
+        <MapScene data={content} topic={state.topic} runLabel={runLabel} date={state.startedAt} live={live} />
+        {decisionNotes}
+      </>
+    );
   if (content.stage === "experiment") scene = <ExperimentScene data={content} live={live} />;
   if (content.stage === "interpret")
     scene = (
@@ -389,7 +405,7 @@ export function StageScreen({
       />
       {endsHere && content.stage === "hypothesize" && <RunEnd state={state} count={set(content).length} />}
       {endsHere && content.stage === "map" && (
-        <RunEnd state={state} count={content.nodes.filter((n) => n.type === "hypothesis").length} />
+        <RunEnd state={state} count={content.nodes.filter((n) => n.type === "hypothesis").length - dropped(state)} />
       )}
       {scene}
     </div>

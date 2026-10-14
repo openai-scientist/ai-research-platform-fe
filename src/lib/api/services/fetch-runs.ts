@@ -38,6 +38,25 @@ export interface RunItem {
   review_mode?: ReviewMode | null;
   /** Highest event `seq` stored for the run. */
   last_seq?: number;
+  /** Set when the run is a pipeline of stages on engines; null for a Popper run. */
+  pipeline_key?: string | null;
+  interaction_mode?: string | null;
+}
+
+/** An answer to a gate a pipeline stage opened. */
+export interface StageGateAnswer {
+  action: "answer" | "approve" | "comment";
+  option_id?: string;
+  text?: string;
+  params?: Record<string, unknown>;
+  /** For `comment`: what the hypotheses must answer, each anchored to the set under review. */
+  findings?: Record<string, unknown>[];
+}
+
+/** Accepts a finished pipeline stage with what goes forward. */
+export interface AcceptStageRequest {
+  selection: { hypothesis_ids: string[] };
+  note?: string;
 }
 
 export type RunListResponse = ApiResult<RunItem[]>;
@@ -85,6 +104,31 @@ export const fetchRuns = {
     const response = await apiService.post<GateAnswerResponse>(
       `${runPath(projectId, runId)}/gates/${encodeURIComponent(gateId)}`,
       answer,
+    );
+    return response.data;
+  },
+  answerStageGate: async (
+    projectId: string,
+    runId: string,
+    stageRunId: string,
+    gateId: string,
+    answer: StageGateAnswer,
+  ): Promise<ApiResult<{ gate_id: string; status: string }>> => {
+    const response = await apiService.post<ApiResult<{ gate_id: string; status: string }>>(
+      `${runPath(projectId, runId)}/stages/${encodeURIComponent(stageRunId)}/gates/${encodeURIComponent(gateId)}`,
+      answer,
+    );
+    return response.data;
+  },
+  acceptStage: async (
+    projectId: string,
+    runId: string,
+    stageRunId: string,
+    body: AcceptStageRequest,
+  ): Promise<ApiResult<unknown>> => {
+    const response = await apiService.post<ApiResult<unknown>>(
+      `${runPath(projectId, runId)}/stages/${encodeURIComponent(stageRunId)}/accept`,
+      body,
     );
     return response.data;
   },

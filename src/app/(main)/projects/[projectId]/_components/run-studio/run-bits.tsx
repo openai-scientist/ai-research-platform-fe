@@ -4,11 +4,64 @@ import { type RefObject, useEffect, useLayoutEffect, useRef, useState } from "re
 
 import { cn } from "cn";
 import { motion } from "motion/react";
+import { type OrbState, ThinkingOrb } from "thinking-orbs";
 
 import type { AgentRole, Verdict } from "@/lib/run-stream/contract";
 import type { RunDisplayStatus } from "@/lib/run-stream/selectors";
 
 import { AGENTS, STATUS_TONE, VERDICT } from "./run-meta";
+
+/** The kind of work each step does, as an orb draws it. Review stops listen; anything else just works. */
+const ORB_OF_STEP: Record<string, OrbState> = {
+  goal: "composing",
+  decompose: "connecting",
+  evaluate: "solving",
+  strategy: "connecting",
+  collect: "searching",
+  score: "solving",
+  reject: "solving",
+  shortlist: "shaping",
+  extract: "composing",
+  cluster: "connecting",
+  overview: "weaving",
+  tension: "weaving",
+  gaps: "weaving",
+  rank: "shaping",
+  debate: "solving",
+  write: "composing",
+  check: "searching",
+  select: "shaping",
+  review: "searching",
+  questions: "weaving",
+  foundation: "weaving",
+  reasoning: "weaving",
+  contribution: "weaving",
+  canvas: "shaping",
+};
+
+/** An animated orb for work in progress: its motion follows the step, and it listens while a review stop waits. */
+export function WorkOrb({
+  step,
+  waiting = false,
+  size = 20,
+  className,
+}: {
+  step?: string | null;
+  /** The run waits for the person. */
+  waiting?: boolean;
+  size?: 20 | 32 | 64;
+  className?: string;
+}) {
+  const state: OrbState = waiting ? "listening" : (ORB_OF_STEP[step ?? ""] ?? "working");
+  return (
+    <ThinkingOrb
+      state={state}
+      size={size}
+      aria-label={waiting ? "Waiting for you" : "Working"}
+      className={cn("shrink-0", className)}
+    />
+  );
+}
 
 export function AgentAvatar({
   agent: role,

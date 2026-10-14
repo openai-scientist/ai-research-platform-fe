@@ -306,7 +306,7 @@ export class MockRun implements RunCommands {
       for (let i = 0; i < this.rounds.length; i++) {
         const round = this.rounds[i];
         // A first or pivot round tests the example set; a refine round reruns the one before.
-        if (round.kind !== "refine") this.sets[round.n] = [...ROUND_SETS[round.kind]];
+        if (round.kind === "first" || round.kind === "pivot") this.sets[round.n] = [...ROUND_SETS[round.kind]];
         await this.runStage(this.experimentStage(round));
         await this.runStage(this.interpretStage(round));
       }

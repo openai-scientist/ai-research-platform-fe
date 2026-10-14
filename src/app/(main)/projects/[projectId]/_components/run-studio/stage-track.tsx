@@ -39,7 +39,8 @@ export function StageTrack({
   }, [live]);
 
   return (
-    <div ref={scroller} className="overflow-x-auto border-b px-4 pt-3 pb-3.5 md:px-5">
+    // Only sideways: anything that reaches below the bars must not bring up a vertical scrollbar.
+    <div ref={scroller} className="overflow-x-auto overflow-y-hidden border-b px-4 pt-3 pb-3.5 md:px-5">
       <ol className="flex gap-1.5" style={{ minWidth: Math.max(620, (items.length + locked.length) * 104) }}>
         {items.map((item, i) => {
           const stage = item.key === "done" ? undefined : state.stages[item.key];
@@ -109,8 +110,14 @@ export function StageTrack({
                     waiting ? "bg-amber-500 text-white" : isPast ? "text-muted-foreground" : "text-amber-500",
                   )}
                 >
+                  {/* Breathes in place: a ring that grew would spill out of the track and shake it. */}
                   {waiting && (
-                    <span className="absolute -inset-[3px] animate-ping rounded-full border-2 border-amber-500" />
+                    <motion.span
+                      aria-hidden
+                      className="absolute -inset-[3px] rounded-full border-2 border-amber-500"
+                      animate={{ opacity: [0.15, 0.8, 0.15] }}
+                      transition={{ duration: 1.6, repeat: Number.POSITIVE_INFINITY, ease: "easeInOut" }}
+                    />
                   )}
                   <Flag className={cn("size-3", !isPast && !waiting && "fill-amber-500/25")} />
                 </span>

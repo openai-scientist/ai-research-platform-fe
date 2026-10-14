@@ -29,6 +29,7 @@ function beat(event: RunEvent): number {
     case "synthesis.overview":
     case "debate.turn":
     case "hypothesis.drafted":
+    case "review.finding":
     case "map.node":
     case "canvas.piece":
       return 450;

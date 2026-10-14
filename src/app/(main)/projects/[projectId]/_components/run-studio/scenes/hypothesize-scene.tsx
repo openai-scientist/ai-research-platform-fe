@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { cn } from "cn";
 import {
+  ArrowRight,
   CircleCheck,
   CircleSlash,
   LayoutList,
@@ -24,17 +25,20 @@ import type {
   DebateTurn,
   Hypothesis,
   NoveltyCheck,
+  ReviewFinding,
   StandingObjection,
   Tension,
 } from "@/lib/run-stream/contract";
 import type { DraftState, FeedItem, HypothesizeContent } from "@/lib/run-stream/run-state";
 
 import { FalsifyLine } from "../falsify-line";
-import { AgentAvatar, AgentCursor, PulseDot } from "../run-bits";
+import { AgentAvatar, AgentCursor, PulseDot, WorkOrb } from "../run-bits";
 import { AGENTS } from "../run-meta";
 import { useReveal, useWorkspace } from "../workspace-context";
 import { DebateBoard, FLAW, SEVERITY, STANCE, STANCE_ORDER } from "./debate-board";
 import { threadsOf, VERDICT_THREAD } from "./debate-positions";
+import { bySeverity, FINDING_SEVERITY, findingTarget } from "./findings";
+import { RevisionPanel } from "./revision-panel";
 import { Bone, Pane, Placeholder, SceneNote, Strike, TypeText } from "./scene-ui";
 
 const LANES: { agent: AgentRole; asks: string }[] = [
@@ -630,8 +634,55 @@ function SettlesBadge({ tension: t, delay }: { tension: Tension; delay: number |
   );
 }
 
+/** What the independent reviewer found in one hypothesis, worst first. */
+function Findings({ findings, fresh }: { findings: ReviewFinding[]; fresh: boolean }) {
+  return (
+    <div className="flex flex-col gap-2 border-t pt-2.5 text-xs">
+      <span className="flex items-center gap-2">
+        <AgentAvatar agent="reviewer" size="sm" />
+        <b className={cn("font-semibold", AGENTS.reviewer.text)}>Independent review</b>
+        <span className="text-muted-foreground">
+          {findings.length} {findings.length === 1 ? "finding" : "findings"}
+        </span>
+      </span>
+      <ul className="flex flex-col gap-2">
+        {[...findings].sort(bySeverity).map((f, i) => {
+          const tone = FINDING_SEVERITY[f.severity] ?? FINDING_SEVERITY.minor;
+          const { field } = findingTarget(f.locator);
+          return (
+            <motion.li
+              key={f.finding_id}
+              initial={fresh ? { opacity: 0, x: -6 } : false}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: fresh ? i * 0.12 : 0, duration: 0.3 }}
+              className={cn("flex flex-col gap-0.5 border-l-2 pl-2.5", tone.bar)}
+            >
+              <span className="flex flex-wrap items-baseline gap-x-1.5 text-[11px]">
+                <b className={cn("font-semibold", tone.text)}>{tone.label}</b>
+                {field && <span className="text-foreground/80">· {field}</span>}
+                <span className="text-muted-foreground">
+                  · {f.category.replaceAll("_", " ")}
+                  {f.kind === "needs_evidence" ? " · needs a source" : ""}
+                </span>
+              </span>
+              <p className="leading-snug">{f.issue}</p>
+              {f.suggestion && (
+                <p className="flex gap-1.5 text-muted-foreground leading-snug">
+                  <ArrowRight className="mt-0.5 size-3 shrink-0" />
+                  {f.suggestion}
+                </p>
+              )}
+            </motion.li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
 function HypothesisCard({
   draft,
+  findings,
   tensions,
   fresh,
   live,
@@ -640,6 +691,8 @@ function HypothesisCard({
   onToggle,
 }: {
   draft: DraftState;
+  /** What the independent reviewer reported on it. */
+  findings: ReviewFinding[];
   /** The tensions it settles. */
   tensions: Tension[];
   /** The card was just written, so its parts animate in. */
@@ -708,11 +761,12 @@ function HypothesisCard({
       role={editing ? "button" : undefined}
       tabIndex={editing ? 0 : undefined}
       aria-pressed={editing ? dropped : undefined}
-      // Eight rows of the set's grid (header, provenance, the four parts, what still stands, the novelty check), shared
+      // Nine rows of the set's grid (header, provenance, the four parts, what still stands, the novelty check, the
+      // review), shared
       // with the card beside it so each part starts at the same height in both. A part a card lacks keeps its row,
       // empty; each row carries its own top space so an empty one adds none.
       className={cn(
-        "relative row-span-8 grid min-w-0 grid-rows-subgrid gap-y-0 overflow-hidden rounded-xl bg-card px-4 py-3.5 text-sm ring-1 transition-shadow duration-500",
+        "relative row-span-9 grid min-w-0 grid-rows-subgrid gap-y-0 overflow-hidden rounded-xl bg-card px-4 py-3.5 text-sm ring-1 transition-shadow duration-500",
         draft.selected && !dropped ? "shadow-sm ring-foreground/30" : "ring-foreground/10",
         editing && "cursor-pointer hover:ring-foreground",
       )}
@@ -837,6 +891,9 @@ function HypothesisCard({
           )}
         </motion.div>
       )}
+      <div className="min-w-0 pt-3 empty:pt-0">
+        {findings.length > 0 && <Findings findings={findings} fresh={live} />}
+      </div>
       {draft.overrideNote && (
         <p className="grid grid-cols-[auto_1fr] gap-2 rounded-lg bg-muted px-2 py-1.5 text-xs">
           <AgentAvatar agent="pi" size="sm" />
@@ -912,6 +969,14 @@ export function HypothesizeScene({
     agent = "pi";
     target = `h:${set[set.length - 1].hypothesis.id}`;
   }
+  const findings = data.findings;
+  const reviewing = live && step === "review";
+  if (reviewing) {
+    agent = "reviewer";
+    const last = findings[findings.length - 1];
+    target = last ? `h:${findingTarget(last.locator).id}` : target;
+  }
+  const blocking = findings.filter((f) => f.severity === "blocking").length;
 
   /** The summary points at an idea: bring its thread into view and wash over it. */
   const focusThread = (id: string) => {
@@ -927,6 +992,13 @@ export function HypothesizeScene({
 
   return (
     <div ref={scene} className="relative flex flex-col gap-4">
+      {data.sent.length > 0 && (
+        <RevisionPanel
+          sent={data.sent}
+          round={round}
+          ready={!live || step === "hypotheses_gate" || findings.length > 0}
+        />
+      )}
       {/* The three lanes stand from the start; the turns fill in below them. */}
       {data.turns.length || !drafts.length ? (
         <Pane title="Debate" aside={debateAside(data.turns, threads.filter((t) => t.id !== VERDICT_THREAD).length)}>
@@ -1062,6 +1134,20 @@ export function HypothesizeScene({
             <span className="text-muted-foreground text-xs">
               four parts each: the claim, why it's new, why it should hold, and the result that proves it wrong
             </span>
+            {findings.length > 0 && (
+              <motion.span
+                initial={live ? { opacity: 0, scale: 0.9 } : false}
+                animate={{ opacity: 1, scale: 1 }}
+                className={cn(
+                  "inline-flex h-5 items-center gap-1.5 rounded-full px-2 font-medium text-xs",
+                  AGENTS.reviewer.soft.split(" ")[0],
+                  AGENTS.reviewer.text,
+                )}
+              >
+                Reviewed · {findings.length} {findings.length === 1 ? "finding" : "findings"}
+                {blocking > 0 && <span className="text-rose-700 dark:text-rose-300">· {blocking} blocking</span>}
+              </motion.span>
+            )}
             <span className="ml-auto flex items-center gap-1.5 text-muted-foreground text-xs">
               Set:
               {set.length ? (
@@ -1106,11 +1192,36 @@ export function HypothesizeScene({
             <span>no hypothesis here decides between their sides</span>
           </motion.p>
         )}
+        <AnimatePresence initial={false}>
+          {reviewing && !findings.length && (
+            <motion.p
+              key="reviewing"
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, height: 0 }}
+              className={cn(
+                "flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm ring-1 ring-inset",
+                AGENTS.reviewer.soft,
+              )}
+              role="status"
+            >
+              <AgentAvatar agent="reviewer" />
+              <span className="min-w-0 flex-1">
+                <b className={cn("font-semibold", AGENTS.reviewer.text)}>Reviewer</b>{" "}
+                <span className="text-muted-foreground">
+                  is checking each hypothesis: its conditions, statistics and the evidence behind it.
+                </span>
+              </span>
+              <WorkOrb step="review" />
+            </motion.p>
+          )}
+        </AnimatePresence>
         <div className={cn("grid gap-3 lg:grid-cols-2", editing && "rounded-2xl ring-3 ring-amber-500/40")}>
           {drafts.map((draft, i) => (
             <HypothesisCard
               key={draft.hypothesis.id}
               draft={draft}
+              findings={findings.filter((f) => findingTarget(f.locator).id === draft.hypothesis.id)}
               tensions={tensions.filter((t) => t.id && draft.hypothesis.tension_ids?.includes(t.id))}
               fresh={live && i >= firstFresh}
               live={live}
@@ -1145,7 +1256,7 @@ export function HypothesizeScene({
         agent={live ? agent : null}
         container={scene}
         target={target}
-        version={`${data.turns.length}-${drafts.length}-${checkedDrafts.length}-${set.length}`}
+        version={`${data.turns.length}-${drafts.length}-${checkedDrafts.length}-${set.length}-${findings.length}`}
       />
     </div>
   );

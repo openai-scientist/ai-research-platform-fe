@@ -8,6 +8,8 @@ export const STAGE_GATE: Partial<Record<RunStage, GateKind>> = {
   interpret: "decision",
   report: "report",
   write: "publish",
+  // Pipeline runs only: the map has a stop only when its plan says so.
+  map: "accept",
 };
 
 export const GATE_TITLE: Record<GateKind, string> = {
@@ -17,6 +19,7 @@ export const GATE_TITLE: Record<GateKind, string> = {
   decision: "Decide what's next",
   report: "Check the report",
   publish: "Approve the paper",
+  accept: "Accept the hypotheses",
 };
 
 /** Key of the stage the run is on now; `done` once the paper is published. */

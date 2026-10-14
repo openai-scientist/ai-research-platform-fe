@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { cn } from "cn";
 import { Check, ChevronRight, FileText, Flag, Play } from "lucide-react";
@@ -13,7 +13,7 @@ import type { AgentRole } from "@/lib/run-stream/contract";
 import type { RunState } from "@/lib/run-stream/run-state";
 import { GATE_TITLE, nextStop } from "@/lib/run-stream/selectors";
 
-import { AgentAvatar, Caret, TypedLine } from "./run-bits";
+import { AgentAvatar, Caret, TypedLine, WorkOrb } from "./run-bits";
 import { AGENTS, RULE_IDS, RULES, TEAM } from "./run-meta";
 
 function Team({ active }: { active: AgentRole | null }) {
@@ -66,6 +66,33 @@ function Team({ active }: { active: AgentRole | null }) {
   );
 }
 
+/** Without news for this long, the card says the step is still going. */
+const QUIET_MS = 3000;
+
+const clock = (seconds: number) => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+
+/** The step is still going though nothing new has come for a while: how long it has run. */
+function StillWorking({ since }: { since?: string }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+  const started = since ? Date.parse(since) : Number.NaN;
+  const seconds = Number.isFinite(started) ? Math.max(0, Math.round((now - started) / 1000)) : null;
+  return (
+    <motion.span
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="tabular-nums"
+      role="status"
+    >
+      · Still working{seconds !== null && seconds < 6 * 3600 ? ` ${clock(seconds)}` : ""}
+    </motion.span>
+  );
+}
+
 export function NowCard({
   state,
   holding,
@@ -86,6 +113,16 @@ export function NowCard({
   const index = step ? steps.indexOf(step) : -1;
   const message = state.message;
   const speaker: AgentRole | null = message?.actor ?? step?.actor ?? null;
+  // Quiet: nothing new for a while. The engine works in long calls, and the card should not look stuck.
+  const [quietAt, setQuietAt] = useState(-1);
+  const lastSeq = state.lastSeq;
+  useEffect(() => {
+    const timer = window.setTimeout(() => setQuietAt(lastSeq), QUIET_MS);
+    return () => window.clearTimeout(timer);
+  }, [lastSeq]);
+  // Paused runs hold still; the orb only moves while work goes on or a stop waits for you.
+  const moving = state.lifecycle === "running" || state.lifecycle === "awaiting_review";
+  const working = quietAt === lastSeq && Boolean(step) && !step?.gate && !state.gate && state.lifecycle === "running";
 
   if (state.completed)
     return (
@@ -120,56 +157,45 @@ export function NowCard({
         </b>
         <span>{step ? `Step ${index + 1} of ${steps.length}` : stage ? `${steps.length} steps` : ""}</span>
       </div>
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={step?.id ?? stage?.plan.key ?? "start"}
-          initial={{ opacity: 0, y: 5 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -4 }}
-          transition={{ duration: 0.25 }}
-        >
-          <h3 className="font-semibold text-[15px] tracking-tight">
-            {step?.title ?? stage?.plan.title ?? "Getting the team ready"}
-          </h3>
-          {!compact && (
-            <p className="mt-0.5 text-muted-foreground text-sm leading-relaxed">
-              {step?.explain ?? stage?.plan.purpose}
+      {/* One block: the orb works the way the step does, the narration streams under the step, and a quiet line says
+          who is speaking (the team row shows it too, but not on narrow screens). */}
+      <div className={cn("grid items-start gap-x-3", moving && "grid-cols-[auto_minmax(0,1fr)]")}>
+        {moving && <WorkOrb step={step?.id} waiting={Boolean(state.gate)} size={32} className="mt-0.5" />}
+        <div className="min-w-0">
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.h3
+              key={step?.id ?? stage?.plan.key ?? "start"}
+              title={step?.explain ?? stage?.plan.purpose}
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -3 }}
+              transition={{ duration: 0.22 }}
+              className="font-semibold text-[15px] tracking-tight"
+            >
+              {step?.title ?? stage?.plan.title ?? "Getting the team ready"}
+            </motion.h3>
+          </AnimatePresence>
+          <p className="mt-1 min-h-5 text-sm leading-relaxed">
+            {message ? (
+              <>
+                <TypedLine text={message.text} typing={typing} />
+                {!message.done && <Caret />}
+              </>
+            ) : (
+              !compact && <span className="text-muted-foreground">{step?.explain ?? stage?.plan.purpose}</span>
+            )}
+          </p>
+          {speaker && (
+            <p className="mt-1.5 flex flex-wrap items-center gap-x-1.5 text-[11px] text-muted-foreground">
+              <span className={cn("size-1.5 rounded-full", AGENTS[speaker].solid)} />
+              <span className={cn("font-medium", AGENTS[speaker].text)}>
+                {speaker === "code" ? "Code check · no AI" : AGENTS[speaker].name}
+              </span>
+              <AnimatePresence>{working && <StillWorking since={state.stepStartedAt} />}</AnimatePresence>
             </p>
           )}
-        </motion.div>
-      </AnimatePresence>
-      {speaker && (
-        <div className="mt-1 grid grid-cols-[auto_1fr] gap-2.5 border-t pt-2.5">
-          <AgentAvatar agent={speaker} />
-          <div className="min-w-0">
-            <span className={cn("flex items-center gap-1.5 font-semibold text-xs", AGENTS[speaker].text)}>
-              {speaker === "code" ? "Code check · no AI" : AGENTS[speaker].name}
-              {!message && (
-                <span className="inline-flex gap-0.5">
-                  {[0, 1, 2].map((i) => (
-                    <motion.i
-                      key={i}
-                      className="size-1 rounded-full bg-current"
-                      animate={{ opacity: [0.25, 1, 0.25], y: [0, -2, 0] }}
-                      transition={{ duration: 1.1, repeat: Number.POSITIVE_INFINITY, delay: i * 0.15 }}
-                    />
-                  ))}
-                </span>
-              )}
-            </span>
-            <p className="mt-0.5 min-h-5 text-sm leading-relaxed">
-              {message ? (
-                <>
-                  <TypedLine text={message.text} typing={typing} />
-                  {!message.done && <Caret />}
-                </>
-              ) : (
-                <span className="text-muted-foreground">{step?.gate ? "" : "Working on it…"}</span>
-              )}
-            </p>
-          </div>
         </div>
-      )}
+      </div>
       <AnimatePresence>
         {holding && (
           <motion.div

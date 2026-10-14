@@ -18,14 +18,25 @@ const envelopeSchema = z.object({
   stage_key: z.string().nullish(),
   actor: z.string().nullish(),
   payload: z.record(z.string(), z.unknown()),
+  // Pipeline runs: the stage run, the engine's step and phase the event belongs to.
+  stage_run_id: z.string().nullish(),
+  step_key: z.string().nullish(),
+  phase: z.string().nullish(),
 });
 
 /** Reads one stored event. Returns null when it is not a run event. */
 export function parseRunEvent(value: unknown): RunEvent | null {
   const parsed = envelopeSchema.safeParse(value);
   if (!parsed.success) return null;
-  const { stage_key, actor, ...rest } = parsed.data;
-  return { ...rest, ...(stage_key ? { stage_key } : {}), ...(actor ? { actor } : {}) } as RunEvent;
+  const { stage_key, actor, stage_run_id, step_key, phase, ...rest } = parsed.data;
+  return {
+    ...rest,
+    ...(stage_key ? { stage_key } : {}),
+    ...(actor ? { actor } : {}),
+    ...(stage_run_id ? { stage_run_id } : {}),
+    ...(step_key ? { step_key } : {}),
+    ...(phase ? { phase } : {}),
+  } as RunEvent;
 }
 
 /** `history`: already stored when the page opened. `live`: happened while following (or while reconnecting). */

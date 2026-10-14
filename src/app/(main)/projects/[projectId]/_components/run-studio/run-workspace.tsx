@@ -114,7 +114,7 @@ function RunWorkspace({ session }: { session: RunSession }) {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== " " || (e.target as HTMLElement).closest("input, textarea, button, [role=radio], [role=switch]"))
         return;
-      if (state.gate || ended) return;
+      if (state.gate || ended || session.pipeline) return;
       e.preventDefault();
       togglePause();
     };
@@ -189,29 +189,34 @@ function RunWorkspace({ session }: { session: RunSession }) {
             </span>
           )}
           <div className="flex items-center gap-2 max-md:w-full max-md:justify-between">
-            <span className="flex items-center gap-2 whitespace-nowrap text-xs">
-              <Switch
-                id="pause-each-step"
-                checked={stepPause}
-                onCheckedChange={(on) => {
-                  setStepPause(on);
-                  if (!on && holding) togglePause();
-                }}
-              />
-              <label htmlFor="pause-each-step" className="cursor-pointer">
-                Pause each step
-              </label>
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={togglePause}
-              disabled={Boolean(state.gate) || ended}
-              title="Pause or resume (Space)"
-            >
-              {paused ? <Play /> : <Pause />}
-              {paused ? "Resume" : "Pause"}
-            </Button>
+            {/* A pipeline run can't be paused yet. */}
+            {!session.pipeline && (
+              <>
+                <span className="flex items-center gap-2 whitespace-nowrap text-xs">
+                  <Switch
+                    id="pause-each-step"
+                    checked={stepPause}
+                    onCheckedChange={(on) => {
+                      setStepPause(on);
+                      if (!on && holding) togglePause();
+                    }}
+                  />
+                  <label htmlFor="pause-each-step" className="cursor-pointer">
+                    Pause each step
+                  </label>
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={togglePause}
+                  disabled={Boolean(state.gate) || ended}
+                  title="Pause or resume (Space)"
+                >
+                  {paused ? <Play /> : <Pause />}
+                  {paused ? "Resume" : "Pause"}
+                </Button>
+              </>
+            )}
             <Button
               variant="ghost"
               size="icon-sm"
@@ -416,15 +421,34 @@ function RunWorkspace({ session }: { session: RunSession }) {
   );
 }
 
-/** With runs on the backend, brings back the project's latest run after a reload or on another device. */
-function useLatestRun(projectId: string, known: boolean) {
+/**
+ * With runs on the backend, brings back the project's latest run after a reload or on another device. While the run
+ * shown has ended, it keeps asking, so a run started elsewhere (another tab, another member) shows up here too.
+ */
+function useLatestRun(projectId: string, session: RunSession | undefined) {
   const attachRun = useRunStudio((s) => s.attachRun);
-  const latest = useRunsQuery(projectId, { limit: 1 }, { enabled: !known });
+  const openRunId = useRunStudio((s) => s.openRunId);
+  const ended = session ? session.state.completed || session.state.lifecycle === "failed" : false;
+  const latest = useRunsQuery(
+    projectId,
+    { limit: 1 },
+    {
+      enabled: !session || ended,
+      refetchInterval: (query) => (session && !query.state.error ? 15_000 : false),
+    },
+  );
   const run = latest.data?.data[0];
+  const shown = session?.runId;
+  const shownAt = session?.createdAt;
   useEffect(() => {
     // Runs started from a dataset have no topic and keep their own page.
-    if (run?.topic && !known) attachRun(projectId, run, true);
-  }, [run, known, projectId, attachRun]);
+    if (!run?.topic || run.id === shown) return;
+    // Only a newer run: a cached answer from before may still name an older one.
+    if (shownAt && Date.parse(run.created_at) <= Date.parse(shownAt)) return;
+    // Not while the ended run is open: switching would close the workspace under you.
+    if (shown && openRunId === shown) return;
+    attachRun(projectId, run, true);
+  }, [run, shown, shownAt, openRunId, projectId, attachRun]);
 }
 
 /** Renders the open workspace over the whole app and tells you when a run you left needs you. */
@@ -435,7 +459,7 @@ export function RunWorkspaceHost({ projectId }: { projectId: string }) {
   const open = useRunSession(openRunId);
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
-  useLatestRun(projectId, Boolean(session));
+  useLatestRun(projectId, session);
 
   const gate = session?.state.gate;
   const away = Boolean(session) && openRunId !== session?.runId;

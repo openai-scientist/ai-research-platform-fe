@@ -17,6 +17,10 @@ export interface RunSession {
   projectId: string;
   /** Short label shown in the UI, such as `RUN-3F9C`. */
   label: string;
+  /** A pipeline run: stages on engines, which can't be paused yet. */
+  pipeline: boolean;
+  /** When the run was created, ISO 8601. */
+  createdAt: string;
   state: RunState;
 }
 
@@ -130,20 +134,29 @@ export const useRunStudio = create<RunStudioState>()((set, get) => {
         return;
       }
       const failed = run.status === RunStatus.Failed || run.status === RunStatus.BudgetExceeded;
-      const stream = new ApiRun(projectId, run.id, (events) => {
-        for (const event of events) receive(event);
-      });
+      const mode = run.review_mode ?? "copilot";
+      const pipeline = Boolean(run.pipeline_key);
+      const stream = new ApiRun(
+        projectId,
+        run.id,
+        (events) => {
+          for (const event of events) receive(event);
+        },
+        pipeline ? { topic: run.topic ?? "", domains: run.domains ?? [], mode } : undefined,
+      );
       track(
         {
           runId: run.id,
           projectId,
           label: run.label ?? labelOf(run.id),
+          pipeline,
+          createdAt: run.created_at,
           // What the run already says about itself, until its events arrive.
           state: {
             ...initialRunState(run.id),
             topic: run.topic ?? "",
             domains: run.domains ?? [],
-            mode: run.review_mode ?? "copilot",
+            mode,
             ...(run.status === RunStatus.Completed ? { completed: true, lifecycle: "completed" as const } : {}),
             ...(failed ? { lifecycle: "failed" as const, failure: run.failure_message ?? undefined } : {}),
           },

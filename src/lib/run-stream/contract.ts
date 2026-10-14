@@ -36,17 +36,23 @@ export type AgentRole =
   | "pi"
   | "interpreter"
   | "reporter"
+  /** A second model, separate from the writers, that reviews the hypotheses before you see them. */
+  | "reviewer"
   | "code";
 
 /** How often the run stops for the person who started it. */
 export type ReviewMode = "auto" | "light" | "copilot" | "full";
 
-export type GateKind = "scope" | "screen" | "hypotheses" | "decision" | "report" | "publish";
+/** `accept` closes a finished stage with the items the person takes forward. */
+export type GateKind = "scope" | "screen" | "hypotheses" | "decision" | "report" | "publish" | "accept";
 
 export type RunLifecycle = "running" | "paused" | "awaiting_review" | "completed" | "failed";
 
-/** Why a round exists: the first one, a new direction after a pivot, or a deeper rerun of the same set. */
-export type RoundKind = "first" | "pivot" | "refine";
+/**
+ * Why a round exists: the first one, a new direction after a pivot, a deeper rerun of the same set, or a revision
+ * of the hypotheses you sent back with comments.
+ */
+export type RoundKind = "first" | "pivot" | "refine" | "revise";
 
 export type Verdict = "supported" | "not_supported" | "insufficient";
 
@@ -447,6 +453,25 @@ export interface Hypothesis {
   kept_by_reviewer?: string;
 }
 
+/** How much a review finding holds the hypotheses back. */
+export type FindingSeverity = "blocking" | "major" | "minor";
+
+/** One point of the independent review of the hypotheses. */
+export interface ReviewFinding {
+  finding_id: string;
+  /** What it is about, such as `hypothesis:H1/conditions`: one field of one hypothesis. */
+  locator: string;
+  severity: FindingSeverity;
+  /** `fix`: the text must change; `needs_evidence`: a claim needs a source. */
+  kind: "fix" | "needs_evidence";
+  /** Such as `reproducibility` or `baseline`. */
+  category: string;
+  issue: string;
+  suggestion?: string;
+  /** `researcher` for a comment the person sent back; findings of the reviewer leave it out. */
+  author?: "reviewer" | "researcher";
+}
+
 // ---------- map ----------
 
 /**
@@ -601,15 +626,35 @@ export interface Gate {
   droppable?: string[];
   /** Held-back ideas the person may keep despite their objection (`hypotheses` gates). */
   keepable?: string[];
+  /** Items the person picks from before confirming (`accept` gates). All start picked; unpicked ones are `dropped`. */
+  selection?: { id: string; label: string }[];
+  /** What the independent reviewer found, which the person may send back to be fixed (`hypotheses` gates). */
+  review?: { findings: ReviewFinding[]; hypotheses: { id: string; label: string }[] };
 }
 
 export interface GateAnswer {
   option_id: string;
   note?: string;
-  /** Ids the person dropped. Only for `hypotheses` and `screen` gates. */
+  /** Ids the person dropped. Only for `hypotheses`, `screen` and `accept` gates. */
   dropped?: string[];
   /** Held-back ideas the person keeps. Only for `hypotheses` gates. */
   kept?: string[];
+  /** Review findings sent back to be fixed, by id. Only for `hypotheses` gates with a review. */
+  findings?: string[];
+  /** Findings the person wrote, sent back with the reviewer's. */
+  own?: OwnFinding[];
+}
+
+/** A finding the person writes at a hypotheses gate. */
+export interface OwnFinding {
+  hypothesis: string;
+  /** The part it points at, such as `falsification_criteria`; empty for the hypothesis as a whole. */
+  field: string;
+  severity: FindingSeverity;
+  kind: ReviewFinding["kind"];
+  category: string;
+  issue: string;
+  suggestion?: string;
 }
 
 export type FigureData =
@@ -812,6 +857,9 @@ export type RunEvent =
   | EventBase<"hypothesis.drafted", { hypothesis: Hypothesis }>
   | EventBase<"hypothesis.checked", { hypothesis_id: string; novelty: NoveltyCheck; feasibility: FeasibilityCheck }>
   | EventBase<"hypothesis.selected", { hypothesis_id: string; override_note?: string }>
+  | EventBase<"review.finding", { finding: ReviewFinding }>
+  /** The comments this round of hypotheses answers: findings sent back from the round before. */
+  | EventBase<"review.sent", { findings: ReviewFinding[] }>
   | EventBase<
       "idea.set_aside",
       {

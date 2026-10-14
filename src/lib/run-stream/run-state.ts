@@ -33,6 +33,7 @@ import type {
   RecordedResult,
   RejectedPaper,
   ReportRow,
+  ReviewFinding,
   ReviewMode,
   RuleId,
   RunLifecycle,
@@ -157,6 +158,10 @@ export interface HypothesizeContent {
   order: string[];
   asides: { id: string; kind?: "held_back" | "not_used"; statement: string; reason: string }[];
   dropped: string[];
+  /** What the independent reviewer reported on the set. */
+  findings: ReviewFinding[];
+  /** For a revision: the comments sent back from the round before, which this round answers. */
+  sent: ReviewFinding[];
 }
 
 export type NodeStatus = "writing" | "ready" | "running" | NodeOutcome;
@@ -287,6 +292,8 @@ export interface RunState {
   stages: Record<string, StageState>;
   stageOrder: string[];
   currentStageKey: string | null;
+  /** When the step running now started, ISO 8601. */
+  stepStartedAt?: string;
   /** The narration being streamed right now, or the last one. */
   message: { id: string; actor: AgentRole; text: string; done: boolean } | null;
   feed: FeedItem[];
@@ -338,7 +345,16 @@ export function emptyContent(plan: StagePlan): StageContent {
     case "synthesize":
       return { stage: "synthesize", clusters: [], setAside: [], tensions: [], gaps: [], ranking: [] };
     case "hypothesize":
-      return { stage: "hypothesize", turns: [], drafts: {}, order: [], asides: [], dropped: [] };
+      return {
+        stage: "hypothesize",
+        turns: [],
+        drafts: {},
+        order: [],
+        asides: [],
+        dropped: [],
+        findings: [],
+        sent: [],
+      };
     case "map":
       return { stage: "map", nodes: [], edges: [], pieces: [] };
     case "experiment":

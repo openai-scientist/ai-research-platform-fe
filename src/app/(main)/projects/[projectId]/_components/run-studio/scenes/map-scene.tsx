@@ -695,8 +695,13 @@ const flowProps = {
   minZoom: 0.08,
   maxZoom: 1.6,
   attributionPosition: "bottom-right",
-  className:
+  // The zoom buttons and the attribution take the app's theme; React Flow's own colours are light only.
+  className: cn(
     "[&_.react-flow__node]:transition-transform [&_.react-flow__node]:duration-500 [&_.react-flow__node]:ease-out",
+    "[--xy-controls-button-background-color:var(--card)] [--xy-controls-button-background-color-hover:var(--muted)]",
+    "[--xy-controls-button-color:var(--foreground)] [--xy-controls-button-color-hover:var(--foreground)]",
+    "[--xy-controls-button-border-color:var(--border)] [--xy-attribution-background-color:transparent]",
+  ),
 } as const;
 
 type Pick = { kind: "node" | "edge"; id: string } | null;
@@ -1602,8 +1607,9 @@ function PieceCard({
                 centre && i === 0 && "font-(family-name:--font-lora) text-center text-[15px]",
               )}
             >
-              {/* The records a line comes from lead it, inline, so each reads as "[C1] what C1 says". */}
-              {item.refs?.map((r) => {
+              {/* The records a line comes from lead it, inline, so each reads as "[C1] what C1 says". Each once:
+                  older runs may name a record twice. */}
+              {[...new Set(item.refs)].map((r) => {
                 const type = typeOf(r);
                 return type ? (
                   <button

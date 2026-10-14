@@ -16,6 +16,12 @@ export interface RunArtifactItem {
   size_bytes: number;
   sha256: string;
   created_at: string;
+  // Pipeline runs: the stage that made it, its contract schema, and the review round it belongs to.
+  stage_run_id?: string | null;
+  schema_id?: string | null;
+  version?: number | null;
+  primary?: boolean;
+  review_round?: number | null;
 }
 
 export type ArtifactListResponse = ApiResult<RunArtifactItem[]>;
@@ -27,6 +33,20 @@ export const fetchArtifacts = {
     const response = await apiService.get<ArtifactListResponse>(`${runPath(projectId, runId)}/artifacts`, undefined, {
       signal,
     });
+    return response.data;
+  },
+  /** A pipeline run's files of one contract schema, such as `revision.response/v1`. */
+  getBySchema: async (
+    projectId: string,
+    runId: string,
+    schema: string,
+    signal?: AbortSignal,
+  ): Promise<ArtifactListResponse> => {
+    const response = await apiService.get<ArtifactListResponse>(
+      `${runPath(projectId, runId)}/artifacts`,
+      { schema },
+      { signal },
+    );
     return response.data;
   },
   download: (projectId: string, runId: string, artifactId: string, signal?: AbortSignal): Promise<FileDownload> =>

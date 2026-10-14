@@ -76,6 +76,13 @@ export const AGENTS: Record<AgentRole, AgentMeta> = {
     soft: "bg-amber-500/12 ring-amber-500/30",
     solid: "bg-amber-600",
   },
+  reviewer: {
+    name: "Reviewer",
+    initials: "Rv",
+    text: "text-indigo-700 dark:text-indigo-300",
+    soft: "bg-indigo-500/12 ring-indigo-500/30",
+    solid: "bg-indigo-600",
+  },
   code: {
     name: "Code check",
     initials: "{ }",
@@ -92,6 +99,7 @@ export const TEAM: AgentRole[] = [
   "theorist",
   "methodologist",
   "skeptic",
+  "reviewer",
   "pi",
   "interpreter",
   "reporter",
@@ -163,6 +171,14 @@ export const STOP_INFO: Record<
     verb: "you approve",
     noun: "the paper",
     stage: "write",
+  },
+  accept: {
+    title: "Accept the hypotheses",
+    where: "After Map",
+    what: "Pick the hypotheses the run ends with.",
+    verb: "you accept",
+    noun: "the hypotheses",
+    stage: "map",
   },
 };
 

@@ -139,6 +139,43 @@ These serve as the fallback; there is no separate default.css file. */
   html {
     @apply font-sans;
   }
+
+  /*
+   * Thin, quiet scrollbars in the theme's colours: a rounded thumb against the edge, on a clear track, darker while
+   * you point at what scrolls. Chrome and Safari draw them from the WebKit parts, which place the thumb; they would
+   * ignore those parts if the standard properties were set, so only Firefox gets the standard ones.
+   */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track,
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    border-top: 0 solid transparent;
+    border-left: 2px solid transparent;
+    border-radius: 9999px;
+    background-color: color-mix(in oklab, var(--foreground) 16%, transparent);
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:horizontal {
+    border-top-width: 2px;
+    border-left-width: 0;
+  }
+  *:hover::-webkit-scrollbar-thumb {
+    background-color: color-mix(in oklab, var(--foreground) 28%, transparent);
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: color-mix(in oklab, var(--foreground) 40%, transparent);
+  }
+  @supports not selector(::-webkit-scrollbar) {
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: color-mix(in oklab, var(--foreground) 16%, transparent) transparent;
+    }
+  }
 }
 
 @layer utilities {

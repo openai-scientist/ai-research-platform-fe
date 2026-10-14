@@ -101,7 +101,8 @@ export function SceneNote({
 
 /** Approving goes on; asking again goes back; anything else is a plain record. */
 function decisionMark(text: string): { Icon: LucideIcon; tone: string } {
-  if (text.startsWith("Approved")) return { Icon: CircleCheck, tone: "text-emerald-600 dark:text-emerald-400" };
+  if (text.startsWith("Approved") || text.startsWith("Accepted"))
+    return { Icon: CircleCheck, tone: "text-emerald-600 dark:text-emerald-400" };
   if (text.startsWith("Asked")) return { Icon: Undo2, tone: "text-amber-600 dark:text-amber-400" };
   return { Icon: CornerDownRight, tone: "text-muted-foreground" };
 }
