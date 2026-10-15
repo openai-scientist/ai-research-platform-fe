@@ -46,13 +46,20 @@ export function useConnectionFlow(
   userId: string,
   googleAvailable: boolean,
   googleResume?: GoogleConnectionResume,
+  /** The provider picked on the connections page; the flow opens on its details step. */
+  initialKind?: ConnectionKind,
 ) {
   const queryClient = useQueryClient();
   const access = useConnectionAccess(projectId);
-  const [step, setStep] = useState<ConnectionStep>(initialConnection ? 2 : 0);
-  const [kind, setKind] = useState<ConnectionKind>(initialConnection?.kind ?? googleResume?.kind ?? "postgres");
+  const [step, setStep] = useState<ConnectionStep>(
+    initialConnection ? 2 : initialKind && !isGoogleConnection(initialKind) ? 1 : 0,
+  );
+  const [kind, setKind] = useState<ConnectionKind>(
+    initialConnection?.kind ?? googleResume?.kind ?? initialKind ?? "postgres",
+  );
   const [storedDraft, setDraft] = useState({
     ...EMPTY_CONNECTION_DRAFT,
+    ...(initialKind === "mysql" ? { port: "3306" } : {}),
     name: googleResume?.name ?? "",
     googleTarget: googleResume?.target ?? "",
   });

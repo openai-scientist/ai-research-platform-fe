@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { getConnectionAccess, recordConnectionError, subscribeConnectionAccess } from "@/lib/api/connection-runtime";
+import { collectPages } from "@/lib/api/infinite-pagination";
 import { connectionKeys } from "@/lib/api/query-keys";
 import {
   type ConnectionItem,
@@ -104,6 +105,18 @@ export function useInfiniteDataConnections(projectId: string, q?: string) {
     retry: false,
   });
   return { ...query, connections: query.items };
+}
+
+/** Every connection in the project, for per-provider counts and instant client-side filtering. */
+export function useAllDataConnections(projectId: string) {
+  const access = useConnectionAccess(projectId);
+  return useQuery({
+    queryKey: [...connectionKeys.lists(projectId), "all"],
+    queryFn: ({ signal }) => collectPages((params) => fetchDataConnections.getList(projectId, params, signal)),
+    enabled: Boolean(projectId) && !access.rateLimited,
+    refetchOnWindowFocus: false,
+    retry: false,
+  });
 }
 
 export function useConnectionActions(projectId: string) {

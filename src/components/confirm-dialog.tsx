@@ -24,6 +24,7 @@ export function ConfirmDialog({
   onOpenChange,
   onConfirm,
   disabled = false,
+  destructive = false,
 }: {
   title: string;
   description: string;
@@ -34,6 +35,8 @@ export function ConfirmDialog({
   onOpenChange?: (open: boolean) => void;
   onConfirm: () => void;
   disabled?: boolean;
+  /** Paint the confirm button as a destructive action, for deletes. */
+  destructive?: boolean;
 }) {
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
@@ -45,7 +48,7 @@ export function ConfirmDialog({
         </AlertDialogHeader>
         <AlertDialogFooter className="flex-row justify-end">
           <AlertDialogCancel>{cancelLabel}</AlertDialogCancel>
-          <AlertDialogAction onClick={onConfirm} disabled={disabled}>
+          <AlertDialogAction onClick={onConfirm} disabled={disabled} variant={destructive ? "destructive" : "default"}>
             {confirmLabel}
           </AlertDialogAction>
         </AlertDialogFooter>

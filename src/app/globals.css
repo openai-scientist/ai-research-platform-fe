@@ -18,6 +18,7 @@
   --radius-3xl: calc(var(--radius) + 12px);
   --radius-4xl: calc(var(--radius) + 16px);
   --color-background: var(--background);
+  --color-canvas: var(--canvas);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
@@ -77,11 +78,11 @@ These serve as the fallback; there is no separate default.css file. */
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.985 0 0);
+  --sidebar: oklch(0.97 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.205 0 0);
   --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent: oklch(0.93 0 0);
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
@@ -91,10 +92,13 @@ These serve as the fallback; there is no separate default.css file. */
   --font-mono: var(--font-geist-mono);
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
+  /* The page behind cards: a shade off white, so white cards stand out. Controls keep --background. */
+  --canvas: oklch(0.985 0 0);
 }
 
 .dark {
   --background: oklch(0.145 0 0);
+  --canvas: var(--background);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);
   --card-foreground: oklch(0.985 0 0);
@@ -127,13 +131,34 @@ These serve as the fallback; there is no separate default.css file. */
   --sidebar-ring: oklch(0.556 0 0);
 }
 
+/* A preset sets its own page colour; keep its canvas the same as its background. */
+:root[data-theme-preset]:not([data-theme-preset="default"]) {
+  --canvas: var(--background);
+}
+
+@layer utilities {
+  /* Every signed-in page sits on the canvas, whichever role's layout it uses. */
+  :root [data-slot="sidebar-inset"] {
+    background-color: var(--canvas);
+  }
+
+  /* Fields stay white on the canvas, as they are on a card. */
+  :root:not(.dark)
+  :is([data-slot="input-group"], [data-slot="input"], [data-slot="select-trigger"], [data-slot="textarea"]):not(
+    :disabled,
+    [data-slot="input-group"] *
+  ) {
+    background-color: var(--background);
+  }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-canvas text-foreground;
     font-family: var(--font-sans), system-ui, sans-serif;
   }
   html {
@@ -294,7 +319,8 @@ html:has([data-landing-page]) {
 
 /* Keep Sonner's stack positioning; animate the notification's own offset. */
 .notification-toast[data-sonner-toast][data-mounted="true"][data-visible="true"] {
-  translate: 0 var(--notification-toast-offset, 0px);
+  translate: var(--notification-toast-x, 0px)
+    calc(var(--notification-toast-offset, 0px) + var(--notification-toast-y, 0px));
   opacity: var(--notification-toast-opacity, 1);
 }
 

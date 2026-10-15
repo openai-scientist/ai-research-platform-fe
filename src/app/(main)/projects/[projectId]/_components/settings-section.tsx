@@ -82,7 +82,7 @@ function SettingsDetailDialog({
       <DialogTrigger asChild>
         <Button variant="outline">{triggerLabel}</Button>
       </DialogTrigger>
-      <DialogContent className="management-surface flex max-h-[calc(100dvh-2rem)] flex-col gap-6 overflow-clip sm:max-w-3xl">
+      <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col gap-6 overflow-clip sm:max-w-3xl">
         <DialogHeader className="shrink-0 pr-10">
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>

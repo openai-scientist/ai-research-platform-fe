@@ -4,10 +4,11 @@ import { useState } from "react";
 
 import { FocusScope } from "@radix-ui/react-focus-scope";
 import { cn } from "cn";
-import { ArrowLeft, ArrowRight, Check, Database, Table2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Database, PlugZap, Table2 } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 
 import { ThemeSwitcher } from "@/app/(main)/dashboard/_components/header/theme-switcher";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
@@ -17,14 +18,17 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
-import { type ConnectionItem, isGoogleConnection } from "@/lib/api/services/fetch-data-connections";
+import {
+  type ConnectionItem,
+  type ConnectionKind,
+  isGoogleConnection,
+} from "@/lib/api/services/fetch-data-connections";
 import type { DatasetItem } from "@/lib/api/services/fetch-datasets";
 import type { ProjectItem } from "@/lib/api/services/fetch-project";
 
 import { CONNECTION_PROVIDERS, ConnectionLogo, connectionSourceLabel } from "./connection-display";
 import { ConnectionForm, ConnectionGuidance } from "./connection-form";
 import { ConnectionPreviewStep } from "./connection-preview-step";
-import { ConnectionProviderPicker } from "./connection-provider-picker";
 import { ConnectionCatalogRefresh, ConnectionSourceControls, ConnectionSourceStep } from "./connection-source-step";
 import type { GoogleConnectionResume } from "./google-connection-state";
 import { GoogleReconnectButton } from "./google-reconnect-button";
@@ -32,10 +36,10 @@ import { type ConnectionFlowState, type ConnectionStep, useConnectionFlow } from
 
 const STAGES = [
   {
-    label: "Provider",
-    title: "Choose your data provider",
-    purpose: "Choose the database, Google source or time series server that holds your research data.",
-    output: "Data provider",
+    label: "Connect",
+    title: "Choose a Google file",
+    purpose: "Sign in with Google and pick the file to import from.",
+    output: "Saved connection",
   },
   {
     label: "Connect",
@@ -63,14 +67,29 @@ const STAGES = [
   },
 ] as const;
 
+// The provider is picked on the connections page. Google signs in and picks a file (step 0)
+// instead of filling in connection details (step 1).
 function flowStages(flow: ConnectionFlowState) {
   return STAGES.flatMap((stage, step) =>
-    flow.isGoogle && step === 1 ? [] : [{ ...stage, step: step as ConnectionStep }],
+    step === (flow.isGoogle ? 1 : 0) ? [] : [{ ...stage, step: step as ConnectionStep }],
   );
 }
 
 function currentStage(flow: ConnectionFlowState) {
   const stage = STAGES[flow.step];
+  if (flow.step === 1) return { ...stage, title: `Connect ${CONNECTION_PROVIDERS[flow.kind].label}` };
+  if (flow.step === 0)
+    return flow.kind === "google_drive"
+      ? {
+          ...stage,
+          title: "Choose a Google Drive folder",
+          purpose: "Sign in with Google and pick the folder to import from.",
+        }
+      : {
+          ...stage,
+          title: "Choose a Google spreadsheet",
+          purpose: "Sign in with Google and pick the spreadsheet to import from.",
+        };
   if (flow.isTimeSeries && flow.step === 2)
     return {
       ...stage,
@@ -85,7 +104,7 @@ function currentStage(flow: ConnectionFlowState) {
 function StageTrack({ flow }: { flow: ConnectionFlowState }) {
   return (
     <nav aria-label="Data connection progress" className="shrink-0 overflow-x-auto border-b px-4 py-3.5 md:px-6">
-      <ol className={cn("grid gap-2", flow.isGoogle ? "grid-cols-4" : "grid-cols-5")}>
+      <ol className="grid grid-cols-4 gap-2">
         {flowStages(flow).map((stage, index) => (
           <li key={stage.label} className="min-w-0">
             <button
@@ -225,7 +244,52 @@ function FlowContext({ flow, project }: { flow: ConnectionFlowState; project: Pr
   );
 }
 
-function FlowActions({ flow, placement = "footer" }: { flow: ConnectionFlowState; placement?: "header" | "footer" }) {
+/** Google's first step: sign in, then pick the spreadsheet or folder in Google Picker. */
+function GoogleStart({ flow }: { flow: ConnectionFlowState }) {
+  const provider = CONNECTION_PROVIDERS[flow.kind];
+  const thing = flow.kind === "google_drive" ? "folder" : "spreadsheet";
+  const signedIn = Boolean(flow.grantId);
+  return (
+    <div className="mx-auto flex w-full max-w-xl flex-col gap-6 overflow-y-auto p-4">
+      <div className="flex flex-col items-center gap-4 rounded-2xl border bg-card px-6 py-8 text-center">
+        <span className="grid size-14 place-items-center [&_img]:size-12 [&_svg]:size-12">
+          <ConnectionLogo kind={flow.kind} />
+        </span>
+        <div className="flex flex-col gap-1.5">
+          <h2 className="font-semibold text-base">
+            {signedIn ? `Pick a ${thing} from Google Drive` : `Sign in to ${provider.label}`}
+          </h2>
+          <p className="text-pretty text-muted-foreground text-sm">
+            {signedIn
+              ? `Google access is ready. Choose the ${thing} to import from.`
+              : `Google asks you to sign in and allow access, then brings you back here to pick a ${thing}.`}
+          </p>
+        </div>
+        <Button
+          disabled={flow.disabled || flow.pickerOpen}
+          onClick={() => void (signedIn ? flow.chooseGoogleSource() : flow.authorizeGoogle())}
+        >
+          {(flow.busy || flow.pickerOpen) && <Spinner data-icon="inline-start" />}
+          {signedIn ? `Choose ${thing}` : "Continue with Google"}
+        </Button>
+      </div>
+      <div className="lg:hidden">
+        <ConnectionGuidance kind={flow.kind} ssl={flow.draft.ssl} />
+      </div>
+    </div>
+  );
+}
+
+function FlowActions({
+  flow,
+  placement = "footer",
+  onClose,
+}: {
+  flow: ConnectionFlowState;
+  placement?: "header" | "footer";
+  /** Back from the first step returns to the connections page, where the provider was picked. */
+  onClose: () => void;
+}) {
   if (flow.step === 0) return null;
   const label =
     flow.step === 1
@@ -259,7 +323,7 @@ function FlowActions({ flow, placement = "footer" }: { flow: ConnectionFlowState
           variant="outline"
           className={buttonClass}
           disabled={flow.busy || flow.reconcileRequired}
-          onClick={() => flow.setStep((flow.step - 1) as ConnectionStep)}
+          onClick={() => (flow.step === 1 ? onClose() : flow.setStep((flow.step - 1) as ConnectionStep))}
         >
           Back
         </Button>
@@ -288,6 +352,7 @@ function FlowActions({ flow, placement = "footer" }: { flow: ConnectionFlowState
 export function ConnectionFlow({
   project,
   initialConnection,
+  initialKind,
   googleResume,
   googleAvailable,
   userId,
@@ -297,6 +362,7 @@ export function ConnectionFlow({
 }: {
   project: ProjectItem;
   initialConnection?: ConnectionItem;
+  initialKind?: ConnectionKind;
   googleResume?: GoogleConnectionResume;
   googleAvailable: boolean;
   userId: string;
@@ -312,6 +378,7 @@ export function ConnectionFlow({
     userId,
     googleAvailable,
     googleResume,
+    initialKind,
   );
   const reduceMotion = useReducedMotion();
   const [details, setDetails] = useState(false);
@@ -319,7 +386,7 @@ export function ConnectionFlow({
   const stages = flowStages(flow);
   const from =
     flow.step === 0
-      ? "Your data source"
+      ? "Google account"
       : flow.step === 1
         ? CONNECTION_PROVIDERS[flow.kind].label
         : flow.step === 2
@@ -375,6 +442,15 @@ export function ConnectionFlow({
             <ThemeSwitcher />
           </header>
           <StageTrack flow={flow} />
+          {!flow.configured && (
+            <Alert className="mx-4 mt-4 w-auto md:mx-8">
+              <PlugZap />
+              <AlertTitle>Data connections are turned off</AlertTitle>
+              <AlertDescription>
+                This server is not set up to connect external data sources. Contact your administrator to enable them.
+              </AlertDescription>
+            </Alert>
+          )}
           <div
             className={cn(
               "grid min-h-0 flex-1 overflow-hidden",
@@ -461,7 +537,9 @@ export function ConnectionFlow({
                           disabled={flow.busy}
                         />
                       )}
-                      {!(flow.isTimeSeries && flow.step === 2) && <FlowActions flow={flow} placement="header" />}
+                      {!(flow.isTimeSeries && flow.step === 2) && (
+                        <FlowActions flow={flow} placement="header" onClose={close} />
+                      )}
                       {flow.step === 2 && <ConnectionCatalogRefresh flow={flow} />}
                     </div>
                   )}
@@ -490,15 +568,7 @@ export function ConnectionFlow({
                     transition={{ duration: reduceMotion ? 0 : 0.3, ease: [0.16, 1, 0.3, 1] }}
                   >
                     {flow.step === 0 ? (
-                      <ScrollArea
-                        type="always"
-                        className="min-h-0 flex-1 [&_[data-slot=scroll-area-viewport]]:overscroll-contain"
-                      >
-                        <div className="flex flex-col gap-5 p-1 pr-4 pb-4">
-                          <ConnectionProviderPicker flow={flow} />
-                          <p className="text-muted-foreground text-xs">Supabase uses PostgreSQL. MariaDB uses MySQL.</p>
-                        </div>
-                      </ScrollArea>
+                      <GoogleStart flow={flow} />
                     ) : flow.step === 1 && !isGoogleConnection(flow.kind) ? (
                       <section
                         className="mx-auto flex w-full max-w-4xl flex-col gap-4 p-4"

@@ -476,23 +476,25 @@ export function RunWorkspaceHost({ projectId }: { projectId: string }) {
     });
   }, [gate, away, label, runId, openWorkspace]);
   // Tell about a finish that happened while you were away, and about any stop, but only when it happens:
-  // not when you leave a finished run, and not when a run that had already ended is loaded.
+  // not when you leave a finished run, and not when a run that had already ended is loaded. A reload
+  // replays the history in batches (started, then failed), so only a session following live events counts.
   const completed = Boolean(session?.state.completed);
   const withPaper = Boolean(session?.state.paperTitle);
   const failed = session?.state.lifecycle === "failed";
   const failure = session?.state.failure;
+  const live = Boolean(session?.followed);
   const seen = useRef({ runId, completed, failed });
   useEffect(() => {
     const before = seen.current;
     seen.current = { runId, completed, failed };
-    if (!runId || before.runId !== runId) return;
+    if (!runId || before.runId !== runId || !live) return;
     if (completed && !before.completed && away)
       toast.success(`${label} finished`, {
         description: withPaper ? "The paper is in Findings." : "The hypotheses are ready.",
       });
     if (failed && !before.failed)
       toast.error(`${label} stopped`, { description: failure ?? "Popper could not finish this run." });
-  }, [runId, completed, failed, away, label, withPaper, failure]);
+  }, [runId, completed, failed, away, label, withPaper, failure, live]);
 
   if (!mounted) return null;
   return createPortal(

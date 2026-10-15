@@ -160,6 +160,11 @@ export const fetchDatasets = {
     versionId: string,
     signal?: AbortSignal,
   ): Promise<FileDownload> => requestDownload(versionDownloadPath(projectId, datasetId, versionId), signal),
+  /** Refused with `DATASET_IN_USE` (409) once a research run has used the dataset. */
+  remove: async (projectId: string, datasetId: string): Promise<ApiResult<null>> => {
+    const response = await apiService.delete<ApiResult<null>>(datasetPath(projectId, datasetId));
+    return response.data;
+  },
   getVersionDownloadUrl: (projectId: string, datasetId: string, versionId: string): string =>
     downloadUrl(versionDownloadPath(projectId, datasetId, versionId)),
 };

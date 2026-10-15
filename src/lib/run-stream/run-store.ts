@@ -21,6 +21,8 @@ export interface RunSession {
   pipeline: boolean;
   /** When the run was created, ISO 8601. */
   createdAt: string;
+  /** Has taken in a live event. Until then its events are history, such as a reload replaying how it ended. */
+  followed?: boolean;
   state: RunState;
 }
 
@@ -52,6 +54,7 @@ const labelOf = (runId: string) => `RUN-${runId.slice(0, 4).toUpperCase()}`;
 // Live streams sit outside React state; only the folded state goes into the store.
 const streams = new Map<string, Stream>();
 const queue = new Map<string, RunEvent[]>();
+const followed = new Set<string>();
 let frame = 0;
 
 export const useRunStudio = create<RunStudioState>()((set, get) => {
@@ -59,18 +62,25 @@ export const useRunStudio = create<RunStudioState>()((set, get) => {
   const flush = () => {
     frame = 0;
     const pending = [...queue.entries()];
+    const live = new Set(followed);
     queue.clear();
+    followed.clear();
     set((store) => {
       const sessions = { ...store.sessions };
       for (const [runId, events] of pending) {
         const session = sessions[runId];
         if (!session) continue;
-        sessions[runId] = { ...session, state: events.reduce(applyRunEvent, session.state) };
+        sessions[runId] = {
+          ...session,
+          ...(live.has(runId) ? { followed: true } : {}),
+          state: events.reduce(applyRunEvent, session.state),
+        };
       }
       return { sessions };
     });
   };
-  const receive = (event: RunEvent) => {
+  const receive = (event: RunEvent, live: boolean) => {
+    if (live) followed.add(event.run_id);
     const list = queue.get(event.run_id) ?? [];
     list.push(event);
     queue.set(event.run_id, list);
@@ -139,8 +149,8 @@ export const useRunStudio = create<RunStudioState>()((set, get) => {
       const stream = new ApiRun(
         projectId,
         run.id,
-        (events) => {
-          for (const event of events) receive(event);
+        (events, live) => {
+          for (const event of events) receive(event, live);
         },
         pipeline ? { topic: run.topic ?? "", domains: run.domains ?? [], mode } : undefined,
       );

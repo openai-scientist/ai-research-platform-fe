@@ -50,15 +50,17 @@ export class ApiRun implements RunCommands {
   private stop: (() => void) | null = null;
   private readonly pacer: RunPacer;
   private readonly adapter: PipelineAdapter | null;
+  /** Set by the first live event: from then on, what arrives is happening now rather than history. */
+  private following = false;
 
   constructor(
     private readonly projectId: string,
     private readonly runId: string,
-    receive: (events: RunEvent[]) => void,
+    receive: (events: RunEvent[], live: boolean) => void,
     /** Set for a pipeline run: what it says about itself before its events. */
     pipeline?: PipelineRunInfo,
   ) {
-    this.pacer = new RunPacer(receive);
+    this.pacer = new RunPacer((events) => receive(events, this.following));
     this.adapter = pipeline ? new PipelineAdapter(pipeline) : null;
   }
 
@@ -75,8 +77,14 @@ export class ApiRun implements RunCommands {
       this.runId,
       { after: 0, live },
       {
-        onEvents: (events, origin) =>
-          origin === "history" ? this.pacer.now(this.adapt(events)) : this.pacer.push(this.adapt(events)),
+        onEvents: (events, origin) => {
+          if (origin === "history") {
+            this.pacer.now(this.adapt(events));
+            return;
+          }
+          this.following = true;
+          this.pacer.push(this.adapt(events));
+        },
         onEnded: () => {
           // Nothing to do: the last events have already marked the run as finished.
         },

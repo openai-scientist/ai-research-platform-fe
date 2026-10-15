@@ -22,8 +22,8 @@ export function TopBarShell({
   readonly user: AuthUser;
 }) {
   return (
-    <div className="flex min-h-dvh flex-col bg-background">
-      <header className="sticky top-0 z-10 border-b bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/80">
+    <div className="flex min-h-dvh flex-col bg-canvas">
+      <header className="sticky top-0 z-10 border-b bg-canvas/95 backdrop-blur supports-backdrop-filter:bg-canvas/80">
         <div className="mx-auto flex h-12 w-full max-w-screen-xl items-center justify-between gap-4 px-4 lg:px-6">
           <Link prefetch={false} href={homeUrl} className="flex items-center gap-2 rounded-md font-semibold">
             <Command className="size-4" />

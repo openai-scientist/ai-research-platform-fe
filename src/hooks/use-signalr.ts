@@ -70,7 +70,7 @@ export function useSignalR() {
         toast.info(title, {
           id: toastId,
           // Our motion uses wall time instead of a frozen browser animation timeline.
-          className: "notification-toast transition-none!",
+          className: "notification-toast transition-none! select-none",
           classNames: { description: "text-muted-foreground!" },
           description: text,
           duration: 12000,

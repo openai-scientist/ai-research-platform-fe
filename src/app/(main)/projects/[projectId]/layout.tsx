@@ -41,7 +41,6 @@ export default async function Layout({
 
   return (
     <SidebarProvider
-      className="management-surface"
       defaultOpen={defaultOpen}
       style={
         {

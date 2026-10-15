@@ -9,7 +9,7 @@ import { WorkspaceSection } from "../_components/workspace-section";
 const sections: Record<string, { title: string; description: string; managerOnly?: boolean }> = {
   connections: {
     title: "Data Connections",
-    description: "Connect databases, Google Sheets or Google Drive and import data into this project.",
+    description: "Connect the places your research data lives and import it into this project as datasets.",
   },
   datasets: {
     title: "Datasets",

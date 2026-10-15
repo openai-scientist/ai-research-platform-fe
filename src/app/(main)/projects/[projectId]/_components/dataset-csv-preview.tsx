@@ -34,6 +34,7 @@ export function DatasetCsvPreview({
   onOpenChange,
   showTrigger = true,
   inline = false,
+  note = true,
 }: {
   projectId: string;
   datasetId: string;
@@ -42,6 +43,8 @@ export function DatasetCsvPreview({
   onOpenChange?: (open: boolean) => void;
   showTrigger?: boolean;
   inline?: boolean;
+  /** The line on what the preview leaves out; off when the caller says it elsewhere. */
+  note?: boolean;
 }) {
   const [localOpen, setLocalOpen] = useState(false);
   const open = controlledOpen ?? localOpen;
@@ -108,10 +111,12 @@ export function DatasetCsvPreview({
           </Table>
         </DialogScrollArea>
       )}
-      <p className="text-muted-foreground text-xs">
-        Preview shows up to 100 rows and 50 columns from the start of the file. Download CSV to view the complete
-        dataset.
-      </p>
+      {note && (
+        <p className="text-muted-foreground text-xs">
+          Preview shows up to 100 rows and 50 columns from the start of the file. Download CSV to view the complete
+          dataset.
+        </p>
+      )}
     </div>
   );
 
@@ -126,7 +131,7 @@ export function DatasetCsvPreview({
           </Button>
         </DialogTrigger>
       )}
-      <DialogContent className="management-surface flex max-h-[85dvh] min-w-0 flex-col gap-4 overflow-hidden sm:max-w-5xl">
+      <DialogContent className="flex max-h-[85dvh] min-w-0 flex-col gap-4 overflow-hidden sm:max-w-5xl">
         <DialogHeader className="shrink-0 pr-8">
           <DialogTitle className="break-words">{version.original_filename}</DialogTitle>
           <DialogDescription>
