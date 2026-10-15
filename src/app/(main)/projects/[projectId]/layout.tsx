@@ -85,7 +85,7 @@ export default async function Layout({
             </div>
           </div>
         </header>
-        <div className="min-h-0 min-w-0 flex-1 overflow-x-hidden p-4 md:p-6">{children}</div>
+        <div className="min-h-0 min-w-0 flex-1 overflow-x-clip p-4 md:p-6">{children}</div>
       </SidebarInset>
     </SidebarProvider>
   );

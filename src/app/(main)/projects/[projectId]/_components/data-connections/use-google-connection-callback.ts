@@ -7,9 +7,14 @@ import { toast } from "sonner";
 
 import { showConnectionError, useConnectionAccess } from "@/hooks/use-data-connections";
 import { connectionKeys } from "@/lib/api/query-keys";
-import { fetchDataConnections } from "@/lib/api/services/fetch-data-connections";
+import {
+  type ConnectionItem,
+  fetchDataConnections,
+  type GoogleConnectionKind,
+} from "@/lib/api/services/fetch-data-connections";
 import { ApiError } from "@/types/api";
 
+import { saveGoogleSelection } from "./google-connection-selection";
 import {
   beginGoogleConnection,
   consumeGoogleConnectionCallback,
@@ -17,6 +22,7 @@ import {
   googleConnectionCallbackMessage,
   takeGoogleConnectionIntent,
 } from "./google-connection-state";
+import { openGooglePicker } from "./google-picker";
 
 interface ReconnectRequest {
   connectionId: string;
@@ -28,13 +34,62 @@ export function useGoogleConnectionCallback(
   projectId: string,
   userId: string,
   canWrite: boolean,
-  onResume: (resume: GoogleConnectionResume) => void,
+  onCreated: (connection: ConnectionItem) => void,
 ) {
   const queryClient = useQueryClient();
   const access = useConnectionAccess(projectId);
   const [reconnect, setReconnect] = useState<ReconnectRequest | null>(null);
   const [pending, setPending] = useState(false);
-  const locked = useRef(false);
+  const [creation, setCreation] = useState<GoogleConnectionResume | null>(null);
+  const locked = useRef<boolean>(false);
+  const attempted = useRef<GoogleConnectionResume | null>(null);
+  const pickerRequest = useRef<AbortController | null>(null);
+
+  useEffect(() => () => pickerRequest.current?.abort(), []);
+
+  const chooseSource = useCallback(
+    async (request: GoogleConnectionResume) => {
+      if (locked.current || !request.grantId || !canWrite || !access.configured || access.rateLimited) return;
+      locked.current = true;
+      setPending(true);
+      const controller = new AbortController();
+      pickerRequest.current = controller;
+      try {
+        const { data } = await fetchDataConnections.getGooglePicker(projectId, request.grantId, controller.signal);
+        const selected = await openGooglePicker(request.kind, data, controller.signal, () => undefined);
+        if (!selected || controller.signal.aborted) return;
+        const connection = await saveGoogleSelection(projectId, request.kind, request.grantId, selected);
+        await queryClient.invalidateQueries({ queryKey: connectionKeys.project(projectId) });
+        if (controller.signal.aborted) return;
+        setCreation(null);
+        toast.success("Connection saved.");
+        // The import flow opens only after a file has been picked and its connection saved.
+        onCreated(connection);
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        if (error instanceof ApiError && error.code === "GOOGLE_GRANT_INVALID")
+          setCreation({ ...request, grantId: undefined });
+        showConnectionError(error, projectId);
+      } finally {
+        pickerRequest.current = null;
+        locked.current = false;
+        if (!controller.signal.aborted) setPending(false);
+      }
+    },
+    [access.configured, access.rateLimited, canWrite, onCreated, projectId, queryClient],
+  );
+
+  useEffect(() => {
+    if (!creation?.grantId || attempted.current === creation || !canWrite || !access.configured || access.rateLimited)
+      return;
+    // Wait for the committed mount so Strict Mode cleanup cannot cancel and lose the callback.
+    const timer = setTimeout(() => {
+      if (attempted.current === creation) return;
+      attempted.current = creation;
+      void chooseSource(creation);
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [access.configured, access.rateLimited, canWrite, chooseSource, creation]);
 
   const reauthorize = useCallback(
     async (request: ReconnectRequest & { grantId: string }) => {
@@ -76,13 +131,26 @@ export function useGoogleConnectionCallback(
       return;
     }
     if (intent.action === "create") {
-      onResume({ ...intent.draft, grantId: callback.error ? undefined : (callback.grantId ?? undefined) });
+      if (callback.grantId && !callback.error) setCreation({ ...intent.draft, grantId: callback.grantId });
     } else if (callback.grantId && !callback.error) {
       void reauthorize({ ...intent, grantId: callback.grantId });
     } else {
       setReconnect({ connectionId: intent.connectionId, accountEmail: intent.accountEmail });
     }
-  }, [canWrite, onResume, projectId, reauthorize, userId]);
+  }, [canWrite, projectId, reauthorize, userId]);
+
+  function startCreate(kind: GoogleConnectionKind) {
+    if (locked.current || !canWrite || !access.configured || access.rateLimited) return;
+    if (creation?.kind === kind && creation.grantId) {
+      void chooseSource(creation);
+      return;
+    }
+    try {
+      beginGoogleConnection(projectId, userId, { action: "create", draft: { kind, name: "", target: "" } });
+    } catch (error) {
+      showConnectionError(error, projectId);
+    }
+  }
 
   function confirmReconnect() {
     if (!reconnect || pending || !canWrite || access.rateLimited) return;
@@ -101,5 +169,5 @@ export function useGoogleConnectionCallback(
     }
   }
 
-  return { reconnect, setReconnect, pending, confirmReconnect };
+  return { reconnect, setReconnect, pending, confirmReconnect, startCreate };
 }

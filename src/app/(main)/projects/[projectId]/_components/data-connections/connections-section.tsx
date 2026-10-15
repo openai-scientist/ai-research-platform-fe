@@ -26,7 +26,6 @@ import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import {
-  showConnectionError,
   useAllDataConnections,
   useConnectionAccess,
   useConnectionActions,
@@ -44,7 +43,6 @@ import { ListState, perform, type WorkspaceProps } from "../workspace-ui";
 import { CONNECTION_PROVIDERS, ConnectionLogo, connectionStatus, connectionTarget } from "./connection-display";
 import { ConnectionFlow } from "./connection-flow";
 import { ConnectionProviderPicker, type ProviderCounts } from "./connection-provider-picker";
-import { beginGoogleConnection, type GoogleConnectionResume } from "./google-connection-state";
 import { GoogleReconnectButton } from "./google-reconnect-button";
 import { useGoogleConnectionCallback } from "./use-google-connection-callback";
 
@@ -184,9 +182,8 @@ export function ConnectionsSection({ project, canWrite, userId, header }: Worksp
   const [flow, setFlow] = useState<{
     connection?: ConnectionItem;
     kind?: ConnectionKind;
-    googleResume?: GoogleConnectionResume;
   } | null>(null);
-  const resumeGoogle = useCallback((googleResume: GoogleConnectionResume) => setFlow({ googleResume }), []);
+  const resumeGoogle = useCallback((connection: ConnectionItem) => setFlow({ connection }), []);
   const googleCallback = useGoogleConnectionCallback(project.id, userId, canWrite, resumeGoogle);
   const [rename, setRename] = useState<ConnectionItem | null>(null);
   const [details, setDetails] = useState<ConnectionItem | null>(null);
@@ -217,12 +214,8 @@ export function ConnectionsSection({ project, canWrite, userId, header }: Worksp
       setFlow({ kind });
       return;
     }
-    // Google signs in first and comes back to this page, which reopens the flow on its picker.
-    try {
-      beginGoogleConnection(project.id, userId, { action: "create", draft: { kind, name: "", target: "" } });
-    } catch (error) {
-      showConnectionError(error, project.id);
-    }
+    // Finish Google's popup on this page, then open the saved connection at source selection.
+    googleCallback.startCreate(kind);
   };
   const show = (kind: ConnectionKind) => {
     setKindFilter(kind);
@@ -451,12 +444,11 @@ export function ConnectionsSection({ project, canWrite, userId, header }: Worksp
           </Empty>
         )
       )}
-      {flow && canWrite && (
+      {flow && canWrite && (flow.connection ?? (flow.kind && !isGoogleConnection(flow.kind))) && (
         <ConnectionFlow
           project={project}
           initialConnection={flow.connection}
           initialKind={flow.kind}
-          googleResume={flow.googleResume}
           googleAvailable={googleAvailable}
           userId={userId}
           canWrite={canWrite}
