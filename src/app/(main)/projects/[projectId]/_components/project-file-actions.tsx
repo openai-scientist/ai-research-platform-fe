@@ -121,10 +121,10 @@ export function ProjectFileActions({
                 onClick={async (event) => {
                   event.preventDefault();
                   if (!canWrite || remove.isPending) return;
-                  const result = await perform(
-                    () => remove.mutateAsync(file.id),
-                    `Document "${file.filename}" deleted.`,
-                  );
+                  const result = await perform(() => remove.mutateAsync(file.id), {
+                    title: "Document deleted",
+                    description: file.filename,
+                  });
                   if (result) setConfirmOpen(false);
                 }}
               >

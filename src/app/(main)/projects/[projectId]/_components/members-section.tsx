@@ -1,208 +1,275 @@
 "use client";
 
-import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useState } from "react";
 
-import type { PaginationState } from "@tanstack/react-table";
-import { format } from "date-fns";
+import { MailX, Search, SearchX, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 
-import type { UserRow } from "@/app/(main)/dashboard/users/_components/data";
-import { Users } from "@/app/(main)/dashboard/users/_components/users";
 import { Button } from "@/components/ui/button";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useInfinityScroll } from "@/hooks/use-infinity-scroll";
 import {
-  useMembersQuery,
   useRemoveMemberMutation,
   useResendProjectInviteMutation,
   useUpdateMemberMutation,
 } from "@/hooks/use-members-query";
-import {
-  ASSIGNABLE_PROJECT_ROLES,
-  canManageProjectMember,
-  isAssignableProjectRole,
-  PROJECT_ROLE_LABELS,
-} from "@/lib/auth/project-access";
-import { type ProjectRole, ProjectStatus } from "@/types/enums";
+import { projectKeys } from "@/lib/api/query-keys";
+import { fetchMembers, type MemberListParams, type ProjectMemberItem } from "@/lib/api/services/fetch-members";
+import { type AssignableProjectRole, canManageProjectMember, PROJECT_ROLE_LABELS } from "@/lib/auth/project-access";
+import { ProjectRole, ProjectStatus } from "@/types/enums";
 
 import { InviteMemberDialog } from "./invite-member-dialog";
-import { MemberActions } from "./member-actions";
-import { perform, type WorkspaceProps } from "./workspace-ui";
+import { InvitationRow, MemberColumns, MemberRow, nameOf, RowsSkeleton } from "./member-rows";
+import { LoadMore, perform, type WorkspaceProps } from "./workspace-ui";
 
-const ROLE_LABELS = PROJECT_ROLE_LABELS;
-const ROLE_OPTIONS = ["All", ...Object.values(ROLE_LABELS)];
-const ROLE_CHOICES = ASSIGNABLE_PROJECT_ROLES.map((role) => ROLE_LABELS[role]);
-const STATUS_OPTIONS = ["All", "Active", "Invited"];
-const NO_OPTIONS: readonly string[] = [];
-function toRole(label: string): ProjectRole | undefined {
-  return Object.entries(ROLE_LABELS).find(([, value]) => value === label)?.[0] as ProjectRole | undefined;
+const ROLES = [ProjectRole.ProjectManager, ProjectRole.Researcher, ProjectRole.Reviewer] as const;
+type RoleFilter = "all" | ProjectRole;
+
+type MemberFilters = Omit<MemberListParams, "limit" | "offset">;
+
+function useMemberList(projectId: string, filters: MemberFilters) {
+  return useInfinityScroll<ProjectMemberItem, MemberFilters>({
+    queryKey: projectKeys.memberLists(projectId),
+    fetchPage: (params, signal) => fetchMembers.getList(projectId, params, signal),
+    filters,
+    pageSize: 50,
+  });
 }
 
-export function MembersSection({ project, canManage, header }: WorkspaceProps & { header?: ReactNode }) {
+export function MembersSection({ project, canManage, userId, header }: WorkspaceProps & { header?: ReactNode }) {
   const [search, setSearch] = useState("");
   const [q, setQ] = useState("");
-  const [filters, setFilters] = useState({ role: "All", status: "All" });
-  const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 50 });
+  const [role, setRole] = useState<RoleFilter>("all");
+  const [tab, setTab] = useState<"members" | "invitations">("members");
   const [inviteOpen, setInviteOpen] = useState(false);
-  const previousProjectId = useRef<string | undefined>(undefined);
   const closeInvite = useCallback(() => setInviteOpen(false), []);
-  const validSearch = q.length <= 120;
   useEffect(() => {
-    if (search.trim() === q) return;
-    const timer = window.setTimeout(() => {
-      const next = search.trim();
-      setQ(next);
-      setPagination((current) => ({ ...current, pageIndex: 0 }));
-    }, 350);
+    const timer = window.setTimeout(() => setQ(search.trim().slice(0, 120)), 300);
     return () => window.clearTimeout(timer);
-  }, [search, q]);
+  }, [search]);
+  // Another project starts from a clean slate.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reset only when the project changes
   useEffect(() => {
-    if (previousProjectId.current === project.id) return;
-    previousProjectId.current = project.id;
     setSearch("");
     setQ("");
-    setFilters({ role: "All", status: "All" });
-    setPagination({ pageIndex: 0, pageSize: 50 });
+    setRole("all");
+    setTab("members");
     setInviteOpen(false);
   }, [project.id]);
-  const query = useMembersQuery(
-    project.id,
-    {
-      q: q || undefined,
-      role: filters.role === "All" ? undefined : toRole(filters.role),
-      status: filters.status === "All" ? undefined : filters.status === "Active" ? "active" : "invited",
-      limit: pagination.pageSize,
-      offset: pagination.pageIndex * pagination.pageSize,
-    },
-    { enabled: validSearch },
-  );
-  const total = query.data?.meta.pagination?.total ?? 0;
-  useEffect(() => {
-    if (!query.data || query.isFetching || query.isError) return;
-    const lastPage = Math.max(0, Math.ceil(total / pagination.pageSize) - 1);
-    if (pagination.pageIndex > lastPage) setPagination((current) => ({ ...current, pageIndex: lastPage }));
-  }, [query.data, query.isFetching, query.isError, total, pagination.pageSize, pagination.pageIndex]);
-  const resend = useResendProjectInviteMutation(project.id);
+
+  const filters = { q: q || undefined, role: role === "all" ? undefined : role };
+  const members = useMemberList(project.id, { ...filters, status: "active" });
+  const invitations = useMemberList(project.id, { ...filters, status: "invited" });
   const update = useUpdateMemberMutation(project.id);
   const remove = useRemoveMemberMutation(project.id);
+  const resend = useResendProjectInviteMutation(project.id);
+
   const writable = canManage && project.status !== ProjectStatus.Archived;
-  const busy = resend.isPending || update.isPending || remove.isPending;
-  const changing = search.trim() !== q;
-  const rows: UserRow[] = (query.data?.data ?? []).map((member) => ({
-    id: member.id,
-    avatar_url: member.avatar_url,
-    email: member.email,
-    name: member.display_name ?? member.email,
-    role: ROLE_LABELS[member.role],
-    status: member.status === "active" ? "Active" : member.invite_expired ? "Expired invitation" : "Pending invite",
-    joinedDate: format(new Date(member.created_at), "dd MMM yyyy, h:mm a"),
-    team: "Platform",
-    workspace: [],
-  }));
-  async function resendInvitation(id: string) {
-    const result = await perform(() => resend.mutateAsync(id));
-    if (result) {
-      toast.success(result.message);
-      if (result.data.invite_email_sent === false)
-        toast.info("The invitation was renewed, but its email was not sent.");
-    }
+  const busy = update.isPending || remove.isPending || resend.isPending;
+  const filtered = Boolean(q) || role !== "all";
+  const editable = (member: ProjectMemberItem) => writable && canManageProjectMember(project, member);
+
+  const changeRole = (member: ProjectMemberItem, next: AssignableProjectRole) =>
+    void perform(() => update.mutateAsync({ membershipId: member.id, role: next }), {
+      title: `Role changed to ${PROJECT_ROLE_LABELS[next]}`,
+      description: nameOf(member),
+    });
+  async function resendInvitation(member: ProjectMemberItem) {
+    const result = await perform(() => resend.mutateAsync(member.id));
+    if (!result) return;
+    toast.success("Invitation sent again", { description: member.email });
+    if (result.data.invite_email_sent === false) toast.info("The invitation was renewed, but its email was not sent.");
   }
+
+  const toolbar = (
+    <div className="grid w-full gap-2 sm:flex sm:w-auto sm:items-center">
+      <InputGroup className="w-full sm:w-64">
+        <InputGroupAddon align="inline-start">
+          <Search aria-hidden="true" />
+        </InputGroupAddon>
+        <InputGroupInput
+          type="search"
+          value={search}
+          maxLength={120}
+          placeholder="Search by name or email"
+          aria-label="Search members"
+          onChange={(event) => setSearch(event.target.value)}
+        />
+      </InputGroup>
+      <Select value={role} onValueChange={(value) => setRole(value as RoleFilter)}>
+        <SelectTrigger aria-label="Filter by role" className="w-full sm:w-40">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectGroup>
+            <SelectItem value="all">All roles</SelectItem>
+            {ROLES.map((value) => (
+              <SelectItem key={value} value={value}>
+                {PROJECT_ROLE_LABELS[value]}
+              </SelectItem>
+            ))}
+          </SelectGroup>
+        </SelectContent>
+      </Select>
+    </div>
+  );
+
+  const invitationCount = invitations.totalItems ?? invitations.items.length;
+  // The owner, then you, then everyone else in the order the server sent them.
+  const rank = (member: ProjectMemberItem) => {
+    if (member.user_id === project.owner_user_id) return 0;
+    return member.user_id === userId ? 1 : 2;
+  };
+  const ordered = [...members.items].sort((a, b) => rank(a) - rank(b));
+  const clearFilters = () => {
+    setSearch("");
+    setRole("all");
+  };
+
+  function status(list: typeof members, empty: ReactNode) {
+    if (list.isPending) return <RowsSkeleton rows={3} />;
+    if (list.isError)
+      return (
+        <div className="p-4">
+          <Button variant="outline" onClick={() => void list.refetch()}>
+            Try again
+          </Button>
+        </div>
+      );
+    if (list.items.length) return null;
+    return (
+      <div className="flex flex-col items-center gap-3 px-4 py-14 text-center text-muted-foreground text-sm">
+        {filtered ? (
+          <>
+            <SearchX className="size-8 text-muted-foreground/70" aria-hidden="true" />
+            <p>Nobody here matches these filters.</p>
+            <Button variant="outline" size="sm" onClick={clearFilters}>
+              Clear filters
+            </Button>
+          </>
+        ) : (
+          empty
+        )}
+      </div>
+    );
+  }
+
+  const more = (list: typeof members) =>
+    list.hasNextPage && (
+      <div className="border-t p-3 text-center">
+        <LoadMore visible pending={list.isFetchingNextPage} onClick={list.loadMore} />
+      </div>
+    );
+
   return (
     <div className="flex min-w-0 flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         {header}
         {writable && (
-          <Button className="shrink-0" disabled={busy} onClick={() => setInviteOpen(true)}>
+          <Button className="shrink-0" onClick={() => setInviteOpen(true)}>
+            <UserPlus data-icon="inline-start" />
             Invite member
           </Button>
         )}
       </div>
-      {query.isError && (
-        <Button
-          variant="outline"
-          className="self-start"
-          disabled={query.isFetching}
-          onClick={() => void query.refetch()}
-        >
-          Reload members
-        </Button>
-      )}
-      <Users
-        roleChangeDisabled={busy || changing || query.isFetching}
-        compactToolbar
-        title="All members"
-        description=""
-        entityLabel="members"
-        nameColumnLabel="Member"
-        joinedDateLabel="Created"
-        roleFilterLabel="Project role"
-        users={rows}
-        roleOptions={ROLE_OPTIONS}
-        getRoleChoices={(row) => {
-          const member = query.data?.data.find((item) => item.id === row.id);
-          return writable && member && canManageProjectMember(project, member) ? ROLE_CHOICES : NO_OPTIONS;
-        }}
-        statusOptions={STATUS_OPTIONS}
-        teamOptions={NO_OPTIONS}
-        workspaceOptions={NO_OPTIONS}
-        showPrimaryActions={false}
-        showViewControls={false}
-        showActions={writable}
-        server={{
-          search,
-          roleFilter: filters.role,
-          statusFilter: filters.status,
-          pagination,
-          total,
-          busy: changing || query.isFetching || (validSearch && query.isPending),
-          onSearchChange: setSearch,
-          onFilterChange: (filter, value) => {
-            if (filter === "emailVerified") return;
-            setFilters((current) => ({ ...current, [filter]: value }));
-            setPagination((current) => ({ ...current, pageIndex: 0 }));
-          },
-          onPaginationChange: setPagination,
-        }}
-        onChangeRole={
-          writable
-            ? (row, label) => {
-                const role = toRole(label);
-                const membershipId = row.id;
-                const member = query.data?.data.find((item) => item.id === membershipId);
-                if (
-                  !membershipId ||
-                  !role ||
-                  !isAssignableProjectRole(role) ||
-                  !member ||
-                  !canManageProjectMember(project, member) ||
-                  busy ||
-                  row.role === label
-                )
-                  return;
-                void perform(
-                  () => update.mutateAsync({ membershipId, role }),
-                  `Changed "${member.display_name?.trim() || member.email}" to ${label}.`,
-                );
-              }
-            : undefined
-        }
-        renderActions={(row) => {
-          const member = query.data?.data.find((item) => item.id === row.id);
-          return member && writable && canManageProjectMember(project, member) ? (
-            <MemberActions
-              member={member}
-              disabled={busy || query.isFetching || changing}
-              onResend={() => resendInvitation(member.id)}
-              onRemove={() =>
-                perform(
-                  () => remove.mutateAsync(member.id),
-                  member.status === "invited"
-                    ? `Invitation for "${member.email}" cancelled.`
-                    : `Removed "${member.display_name?.trim() || member.email}" from the project.`,
-                )
-              }
-            />
-          ) : null;
-        }}
-      />
+
+      <Tabs
+        value={tab}
+        onValueChange={(value) => setTab(value === "invitations" ? "invitations" : "members")}
+        className="flex min-w-0 flex-col gap-0 rounded-xl border bg-card"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 border-b px-4 pt-3 pb-3 sm:pb-0">
+          <TabsList variant="line" className="h-10 gap-4 p-0">
+            <TabsTrigger value="members" className="px-0.5 pb-2.5">
+              Members
+              {members.totalItems !== null && (
+                <span className="text-muted-foreground tabular-nums">{members.totalItems}</span>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="invitations" className="px-0.5 pb-2.5">
+              Invitations
+              {invitationCount > 0 && (
+                <span className="rounded-full bg-muted px-1.5 text-foreground text-xs tabular-nums">
+                  {invitationCount}
+                </span>
+              )}
+            </TabsTrigger>
+          </TabsList>
+          <div className="w-full sm:w-auto sm:pb-3">{toolbar}</div>
+        </div>
+
+        <TabsContent value="members" className="flex flex-col">
+          {status(members, <p>No members yet.</p>) ?? (
+            <>
+              <MemberColumns dateLabel="Added" />
+              <ul className="divide-y">
+                {ordered.map((member) => (
+                  <MemberRow
+                    key={member.id}
+                    member={member}
+                    you={member.user_id === userId}
+                    owner={member.user_id === project.owner_user_id}
+                    editable={editable(member)}
+                    disabled={busy}
+                    onRoleChange={(next) => changeRole(member, next)}
+                    onRemove={() =>
+                      perform(() => remove.mutateAsync(member.id), {
+                        title: "Removed from the project",
+                        description: nameOf(member),
+                      })
+                    }
+                  />
+                ))}
+              </ul>
+            </>
+          )}
+          {more(members)}
+        </TabsContent>
+
+        <TabsContent value="invitations" className="flex flex-col">
+          {status(
+            invitations,
+            <>
+              <MailX className="size-8 text-muted-foreground/70" aria-hidden="true" />
+              <p>No pending invitations.</p>
+              {writable && (
+                <Button variant="outline" size="sm" onClick={() => setInviteOpen(true)}>
+                  Invite member
+                </Button>
+              )}
+            </>,
+          ) ?? (
+            <>
+              <p className="border-b px-4 py-2.5 text-muted-foreground text-xs">
+                People join with the role shown once they accept. An invitation lasts 24 hours.
+              </p>
+              <MemberColumns dateLabel="Status" />
+              <ul className="divide-y">
+                {invitations.items.map((member) => (
+                  <InvitationRow
+                    key={member.id}
+                    member={member}
+                    editable={editable(member)}
+                    disabled={busy}
+                    onRoleChange={(next) => changeRole(member, next)}
+                    onResend={() => resendInvitation(member)}
+                    onCancel={() =>
+                      perform(() => remove.mutateAsync(member.id), {
+                        title: "Invitation cancelled",
+                        description: member.email,
+                      })
+                    }
+                  />
+                ))}
+              </ul>
+            </>
+          )}
+          {more(invitations)}
+        </TabsContent>
+      </Tabs>
+
       {inviteOpen && writable && <InviteMemberDialog key={project.id} projectId={project.id} onClose={closeInvite} />}
     </div>
   );

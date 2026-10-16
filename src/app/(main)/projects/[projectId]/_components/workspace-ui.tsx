@@ -17,6 +17,7 @@ import {
   isAssignableProjectRole,
   PROJECT_ROLE_LABELS,
 } from "@/lib/auth/project-access";
+import { ProjectRole } from "@/types/enums";
 
 export interface WorkspaceProps {
   project: ProjectItem;
@@ -26,10 +27,14 @@ export interface WorkspaceProps {
 }
 
 // Shared hooks own API error toasts; event handlers must also consume rejected promises.
-export async function perform<T>(action: () => Promise<T>, success?: string): Promise<T | undefined> {
+/** A success toast: one line, or a short title with the long part (a name, an email) below it. */
+export type SuccessMessage = string | { title: string; description: string };
+
+export async function perform<T>(action: () => Promise<T>, success?: SuccessMessage): Promise<T | undefined> {
   try {
     const result = await action();
-    if (success) toast.success(success);
+    if (typeof success === "string") toast.success(success);
+    else if (success) toast.success(success.title, { description: success.description });
     return result;
   } catch {
     return undefined;
@@ -117,16 +122,25 @@ export function ConfirmAction({
   );
 }
 
+/** What each role a manager can hand out lets that person do. */
+export const ROLE_DESCRIPTIONS: Record<AssignableProjectRole, string> = {
+  [ProjectRole.Researcher]: "Uploads data, starts research runs and works on the results.",
+  [ProjectRole.Reviewer]: "Sees everything and reviews results, but can't change data or start runs.",
+};
+
+/** A role picker whose options say what the role allows; the closed trigger shows the name only. */
 export function RoleSelect({
   value,
   onChange,
   disabled,
   label,
+  className,
 }: {
   value: AssignableProjectRole;
   onChange: (role: AssignableProjectRole) => void;
   disabled?: boolean;
   label: string;
+  className?: string;
 }) {
   return (
     <Select
@@ -136,14 +150,17 @@ export function RoleSelect({
       }}
       disabled={disabled}
     >
-      <SelectTrigger aria-label={label}>
-        <SelectValue />
+      <SelectTrigger aria-label={label} className={className}>
+        <SelectValue>{PROJECT_ROLE_LABELS[value]}</SelectValue>
       </SelectTrigger>
-      <SelectContent>
+      <SelectContent className="max-w-72">
         <SelectGroup>
           {ASSIGNABLE_PROJECT_ROLES.map((role) => (
-            <SelectItem key={role} value={role}>
-              {PROJECT_ROLE_LABELS[role]}
+            <SelectItem key={role} value={role} className="items-start py-2">
+              <span className="flex flex-col gap-0.5">
+                <span>{PROJECT_ROLE_LABELS[role]}</span>
+                <span className="whitespace-normal text-muted-foreground text-xs">{ROLE_DESCRIPTIONS[role]}</span>
+              </span>
             </SelectItem>
           ))}
         </SelectGroup>

@@ -77,7 +77,8 @@ export function useProjectFileUpload(projectId: string, canUpload: boolean) {
           }
         }
         if (uploaded)
-          toast.success(uploaded === 1 ? `Document "${lastName}" uploaded.` : `${uploaded} documents uploaded.`);
+          if (uploaded === 1) toast.success("Document uploaded", { description: lastName });
+          else toast.success(`${uploaded} documents uploaded.`);
       } finally {
         locked.current = false;
         setUploading(false);

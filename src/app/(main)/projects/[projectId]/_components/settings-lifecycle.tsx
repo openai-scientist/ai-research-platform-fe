@@ -33,7 +33,7 @@ import { PROJECT_ROLE_LABELS } from "@/lib/auth/project-access";
 import { ProjectStatus } from "@/types/enums";
 
 import { SettingsGroup, SettingsHeading, SettingsRow } from "./settings-panel";
-import { perform } from "./workspace-ui";
+import { perform, type SuccessMessage } from "./workspace-ui";
 
 const STATUS_NOTES: Partial<Record<ProjectStatus, string>> = {
   [ProjectStatus.Draft]: "No dataset yet.",
@@ -51,15 +51,16 @@ function useLifecycle(project: ProjectItem) {
   const complete = useCompleteProjectMutation();
   const reopen = useReopenProjectMutation();
   const busy = archive.isPending || restore.isPending || complete.isPending || reopen.isPending;
-  const run = async (action: () => Promise<unknown>, message: string) => {
+  const run = async (action: () => Promise<unknown>, message: SuccessMessage) => {
     if (await perform(action, message)) router.refresh();
   };
   return {
     busy,
-    archive: () => run(() => archive.mutateAsync(project.id), `Project "${project.name}" archived.`),
-    restore: () => run(() => restore.mutateAsync(project.id), `Project "${project.name}" restored.`),
-    complete: () => run(() => complete.mutateAsync(project.id), `Project "${project.name}" marked as completed.`),
-    reopen: () => run(() => reopen.mutateAsync(project.id), `Project "${project.name}" reopened.`),
+    archive: () => run(() => archive.mutateAsync(project.id), { title: "Project archived", description: project.name }),
+    restore: () => run(() => restore.mutateAsync(project.id), { title: "Project restored", description: project.name }),
+    complete: () =>
+      run(() => complete.mutateAsync(project.id), { title: "Project marked as completed", description: project.name }),
+    reopen: () => run(() => reopen.mutateAsync(project.id), { title: "Project reopened", description: project.name }),
   };
 }
 

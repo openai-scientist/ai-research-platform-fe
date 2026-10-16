@@ -58,7 +58,7 @@ export function CreateProjectDialog({
   async function onSubmit(data: FormValues) {
     try {
       const result = await createProject.mutateAsync(data);
-      toast.success(`Project "${data.name}" created.`);
+      toast.success("Project created", { description: data.name });
       handleOpenChange(false);
       router.push(`/projects/${result.data.id}`);
     } catch {

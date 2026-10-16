@@ -65,11 +65,11 @@ export function AdminUserActions({
   const onSuccess = () => {
     setAction(null);
     const who = user.display_name?.trim() || user.email;
-    toast.success(
+    const title =
       action === "status"
-        ? `"${who}" ${active ? "was suspended" : "was reactivated"}.`
-        : `"${who}" ${admin ? "is no longer an admin" : "is now an admin"}.`,
-    );
+        ? `User ${active ? "suspended" : "reactivated"}`
+        : `${admin ? "Admin access removed" : "Admin access granted"}`;
+    toast.success(title, { description: who });
     if (self) {
       void dispatch(restoreSession()).then(() => router.refresh());
     }

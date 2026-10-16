@@ -184,7 +184,8 @@ export function DatasetLibrary({
       ),
     );
     setDeleting(false);
-    if (removed) toast.success(removed === 1 ? `Dataset "${lastName}" deleted.` : `${removed} datasets deleted.`);
+    if (removed === 1) toast.success("Dataset deleted", { description: lastName });
+    else if (removed) toast.success(`${removed} datasets deleted.`);
   }
 
   const columns = canWrite ? 7 : 6;

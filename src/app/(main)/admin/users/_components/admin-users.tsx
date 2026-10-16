@@ -92,7 +92,7 @@ export function AdminUsers() {
       { userId: user.id, status: user.status === "Active" ? UserStatus.Suspended : UserStatus.Active },
       {
         onSuccess: () =>
-          toast.success(`"${user.name}" ${user.status === "Active" ? "was suspended" : "was reactivated"}.`),
+          toast.success(user.status === "Active" ? "User suspended" : "User reactivated", { description: user.name }),
       },
     );
   };
@@ -110,7 +110,7 @@ export function AdminUsers() {
     }
     roleMutation.mutate(
       { userId: user.id, role: toPlatformRole(role) },
-      { onSuccess: () => toast.success(`Changed "${user.name}" to ${role}.`) },
+      { onSuccess: () => toast.success(`Role changed to ${role}`, { description: user.name }) },
     );
   };
 

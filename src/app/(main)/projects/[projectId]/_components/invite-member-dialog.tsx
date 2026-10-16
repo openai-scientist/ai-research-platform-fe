@@ -9,22 +9,25 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { useInfiniteInviteCandidates } from "@/hooks/use-infinite-invite-candidates";
 import { useAddMemberMutation } from "@/hooks/use-members-query";
 import type { InviteCandidate } from "@/lib/api/services/fetch-members";
-import type { AssignableProjectRole } from "@/lib/auth/project-access";
+import { type AssignableProjectRole, PROJECT_ROLE_LABELS } from "@/lib/auth/project-access";
 import { ApiError } from "@/types/api";
 import { ProjectRole } from "@/types/enums";
 
 import { InviteCandidatePicker } from "./invite-candidate-picker";
-import { InviteMemberRole } from "./invite-member-role";
+import { RoleSelect } from "./workspace-ui";
 
+/** Pick a person and a role on one screen, then send. */
 export function InviteMemberDialog({ projectId, onClose }: { projectId: string; onClose: () => void }) {
   const router = useRouter();
   const [search, setSearch] = useState("");
@@ -52,7 +55,7 @@ export function InviteMemberDialog({ projectId, onClose }: { projectId: string; 
     if (!selected || invite.isPending || candidates.ended) return;
     try {
       const response = await invite.mutateAsync({ email: selected.email, role });
-      toast.success(response.message);
+      toast.success(`Invited as ${PROJECT_ROLE_LABELS[role]}`, { description: selected.email });
       if (response.data.invite_email_sent === false)
         toast.info(
           "The invitation was created, but its email was not sent. The user can respond in Projects → Invitations.",
@@ -84,26 +87,10 @@ export function InviteMemberDialog({ projectId, onClose }: { projectId: string; 
         }}
       >
         <DialogHeader>
-          <DialogTitle>{selected ? "Choose a project role" : "Invite member"}</DialogTitle>
-          <DialogDescription>
-            {selected
-              ? "Review access before sending the invitation."
-              : "Find a person and add them to your invitation."}
-          </DialogDescription>
+          <DialogTitle>Invite member</DialogTitle>
+          <DialogDescription>They get an email and a notification, and join once they accept.</DialogDescription>
         </DialogHeader>
-        {selected ? (
-          <form noValidate onSubmit={submit} className="flex flex-col gap-5" aria-busy={invite.isPending}>
-            <InviteMemberRole user={selected} role={role} onRoleChange={setRole} pending={invite.isPending} />
-            <DialogFooter>
-              <Button type="button" variant="outline" disabled={invite.isPending} onClick={() => setSelected(null)}>
-                Back
-              </Button>
-              <Button type="submit" disabled={invite.isPending || candidates.ended}>
-                {invite.isPending ? "Inviting..." : "Send invitation"}
-              </Button>
-            </DialogFooter>
-          </form>
-        ) : (
+        <form noValidate onSubmit={submit} className="flex flex-col gap-5" aria-busy={invite.isPending}>
           <InviteCandidatePicker
             search={search}
             onSearchChange={setSearch}
@@ -113,15 +100,34 @@ export function InviteMemberDialog({ projectId, onClose }: { projectId: string; 
             hasMore={Boolean(candidates.hasNextPage)}
             failed={candidates.isError && !candidates.data}
             nextPageFailed={candidates.isFetchNextPageError}
-            disabled={changing || !valid || candidates.ended}
-            onAdd={(user) => {
-              setSelected(user);
-              setRole(ProjectRole.Researcher);
-            }}
+            disabled={changing || !valid || candidates.ended || invite.isPending}
+            selectedId={selected?.id ?? null}
+            onSelect={setSelected}
             loadMore={candidates.loadMore}
             retry={candidates.refetch}
           />
-        )}
+          <Field>
+            <FieldLabel>Role</FieldLabel>
+            <RoleSelect
+              label="Role for the new member"
+              value={role}
+              onChange={setRole}
+              disabled={invite.isPending}
+              className="w-full"
+            />
+            <FieldDescription>You can change it later.</FieldDescription>
+          </Field>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button type="button" variant="outline" disabled={invite.isPending}>
+                Cancel
+              </Button>
+            </DialogClose>
+            <Button type="submit" disabled={!selected || invite.isPending || candidates.ended}>
+              {invite.isPending ? "Sending…" : "Send invitation"}
+            </Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );

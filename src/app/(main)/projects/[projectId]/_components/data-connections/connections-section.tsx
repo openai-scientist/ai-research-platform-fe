@@ -79,10 +79,10 @@ function RenameConnection({
           return;
         }
         return Boolean(
-          await perform(
-            () => actions.rename.mutateAsync({ id: connection.id, name: trimmed }),
-            `Connection renamed to "${trimmed}".`,
-          ),
+          await perform(() => actions.rename.mutateAsync({ id: connection.id, name: trimmed }), {
+            title: "Connection renamed",
+            description: trimmed,
+          }),
         );
       }}
     >
@@ -494,7 +494,10 @@ export function ConnectionsSection({ project, canWrite, userId, header }: Worksp
         destructive
         onConfirm={() => {
           if (!remove || disabled || !canWrite) return;
-          void perform(() => actions.remove.mutateAsync(remove.id), `Connection "${remove.name}" deleted.`);
+          void perform(() => actions.remove.mutateAsync(remove.id), {
+            title: "Connection deleted",
+            description: remove.name,
+          });
           setRemove(null);
         }}
       />

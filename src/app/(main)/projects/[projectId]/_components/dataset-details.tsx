@@ -67,10 +67,10 @@ function DatasetEditDialog({
           return;
         }
         return Boolean(
-          await perform(
-            () => update.mutateAsync({ name: name.trim(), description: description.trim() }),
-            `Dataset "${name.trim()}" saved.`,
-          ),
+          await perform(() => update.mutateAsync({ name: name.trim(), description: description.trim() }), {
+            title: "Dataset saved",
+            description: name.trim(),
+          }),
         );
       }}
     >
@@ -143,7 +143,7 @@ export function DatasetDetails({ project, canWrite, datasetId }: WorkspaceProps 
       });
       return;
     }
-    toast.success(`Dataset "${item.name}" deleted.`);
+    toast.success("Dataset deleted", { description: item.name });
     router.push(`/projects/${project.id}/datasets`);
     await Promise.all(
       [projectKeys.detail(project.id), projectKeys.lists(), adminKeys.all].map((queryKey) =>
