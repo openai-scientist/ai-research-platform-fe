@@ -31,7 +31,11 @@ export default async function LoginPage() {
       <div className="absolute top-5 flex w-full justify-end px-10">
         <div className="text-muted-foreground text-sm">
           Don&apos;t have an account?{" "}
-          <Link prefetch={false} className="text-foreground" href="/auth/register">
+          <Link
+            prefetch={false}
+            className="font-medium text-foreground underline-offset-4 hover:underline"
+            href="/auth/register"
+          >
             Register
           </Link>
         </div>
