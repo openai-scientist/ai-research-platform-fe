@@ -3,7 +3,7 @@ import { cache } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
-import { getServerApiBaseUrl } from "@/lib/api/config";
+import { getServerApiBaseUrl } from "@/lib/api/server-config";
 import {
   AUTH_COOKIE_NAME,
   type AuthUser,

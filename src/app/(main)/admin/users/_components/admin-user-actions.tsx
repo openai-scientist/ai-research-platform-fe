@@ -64,7 +64,12 @@ export function AdminUserActions({
   const description = action === "status" ? statusDescription : roleDescription;
   const onSuccess = () => {
     setAction(null);
-    toast.success("User updated successfully.");
+    const who = user.display_name?.trim() || user.email;
+    toast.success(
+      action === "status"
+        ? `"${who}" ${active ? "was suspended" : "was reactivated"}.`
+        : `"${who}" ${admin ? "is no longer an admin" : "is now an admin"}.`,
+    );
     if (self) {
       void dispatch(restoreSession()).then(() => router.refresh());
     }

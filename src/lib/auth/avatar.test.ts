@@ -3,11 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 import { AVATAR_MAX_BYTES, prepareAvatar, resolveAvatarUrl } from "./avatar";
 
 describe("avatar preparation", () => {
-  it("resolves the API origin and keeps the cache version", () => {
-    vi.stubEnv("NEXT_PUBLIC_API_URL", "https://api.example.com/api/v1");
-    expect(resolveAvatarUrl("/api/v1/users/u/avatar?v=version-2")).toBe(
-      "https://api.example.com/api/v1/users/u/avatar?v=version-2",
-    );
+  it("keeps the avatar on this app's origin, with its cache version", () => {
+    expect(resolveAvatarUrl("/api/v1/users/u/avatar?v=version-2")).toBe("/api/v1/users/u/avatar?v=version-2");
     expect(resolveAvatarUrl(null)).toBeUndefined();
   });
   it("rejects unsupported files and files larger than 4 MiB before decoding", async () => {

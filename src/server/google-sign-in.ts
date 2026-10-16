@@ -1,4 +1,4 @@
-import { getServerApiBaseUrl } from "@/lib/api/config";
+import { getServerApiBaseUrl } from "@/lib/api/server-config";
 
 export async function isGoogleSignInAvailable(): Promise<boolean> {
   try {

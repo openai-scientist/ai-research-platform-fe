@@ -1,9 +1,7 @@
-// Accepts the backend origin or its /api/v1 base URL.
+// The browser only ever talks to this app's own origin; next.config.mjs passes /api/v1 on to the
+// backend, so the backend's address never reaches the browser.
+export const API_PREFIX = "/api/v1";
+
 export function getApiBaseUrl() {
-  const base = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000").replace(/\/+$/, "");
-  return base.endsWith("/api/v1") ? base : `${base}/api/v1`;
-}
-export function getServerApiBaseUrl() {
-  const base = (process.env.API_URL ?? getApiBaseUrl()).replace(/\/+$/, "");
-  return base.endsWith("/api/v1") ? base : `${base}/api/v1`;
+  return API_PREFIX;
 }

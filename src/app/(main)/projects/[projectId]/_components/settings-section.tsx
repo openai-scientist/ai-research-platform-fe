@@ -176,7 +176,7 @@ function GeneralTab({ project, readOnly }: { project: ProjectItem; readOnly: boo
             domain: domain.trim() || null,
             tags,
           };
-          if (!(await perform(() => save.mutateAsync(data), "Project saved."))) return;
+          if (!(await perform(() => save.mutateAsync(data), `Project "${trimmed}" saved.`))) return;
           setName(trimmed);
           setDescription(description.trim());
           setObjective(objective.trim());
@@ -319,7 +319,8 @@ function ArchivedNotice({ project }: { project: ProjectItem }) {
         size="sm"
         disabled={restore.isPending}
         onClick={async () => {
-          if (await perform(() => restore.mutateAsync(project.id), "Project restored.")) router.refresh();
+          if (await perform(() => restore.mutateAsync(project.id), `Project "${project.name}" restored.`))
+            router.refresh();
         }}
       >
         Restore

@@ -1,11 +1,10 @@
-import { getApiBaseUrl } from "@/lib/api/config";
-
 export const AVATAR_MAX_BYTES = 4 * 1024 * 1024;
 export const AVATAR_TYPES = ["image/png", "image/jpeg", "image/webp"];
 
+// The backend hands out /api/v1 paths, which this app's origin passes on to it.
 export function resolveAvatarUrl(path?: string | null): string | undefined {
   if (!path) return undefined;
-  return new URL(path, new URL(getApiBaseUrl()).origin).href;
+  return path;
 }
 
 export async function prepareAvatar(file: File): Promise<File> {

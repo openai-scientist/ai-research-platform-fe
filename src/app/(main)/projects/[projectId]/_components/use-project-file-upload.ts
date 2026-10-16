@@ -56,11 +56,13 @@ export function useProjectFileUpload(projectId: string, canUpload: boolean) {
       locked.current = true;
       setUploading(true);
       let uploaded = 0;
+      let lastName = "";
       try {
         for (const file of valid) {
           try {
             await mutateAsync(file);
             uploaded++;
+            lastName = file.name;
           } catch (error) {
             // The mutation displays the backend message. Never retry a potentially completed upload.
             if (error instanceof ApiError && error.code === "RATE_LIMITED") {
@@ -74,7 +76,8 @@ export function useProjectFileUpload(projectId: string, canUpload: boolean) {
               break;
           }
         }
-        if (uploaded) toast.success(`${uploaded} ${uploaded === 1 ? "document" : "documents"} uploaded.`);
+        if (uploaded)
+          toast.success(uploaded === 1 ? `Document "${lastName}" uploaded.` : `${uploaded} documents uploaded.`);
       } finally {
         locked.current = false;
         setUploading(false);

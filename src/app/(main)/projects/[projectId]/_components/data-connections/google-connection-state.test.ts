@@ -14,7 +14,6 @@ describe("Google connection handoff", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     values.clear();
-    vi.stubEnv("NEXT_PUBLIC_API_URL", "https://api.example.com/api/v1");
     vi.stubGlobal("sessionStorage", {
       setItem: (key: string, value: string) => values.set(key, value),
       getItem: (key: string) => values.get(key) ?? null,
@@ -31,7 +30,7 @@ describe("Google connection handoff", () => {
       action: "create",
       draft: { kind, name: "Study data", target: "source-id", password: "secret", grantId: "secret-grant" },
     } as unknown as Parameters<typeof beginGoogleConnection>[2]);
-    expect(assign).toHaveBeenCalledWith("https://api.example.com/api/v1/projects/p/connections/google/start");
+    expect(assign).toHaveBeenCalledWith("/api/v1/projects/p/connections/google/start");
     expect(takeGoogleConnectionIntent("p", "other-user")).toBeNull();
     expect(takeGoogleConnectionIntent("other-project", "u")).toBeNull();
     expect(takeGoogleConnectionIntent("p", "u")).toEqual({

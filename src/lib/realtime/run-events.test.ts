@@ -53,7 +53,6 @@ describe("run event subscription", () => {
     FakeSource.instances = [];
     vi.stubGlobal("EventSource", FakeSource);
     vi.stubGlobal("window", { location: { origin: "https://frontend.test" } });
-    vi.stubEnv("NEXT_PUBLIC_API_URL", "https://backend.test/api/v1");
   });
   afterEach(() => {
     vi.restoreAllMocks();

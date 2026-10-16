@@ -56,10 +56,10 @@ function useLifecycle(project: ProjectItem) {
   };
   return {
     busy,
-    archive: () => run(() => archive.mutateAsync(project.id), "Project archived."),
-    restore: () => run(() => restore.mutateAsync(project.id), "Project restored."),
-    complete: () => run(() => complete.mutateAsync(project.id), "Project marked as completed."),
-    reopen: () => run(() => reopen.mutateAsync(project.id), "Project reopened."),
+    archive: () => run(() => archive.mutateAsync(project.id), `Project "${project.name}" archived.`),
+    restore: () => run(() => restore.mutateAsync(project.id), `Project "${project.name}" restored.`),
+    complete: () => run(() => complete.mutateAsync(project.id), `Project "${project.name}" marked as completed.`),
+    reopen: () => run(() => reopen.mutateAsync(project.id), `Project "${project.name}" reopened.`),
   };
 }
 

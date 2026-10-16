@@ -69,7 +69,7 @@ function DatasetEditDialog({
         return Boolean(
           await perform(
             () => update.mutateAsync({ name: name.trim(), description: description.trim() }),
-            "Dataset saved.",
+            `Dataset "${name.trim()}" saved.`,
           ),
         );
       }}
@@ -143,7 +143,7 @@ export function DatasetDetails({ project, canWrite, datasetId }: WorkspaceProps 
       });
       return;
     }
-    toast.success("Dataset deleted.");
+    toast.success(`Dataset "${item.name}" deleted.`);
     router.push(`/projects/${project.id}/datasets`);
     await Promise.all(
       [projectKeys.detail(project.id), projectKeys.lists(), adminKeys.all].map((queryKey) =>

@@ -44,7 +44,8 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
           <TooltipProvider>
             <PreferencesStoreProvider initialValues={PREFERENCE_DEFAULTS}>
               {children}
-              <Toaster />
+              {/* Top centre stays clear of bars pinned to the bottom, such as the settings save bar. */}
+              <Toaster position="top-center" closeButton />
             </PreferencesStoreProvider>
           </TooltipProvider>
         </Providers>

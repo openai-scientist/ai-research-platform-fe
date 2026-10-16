@@ -165,10 +165,12 @@ export function DatasetLibrary({
   async function remove(items: DatasetItem[]) {
     setDeleting(true);
     let removed = 0;
+    let lastName = "";
     for (const dataset of items) {
       try {
         await fetchDatasets.remove(projectId, dataset.id);
         removed += 1;
+        lastName = dataset.name;
         toggle(dataset.id, false);
       } catch (error) {
         toast.error(`Couldn't delete ${dataset.name}`, {
@@ -182,7 +184,7 @@ export function DatasetLibrary({
       ),
     );
     setDeleting(false);
-    if (removed) toast.success(removed === 1 ? "Dataset deleted." : `${removed} datasets deleted.`);
+    if (removed) toast.success(removed === 1 ? `Dataset "${lastName}" deleted.` : `${removed} datasets deleted.`);
   }
 
   const columns = canWrite ? 7 : 6;

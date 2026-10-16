@@ -177,7 +177,10 @@ export function MembersSection({ project, canManage, header }: WorkspaceProps & 
                   row.role === label
                 )
                   return;
-                void perform(() => update.mutateAsync({ membershipId, role }), "Member role updated.");
+                void perform(
+                  () => update.mutateAsync({ membershipId, role }),
+                  `Changed "${member.display_name?.trim() || member.email}" to ${label}.`,
+                );
               }
             : undefined
         }
@@ -191,7 +194,9 @@ export function MembersSection({ project, canManage, header }: WorkspaceProps & 
               onRemove={() =>
                 perform(
                   () => remove.mutateAsync(member.id),
-                  member.status === "invited" ? "Invitation cancelled." : "Member removed.",
+                  member.status === "invited"
+                    ? `Invitation for "${member.email}" cancelled.`
+                    : `Removed "${member.display_name?.trim() || member.email}" from the project.`,
                 )
               }
             />

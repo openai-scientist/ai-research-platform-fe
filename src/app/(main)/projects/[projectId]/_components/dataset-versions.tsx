@@ -34,7 +34,7 @@ export function UploadVersionButton({ dataset, projectId }: { dataset: DatasetIt
       onSubmit={async (event) => {
         event.preventDefault();
         if (!validateCsv(file)) return;
-        if (await perform(() => upload.mutateAsync(file), `Uploaded as v${next}.`)) {
+        if (await perform(() => upload.mutateAsync(file), `"${dataset.name}" updated to v${next}.`)) {
           setFile(null);
           setFileKey((key) => key + 1);
           return true;

@@ -63,6 +63,7 @@ export function DatasetUpload({ projectId, compact }: { projectId: string; compa
     return () => clearTimeout(timer);
   }, []);
   const finished = useRef(0);
+  const lastUploaded = useRef("");
 
   const patch = useCallback(
     (id: string, change: Partial<QueuedUpload>) =>
@@ -76,7 +77,11 @@ export function DatasetUpload({ projectId, compact }: { projectId: string; compa
     const next = uploads.find((item) => item.status === "queued");
     if (!next) {
       if (finished.current && !uploads.some((item) => item.status === "uploading")) {
-        toast.success(finished.current === 1 ? "Dataset uploaded." : `${finished.current} datasets uploaded.`);
+        toast.success(
+          finished.current === 1
+            ? `Dataset "${lastUploaded.current}" uploaded.`
+            : `${finished.current} datasets uploaded.`,
+        );
         finished.current = 0;
       }
       return;
@@ -95,6 +100,7 @@ export function DatasetUpload({ projectId, compact }: { projectId: string; compa
             );
             patch(next.id, { status: "done", progress: 100, datasetId: dataset.id, datasetName: dataset.name });
             finished.current += 1;
+            lastUploaded.current = dataset.name;
             break;
           } catch (error) {
             if (!(error instanceof ApiError && error.code === "DATASET_NAME_EXISTS") || attempt >= 20) throw error;
