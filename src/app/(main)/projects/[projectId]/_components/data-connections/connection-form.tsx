@@ -36,7 +36,6 @@ export interface ConnectionDraft {
   projectId: string;
   location: string;
   serviceAccountJson: string;
-  googleTarget: string;
   url: string;
   token: string;
 }
@@ -51,7 +50,6 @@ export const EMPTY_CONNECTION_DRAFT: ConnectionDraft = {
   projectId: "",
   location: "",
   serviceAccountJson: "",
-  googleTarget: "",
   url: "",
   token: "",
 };
@@ -63,25 +61,9 @@ function connectionName(value: string, maxLength = 120) {
   return name;
 }
 
-export function googleConnectionDetails(draft: Pick<ConnectionDraft, "name" | "googleTarget">) {
-  const name = connectionName(draft.name);
-  const target = draft.googleTarget.trim();
-  if (!target || target.length > 2048) throw new Error("Choose a spreadsheet or folder from Google Drive.");
-  return { name, target };
-}
-
-export function createConnectionInput(
-  kind: ConnectionKind,
-  draft: ConnectionDraft,
-  grantId?: string,
-): CreateConnectionRequest {
-  if (isGoogleConnection(kind)) {
-    const { name, target } = googleConnectionDetails(draft);
-    if (!grantId) throw new Error("Connect your Google account before saving this connection.");
-    return kind === "google_sheets"
-      ? { name, kind, config: { spreadsheet: target }, grant_id: grantId }
-      : { name, kind, config: { folder: target }, grant_id: grantId };
-  }
+export function createConnectionInput(kind: ConnectionKind, draft: ConnectionDraft): CreateConnectionRequest {
+  // Google files are picked with Google Picker, never typed into this form.
+  if (isGoogleConnection(kind)) throw new Error("Pick Google files with Google Picker.");
   const name = connectionName(draft.name, isTimeSeriesConnection(kind) ? 160 : 120);
   if (isTimeSeriesConnection(kind)) return createTimeSeriesConnection(kind, draft, name);
   if (kind === "bigquery") {
@@ -151,30 +133,6 @@ export function ConnectionGuidance({
         </p>
         <p>Use read-only credentials. HTTPS requires a publicly trusted certificate.</p>
         <p>Credentials are never returned. Only the name can be changed after saving.</p>
-      </div>
-    );
-  }
-  if (isGoogleConnection(kind)) {
-    return (
-      <div className="flex flex-col gap-3 text-pretty text-muted-foreground text-xs leading-relaxed">
-        <h3 className="font-semibold text-foreground">Before you connect</h3>
-        <p>All project members who can contribute will be able to read this source using your Google account.</p>
-        <p>
-          Grant permission to view Google Drive files when Google asks. Signing in with Google does not grant this
-          access.
-        </p>
-        <p>The first row must contain unique column names. Data below an empty header is not supported.</p>
-        {kind === "google_drive" ? (
-          <p>
-            Only files directly inside the folder are read. Subfolders are excluded. Supported: CSV, Google Sheets and
-            Excel .xlsx.
-          </p>
-        ) : (
-          <p>
-            Excel files opened in Google Sheets must be converted using File → Save as Google Sheets, or connected
-            through Google Drive.
-          </p>
-        )}
       </div>
     );
   }
@@ -374,10 +332,8 @@ export function ConnectionForm({
           </Field>
         </>
       )}
-      <FieldDescription className={cn(!isGoogleConnection(kind) && kind !== "bigquery" && "md:col-span-2")}>
-        {isGoogleConnection(kind)
-          ? "Connecting checks access to this source and saves the connection only when successful."
-          : "Connecting tests these credentials and saves the connection only when successful."}
+      <FieldDescription className={cn(kind !== "bigquery" && "md:col-span-2")}>
+        Connecting tests these credentials and saves the connection only when successful.
       </FieldDescription>
     </FieldGroup>
   );

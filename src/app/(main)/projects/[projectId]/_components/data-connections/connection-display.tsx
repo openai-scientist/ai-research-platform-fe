@@ -64,9 +64,19 @@ export const CONNECTION_PROVIDERS = {
     color: "text-blue-500",
     badgeColor: "border-blue-500/20 bg-blue-500/10 text-blue-700 dark:text-blue-300",
   },
+  // A member's own Google account: it picks spreadsheets and folders, and is not read itself.
+  google: {
+    label: "Google account",
+    description: "Pick spreadsheets and folders from your Google account.",
+    category: "Spreadsheets and files",
+    icon: null,
+    viewBox: "0 0 24 24",
+    color: "text-yellow-500",
+    badgeColor: "border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+  },
   google_sheets: {
     label: "Google Sheets",
-    description: "Read tabs from a Google spreadsheet.",
+    description: "Pick a spreadsheet from your Google account and import its tabs.",
     category: "Spreadsheet",
     icon: null,
     viewBox: "0 0 24 24",
@@ -75,7 +85,7 @@ export const CONNECTION_PROVIDERS = {
   },
   google_drive: {
     label: "Google Drive",
-    description: "Read CSV, Google Sheets and Excel files in a folder.",
+    description: "Pick a Drive folder and import its CSV, Google Sheets and Excel files.",
     category: "File storage",
     icon: null,
     viewBox: "0 0 24 24",
@@ -96,10 +106,10 @@ export const CONNECTION_PROVIDERS = {
 >;
 
 export function ConnectionLogo({ kind }: { kind: ConnectionKind }) {
-  if (kind === "google_drive" || kind === "google_sheets") {
+  if (kind === "google" || kind === "google_drive" || kind === "google_sheets") {
     return (
       <Image
-        src={kind === "google_drive" ? googleDriveLogo : googleSheetsLogo}
+        src={kind === "google_sheets" ? googleSheetsLogo : googleDriveLogo}
         width={32}
         height={32}
         className="size-8 shrink-0"
@@ -140,6 +150,7 @@ export function connectionStatus(connection: ConnectionItem) {
 
 export function connectionTarget(connection: ConnectionItem) {
   if (isTimeSeriesConnection(connection.kind)) return String(connection.config.url ?? "");
+  if (connection.kind === "google") return String(connection.config.account_email ?? "");
   if (connection.kind === "google_sheets") return String(connection.config.title ?? "Spreadsheet");
   if (connection.kind === "google_drive") return String(connection.config.folder_name ?? "Folder");
   return connection.kind === "bigquery"

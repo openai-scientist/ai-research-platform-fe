@@ -2,11 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import Link from "next/link";
-
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "cn";
-import { ArrowRight, Check, FileSpreadsheet, FileUp, RotateCw, Upload, X } from "lucide-react";
+import { Check, FileSpreadsheet, FileUp, Plug, RotateCw, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -44,7 +42,16 @@ function rejectReason(file: File) {
 }
 
 /** Drop or pick CSV files: each becomes a dataset named after its file, uploaded one at a time. */
-export function DatasetUpload({ projectId, compact }: { projectId: string; compact: boolean }) {
+export function DatasetUpload({
+  projectId,
+  compact,
+  onImport,
+}: {
+  projectId: string;
+  compact: boolean;
+  /** Opens the choice of a saved data connection to import from. */
+  onImport: () => void;
+}) {
   const queryClient = useQueryClient();
   const connections = useAllDataConnections(projectId).data ?? [];
   const input = useRef<HTMLInputElement>(null);
@@ -136,8 +143,7 @@ export function DatasetUpload({ projectId, compact }: { projectId: string; compa
     if (accepted.length) setUploads((list) => [...list, ...accepted]);
   }
 
-  const shownConnections = connections.slice(0, 3);
-  const moreConnections = connections.length - shownConnections.length;
+  const shownConnections = connections.filter((connection) => connection.kind !== "google").slice(0, 3);
 
   return (
     <section
@@ -272,46 +278,28 @@ export function DatasetUpload({ projectId, compact }: { projectId: string; compa
           ))}
         </ul>
       )}
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t bg-muted/30 px-4 py-3">
+      <div className="flex flex-wrap items-center gap-2 border-t bg-muted/30 px-4 py-3">
         <Button variant="outline" onClick={() => input.current?.click()}>
           <Upload data-icon="inline-start" />
           Upload CSV
         </Button>
-        <Link
-          href={`/projects/${projectId}/connections`}
-          className="group inline-flex min-w-0 items-center gap-2.5 text-muted-foreground text-sm outline-none hover:text-foreground focus-visible:underline"
-        >
+        <Button variant="outline" onClick={onImport}>
           {shownConnections.length > 0 ? (
-            <>
-              <span className="flex shrink-0 -space-x-1.5">
-                {shownConnections.map((connection) => (
-                  <span
-                    key={connection.id}
-                    className="grid size-6 place-items-center rounded-full bg-background ring-2 ring-muted [&_img]:size-3.5 [&_svg]:size-3.5"
-                  >
-                    <ConnectionLogo kind={connection.kind} />
-                  </span>
-                ))}
-              </span>
-              <span className="min-w-0 truncate">
-                Import from{" "}
-                <b className="font-medium text-foreground">
-                  {shownConnections.map((connection) => connection.name).join(", ")}
-                </b>
-                {moreConnections > 0 && ` +${moreConnections}`}
-              </span>
-            </>
-          ) : (
-            <span>
-              Data in a database or another service?{" "}
-              <b className="font-medium text-foreground">Import from a data connection</b>
+            <span className="-ml-1 flex shrink-0 -space-x-1.5" aria-hidden="true">
+              {shownConnections.map((connection) => (
+                <span
+                  key={connection.id}
+                  className="grid size-5 place-items-center rounded-full bg-background ring-2 ring-background [&_img]:size-3.5 [&_svg]:size-3.5"
+                >
+                  <ConnectionLogo kind={connection.kind} />
+                </span>
+              ))}
             </span>
+          ) : (
+            <Plug data-icon="inline-start" />
           )}
-          <ArrowRight
-            className="size-3.5 shrink-0 transition-transform group-hover:translate-x-0.5"
-            aria-hidden="true"
-          />
-        </Link>
+          Import from a connection
+        </Button>
       </div>
     </section>
   );

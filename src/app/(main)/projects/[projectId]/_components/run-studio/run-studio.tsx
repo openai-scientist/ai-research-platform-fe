@@ -6,19 +6,7 @@ import Link from "next/link";
 
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "cn";
-import {
-  ArrowRight,
-  ChevronRight,
-  CircleCheck,
-  CircleX,
-  Database,
-  Flag,
-  Lightbulb,
-  Lock,
-  Play,
-  Plus,
-  Upload,
-} from "lucide-react";
+import { ArrowRight, ChevronRight, CircleCheck, CircleX, Database, Flag, Lock, Play, Plus, Upload } from "lucide-react";
 import { motion } from "motion/react";
 
 import { ManagementStatusBadge } from "@/components/management-status-badge";
@@ -349,22 +337,16 @@ export function LiveRunCard({ session, onOpen }: { session: RunSession; onOpen(f
       ) : state.completed && !state.paperTitle ? (
         <HypothesesReady state={state} />
       ) : state.completed ? (
-        <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-lg bg-muted/70 px-3.5 py-3 text-sm max-sm:grid-cols-[auto_minmax(0,1fr)]">
+        <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3 rounded-lg bg-muted/70 px-3.5 py-3 text-sm">
           <CircleCheck className="size-4.5 text-emerald-600" />
           <span>
-            <b className="block font-semibold">Paper published to Findings</b>
+            <b className="block font-semibold">Paper published</b>
             <span className="text-muted-foreground text-xs">
               {h1 && h1.estimate !== null
                 ? `Students sleeping 7 h or more scored ${signed(h1.estimate)} points higher.`
                 : state.paperTitle}
             </span>
           </span>
-          <Button variant="ghost" size="sm" asChild className="max-sm:col-span-2 max-sm:justify-self-start">
-            <Link href={`/projects/${session.projectId}/findings`}>
-              <Lightbulb />
-              Open in Findings
-            </Link>
-          </Button>
         </div>
       ) : state.gate ? (
         <div className="grid grid-cols-[auto_1fr] items-center gap-3 rounded-lg bg-amber-500/10 px-3.5 py-3 text-sm">

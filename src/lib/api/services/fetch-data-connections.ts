@@ -5,14 +5,15 @@ import apiService from "../core";
 import { projectPath } from "../request";
 import type { ListParams } from "../types";
 
-export type GoogleConnectionKind = "google_sheets" | "google_drive";
+/** `google` is a member's Google account, kept for them to pick spreadsheets and folders with. */
+export type GoogleConnectionKind = "google" | "google_sheets" | "google_drive";
 export type TimeSeriesConnectionKind = "prometheus" | "influxdb";
 export type ConnectionKind = "postgres" | "mysql" | "bigquery" | GoogleConnectionKind | TimeSeriesConnectionKind;
 export function isTimeSeriesConnection(kind: ConnectionKind): kind is TimeSeriesConnectionKind {
   return kind === "prometheus" || kind === "influxdb";
 }
 export function isGoogleConnection(kind: ConnectionKind): kind is GoogleConnectionKind {
-  return kind === "google_sheets" || kind === "google_drive";
+  return kind === "google" || kind === "google_sheets" || kind === "google_drive";
 }
 export type ConnectionSsl = "require" | "verify-full" | "disable";
 export type TimeSeriesBucket = "1m" | "5m" | "15m" | "1h" | "6h" | "1d" | "1w";
@@ -75,8 +76,10 @@ export type CreateConnectionRequest =
       config?: { project_id?: string; location?: string };
       secret: { service_account_json: string };
     }
-  | { name: string; kind: "google_sheets"; config: { spreadsheet: string }; grant_id: string }
-  | { name: string; kind: "google_drive"; config: { folder: string }; grant_id: string }
+  // A member keeps their Google account from a fresh sign-in, then picks files with it.
+  | { name?: string; kind: "google"; grant_id: string }
+  | { name: string; kind: "google_sheets"; config: { spreadsheet: string }; account_id: string }
+  | { name: string; kind: "google_drive"; config: { folder: string }; account_id: string }
   | { name: string; kind: "prometheus"; config: { url: string }; secret?: { username?: string; token?: string } }
   | {
       name: string;
@@ -140,19 +143,6 @@ export const fetchDataConnections = {
       signal,
       id,
     ),
-  getGooglePicker: (projectId: string, grantId: string, signal?: AbortSignal) =>
-    connectionRequest(
-      projectId,
-      async () =>
-        (
-          await apiService.post<ApiResult<GooglePickerCredentials>>(
-            `${connectionsPath(projectId)}/google/picker`,
-            { grant_id: grantId },
-            { signal },
-          )
-        ).data,
-      signal,
-    ),
   getList: (projectId: string, params?: ConnectionListParams, signal?: AbortSignal) =>
     connectionRequest(
       projectId,
@@ -168,20 +158,28 @@ export const fetchDataConnections = {
       signal,
       id,
     ),
+  /** `reused`: the project already had this source (or this Google account), and that one answers. */
   create: (projectId: string, input: CreateConnectionRequest) =>
+    connectionRequest(projectId, async () => {
+      const response = await apiService.post<ApiResult<ConnectionItem>>(connectionsPath(projectId), input, {
+        timeout: remoteTimeout,
+      });
+      return { ...response.data, reused: response.status === 200 };
+    }),
+  /** Google Picker with the member's own saved Google account. */
+  getAccountPicker: (projectId: string, accountId: string, signal?: AbortSignal) =>
     connectionRequest(
       projectId,
       async () =>
         (
-          await apiService.post<ApiResult<ConnectionItem>>(connectionsPath(projectId), input, {
-            timeout: remoteTimeout,
-          })
+          await apiService.post<ApiResult<GooglePickerCredentials>>(
+            `${connectionPath(projectId, accountId)}/picker`,
+            undefined,
+            { signal },
+          )
         ).data,
-    ),
-  rename: (projectId: string, id: string, name: string) =>
-    connectionRequest(
-      projectId,
-      async () => (await apiService.patch<ApiResult<ConnectionItem>>(connectionPath(projectId, id), { name })).data,
+      signal,
+      accountId,
     ),
   reauthorize: (projectId: string, id: string, grantId: string) =>
     connectionRequest(projectId, async () => {
@@ -197,18 +195,6 @@ export const fetchDataConnections = {
     connectionRequest(
       projectId,
       async () => (await apiService.delete<ApiResult<null>>(connectionPath(projectId, id))).data,
-    ),
-  test: (projectId: string, id: string) =>
-    connectionRequest(
-      projectId,
-      async () =>
-        (
-          await apiService.post<ApiResult<ConnectionItem>>(`${connectionPath(projectId, id)}/test`, undefined, {
-            timeout: remoteTimeout,
-          })
-        ).data,
-      undefined,
-      id,
     ),
   getSchemas: (projectId: string, id: string, signal?: AbortSignal) =>
     connectionRequest(

@@ -1,5 +1,5 @@
-import { PageSkeleton } from "@/app/(main)/_components/page-skeleton";
+import { DatasetDetailSkeleton } from "../../_components/workspace-skeletons";
 
 export default function Loading() {
-  return <PageSkeleton layout="table" label="Loading dataset" />;
+  return <DatasetDetailSkeleton />;
 }

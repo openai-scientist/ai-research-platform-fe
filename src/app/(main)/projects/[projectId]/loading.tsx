@@ -1,5 +1,5 @@
-import { PageSkeleton } from "../../_components/page-skeleton";
+import { OverviewSkeleton } from "./_components/workspace-skeletons";
 
 export default function Loading() {
-  return <PageSkeleton label="Loading project workspace" />;
+  return <OverviewSkeleton />;
 }

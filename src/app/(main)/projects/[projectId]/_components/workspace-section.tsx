@@ -13,7 +13,6 @@ import { DatasetsSection } from "./datasets-section";
 import { ExperimentsSection } from "./experiments-section";
 import { MembersSection } from "./members-section";
 import { ProjectFilesSection } from "./project-files-section";
-import { FindingsSection } from "./research-preview";
 import { RunDetails } from "./run-details";
 import { SettingsSection } from "./settings-section";
 import type { WorkspaceProps } from "./workspace-ui";
@@ -23,7 +22,6 @@ const screens: Record<string, ComponentType<WorkspaceProps>> = {
   datasets: DatasetsSection,
   experiments: ExperimentsSection,
   members: MembersSection,
-  findings: FindingsSection,
   settings: SettingsSection,
 };
 

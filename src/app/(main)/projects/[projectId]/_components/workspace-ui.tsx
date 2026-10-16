@@ -5,11 +5,11 @@ import type { ReactNode } from "react";
 import { Inbox } from "lucide-react";
 import { toast } from "sonner";
 
+import { ListRowsSkeleton } from "@/app/(main)/_components/content-skeletons";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Skeleton } from "@/components/ui/skeleton";
 import type { ProjectItem } from "@/lib/api/services/fetch-project";
 import {
   ASSIGNABLE_PROJECT_ROLES,
@@ -53,14 +53,17 @@ export function ListState({
   empty,
   title,
   retry,
+  loading,
 }: {
   pending: boolean;
   failed: boolean;
   empty: boolean;
   title: string;
   retry: () => unknown;
+  /** What stands in while it loads, shaped like the content; rows of a list by default. */
+  loading?: ReactNode;
 }) {
-  if (pending) return <Skeleton className="h-32 w-full" aria-label={`Loading ${title.toLowerCase()}`} />;
+  if (pending) return loading ?? <ListRowsSkeleton label={`Loading ${title.toLowerCase()}`} />;
   if (failed)
     return (
       <Button variant="outline" onClick={() => void retry()}>

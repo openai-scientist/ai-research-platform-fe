@@ -2,8 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { useRouter } from "next/navigation";
-
 import { cn } from "cn";
 import { ArrowDown, ArrowLeft, ArrowRight, PanelRight, Pause, Play } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
@@ -38,7 +36,6 @@ function stageName(session: RunSession, key: string | null) {
 
 function RunWorkspace({ session }: { session: RunSession }) {
   const { state, runId } = session;
-  const router = useRouter();
   const closeWorkspace = useRunStudio((s) => s.closeWorkspace);
   const answerGate = useRunStudio((s) => s.answerGate);
   const pause = useRunStudio((s) => s.pause);
@@ -290,10 +287,6 @@ function RunWorkspace({ session }: { session: RunSession }) {
                         live={isLiveView && !hold.shown.ended}
                         scroller={scroller}
                         onOpenReport={() => setViewKey("report")}
-                        onOpenFindings={() => {
-                          closeWorkspace();
-                          router.push(`/projects/${session.projectId}/findings`);
-                        }}
                         onClose={closeWorkspace}
                       />
                     </BusyContext.Provider>

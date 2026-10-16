@@ -11,7 +11,6 @@ import type { FileManagerFile } from "@/app/(main)/dashboard/file-manager/_compo
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Skeleton } from "@/components/ui/skeleton";
 import { useInvitationsQuery } from "@/hooks/use-invitations-query";
 import { useInfiniteProjects } from "@/hooks/use-projects-query";
 import { invitationKeys } from "@/lib/api/query-keys";
@@ -22,6 +21,7 @@ import { getInitials } from "@/lib/utils";
 import { AdminProjects, projectActions } from "../../admin/_components/admin-projects";
 import { CreateProjectDialog } from "./create-project-dialog";
 import { ProjectInvitations } from "./project-invitations";
+import { ProjectsSkeleton } from "./projects-skeleton";
 
 function toProjectFile(project: ProjectItem): FileManagerFile {
   return {
@@ -75,7 +75,7 @@ export function WorkspaceProjects({
   return (
     <div className="flex flex-col gap-4">
       {query.isPending ? (
-        <Skeleton className="h-64 w-full" aria-label="Loading projects" />
+        <ProjectsSkeleton />
       ) : (
         <AdminProjects
           canCreateProject={canCreate}

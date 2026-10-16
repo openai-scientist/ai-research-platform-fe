@@ -25,8 +25,6 @@ import { type DatasetItem, fetchDatasets } from "@/lib/api/services/fetch-datase
 import { ApiError } from "@/types/api";
 
 import { createConnectionInput, EMPTY_CONNECTION_DRAFT } from "./connection-form";
-import { beginGoogleConnection, type GoogleConnectionResume } from "./google-connection-state";
-import { openGooglePicker } from "./google-picker";
 import {
   buildTimeSeriesSource,
   createTimeSeriesDraft,
@@ -36,40 +34,29 @@ import {
   validateTimeSeriesSource,
 } from "./time-series-source";
 
-export type ConnectionStep = 0 | 1 | 2 | 3 | 4;
+export type ConnectionStep = 1 | 2 | 3;
 
 export function useConnectionFlow(
   projectId: string,
   initialConnection: ConnectionItem | undefined,
   onComplete: (dataset: DatasetItem) => void,
   canWrite: boolean,
-  userId: string,
-  googleAvailable: boolean,
-  googleResume?: GoogleConnectionResume,
   /** The provider picked on the connections page; the flow opens on its details step. */
   initialKind?: ConnectionKind,
 ) {
   const queryClient = useQueryClient();
   const access = useConnectionAccess(projectId);
-  const [step, setStep] = useState<ConnectionStep>(
-    initialConnection ? 2 : initialKind && !isGoogleConnection(initialKind) ? 1 : 0,
-  );
-  const [kind, setKind] = useState<ConnectionKind>(
-    initialConnection?.kind ?? googleResume?.kind ?? initialKind ?? "postgres",
-  );
+  const [step, setStep] = useState<ConnectionStep>(initialConnection ? 2 : 1);
+  const kind = initialConnection?.kind ?? initialKind ?? "postgres";
   const [storedDraft, setDraft] = useState({
     ...EMPTY_CONNECTION_DRAFT,
     ...(initialKind === "mysql" ? { port: "3306" } : {}),
-    name: googleResume?.name ?? "",
-    googleTarget: googleResume?.target ?? "",
   });
   // Fast Refresh can retain the draft from before time series fields were added.
   const draft =
     typeof storedDraft.url === "string" && typeof storedDraft.token === "string"
       ? storedDraft
       : { ...EMPTY_CONNECTION_DRAFT, ...storedDraft, url: storedDraft.url ?? "", token: storedDraft.token ?? "" };
-  const [grantId, setGrantId] = useState(googleResume?.grantId);
-  const [pickerOpen, setPickerOpen] = useState(false);
   const [connection, setConnection] = useState(initialConnection);
   const [schemas, setSchemas] = useState<string[]>([]);
   const [catalogLoaded, setCatalogLoaded] = useState(false);
@@ -88,8 +75,6 @@ export function useConnectionFlow(
   const [reconcileRequired, setReconcileRequired] = useState(false);
   const busyRef = useRef(false);
   const initialised = useRef(false);
-  const autoPickerAttempted = useRef(false);
-  const pickerRequest = useRef<AbortController | null>(null);
   const pendingImport = useRef<{
     name: string;
     source: ConnectionSource;
@@ -133,7 +118,6 @@ export function useConnectionFlow(
       try {
         await action();
       } catch (error) {
-        if (error instanceof ApiError && error.code === "GOOGLE_GRANT_INVALID") setGrantId(undefined);
         showConnectionError(error, projectId);
         if (connection && error instanceof ApiError && error.reason === "source_not_found") {
           setStep(2);
@@ -157,115 +141,22 @@ export function useConnectionFlow(
     void run(() => loadCatalog(initialConnection));
   }, [initialConnection, run, loadCatalog]);
 
-  useEffect(() => () => pickerRequest.current?.abort(), []);
-
-  function chooseKind(next: ConnectionKind) {
-    if (busyRef.current || !canWrite || !access.configured || access.rateLimited) return;
-    if (isGoogleConnection(next) && !googleAvailable) return;
-    setKind(next);
-    setMode("table");
-    if (next !== kind) setGrantId(undefined);
-    if (next !== kind)
-      setDraft((previous) => ({
-        ...previous,
-        port: next === "mysql" ? "3306" : "5432",
-        password: "",
-        token: "",
-        username: "",
-        url: "",
-        serviceAccountJson: "",
-        googleTarget: "",
-      }));
-    if (isGoogleConnection(next)) {
-      if (next === kind && grantId) void chooseGoogleSource();
-      else void authorizeGoogle(next);
-    } else setStep(1);
-  }
-
   const saveConnection = useCallback(
-    async (input: CreateConnectionRequest, automaticName = false) => {
-      let savedConnection: ConnectionItem;
-      try {
-        savedConnection = (await fetchDataConnections.create(projectId, input)).data;
-      } catch (error) {
-        if (!automaticName || !(error instanceof ApiError) || error.code !== "CONNECTION_NAME_EXISTS") throw error;
-        const existing = await collectPages((params) => fetchDataConnections.getList(projectId, params));
-        const names = new Set(existing.map((item) => item.name.toLowerCase()));
-        let name: string;
-        let number = 2;
-        do {
-          const suffix = ` (${number++})`;
-          name = `${input.name.slice(0, 120 - suffix.length)}${suffix}`;
-        } while (names.has(name.toLowerCase()));
-        savedConnection = (await fetchDataConnections.create(projectId, { ...input, name })).data;
-      }
+    async (input: CreateConnectionRequest) => {
+      const saved = await fetchDataConnections.create(projectId, input);
+      const savedConnection = saved.data;
       setConnection(savedConnection);
-      setGrantId(undefined);
       setDraft((previous) => ({ ...previous, password: "", token: "", serviceAccountJson: "" }));
       setStep(2);
-      toast.success("Connection saved.");
+      // The same server and user already connected: that connection is used, under its own name.
+      toast.success(saved.reused ? "Already connected" : "Connection saved", { description: savedConnection.name });
       await queryClient.invalidateQueries({ queryKey: connectionKeys.lists(projectId) });
       await loadCatalog(savedConnection);
     },
     [loadCatalog, projectId, queryClient],
   );
 
-  const connect = () => run(() => saveConnection(createConnectionInput(kind, draft, grantId)));
-
-  const chooseGoogleSource = useCallback(
-    () =>
-      run(async () => {
-        if (!isGoogleConnection(kind) || !grantId) return;
-        const controller = new AbortController();
-        pickerRequest.current = controller;
-        try {
-          const { data } = await fetchDataConnections.getGooglePicker(projectId, grantId, controller.signal);
-          const selected = await openGooglePicker(kind, data, controller.signal, () => setPickerOpen(true));
-          if (!selected || controller.signal.aborted) return;
-          const sourceName = selected.name.trim().slice(0, 120);
-          const name = sourceName.length >= 2 ? sourceName : `${sourceName || "Google"} source`;
-          const selectedDraft = { ...EMPTY_CONNECTION_DRAFT, name, googleTarget: selected.id };
-          setDraft(selectedDraft);
-          setPickerOpen(false);
-          await saveConnection(createConnectionInput(kind, selectedDraft, grantId), true);
-        } catch (error) {
-          if (!controller.signal.aborted) throw error;
-        } finally {
-          pickerRequest.current = null;
-          setPickerOpen(false);
-        }
-      }),
-    [grantId, kind, projectId, run, saveConnection],
-  );
-
-  useEffect(() => {
-    if (
-      autoPickerAttempted.current ||
-      !googleResume?.grantId ||
-      grantId !== googleResume.grantId ||
-      connection ||
-      !canWrite ||
-      !access.configured ||
-      access.rateLimited
-    )
-      return;
-    // Defer until the effect is committed: Strict Mode cleans up its first setup immediately.
-    const attempt = setTimeout(() => {
-      if (autoPickerAttempted.current) return;
-      autoPickerAttempted.current = true;
-      void chooseGoogleSource();
-    }, 0);
-    return () => clearTimeout(attempt);
-  }, [access.configured, access.rateLimited, canWrite, chooseGoogleSource, connection, googleResume, grantId]);
-
-  const authorizeGoogle = (provider: ConnectionKind = kind) =>
-    run(async () => {
-      if (!isGoogleConnection(provider) || !googleAvailable) return;
-      beginGoogleConnection(projectId, userId, {
-        action: "create",
-        draft: { kind: provider, name: "", target: "" },
-      });
-    });
+  const connect = () => run(() => saveConnection(createConnectionInput(kind, draft)));
 
   const selectSchema = (value: string) =>
     run(async () => {
@@ -337,7 +228,7 @@ export function useConnectionFlow(
       setReconcileRequired(false);
       pendingImport.current = null;
       await queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) });
-      toast.success("The import completed. Opening the saved dataset.");
+      toast.success("Dataset imported", { description: found.name });
       onComplete(found);
       return;
     }
@@ -369,7 +260,7 @@ export function useConnectionFlow(
         });
         pendingImport.current = null;
         await queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) });
-        toast.success("Dataset imported.");
+        toast.success("Dataset imported", { description: result.data.name });
         onComplete(result.data);
       } catch (error) {
         if (error instanceof ApiError && error.status !== 0 && error.status < 500) throw error;
@@ -390,7 +281,6 @@ export function useConnectionFlow(
     step,
     setStep,
     kind,
-    googleAvailable,
     isGoogle: isGoogleConnection(kind),
     isTimeSeries: isTimeSeriesConnection(kind),
     timeSeriesDraft,
@@ -398,12 +288,7 @@ export function useConnectionFlow(
       setTimeSeriesDraft(value);
       setPreview(null);
     },
-    grantId,
-    pickerOpen,
-    chooseGoogleSource,
-    authorizeGoogle,
     needsReauthorization,
-    chooseKind,
     draft,
     setDraft,
     connection,

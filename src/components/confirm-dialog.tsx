@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactElement } from "react";
+import type { ReactElement, ReactNode } from "react";
 
 import {
   AlertDialog,
@@ -25,6 +25,7 @@ export function ConfirmDialog({
   onConfirm,
   disabled = false,
   destructive = false,
+  children,
 }: {
   title: string;
   description: string;
@@ -37,6 +38,8 @@ export function ConfirmDialog({
   disabled?: boolean;
   /** Paint the confirm button as a destructive action, for deletes. */
   destructive?: boolean;
+  /** A choice that goes with the confirmation, shown under the description. */
+  children?: ReactNode;
 }) {
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
@@ -46,6 +49,7 @@ export function ConfirmDialog({
           <AlertDialogTitle>{title}</AlertDialogTitle>
           <AlertDialogDescription>{description}</AlertDialogDescription>
         </AlertDialogHeader>
+        {children}
         <AlertDialogFooter className="flex-row justify-end">
           <AlertDialogCancel>{cancelLabel}</AlertDialogCancel>
           <AlertDialogAction onClick={onConfirm} disabled={disabled} variant={destructive ? "destructive" : "default"}>

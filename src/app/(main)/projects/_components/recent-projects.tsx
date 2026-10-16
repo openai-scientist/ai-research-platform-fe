@@ -11,7 +11,6 @@ import { Clock, Folder } from "lucide-react";
 import type { FileManagerFile } from "@/app/(main)/dashboard/file-manager/_components/data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
-import { Skeleton } from "@/components/ui/skeleton";
 import { shouldRetryApiQuery } from "@/hooks/use-api";
 import { projectKeys } from "@/lib/api/query-keys";
 import { fetchProject } from "@/lib/api/services/fetch-project";
@@ -22,6 +21,8 @@ import {
 } from "@/lib/projects/recent-projects";
 import { useAppSelector } from "@/lib/redux/hooks";
 import { selectUser } from "@/lib/redux/slices/auth-slice";
+
+import { RecentProjectsSkeleton } from "./projects-skeleton";
 
 function subscribe(onChange: () => void) {
   window.addEventListener("storage", onChange);
@@ -67,7 +68,7 @@ export function RecentProjects({ projects }: { projects: FileManagerFile[] }) {
         </span>
       </div>
       {isLoading ? (
-        <Skeleton className="h-28 w-full" aria-label="Loading recent projects" />
+        <RecentProjectsSkeleton label="Loading recent projects" />
       ) : recent.length > 0 ? (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {recent.map(({ id, name, href, openedAt }) => (

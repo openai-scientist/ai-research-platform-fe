@@ -12,16 +12,16 @@ import { useProjectDetailQuery } from "@/hooks/use-projects-query";
 import type { ProjectItem } from "@/lib/api/services/fetch-project";
 import { getProjectAccess } from "@/lib/auth/project-access";
 
-import { PageSkeleton } from "../../../_components/page-skeleton";
 import { ProjectStatusBadge } from "../../_components/project-status-badge";
 import { BudgetUsageCard } from "./budget-usage-card";
 import { ExperimentActivityCard } from "./experiment-activity-card";
 import { toManagerDashboard } from "./manager-dashboard-data";
 import { ProjectKpiStrip } from "./project-kpi-strip";
-import { RecentExperimentsCard, RecentFindingsCard, WarningsCard } from "./research-highlights";
+import { RecentExperimentsCard, WarningsCard } from "./research-highlights";
 import { ResearchLoopCard } from "./research-loop-card";
 import { ResearchPreviewDialog } from "./research-preview";
 import { useProjectPreview } from "./use-project-preview";
+import { OverviewSkeleton } from "./workspace-skeletons";
 
 export function ProjectOverview({ project: initialProject }: { readonly project: ProjectItem }) {
   const projectQuery = useProjectDetailQuery(initialProject.id);
@@ -31,7 +31,7 @@ export function ProjectOverview({ project: initialProject }: { readonly project:
   const access = getProjectAccess(project.my_role, project.status);
   const baseUrl = `/projects/${project.id}`;
   if (!access.canRead) return null;
-  if (research.isPending) return <PageSkeleton label="Loading project overview" />;
+  if (research.isPending) return <OverviewSkeleton />;
   if (!research.data) {
     return (
       <Empty>
@@ -99,10 +99,7 @@ export function ProjectOverview({ project: initialProject }: { readonly project:
         <BudgetUsageCard budgets={dashboard.budgets} live />
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <RecentExperimentsCard baseUrl={baseUrl} experiments={dashboard.recentExperiments} />
-        <RecentFindingsCard baseUrl={baseUrl} findings={dashboard.recentFindings} />
-      </div>
+      <RecentExperimentsCard baseUrl={baseUrl} experiments={dashboard.recentExperiments} />
     </div>
   );
 }

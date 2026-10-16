@@ -7,12 +7,12 @@ import Link from "next/link";
 import { ArrowRight, FolderCheck, Search } from "lucide-react";
 import { toast } from "sonner";
 
+import { ListRowsSkeleton } from "@/app/(main)/_components/content-skeletons";
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { useAnswerInvitationMutation, useInfiniteInvitations } from "@/hooks/use-invitations-query";
 import type { InvitationItem } from "@/lib/api/services/fetch-invitations";
@@ -131,7 +131,7 @@ export function ProjectInvitations({
         </Card>
       )}
       {changing || (validSearch && query.isPending) ? (
-        <Skeleton className="h-40 w-full" aria-label="Loading project invitations" />
+        <ListRowsSkeleton rows={4} label="Loading project invitations" />
       ) : !validSearch ? null : query.isError && !query.data ? (
         <Button variant="outline" className="self-start" onClick={() => void query.refetch()}>
           Reload invitations

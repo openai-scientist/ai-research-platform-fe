@@ -1,5 +1,5 @@
-import { PageSkeleton } from "@/app/(main)/_components/page-skeleton";
+import { RunDetailSkeleton } from "../../../_components/workspace-skeletons";
 
 export default function Loading() {
-  return <PageSkeleton layout="split" label="Loading research run" />;
+  return <RunDetailSkeleton />;
 }

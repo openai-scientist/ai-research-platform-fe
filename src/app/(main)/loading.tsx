@@ -1,9 +1,10 @@
-import { PageSkeleton } from "./_components/page-skeleton";
+import { Spinner } from "@/components/ui/spinner";
 
+// Shown before any area's own layout is ready, so it stays neutral: each area draws its own skeleton next.
 export default function Loading() {
   return (
-    <main className="mx-auto w-full max-w-screen-2xl p-4 md:p-6">
-      <PageSkeleton />
-    </main>
+    <div className="flex min-h-dvh items-center justify-center bg-canvas">
+      <Spinner className="size-5 text-muted-foreground" aria-label="Loading page" />
+    </div>
   );
 }

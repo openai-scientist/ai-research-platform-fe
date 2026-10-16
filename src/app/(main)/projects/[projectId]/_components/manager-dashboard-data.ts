@@ -75,7 +75,6 @@ export function toManagerDashboard(
       state: run.status.replaceAll("_", " "),
       updatedAt: new Date(run.updated_at).toLocaleDateString("en-US"),
     })),
-    recentFindings: preview?.recentFindings ?? [],
     warnings: preview?.warnings ?? [],
     report: preview?.report ?? {
       status: "Not started",

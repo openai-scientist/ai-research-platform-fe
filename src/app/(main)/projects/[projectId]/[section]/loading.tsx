@@ -1,5 +1,10 @@
-import { PageSkeleton } from "@/app/(main)/_components/page-skeleton";
+"use client";
+
+import { useParams } from "next/navigation";
+
+import { SectionSkeleton } from "../_components/workspace-skeletons";
 
 export default function Loading() {
-  return <PageSkeleton layout="table" label="Loading workspace section" />;
+  const { section } = useParams<{ section?: string }>();
+  return <SectionSkeleton section={section} />;
 }

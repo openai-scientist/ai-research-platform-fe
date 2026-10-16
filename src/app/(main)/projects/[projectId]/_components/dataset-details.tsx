@@ -20,12 +20,15 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { showConnectionError, useAllDataConnections, useDatasetsByConnection } from "@/hooks/use-data-connections";
 import { useDatasetDetailQuery, useUpdateDatasetMutation } from "@/hooks/use-datasets-query";
-import { adminKeys, projectKeys } from "@/lib/api/query-keys";
+import { adminKeys, connectionKeys, projectKeys } from "@/lib/api/query-keys";
+import { fetchDataConnections, isGoogleConnection } from "@/lib/api/services/fetch-data-connections";
 import { type DatasetItem, type DatasetVersionItem, fetchDatasets } from "@/lib/api/services/fetch-datasets";
 
 import { DatasetConnectionActions, DatasetConnectionSource } from "./data-connections/dataset-connection-source";
@@ -33,6 +36,7 @@ import { timeAgo } from "./dataset-format";
 import { DatasetHistory } from "./dataset-history";
 import { DatasetPreview, UploadVersionButton } from "./dataset-versions";
 import { WorkspaceFormDialog } from "./workspace-form-dialog";
+import { DatasetBodySkeleton } from "./workspace-skeletons";
 import { ListState, perform, type WorkspaceProps } from "./workspace-ui";
 
 function DatasetEditDialog({
@@ -121,7 +125,13 @@ function HeaderIcon({
   );
 }
 
-export function DatasetDetails({ project, canWrite, datasetId }: WorkspaceProps & { datasetId: string }) {
+export function DatasetDetails({
+  project,
+  canWrite,
+  canManage,
+  userId,
+  datasetId,
+}: WorkspaceProps & { datasetId: string }) {
   const query = useDatasetDetailQuery(project.id, datasetId);
   const dataset = query.data?.data;
   const latest = dataset?.latest_version;
@@ -133,6 +143,18 @@ export function DatasetDetails({ project, canWrite, datasetId }: WorkspaceProps 
   const [removing, setRemoving] = useState(false);
   // An older version picked in the history, or else the latest.
   const shown = viewing ?? latest ?? null;
+  // The source of the last dataset imported from it can go with it, for whoever may delete the source.
+  const connections = useAllDataConnections(canWrite ? project.id : "");
+  const byConnection = useDatasetsByConnection(canWrite ? project.id : "");
+  const sourceId = latest?.source?.connection_id;
+  const source = connections.data?.find((connection) => connection.id === sourceId);
+  const lastFromSource =
+    source &&
+    (canManage || source.created_by_user_id === userId) &&
+    byConnection.data?.get(source.id)?.every((item) => item.id === datasetId)
+      ? source
+      : undefined;
+  const [removeSource, setRemoveSource] = useState(false);
 
   async function remove(item: DatasetItem) {
     try {
@@ -143,11 +165,20 @@ export function DatasetDetails({ project, canWrite, datasetId }: WorkspaceProps 
       });
       return;
     }
-    toast.success("Dataset deleted", { description: item.name });
+    let sourceRemoved = false;
+    if (lastFromSource && removeSource) {
+      try {
+        await fetchDataConnections.remove(project.id, lastFromSource.id);
+        sourceRemoved = true;
+      } catch (error) {
+        showConnectionError(error, project.id);
+      }
+    }
+    toast.success(sourceRemoved ? "Dataset and its source deleted" : "Dataset deleted", { description: item.name });
     router.push(`/projects/${project.id}/datasets`);
     await Promise.all(
-      [projectKeys.detail(project.id), projectKeys.lists(), adminKeys.all].map((queryKey) =>
-        queryClient.invalidateQueries({ queryKey }),
+      [projectKeys.detail(project.id), projectKeys.lists(), adminKeys.all, connectionKeys.project(project.id)].map(
+        (queryKey) => queryClient.invalidateQueries({ queryKey }),
       ),
     );
   }
@@ -190,6 +221,7 @@ export function DatasetDetails({ project, canWrite, datasetId }: WorkspaceProps 
         empty={false}
         title="Dataset details"
         retry={query.refetch}
+        loading={<DatasetBodySkeleton label="Loading dataset" />}
       />
       {dataset && (
         <>
@@ -220,7 +252,16 @@ export function DatasetDetails({ project, canWrite, datasetId }: WorkspaceProps 
                   <HeaderIcon label="Edit name and description" onClick={() => setEditing(true)}>
                     <Pencil />
                   </HeaderIcon>
-                  <HeaderIcon label="Delete dataset" destructive onClick={() => setRemoving(true)}>
+                  <HeaderIcon
+                    label="Delete dataset"
+                    destructive
+                    onClick={() => {
+                      // A Google file is listed only while the project has data from it; a database
+                      // keeps its sign-in unless asked.
+                      setRemoveSource(Boolean(lastFromSource && isGoogleConnection(lastFromSource.kind)));
+                      setRemoving(true);
+                    }}
+                  >
                     <Trash2 />
                   </HeaderIcon>
                 </>
@@ -276,7 +317,22 @@ export function DatasetDetails({ project, canWrite, datasetId }: WorkspaceProps 
             confirmLabel="Delete"
             destructive
             onConfirm={() => void remove(dataset)}
-          />
+          >
+            {lastFromSource && (
+              <label htmlFor="remove-dataset-source" className="flex items-start gap-2 text-sm">
+                <Checkbox
+                  id="remove-dataset-source"
+                  className="mt-0.5"
+                  checked={removeSource}
+                  onCheckedChange={(on) => setRemoveSource(on === true)}
+                />
+                <span className="flex min-w-0 flex-col gap-0.5">
+                  <span>Also remove “{lastFromSource.name}” from Data connections</span>
+                  <span className="text-muted-foreground text-xs">It is the last dataset from this source.</span>
+                </span>
+              </label>
+            )}
+          </ConfirmDialog>
         </>
       )}
     </div>
