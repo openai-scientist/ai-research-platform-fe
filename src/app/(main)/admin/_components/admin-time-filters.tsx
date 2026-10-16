@@ -12,12 +12,14 @@ export function AdminTimeFilters({
   to,
   onChange,
   compact = false,
+  placeholder = "All time",
 }: {
   prefix: string;
   from: string;
   to: string;
   onChange: (from: string, to: string) => void;
   compact?: boolean;
+  placeholder?: string;
 }) {
   const range: DateRange | undefined = from ? { from: parseISO(from), to: to ? parseISO(to) : undefined } : undefined;
   const selectRange = (next: DateRange | undefined) => {
@@ -34,7 +36,7 @@ export function AdminTimeFilters({
         id={`${prefix}-date-range`}
         value={range}
         onChange={selectRange}
-        placeholder="All time"
+        placeholder={placeholder}
         className="w-full justify-start sm:min-w-64"
       />
     </Field>

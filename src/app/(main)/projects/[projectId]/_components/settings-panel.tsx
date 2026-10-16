@@ -38,9 +38,14 @@ export function SettingsGroup({
   children: ReactNode;
   className?: string;
 }) {
+  const headingId = useId();
   return (
-    <section className="flex flex-col gap-2">
-      {title && <h3 className="px-1 font-medium text-muted-foreground text-xs">{title}</h3>}
+    <section aria-labelledby={title ? headingId : undefined} className="flex min-w-0 flex-col gap-2.5">
+      {title && (
+        <h3 id={headingId} className="px-1 font-medium text-muted-foreground text-sm">
+          {title}
+        </h3>
+      )}
       <div className={cn("divide-y overflow-hidden rounded-xl border bg-card", className)}>{children}</div>
     </section>
   );
@@ -65,8 +70,8 @@ export function SettingsRow({
   return (
     <div
       className={cn(
-        "grid gap-x-8 gap-y-2.5 px-5 py-4",
-        inline ? "grid-cols-[minmax(0,1fr)_auto] items-center" : "sm:grid-cols-[13rem_minmax(0,1fr)]",
+        "grid gap-x-8 gap-y-3 px-4 py-5 sm:px-5",
+        inline ? "grid-cols-[minmax(0,1fr)_auto] items-center" : "@xl/settings:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]",
       )}
     >
       <div className="flex min-w-0 flex-col gap-0.5 sm:pt-1.5">
@@ -107,7 +112,7 @@ export function SaveBar({
 }) {
   if (!dirty) return null;
   return (
-    <div className="fade-in-0 slide-in-from-bottom-2 sticky bottom-4 z-10 flex animate-in items-center justify-between gap-4 rounded-xl border bg-popover py-2 pr-2 pl-4 shadow-lg duration-200">
+    <div className="fade-in-0 slide-in-from-bottom-2 sticky bottom-4 z-10 flex animate-in flex-wrap items-center justify-between gap-3 rounded-xl border bg-popover p-2 duration-200 motion-reduce:animate-none sm:pl-4">
       <p className="text-sm">Unsaved changes</p>
       <div className="flex items-center gap-1.5">
         <Button type="button" variant="ghost" disabled={pending} onClick={onDiscard}>

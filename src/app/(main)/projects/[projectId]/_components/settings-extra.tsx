@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Copy, FolderGit2, Library, MessageSquare, RotateCw, Webhook } from "lucide-react";
 import { toast } from "sonner";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -19,17 +20,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 
-import {
-  ChoiceRow,
-  DraftTab,
-  NumberRow,
-  notStoredYet,
-  type Option,
-  ServiceRow,
-  SwitchRow,
-  useDraft,
-} from "./settings-kit";
-import { SettingsGroup, SettingsHeading, SettingsRow, TagInput } from "./settings-panel";
+import { ChoiceRow, DraftTab, NumberRow, type Option, ServiceRow, SwitchRow, useDraft } from "./settings-kit";
+import { SettingsGroup, SettingsRow, TagInput } from "./settings-panel";
 
 const ROLE_OPTIONS: Option[] = [
   { value: "researcher", label: "Researcher" },
@@ -37,8 +29,16 @@ const ROLE_OPTIONS: Option[] = [
 ];
 
 /** Who gets into the project, and how. */
-export function SettingsAccess({ projectId, readOnly }: { projectId: string; readOnly: boolean }) {
-  const draft = useDraft({
+export function SettingsAccess({
+  projectId,
+  readOnly,
+  embedded = false,
+}: {
+  projectId: string;
+  readOnly: boolean;
+  embedded?: boolean;
+}) {
+  const draft = useDraft("access", {
     inviters: "managers",
     defaultRole: "researcher",
     expiry: "7",
@@ -46,12 +46,21 @@ export function SettingsAccess({ projectId, readOnly }: { projectId: string; rea
     link: false,
     approval: true,
     reviewersSeeData: true,
+    linkVersion: 1,
   });
   const { values: v, set } = draft;
-  const inviteLink = `${typeof window === "undefined" ? "" : window.location.origin}/join/${projectId.slice(0, 8)}`;
+  const inviteLink = `https://research.example/join/${projectId.slice(0, 8)}-${v.linkVersion}`;
 
   return (
-    <DraftTab id="access" title="Members & access" what="access settings" dirty={draft.dirty} onDiscard={draft.discard}>
+    <DraftTab
+      id="access"
+      title="Members & access"
+      what="access settings"
+      hideHeading={embedded}
+      dirty={draft.dirty}
+      onDiscard={draft.discard}
+      onSave={draft.save}
+    >
       <SettingsGroup title="Invitations">
         <ChoiceRow
           id="access-inviters"
@@ -101,7 +110,7 @@ export function SettingsAccess({ projectId, readOnly }: { projectId: string; rea
         />
         {v.link && (
           <>
-            <SettingsRow label="Link">
+            <SettingsRow label="Sample link" hint="For preview only. This link does not grant project access.">
               <div className="flex min-w-0 items-center gap-1.5">
                 <Input readOnly value={inviteLink} className="font-mono text-muted-foreground" />
                 <Button
@@ -123,7 +132,8 @@ export function SettingsAccess({ projectId, readOnly }: { projectId: string; rea
                   variant="outline"
                   size="icon"
                   aria-label="Make a new link"
-                  onClick={() => notStoredYet("a new invite link")}
+                  disabled={readOnly}
+                  onClick={() => set("linkVersion")(v.linkVersion + 1)}
                 >
                   <RotateCw />
                 </Button>
@@ -156,16 +166,16 @@ export function SettingsAccess({ projectId, readOnly }: { projectId: string; rea
 
 const MODEL_OPTIONS: Option[] = [
   { value: "default", label: "Platform default" },
-  { value: "claude-opus-5-5", label: "Claude Opus 5.5" },
-  { value: "claude-sonnet-5-5", label: "Claude Sonnet 5.5" },
-  { value: "claude-haiku-5-5", label: "Claude Haiku 5.5" },
+  { value: "claude-opus", label: "Claude Opus" },
+  { value: "claude-sonnet", label: "Claude Sonnet" },
+  { value: "claude-haiku", label: "Claude Haiku" },
   { value: "gpt-5", label: "GPT-5" },
   { value: "gemini-2-5-pro", label: "Gemini 2.5 Pro" },
 ];
 
 /** Which AI models do the work and how they think. */
 export function SettingsModels({ readOnly }: { readOnly: boolean }) {
-  const draft = useDraft({
+  const draft = useDraft("models", {
     stage: "default",
     review: "default",
     fallback: "none",
@@ -175,7 +185,14 @@ export function SettingsModels({ readOnly }: { readOnly: boolean }) {
   const { values: v, set } = draft;
 
   return (
-    <DraftTab id="models" title="AI models" what="model settings" dirty={draft.dirty} onDiscard={draft.discard}>
+    <DraftTab
+      id="models"
+      title="AI models"
+      what="model settings"
+      dirty={draft.dirty}
+      onDiscard={draft.discard}
+      onSave={draft.save}
+    >
       <SettingsGroup title="Models">
         <ChoiceRow
           id="models-stage"
@@ -249,7 +266,7 @@ const SOURCES = [
 
 /** Where runs look for papers and which ones they keep. */
 export function SettingsLiterature({ readOnly }: { readOnly: boolean }) {
-  const draft = useDraft({
+  const draft = useDraft("literature", {
     arxiv: true,
     semantic: true,
     openalex: true,
@@ -271,6 +288,7 @@ export function SettingsLiterature({ readOnly }: { readOnly: boolean }) {
       what="literature settings"
       dirty={draft.dirty}
       onDiscard={draft.discard}
+      onSave={draft.save}
       validate={() => {
         if (!anySource) return "Turn on at least one source.";
         const count = Number(v.perRound);
@@ -333,7 +351,7 @@ export function SettingsLiterature({ readOnly }: { readOnly: boolean }) {
 
 /** Who signs off on results, and what the finished paper looks like. */
 export function SettingsReview({ readOnly }: { readOnly: boolean }) {
-  const draft = useDraft({
+  const draft = useDraft("review", {
     approvals: "1",
     approvers: "reviewers",
     selfApproval: false,
@@ -352,6 +370,7 @@ export function SettingsReview({ readOnly }: { readOnly: boolean }) {
       what="review settings"
       dirty={draft.dirty}
       onDiscard={draft.discard}
+      onSave={draft.save}
     >
       <SettingsGroup title="Approvals">
         <ChoiceRow
@@ -454,7 +473,7 @@ const FILE_TYPES = ["CSV", "Excel", "Parquet", "JSON"] as const;
 
 /** How data comes in, how long it's kept and how it's protected. */
 export function SettingsData({ readOnly }: { readOnly: boolean }) {
-  const draft = useDraft({
+  const draft = useDraft("data", {
     pinning: "latest",
     sameName: "version",
     types: ["CSV"] as string[],
@@ -473,6 +492,7 @@ export function SettingsData({ readOnly }: { readOnly: boolean }) {
       what="data settings"
       dirty={draft.dirty}
       onDiscard={draft.discard}
+      onSave={draft.save}
       validate={() => (v.types.length ? undefined : "Allow at least one file type.")}
     >
       <SettingsGroup title="Datasets">
@@ -585,13 +605,18 @@ const WEBHOOK_EVENTS = [
   "Dataset uploaded",
 ] as const;
 
-function AddWebhook({ disabled }: { disabled: boolean }) {
+type PreviewWebhook = { id: string; url: string; events: string[] };
+
+function AddWebhook({ disabled, onAdd }: { disabled: boolean; onAdd: (webhook: PreviewWebhook) => void }) {
+  const [open, setOpen] = useState(false);
   const [url, setUrl] = useState("");
   const [events, setEvents] = useState<string[]>(["Run finished"]);
   return (
     <Dialog
-      onOpenChange={(open) => {
-        if (open) return;
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (next) return;
         setUrl("");
         setEvents(["Run finished"]);
       }}
@@ -604,7 +629,7 @@ function AddWebhook({ disabled }: { disabled: boolean }) {
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Add webhook</DialogTitle>
-          <DialogDescription>We send a signed POST request to this address when an event happens.</DialogDescription>
+          <DialogDescription>Add a sample endpoint. No requests are sent in this preview.</DialogDescription>
         </DialogHeader>
         <form
           id="add-webhook"
@@ -612,9 +637,13 @@ function AddWebhook({ disabled }: { disabled: boolean }) {
           className="flex flex-col gap-4"
           onSubmit={(event) => {
             event.preventDefault();
+            event.stopPropagation();
             if (!/^https:\/\/\S+\.\S+/.test(url.trim())) return void toast.error("Enter an https:// address.");
             if (!events.length) return void toast.error("Pick at least one event.");
-            notStoredYet("webhooks");
+            onAdd({ id: crypto.randomUUID(), url: url.trim(), events });
+            setOpen(false);
+            setUrl("");
+            setEvents(["Run finished"]);
           }}
         >
           <div className="flex flex-col gap-2">
@@ -664,16 +693,37 @@ function AddWebhook({ disabled }: { disabled: boolean }) {
 
 /** Services outside the platform that hear from the project or receive its work. */
 export function SettingsIntegrations({ readOnly }: { readOnly: boolean }) {
-  const connect = (name: string) => () => notStoredYet(`the ${name} connection`);
-  const button = (name: string) => (
-    <Button type="button" variant="outline" size="sm" disabled={readOnly} onClick={connect(name)}>
-      Connect
-    </Button>
-  );
+  const draft = useDraft("integrations", { connected: [] as string[], webhooks: [] as PreviewWebhook[] });
+  const { values: v, set } = draft;
+  const button = (name: string) => {
+    const connected = v.connected.includes(name);
+    return (
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        {connected && <Badge variant="secondary">Connected</Badge>}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={readOnly}
+          onClick={() => {
+            set("connected")(connected ? v.connected.filter((item) => item !== name) : [...v.connected, name]);
+          }}
+        >
+          {connected ? "Disconnect" : "Connect"}
+        </Button>
+      </div>
+    );
+  };
 
   return (
-    <div className="flex flex-col gap-6">
-      <SettingsHeading title="Integrations" />
+    <DraftTab
+      id="integrations"
+      title="Integrations"
+      what="integrations"
+      dirty={draft.dirty}
+      onDiscard={draft.discard}
+      onSave={draft.save}
+    >
       <SettingsGroup title="Messaging">
         <ServiceRow
           icon={MessageSquare}
@@ -709,13 +759,34 @@ export function SettingsIntegrations({ readOnly }: { readOnly: boolean }) {
         />
       </SettingsGroup>
       <SettingsGroup title="Webhooks">
+        {v.webhooks.map((webhook) => (
+          <ServiceRow
+            key={webhook.id}
+            icon={Webhook}
+            name={webhook.url}
+            description={webhook.events.join(", ")}
+            action={
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                disabled={readOnly}
+                onClick={() => {
+                  set("webhooks")(v.webhooks.filter((item) => item.id !== webhook.id));
+                }}
+              >
+                Remove
+              </Button>
+            }
+          />
+        ))}
         <ServiceRow
           icon={Webhook}
-          name="No webhooks yet"
-          description="Call your own service when runs start, stop or finish."
-          action={<AddWebhook disabled={readOnly} />}
+          name={v.webhooks.length ? "Add an endpoint" : "No webhooks yet"}
+          description="Preview event subscriptions for your own service."
+          action={<AddWebhook disabled={readOnly} onAdd={(webhook) => set("webhooks")([...v.webhooks, webhook])} />}
         />
       </SettingsGroup>
-    </div>
+    </DraftTab>
   );
 }

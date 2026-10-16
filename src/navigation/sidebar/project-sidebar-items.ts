@@ -52,10 +52,9 @@ export function getProjectSidebarItems(projectId: string, role: ProjectRole | nu
       id: 4,
       label: "PROJECT",
       items: [
-        { id: "project-members", title: "Members", url: `${baseUrl}/members`, icon: Users },
         ...(role === ProjectRole.ProjectManager
           ? [{ id: "project-settings", title: "Settings", url: `${baseUrl}/settings`, icon: Settings }]
-          : []),
+          : [{ id: "project-members", title: "Members", url: `${baseUrl}/members`, icon: Users }]),
       ],
     },
   ];

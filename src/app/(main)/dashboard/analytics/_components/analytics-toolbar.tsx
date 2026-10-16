@@ -28,15 +28,23 @@ export function AnalyticsToolbar({
   actionLabel = "Analytics actions",
   defaultValue = "last-4-weeks",
   options = defaultOptions,
+  value,
+  onValueChange,
+  onRefresh,
+  refreshDisabled = false,
 }: {
   readonly actionLabel?: string;
   readonly defaultValue?: string;
   readonly options?: readonly AnalyticsToolbarOption[];
+  readonly value?: string;
+  readonly onValueChange?: (value: string) => void;
+  readonly onRefresh?: () => void;
+  readonly refreshDisabled?: boolean;
 }) {
   return (
     <div className="flex items-center gap-2">
-      <Select defaultValue={defaultValue}>
-        <SelectTrigger className="w-34">
+      <Select defaultValue={defaultValue} value={value} onValueChange={onValueChange}>
+        <SelectTrigger className="w-34" aria-label="Time range">
           <SelectValue placeholder="Select range" />
         </SelectTrigger>
         <SelectContent>
@@ -59,22 +67,26 @@ export function AnalyticsToolbar({
         <DropdownMenuContent align="end" className="w-48">
           <DropdownMenuGroup>
             <DropdownMenuLabel>{actionLabel}</DropdownMenuLabel>
-            <DropdownMenuItem>
-              <FileDown />
-              Export report
-            </DropdownMenuItem>
-            <DropdownMenuItem>
-              <FileUp />
-              Import data
-            </DropdownMenuItem>
-            <DropdownMenuItem>
-              <Share2 />
-              Share dashboard
-            </DropdownMenuItem>
+            {!onRefresh && (
+              <>
+                <DropdownMenuItem>
+                  <FileDown />
+                  Export report
+                </DropdownMenuItem>
+                <DropdownMenuItem>
+                  <FileUp />
+                  Import data
+                </DropdownMenuItem>
+                <DropdownMenuItem>
+                  <Share2 />
+                  Share dashboard
+                </DropdownMenuItem>
+              </>
+            )}
           </DropdownMenuGroup>
-          <DropdownMenuSeparator />
+          {!onRefresh && <DropdownMenuSeparator />}
           <DropdownMenuGroup>
-            <DropdownMenuItem>
+            <DropdownMenuItem onSelect={onRefresh} disabled={refreshDisabled}>
               <RefreshCw />
               Refresh metrics
             </DropdownMenuItem>

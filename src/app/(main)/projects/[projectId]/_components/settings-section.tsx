@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 
 import { cn } from "cn";
 import { Archive, Check, Copy } from "lucide-react";
@@ -12,11 +12,10 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { useRestoreProjectMutation, useUpdateProjectMutation } from "@/hooks/use-projects-query";
 import type { ProjectItem } from "@/lib/api/services/fetch-project";
 import { ProjectStatus } from "@/types/enums";
 
-import { SettingsActivity } from "./settings-activity";
+import { MembersSection } from "./members-section";
 import {
   SettingsAccess,
   SettingsData,
@@ -25,8 +24,7 @@ import {
   SettingsModels,
   SettingsReview,
 } from "./settings-extra";
-import { ChoiceRow, notStoredYet, useDraft } from "./settings-kit";
-import { SettingsDangerZone, StatusRow } from "./settings-lifecycle";
+import { ChoiceRow, useDraft } from "./settings-kit";
 import {
   CharacterCount,
   SaveBar,
@@ -36,8 +34,11 @@ import {
   TagInput,
   useUnsavedWarning,
 } from "./settings-panel";
+import { SettingsPreviewProvider, useSettingsPreview } from "./settings-preview";
+import { SettingsPreviewActivity } from "./settings-preview-activity";
+import { PreviewStatusRow, SettingsPreviewDangerZone, usePreviewLifecycle } from "./settings-preview-lifecycle";
 import { SettingsNotifications, SettingsRuns, SettingsSpending } from "./settings-system";
-import { perform, type WorkspaceProps } from "./workspace-ui";
+import type { WorkspaceProps } from "./workspace-ui";
 
 const GROUPS: { label: string; tabs: { id: string; label: string }[] }[] = [
   {
@@ -120,8 +121,7 @@ const sameTags = (a: string[], b: string[]) => a.length === b.length && a.every(
 
 /** Everything that describes the project, edited and saved together. */
 function GeneralTab({ project, readOnly }: { project: ProjectItem; readOnly: boolean }) {
-  const router = useRouter();
-  const save = useUpdateProjectMutation(project.id);
+  const preview = useSettingsPreview();
   const initial = {
     name: project.name,
     description: project.description ?? "",
@@ -140,7 +140,7 @@ function GeneralTab({ project, readOnly }: { project: ProjectItem; readOnly: boo
     objective.trim() !== initial.objective.trim() ||
     domain.trim() !== initial.domain.trim() ||
     !sameTags(tags, initial.tags);
-  const prefs = useDraft({ visibility: "members", timezone: "Asia/Ho_Chi_Minh", language: "en" });
+  const prefs = useDraft("general", { visibility: "members", timezone: "Asia/Ho_Chi_Minh", language: "en" });
   useUnsavedWarning(dirty);
 
   const discard = () => {
@@ -159,7 +159,7 @@ function GeneralTab({ project, readOnly }: { project: ProjectItem; readOnly: boo
         id="settings-general"
         noValidate
         className="flex flex-col gap-6"
-        onSubmit={async (event) => {
+        onSubmit={(event) => {
           event.preventDefault();
           const trimmed = name.trim();
           if (trimmed.length < 2) return void toast.error("The project name needs at least 2 characters.");
@@ -167,8 +167,6 @@ function GeneralTab({ project, readOnly }: { project: ProjectItem; readOnly: boo
           if (description.length > 5000) return void toast.error("The description can be up to 5,000 characters.");
           if (objective.length > 10000) return void toast.error("The objective can be up to 10,000 characters.");
           if (domain.trim().length > 160) return void toast.error("The domain can be up to 160 characters.");
-          if (prefs.dirty) notStoredYet("visibility, time zone and language");
-          if (!dirty) return;
           const data = {
             name: trimmed,
             description: description.trim() || null,
@@ -176,12 +174,14 @@ function GeneralTab({ project, readOnly }: { project: ProjectItem; readOnly: boo
             domain: domain.trim() || null,
             tags,
           };
-          if (!(await perform(() => save.mutateAsync(data), { title: "Project saved", description: trimmed }))) return;
+          preview.updateProject(data);
+          prefs.save();
+          preview.record("updated the general project settings.");
+          toast.success("Changes saved in this preview.");
           setName(trimmed);
           setDescription(description.trim());
           setObjective(objective.trim());
           setDomain(domain.trim());
-          router.refresh();
         }}
       >
         <SettingsGroup>
@@ -274,7 +274,7 @@ function GeneralTab({ project, readOnly }: { project: ProjectItem; readOnly: boo
         />
       </SettingsGroup>
       <SettingsGroup title="About">
-        <StatusRow project={project} />
+        <PreviewStatusRow />
         <SettingsRow label="Project ID">
           <CopyValue value={project.id} label="Project ID" />
         </SettingsRow>
@@ -289,45 +289,55 @@ function GeneralTab({ project, readOnly }: { project: ProjectItem; readOnly: boo
         </SettingsRow>
       </SettingsGroup>
       <SettingsGroup title="Copy and export">
-        <SettingsRow label="Export" hint="Datasets, papers, run files and the activity log in one archive." inline>
-          <Button type="button" variant="outline" size="sm" onClick={() => notStoredYet("project exports")}>
-            Export data
+        <SettingsRow label="Export" hint="Download the project details and preview preferences as JSON." inline>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              const file = new Blob([JSON.stringify({ project, preferences: prefs.values, preview: true }, null, 2)], {
+                type: "application/json",
+              });
+              const url = URL.createObjectURL(file);
+              const link = document.createElement("a");
+              link.href = url;
+              link.download = "project-settings-preview.json";
+              link.click();
+              setTimeout(() => URL.revokeObjectURL(url), 0);
+              toast.success("Preview settings exported.");
+            }}
+          >
+            Export settings
           </Button>
         </SettingsRow>
-        <SettingsRow label="Duplicate" hint="A new project with these settings and brief, without data or runs." inline>
-          <Button type="button" variant="outline" size="sm" onClick={() => notStoredYet("project copies")}>
+        <SettingsRow label="Duplicate" hint="Preview copying the project settings and research brief." inline>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              preview.record("previewed duplicating the project.");
+              toast.info("Duplicate preview complete. No project was created.");
+            }}
+          >
             Duplicate
           </Button>
         </SettingsRow>
       </SettingsGroup>
-      <SaveBar dirty={dirty || prefs.dirty} pending={save.isPending} form="settings-general" onDiscard={discard} />
+      <SaveBar dirty={dirty || prefs.dirty} form="settings-general" onDiscard={discard} />
     </div>
   );
 }
 
-function ArchivedNotice({ project }: { project: ProjectItem }) {
-  const router = useRouter();
-  const restore = useRestoreProjectMutation();
+function ArchivedNotice() {
+  const lifecycle = usePreviewLifecycle();
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 py-2.5 pr-2.5 pl-4">
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card py-2.5 pr-2.5 pl-4">
       <p className="flex items-center gap-2.5 text-sm">
-        <Archive className="size-4 shrink-0 text-amber-700 dark:text-amber-400" aria-hidden="true" />
-        This project is archived and read only.
+        <Archive className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        This preview is archived and read only.
       </p>
-      <Button
-        variant="outline"
-        size="sm"
-        disabled={restore.isPending}
-        onClick={async () => {
-          if (
-            await perform(() => restore.mutateAsync(project.id), {
-              title: "Project restored",
-              description: project.name,
-            })
-          )
-            router.refresh();
-        }}
-      >
+      <Button variant="outline" size="sm" onClick={lifecycle.restore}>
         Restore
       </Button>
     </div>
@@ -343,12 +353,11 @@ function TabLink({ id, label, active }: { id: Tab; label: string; active: boolea
       aria-current={active ? "page" : undefined}
       className={cn(
         "flex h-8 shrink-0 items-center whitespace-nowrap rounded-md px-2.5 text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring",
-        active ? "bg-sidebar-accent font-medium" : "hover:bg-sidebar-accent/60",
-        danger
-          ? "text-red-600 dark:text-red-400"
-          : active
-            ? "text-sidebar-accent-foreground"
-            : "text-foreground/75 hover:text-foreground",
+        active && "bg-sidebar-accent font-medium",
+        !active && "hover:bg-sidebar-accent/60",
+        danger && "text-destructive",
+        !danger && active && "text-sidebar-accent-foreground",
+        !danger && !active && "text-muted-foreground hover:text-foreground",
       )}
     >
       {label}
@@ -356,7 +365,8 @@ function TabLink({ id, label, active }: { id: Tab; label: string; active: boolea
   );
 }
 
-export function SettingsSection({ project, userId }: WorkspaceProps) {
+function SettingsContent({ workspace }: { workspace: WorkspaceProps }) {
+  const { project } = useSettingsPreview();
   const archived = project.status === ProjectStatus.Archived;
   const requested = useSearchParams().get("tab");
   const tab: Tab = TABS.find((item) => item.id === requested)?.id ?? "general";
@@ -366,53 +376,80 @@ export function SettingsSection({ project, userId }: WorkspaceProps) {
     const list = row.current;
     const link = list?.querySelector<HTMLElement>(`a[href="?tab=${tab}"]`);
     if (list && link && list.scrollWidth > list.clientWidth)
-      list.scrollTo({ left: link.offsetLeft - 16, behavior: "smooth" });
+      list.scrollTo({
+        left: link.offsetLeft - 16,
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth",
+      });
   }, [tab]);
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[11rem_minmax(0,1fr)] lg:gap-10">
-      <nav aria-label="Settings" className="min-w-0">
-        <ul ref={row} className="-mx-4 flex gap-1 overflow-x-auto px-4 pb-1 [scrollbar-width:none] lg:hidden">
-          {TABS.map((item) => (
-            <li key={item.id}>
-              <TabLink id={item.id} label={item.label} active={tab === item.id} />
-            </li>
-          ))}
-        </ul>
-        <div className="sticky top-6 hidden flex-col gap-5 lg:flex">
-          {GROUPS.map((group) => (
-            <div key={group.label || "danger"} className={cn("flex flex-col gap-0.5", !group.label && "border-t pt-5")}>
-              {group.label && (
-                <p className="px-2.5 pb-1 font-semibold text-foreground text-xs uppercase tracking-wide">
-                  {group.label}
-                </p>
-              )}
-              <ul className="flex flex-col gap-0.5">
-                {group.tabs.map((item) => (
-                  <li key={item.id}>
-                    <TabLink id={item.id} label={item.label} active={tab === item.id} />
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
+    <div className="flex min-w-0 flex-col gap-6">
+      <div className="grid gap-6 lg:grid-cols-[11rem_minmax(0,1fr)] lg:gap-10">
+        <nav aria-label="Settings" className="min-w-0">
+          <ul ref={row} className="-mx-4 flex gap-1 overflow-x-auto px-4 pb-1 [scrollbar-width:none] lg:hidden">
+            {TABS.map((item) => (
+              <li key={item.id}>
+                <TabLink id={item.id} label={item.label} active={tab === item.id} />
+              </li>
+            ))}
+          </ul>
+          <div className="sticky top-[calc(var(--dashboard-header-height)+1.5rem)] hidden flex-col gap-5 lg:flex">
+            {GROUPS.map((group) => (
+              <div
+                key={group.label || "danger"}
+                className={cn("flex flex-col gap-0.5", !group.label && "border-t pt-5")}
+              >
+                {group.label && (
+                  <p className="px-2.5 pb-1 font-semibold text-foreground text-xs uppercase tracking-wide">
+                    {group.label}
+                  </p>
+                )}
+                <ul className="flex flex-col gap-0.5">
+                  {group.tabs.map((item) => (
+                    <li key={item.id}>
+                      <TabLink id={item.id} label={item.label} active={tab === item.id} />
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </nav>
+        <div
+          key={tab}
+          className="@container/settings fade-in-0 flex min-w-0 max-w-5xl animate-in flex-col gap-6 duration-200 motion-reduce:animate-none"
+        >
+          {archived && <ArchivedNotice />}
+          {tab === "general" && <GeneralTab project={project} readOnly={archived} />}
+          {tab === "access" && (
+            <MembersSection
+              {...workspace}
+              canManage={workspace.canManage && !archived}
+              header={<SettingsHeading title="Members & access" />}
+              accessPanel={<SettingsAccess projectId={project.id} readOnly={archived} embedded />}
+            />
+          )}
+          {tab === "runs" && <SettingsRuns readOnly={archived} />}
+          {tab === "models" && <SettingsModels readOnly={archived} />}
+          {tab === "literature" && <SettingsLiterature readOnly={archived} />}
+          {tab === "review" && <SettingsReview readOnly={archived} />}
+          {tab === "data" && <SettingsData readOnly={archived} />}
+          {tab === "integrations" && <SettingsIntegrations readOnly={archived} />}
+          {tab === "spending" && <SettingsSpending readOnly={archived} />}
+          {tab === "notifications" && <SettingsNotifications />}
+          {tab === "activity" && <SettingsPreviewActivity />}
+          {tab === "danger" && <SettingsPreviewDangerZone />}
         </div>
-      </nav>
-      <div key={tab} className="fade-in-0 flex min-w-0 max-w-3xl animate-in flex-col gap-6 duration-200">
-        {archived && <ArchivedNotice project={project} />}
-        {tab === "general" && <GeneralTab project={project} readOnly={archived} />}
-        {tab === "access" && <SettingsAccess projectId={project.id} readOnly={archived} />}
-        {tab === "runs" && <SettingsRuns readOnly={archived} />}
-        {tab === "models" && <SettingsModels readOnly={archived} />}
-        {tab === "literature" && <SettingsLiterature readOnly={archived} />}
-        {tab === "review" && <SettingsReview readOnly={archived} />}
-        {tab === "data" && <SettingsData readOnly={archived} />}
-        {tab === "integrations" && <SettingsIntegrations readOnly={archived} />}
-        {tab === "spending" && <SettingsSpending readOnly={archived} />}
-        {tab === "notifications" && <SettingsNotifications />}
-        {tab === "activity" && <SettingsActivity project={project} userId={userId} />}
-        {tab === "danger" && <SettingsDangerZone project={project} userId={userId} />}
       </div>
     </div>
+  );
+}
+
+export function SettingsSection(workspace: WorkspaceProps) {
+  const { project, userId } = workspace;
+  return (
+    <SettingsPreviewProvider key={`${project.id}:${userId}`} project={project}>
+      <SettingsContent workspace={workspace} />
+    </SettingsPreviewProvider>
   );
 }

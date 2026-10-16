@@ -21,7 +21,8 @@ import { type AssignableProjectRole, canManageProjectMember, PROJECT_ROLE_LABELS
 import { ProjectRole, ProjectStatus } from "@/types/enums";
 
 import { InviteMemberDialog } from "./invite-member-dialog";
-import { InvitationRow, MemberColumns, MemberRow, nameOf, RowsSkeleton } from "./member-rows";
+import { InvitationRow, MemberRow, nameOf, RowsSkeleton } from "./member-rows";
+import { MembersTable } from "./members-table";
 import { LoadMore, perform, type WorkspaceProps } from "./workspace-ui";
 
 const ROLES = [ProjectRole.ProjectManager, ProjectRole.Researcher, ProjectRole.Reviewer] as const;
@@ -38,11 +39,20 @@ function useMemberList(projectId: string, filters: MemberFilters) {
   });
 }
 
-export function MembersSection({ project, canManage, userId, header }: WorkspaceProps & { header?: ReactNode }) {
+export function MembersSection({
+  project,
+  canManage,
+  userId,
+  header,
+  accessPanel,
+}: WorkspaceProps & {
+  header?: ReactNode;
+  accessPanel?: ReactNode;
+}) {
   const [search, setSearch] = useState("");
   const [q, setQ] = useState("");
   const [role, setRole] = useState<RoleFilter>("all");
-  const [tab, setTab] = useState<"members" | "invitations">("members");
+  const [tab, setTab] = useState<"members" | "invitations" | "access">("members");
   const [inviteOpen, setInviteOpen] = useState(false);
   const closeInvite = useCallback(() => setInviteOpen(false), []);
   useEffect(() => {
@@ -84,35 +94,43 @@ export function MembersSection({ project, canManage, userId, header }: Workspace
   }
 
   const toolbar = (
-    <div className="grid w-full gap-2 sm:flex sm:w-auto sm:items-center">
-      <InputGroup className="w-full sm:w-64">
-        <InputGroupAddon align="inline-start">
-          <Search aria-hidden="true" />
-        </InputGroupAddon>
-        <InputGroupInput
-          type="search"
-          value={search}
-          maxLength={120}
-          placeholder="Search by name or email"
-          aria-label="Search members"
-          onChange={(event) => setSearch(event.target.value)}
-        />
-      </InputGroup>
-      <Select value={role} onValueChange={(value) => setRole(value as RoleFilter)}>
-        <SelectTrigger aria-label="Filter by role" className="w-full sm:w-40">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectGroup>
-            <SelectItem value="all">All roles</SelectItem>
-            {ROLES.map((value) => (
-              <SelectItem key={value} value={value}>
-                {PROJECT_ROLE_LABELS[value]}
-              </SelectItem>
-            ))}
-          </SelectGroup>
-        </SelectContent>
-      </Select>
+    <div className="flex w-full flex-col gap-3 @2xl/members:flex-row @2xl/members:items-center @2xl/members:justify-between">
+      {writable && (
+        <Button type="button" onClick={() => setInviteOpen(true)}>
+          <UserPlus data-icon="inline-start" />
+          Invite member
+        </Button>
+      )}
+      <div className="grid w-full gap-2 @lg/members:grid-cols-[minmax(0,1fr)_10rem] @2xl/members:ml-auto @2xl/members:w-auto">
+        <InputGroup className="w-full @2xl/members:w-60">
+          <InputGroupAddon align="inline-start">
+            <Search aria-hidden="true" />
+          </InputGroupAddon>
+          <InputGroupInput
+            type="search"
+            value={search}
+            maxLength={120}
+            placeholder="Search by name or email"
+            aria-label="Search members"
+            onChange={(event) => setSearch(event.target.value)}
+          />
+        </InputGroup>
+        <Select value={role} onValueChange={(value) => setRole(value as RoleFilter)}>
+          <SelectTrigger aria-label="Filter by role" className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectGroup>
+              <SelectItem value="all">All roles</SelectItem>
+              {ROLES.map((value) => (
+                <SelectItem key={value} value={value}>
+                  {PROJECT_ROLE_LABELS[value]}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          </SelectContent>
+        </Select>
+      </div>
     </div>
   );
 
@@ -129,10 +147,17 @@ export function MembersSection({ project, canManage, userId, header }: Workspace
   };
 
   function status(list: typeof members, empty: ReactNode) {
-    if (list.isPending) return <RowsSkeleton rows={3} />;
+    if (list.isPending)
+      return (
+        <div className="flex flex-col gap-4">
+          {toolbar}
+          <RowsSkeleton rows={3} />
+        </div>
+      );
     if (list.isError)
       return (
-        <div className="p-4">
+        <div className="flex flex-col gap-4">
+          {toolbar}
           <Button variant="outline" onClick={() => void list.refetch()}>
             Try again
           </Button>
@@ -140,18 +165,21 @@ export function MembersSection({ project, canManage, userId, header }: Workspace
       );
     if (list.items.length) return null;
     return (
-      <div className="flex flex-col items-center gap-3 px-4 py-14 text-center text-muted-foreground text-sm">
-        {filtered ? (
-          <>
-            <SearchX className="size-8 text-muted-foreground/70" aria-hidden="true" />
-            <p>Nobody here matches these filters.</p>
-            <Button variant="outline" size="sm" onClick={clearFilters}>
-              Clear filters
-            </Button>
-          </>
-        ) : (
-          empty
-        )}
+      <div className="flex flex-col gap-4">
+        {toolbar}
+        <div className="flex flex-col items-center gap-3 px-4 py-14 text-center text-muted-foreground text-sm">
+          {filtered ? (
+            <>
+              <SearchX className="size-8 text-muted-foreground/70" aria-hidden="true" />
+              <p>Nobody here matches these filters.</p>
+              <Button variant="outline" size="sm" onClick={clearFilters}>
+                Clear filters
+              </Button>
+            </>
+          ) : (
+            empty
+          )}
+        </div>
       </div>
     );
   }
@@ -163,25 +191,30 @@ export function MembersSection({ project, canManage, userId, header }: Workspace
       </div>
     );
 
+  const removeMember = (member: ProjectMemberItem) =>
+    perform(() => remove.mutateAsync(member.id), {
+      title: "Removed from the project",
+      description: nameOf(member),
+    });
+  const cancelInvitation = (member: ProjectMemberItem) =>
+    perform(() => remove.mutateAsync(member.id), {
+      title: "Invitation cancelled",
+      description: member.email,
+    });
+
   return (
-    <div className="flex min-w-0 flex-col gap-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        {header}
-        {writable && (
-          <Button className="shrink-0" onClick={() => setInviteOpen(true)}>
-            <UserPlus data-icon="inline-start" />
-            Invite member
-          </Button>
-        )}
-      </div>
+    <div className="@container/members flex min-w-0 max-w-5xl flex-col gap-6">
+      {header}
 
       <Tabs
         value={tab}
-        onValueChange={(value) => setTab(value === "invitations" ? "invitations" : "members")}
-        className="flex min-w-0 flex-col gap-0 rounded-xl border bg-card"
+        onValueChange={(value) => {
+          if (value === "members" || value === "invitations" || (value === "access" && accessPanel)) setTab(value);
+        }}
+        className="flex min-w-0 flex-col gap-5"
       >
-        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 border-b px-4 pt-3 pb-3 sm:pb-0">
-          <TabsList variant="line" className="h-10 gap-4 p-0">
+        <div className="min-w-0 overflow-x-auto border-b pb-1">
+          <TabsList variant="line" className="h-10 gap-6 p-0">
             <TabsTrigger value="members" className="px-0.5 pb-2.5">
               Members
               {members.totalItems !== null && (
@@ -196,78 +229,99 @@ export function MembersSection({ project, canManage, userId, header }: Workspace
                 </span>
               )}
             </TabsTrigger>
+            {accessPanel && (
+              <TabsTrigger value="access" className="px-0.5 pb-2.5">
+                Access settings
+              </TabsTrigger>
+            )}
           </TabsList>
-          <div className="w-full sm:w-auto sm:pb-3">{toolbar}</div>
         </div>
 
-        <TabsContent value="members" className="flex flex-col">
+        <TabsContent value="members" className="flex min-w-0 flex-col gap-4">
           {status(members, <p>No members yet.</p>) ?? (
             <>
-              <MemberColumns dateLabel="Added" />
-              <ul className="divide-y">
-                {ordered.map((member) => (
-                  <MemberRow
-                    key={member.id}
-                    member={member}
-                    you={member.user_id === userId}
-                    owner={member.user_id === project.owner_user_id}
-                    editable={editable(member)}
-                    disabled={busy}
-                    onRoleChange={(next) => changeRole(member, next)}
-                    onRemove={() =>
-                      perform(() => remove.mutateAsync(member.id), {
-                        title: "Removed from the project",
-                        description: nameOf(member),
-                      })
-                    }
-                  />
-                ))}
-              </ul>
+              <div className="hidden @3xl/members:block">
+                <MembersTable
+                  rows={ordered}
+                  ownerId={project.owner_user_id}
+                  userId={userId}
+                  busy={busy}
+                  editable={editable}
+                  onRoleChange={changeRole}
+                  onRemove={removeMember}
+                  onResend={resendInvitation}
+                  toolbar={toolbar}
+                />
+              </div>
+              <div className="flex flex-col gap-4 @3xl/members:hidden">
+                {toolbar}
+                <ul className="divide-y border-y">
+                  {ordered.map((member) => (
+                    <MemberRow
+                      key={member.id}
+                      member={member}
+                      you={member.user_id === userId}
+                      owner={member.user_id === project.owner_user_id}
+                      editable={editable(member)}
+                      disabled={busy}
+                      onRoleChange={(next) => changeRole(member, next)}
+                      onRemove={() => removeMember(member)}
+                    />
+                  ))}
+                </ul>
+              </div>
             </>
           )}
           {more(members)}
         </TabsContent>
 
-        <TabsContent value="invitations" className="flex flex-col">
+        <TabsContent value="invitations" className="flex min-w-0 flex-col gap-4">
           {status(
             invitations,
             <>
               <MailX className="size-8 text-muted-foreground/70" aria-hidden="true" />
               <p>No pending invitations.</p>
-              {writable && (
-                <Button variant="outline" size="sm" onClick={() => setInviteOpen(true)}>
-                  Invite member
-                </Button>
-              )}
             </>,
           ) ?? (
             <>
-              <p className="border-b px-4 py-2.5 text-muted-foreground text-xs">
+              <p className="text-muted-foreground text-xs">
                 People join with the role shown once they accept. An invitation lasts 24 hours.
               </p>
-              <MemberColumns dateLabel="Status" />
-              <ul className="divide-y">
-                {invitations.items.map((member) => (
-                  <InvitationRow
-                    key={member.id}
-                    member={member}
-                    editable={editable(member)}
-                    disabled={busy}
-                    onRoleChange={(next) => changeRole(member, next)}
-                    onResend={() => resendInvitation(member)}
-                    onCancel={() =>
-                      perform(() => remove.mutateAsync(member.id), {
-                        title: "Invitation cancelled",
-                        description: member.email,
-                      })
-                    }
-                  />
-                ))}
-              </ul>
+              <div className="hidden @3xl/members:block">
+                <MembersTable
+                  rows={invitations.items}
+                  ownerId={project.owner_user_id}
+                  userId={userId}
+                  invitations
+                  busy={busy}
+                  editable={editable}
+                  onRoleChange={changeRole}
+                  onRemove={cancelInvitation}
+                  onResend={resendInvitation}
+                  toolbar={toolbar}
+                />
+              </div>
+              <div className="flex flex-col gap-4 @3xl/members:hidden">
+                {toolbar}
+                <ul className="divide-y border-y">
+                  {invitations.items.map((member) => (
+                    <InvitationRow
+                      key={member.id}
+                      member={member}
+                      editable={editable(member)}
+                      disabled={busy}
+                      onRoleChange={(next) => changeRole(member, next)}
+                      onResend={() => resendInvitation(member)}
+                      onCancel={() => cancelInvitation(member)}
+                    />
+                  ))}
+                </ul>
+              </div>
             </>
           )}
           {more(invitations)}
         </TabsContent>
+        {accessPanel && <TabsContent value="access">{accessPanel}</TabsContent>}
       </Tabs>
 
       {inviteOpen && writable && <InviteMemberDialog key={project.id} projectId={project.id} onClose={closeInvite} />}

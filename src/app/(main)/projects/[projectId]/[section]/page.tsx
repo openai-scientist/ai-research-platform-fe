@@ -57,16 +57,22 @@ export default async function Page({ params }: { params: Promise<{ projectId: st
     redirect(`/projects/${project.id}`);
   }
 
+  if (section === "members" && getProjectAccess(project.my_role, project.status).canAccessSettings) {
+    redirect(`/projects/${project.id}/settings?tab=access`);
+  }
+
   const header = (
     <div className="flex min-w-0 flex-col gap-1">
-      <h1 className="font-heading text-3xl tracking-tight">{config.title}</h1>
+      <h1 className={section === "members" ? "font-semibold text-lg" : "font-heading text-3xl tracking-tight"}>
+        {config.title}
+      </h1>
       <p className="max-w-3xl text-muted-foreground text-sm">{config.description}</p>
     </div>
   );
 
   return (
     <div className="flex flex-col gap-6">
-      {section !== "members" && section !== "connections" && section !== "files" && header}
+      {section !== "members" && section !== "connections" && section !== "files" && section !== "settings" && header}
       <WorkspaceSection
         project={project}
         section={section}

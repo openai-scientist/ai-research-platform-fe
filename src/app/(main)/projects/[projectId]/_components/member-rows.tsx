@@ -2,8 +2,6 @@
 
 import type { ReactNode } from "react";
 
-import { cn } from "cn";
-
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -22,27 +20,7 @@ const day = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", y
 
 export const nameOf = (member: ProjectMemberItem) => member.display_name?.trim() || member.email;
 
-// Member, role, date, actions. Below sm the row stacks: who and the actions, then role and date.
-const COLUMNS = "sm:grid-cols-[minmax(0,1fr)_11rem_10rem_6.5rem]";
-
-export function MemberColumns({ dateLabel }: { dateLabel: string }) {
-  return (
-    <div
-      aria-hidden="true"
-      className={cn(
-        "hidden gap-x-4 border-b px-4 py-2 font-medium text-muted-foreground text-xs sm:grid sm:grid-cols-1",
-        COLUMNS,
-      )}
-    >
-      <span>Member</span>
-      <span>Role</span>
-      <span>{dateLabel}</span>
-      <span />
-    </div>
-  );
-}
-
-function Person({ member, you, owner }: { member: ProjectMemberItem; you: boolean; owner: boolean }) {
+export function MemberIdentity({ member, you, owner }: { member: ProjectMemberItem; you: boolean; owner: boolean }) {
   const name = nameOf(member);
   return (
     <div className="flex min-w-0 items-center gap-3">
@@ -82,13 +60,11 @@ function Row({
   actions: ReactNode;
 }) {
   return (
-    <li
-      className={cn("grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2.5 px-4 py-3 sm:py-2.5", COLUMNS)}
-    >
+    <li className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-3 py-4">
       {person}
-      <div className="flex justify-end sm:order-last">{actions}</div>
-      {/* Role and date share a line under the name on a phone; on wider screens they are columns. */}
-      <div className="col-span-2 flex flex-wrap items-center gap-x-4 gap-y-1 pl-12 sm:contents">
+      <div className="flex justify-end">{actions}</div>
+      {/* Compact rows are used when the Members content area is too narrow for a table. */}
+      <div className="col-span-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 pl-12">
         <div className="min-w-0">{role}</div>
         <div className="text-muted-foreground text-sm tabular-nums">{date}</div>
       </div>
@@ -96,7 +72,7 @@ function Row({
   );
 }
 
-function RoleCell({
+export function MemberRole({
   member,
   editable,
   disabled,
@@ -141,17 +117,17 @@ export function MemberRow({
 }) {
   return (
     <Row
-      person={<Person member={member} you={you} owner={owner} />}
-      role={<RoleCell member={member} editable={editable} disabled={disabled} onChange={onRoleChange} />}
+      person={<MemberIdentity member={member} you={you} owner={owner} />}
+      role={<MemberRole member={member} editable={editable} disabled={disabled} onChange={onRoleChange} />}
       date={<time dateTime={member.created_at}>{day.format(new Date(member.created_at))}</time>}
       actions={editable ? <MemberActions member={member} disabled={disabled} onRemove={onRemove} /> : null}
     />
   );
 }
 
-function InvitationStatus({ member }: { member: ProjectMemberItem }) {
+export function InvitationStatus({ member }: { member: ProjectMemberItem }) {
   const expires = member.invite_expires_at;
-  if (member.invite_expired) return <span className="text-red-600 dark:text-red-400">Expired</span>;
+  if (member.invite_expired) return <Badge variant="destructive">Expired</Badge>;
   if (!expires) return "Waiting for a reply";
   return (
     <time dateTime={expires} title={new Date(expires).toLocaleString("en-US")}>
@@ -177,34 +153,50 @@ export function InvitationRow({
 }) {
   return (
     <Row
-      person={<Person member={member} you={false} owner={false} />}
-      role={<RoleCell member={member} editable={editable} disabled={disabled} onChange={onRoleChange} />}
+      person={<MemberIdentity member={member} you={false} owner={false} />}
+      role={<MemberRole member={member} editable={editable} disabled={disabled} onChange={onRoleChange} />}
       date={<InvitationStatus member={member} />}
       actions={
         editable ? (
-          <div className="flex items-center gap-1">
-            {member.invite_expired && (
-              <Button variant="outline" size="sm" disabled={disabled} onClick={() => void onResend()}>
-                Resend
-              </Button>
-            )}
-            <ConfirmDialog
-              title="Cancel this invitation?"
-              description={`${member.email} won't be able to join with it. You can invite them again later.`}
-              confirmLabel="Cancel invitation"
-              cancelLabel="Keep it"
-              destructive
-              onConfirm={() => void onCancel()}
-              trigger={
-                <Button variant="ghost" size="sm" disabled={disabled}>
-                  Cancel
-                </Button>
-              }
-            />
-          </div>
+          <InvitationActions member={member} disabled={disabled} onResend={onResend} onCancel={onCancel} />
         ) : null
       }
     />
+  );
+}
+
+export function InvitationActions({
+  member,
+  disabled,
+  onResend,
+  onCancel,
+}: {
+  member: ProjectMemberItem;
+  disabled: boolean;
+  onResend: () => unknown;
+  onCancel: () => unknown;
+}) {
+  return (
+    <div className="flex items-center justify-end gap-1">
+      {member.invite_expired && (
+        <Button variant="outline" size="sm" disabled={disabled} onClick={() => void onResend()}>
+          Resend
+        </Button>
+      )}
+      <ConfirmDialog
+        title="Cancel this invitation?"
+        description={`${member.email} won't be able to join with it. You can invite them again later.`}
+        confirmLabel="Cancel invitation"
+        cancelLabel="Keep it"
+        destructive
+        onConfirm={() => void onCancel()}
+        trigger={
+          <Button variant="ghost" size="sm" disabled={disabled}>
+            Cancel
+          </Button>
+        }
+      />
+    </div>
   );
 }
 

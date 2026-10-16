@@ -10,6 +10,7 @@ export type AnalyticsKpiItem = {
   label: string;
   period: string;
   value: string;
+  positive?: boolean;
 };
 
 const defaultItems: AnalyticsKpiItem[] = [
@@ -34,7 +35,7 @@ export function AnalyticsKpiStrip({ items = defaultItems }: { readonly items?: r
         {items.map((item) => {
           const TrendIcon = item.direction === "up" ? ArrowUpRight : ArrowDownRight;
           const trendClassName =
-            item.direction === "up"
+            (item.positive ?? item.direction === "up")
               ? "bg-green-500/10 text-green-700 dark:bg-green-500/15 dark:text-green-300"
               : "bg-destructive/10 text-destructive";
 
@@ -49,17 +50,23 @@ export function AnalyticsKpiStrip({ items = defaultItems }: { readonly items?: r
               <CardContent className="flex flex-col gap-4">
                 <div className="flex items-center justify-between gap-4">
                   <div className="text-2xl leading-none tracking-tight">{item.value}</div>
-                  <Badge className={trendClassName}>
-                    <TrendIcon />
-                    {item.change}
-                  </Badge>
+                  {item.change && (
+                    <Badge className={trendClassName}>
+                      <TrendIcon />
+                      {item.change}
+                    </Badge>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-2 text-muted-foreground text-xs">
-                  <span>
-                    from <span className="text-foreground">{item.from}</span>
-                  </span>
-                  <span>•</span>
+                  {item.from && (
+                    <>
+                      <span>
+                        from <span className="text-foreground">{item.from}</span>
+                      </span>
+                      <span>•</span>
+                    </>
+                  )}
                   <span>{item.period}</span>
                 </div>
               </CardContent>

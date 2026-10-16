@@ -5,6 +5,7 @@ import { CartesianGrid, ComposedChart, Line, XAxis, YAxis } from "recharts";
 
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { type ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 
 const qualitySeries = [
   { date: "2026-04-01T00:00:00.000Z", actualQuality: 0.4, baselineQuality: -1.2 },
@@ -101,8 +102,8 @@ const defaultChartData = qualitySeries.map((item, index) => ({
 const defaultWeeklyTicks = [4, 11, 18, 25];
 
 export type TrafficQualityPoint = {
-  actualQuality: number;
-  baselineQuality: number;
+  actualQuality: number | null;
+  baselineQuality: number | null;
   dayIndex: number;
 };
 
@@ -118,6 +119,7 @@ export interface TrafficQualityProps {
   xTicks?: number[];
   yDomain?: [number, number];
   yTickFormatter?: (value: number) => string;
+  emptyText?: string;
 }
 
 function formatDefaultWeek(value: number) {
@@ -138,6 +140,7 @@ export function TrafficQuality({
   xTicks = defaultWeeklyTicks,
   yDomain = [-6, 6],
   yTickFormatter = (value) => `${value}%`,
+  emptyText,
 }: TrafficQualityProps) {
   const chartConfig = {
     actualQuality: {
@@ -160,7 +163,7 @@ export function TrafficQuality({
         </CardAction>
       </CardHeader>
 
-      <CardContent>
+      <CardContent className="relative">
         <ChartContainer config={chartConfig} className="h-68 w-full">
           <ComposedChart data={[...chartData]} margin={{ bottom: 0, left: 0, right: 0, top: 0 }}>
             <CartesianGrid vertical={false} />
@@ -206,6 +209,14 @@ export function TrafficQuality({
             />
           </ComposedChart>
         </ChartContainer>
+        {emptyText && !chartData.some((point) => point.actualQuality !== null) && (
+          <Empty className="absolute inset-0">
+            <EmptyHeader>
+              <EmptyTitle>Unavailable</EmptyTitle>
+              <EmptyDescription>{emptyText}</EmptyDescription>
+            </EmptyHeader>
+          </Empty>
+        )}
       </CardContent>
     </Card>
   );

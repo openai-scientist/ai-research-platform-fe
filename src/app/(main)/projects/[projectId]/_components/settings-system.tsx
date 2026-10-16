@@ -29,7 +29,7 @@ function DescribedSelect({
   return (
     <>
       <Select value={value} onValueChange={onChange} disabled={disabled}>
-        <SelectTrigger id={id} className="w-full sm:w-72">
+        <SelectTrigger id={id} className="w-full max-w-80">
           <SelectValue>{selected?.label}</SelectValue>
         </SelectTrigger>
         <SelectContent className="max-w-80">
@@ -63,7 +63,7 @@ const STARTER_OPTIONS = [
 
 /** What a new research run starts with, how far it may go, and who may start one. */
 export function SettingsRuns({ readOnly }: { readOnly: boolean }) {
-  const draft = useDraft({
+  const draft = useDraft("runs", {
     mode: "copilot",
     budget: "5",
     fields: [] as string[],
@@ -83,6 +83,7 @@ export function SettingsRuns({ readOnly }: { readOnly: boolean }) {
       what="run settings"
       dirty={draft.dirty}
       onDiscard={draft.discard}
+      onSave={draft.save}
       validate={() => {
         const amount = Number(v.budget);
         if (!(amount > 0)) return "Enter a budget above $0 for each run.";
@@ -183,7 +184,7 @@ export function SettingsRuns({ readOnly }: { readOnly: boolean }) {
 
 /** A monthly ceiling on what the project's runs may spend, with an early warning. */
 export function SettingsSpending({ readOnly }: { readOnly: boolean }) {
-  const draft = useDraft({
+  const draft = useDraft("spending", {
     capped: false,
     limit: "100",
     warnAt: "80",
@@ -199,6 +200,7 @@ export function SettingsSpending({ readOnly }: { readOnly: boolean }) {
       what="the spending limit"
       dirty={draft.dirty}
       onDiscard={draft.discard}
+      onSave={draft.save}
       validate={() => {
         if (v.capped && !(Number(v.limit) > 0)) return "Enter a monthly limit above $0.";
         if (v.billingEmail && !/^\S+@\S+\.\S+$/.test(v.billingEmail)) return "Enter a valid billing email.";
@@ -293,7 +295,7 @@ const CHANNELS: Record<EventKey, { app: boolean; email: boolean }> = {
 
 /** Which project events reach you, and where. Every member picks their own. */
 export function SettingsNotifications() {
-  const draft = useDraft({ channels: CHANNELS, digest: "off", quiet: false });
+  const draft = useDraft("notifications", { channels: CHANNELS, digest: "off", quiet: false });
   const { values: v, set } = draft;
   const toggle = (key: EventKey, channel: "app" | "email", on: boolean) =>
     set("channels")({ ...v.channels, [key]: { ...v.channels[key], [channel]: on } });
@@ -305,14 +307,21 @@ export function SettingsNotifications() {
       what="notification choices"
       dirty={draft.dirty}
       onDiscard={draft.discard}
+      onSave={draft.save}
     >
       <SettingsGroup title="Only for you">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b text-muted-foreground text-xs">
-              <th className="py-2.5 pl-5 text-left font-normal">Event</th>
-              <th className="w-20 py-2.5 text-center font-normal">In app</th>
-              <th className="w-20 py-2.5 pr-3 text-center font-normal">Email</th>
+              <th scope="col" className="py-2.5 pl-4 text-left font-normal sm:pl-5">
+                Event
+              </th>
+              <th scope="col" className="w-16 py-2.5 text-center font-normal sm:w-20">
+                In app
+              </th>
+              <th scope="col" className="w-16 py-2.5 pr-3 text-center font-normal sm:w-20">
+                Email
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y">

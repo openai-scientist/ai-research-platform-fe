@@ -1,12 +1,14 @@
 import type { Metadata } from "next";
 
-import { PatientMonitoringScreen } from "@/app/(main)/dashboard/patient-monitoring/_components/patient-monitoring-screen";
+import { APP_CONFIG } from "@/config/app-config";
+
+import { MonitoringScreen } from "./_components/monitoring-screen";
 
 export const metadata: Metadata = {
-  title: "Log monitoring · OpenAI Scientist",
-  description: "Explore simulated service telemetry, live log streams, and audit activity.",
+  title: `Log monitoring · ${APP_CONFIG.name}`,
+  description: "Monitor service health, measured request telemetry, and technical events.",
 };
 
 export default function Page() {
-  return <PatientMonitoringScreen mode="logs" />;
+  return <MonitoringScreen />;
 }

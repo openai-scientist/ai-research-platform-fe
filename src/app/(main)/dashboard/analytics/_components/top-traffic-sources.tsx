@@ -5,6 +5,7 @@ import { Bar, BarChart, CartesianGrid, LabelList, type LabelProps, XAxis, YAxis 
 
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { type ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export type TrafficSourceDatum = {
@@ -59,6 +60,7 @@ export type TrafficSourceTab = {
   data: readonly TrafficSourceDatum[];
   label: string;
   value: string;
+  emptyText?: string;
 };
 
 const defaultTabs: TrafficSourceTab[] = [
@@ -137,7 +139,23 @@ export function TopTrafficSources({
 
           {tabs.map((tab) => (
             <TabsContent key={tab.value} value={tab.value} className="px-4">
-              <TrafficSourceBarChart data={tab.data} valueLabel={valueLabel} />
+              {tab.emptyText ? (
+                <Empty className="h-64">
+                  <EmptyHeader>
+                    <EmptyTitle>Unavailable</EmptyTitle>
+                    <EmptyDescription>{tab.emptyText}</EmptyDescription>
+                  </EmptyHeader>
+                </Empty>
+              ) : tab.data.length === 0 ? (
+                <Empty className="h-64">
+                  <EmptyHeader>
+                    <EmptyTitle>No activity</EmptyTitle>
+                    <EmptyDescription>No observations in this time window.</EmptyDescription>
+                  </EmptyHeader>
+                </Empty>
+              ) : (
+                <TrafficSourceBarChart data={tab.data} valueLabel={valueLabel} />
+              )}
             </TabsContent>
           ))}
         </Tabs>

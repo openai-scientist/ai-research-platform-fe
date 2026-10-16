@@ -1,16 +1,16 @@
 "use client";
 
+import { cn } from "cn";
 import { Ellipsis } from "lucide-react";
 import { Bar, BarChart, type BarShapeProps, XAxis, YAxis } from "recharts";
 
-import { cn } from "cn";
-
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { type ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 
 type RealtimeDatum = {
   minute: number;
-  visitors: number;
+  visitors: number | null;
 };
 
 export type RealtimeBreakdownItem = {
@@ -62,6 +62,7 @@ const defaultBreakdown: RealtimeBreakdownItem[] = [
 function RealtimeBarShape(props: BarShapeProps) {
   const { height, payload, width, x, y } = props;
   const barPayload = payload as (typeof realtimeData)[number] | undefined;
+  if (barPayload?.visitors == null) return <g />;
   const barHeightValue = Number(height);
   const barWidthValue = Number(width);
   const xValue = Number(x);
@@ -109,6 +110,9 @@ export function RealtimeVisitors({
   title = "Realtime Visitors",
   unit = "per minute",
   value = "24",
+  live = true,
+  emptyText,
+  yDomain = [0, 22],
 }: {
   readonly breakdown?: readonly RealtimeBreakdownItem[];
   readonly chartLabel?: string;
@@ -117,6 +121,9 @@ export function RealtimeVisitors({
   readonly title?: string;
   readonly unit?: string;
   readonly value?: string;
+  readonly live?: boolean;
+  readonly emptyText?: string;
+  readonly yDomain?: [number, number | "auto"];
 }) {
   const chartConfig = {
     visitors: {
@@ -142,20 +149,37 @@ export function RealtimeVisitors({
           </div>
           <div className="flex items-center gap-2 text-muted-foreground text-sm">
             <span className="relative flex size-2">
-              <span className="absolute inline-flex size-full animate-ping rounded-full bg-green-500 opacity-75" />
-              <span className="relative inline-flex size-2 rounded-full bg-green-500" />
+              {live && (
+                <span className="absolute inline-flex size-full animate-ping rounded-full bg-green-500 opacity-75" />
+              )}
+              <span
+                className={cn(
+                  "relative inline-flex size-2 rounded-full",
+                  live ? "bg-green-500" : "bg-muted-foreground",
+                )}
+              />
             </span>
             <span>{liveLabel}</span>
           </div>
         </div>
-        <ChartContainer config={chartConfig} className="h-36 w-full">
-          <BarChart data={[...data]} margin={{ bottom: 0, left: 0, right: 0, top: 0 }} barCategoryGap={3}>
-            <XAxis dataKey="minute" hide />
-            <YAxis hide domain={[0, 22]} />
-            <ChartTooltip cursor={false} content={<ChartTooltipContent hideLabel />} />
-            <Bar dataKey="visitors" fill="var(--color-visitors)" shape={RealtimeBarShape} />
-          </BarChart>
-        </ChartContainer>
+        <div className="relative">
+          <ChartContainer config={chartConfig} className="h-36 w-full">
+            <BarChart data={[...data]} margin={{ bottom: 0, left: 0, right: 0, top: 0 }} barCategoryGap={3}>
+              <XAxis dataKey="minute" hide />
+              <YAxis hide domain={yDomain} />
+              <ChartTooltip cursor={false} content={<ChartTooltipContent hideLabel />} />
+              <Bar dataKey="visitors" fill="var(--color-visitors)" shape={RealtimeBarShape} />
+            </BarChart>
+          </ChartContainer>
+          {emptyText && !data.some((point) => point.visitors !== null) && (
+            <Empty className="absolute inset-0 p-2">
+              <EmptyHeader>
+                <EmptyTitle>No historical data</EmptyTitle>
+                <EmptyDescription>{emptyText}</EmptyDescription>
+              </EmptyHeader>
+            </Empty>
+          )}
+        </div>
         <div className="grid grid-cols-2">
           {breakdown.map((item, index) => (
             <div
