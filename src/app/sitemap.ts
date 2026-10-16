@@ -1,40 +1,9 @@
 import type { MetadataRoute } from "next";
 
-const SITE_URL = "https://studio-admin.arhamkhnz.com";
+import { SITE_URL } from "@/config/site-url";
 
-const PUBLIC_ROUTES = [
-  "/admin",
-  "/admin/users",
-  "/admin/projects",
-  "/admin/providers",
-  "/admin/decision-providers",
-  "/admin/usage",
-  "/admin/system",
-  "/admin/logs",
-  "/admin/settings",
-  "/dashboard/default",
-  "/dashboard/crm",
-  "/dashboard/finance",
-  "/dashboard/analytics",
-  "/dashboard/productivity",
-  "/dashboard/ecommerce",
-  "/dashboard/academy",
-  "/dashboard/logistics",
-  "/dashboard/infrastructure",
-  "/dashboard/file-manager",
-  "/dashboard/patient-monitoring",
-  "/dashboard/calendar",
-  "/dashboard/kanban",
-  "/dashboard/tasks",
-  "/dashboard/invoice",
-  "/dashboard/profile",
-  "/dashboard/users",
-  "/dashboard/roles",
-  "/auth/login",
-  "/auth/register",
-  "/chat",
-  "/mail",
-] as const;
+// Everything else sits behind sign-in, so only the auth pages are worth indexing.
+const PUBLIC_ROUTES = ["/auth/login", "/auth/register"] as const;
 
 export default function sitemap(): MetadataRoute.Sitemap {
   return PUBLIC_ROUTES.map((route) => ({

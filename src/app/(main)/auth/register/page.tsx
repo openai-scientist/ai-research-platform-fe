@@ -11,8 +11,8 @@ import { getAuthenticatedUser } from "@/server/auth";
 import { RegisterForm } from "../_components/register-form";
 
 export const metadata: Metadata = {
-  title: "Register · ResearchLab AI",
-  description: "Create an account for the ResearchLab AI AI Research Experimentation Platform.",
+  title: "Register · OpenAI Scientist",
+  description: "Create an account for OpenAI Scientist.",
 };
 
 export default async function RegisterPage() {
@@ -38,7 +38,10 @@ export default async function RegisterPage() {
       </div>
 
       <div className="absolute bottom-5 flex w-full justify-between px-10">
-        <div className="text-sm">{APP_CONFIG.copyright}</div>
+        <div className="flex flex-col gap-0.5 text-sm">
+          <span>{APP_CONFIG.copyright}</span>
+          <span className="text-muted-foreground text-xs">{APP_CONFIG.independence}</span>
+        </div>
         <div className="flex items-center gap-1 text-sm">
           <Globe className="size-4 text-muted-foreground" />
           ENG

@@ -3,8 +3,8 @@ import type { Metadata } from "next";
 import { AdminOverview } from "./_components/overview";
 
 export const metadata: Metadata = {
-  title: "Admin Overview · ResearchLab AI",
-  description: "Operational overview for the ResearchLab AI experimentation platform.",
+  title: "Admin Overview · OpenAI Scientist",
+  description: "Operational overview for OpenAI Scientist.",
 };
 
 export default function Page() {

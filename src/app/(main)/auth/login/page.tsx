@@ -13,8 +13,8 @@ import { LoginForm } from "../_components/login-form";
 import { GoogleSignInFeedback } from "../_components/social-auth/google-sign-in-feedback";
 
 export const metadata: Metadata = {
-  title: "Login · ResearchLab AI",
-  description: "Sign in to the ResearchLab AI AI Research Experimentation Platform.",
+  title: "Login · OpenAI Scientist",
+  description: "Sign in to OpenAI Scientist.",
 };
 
 export default async function LoginPage() {
@@ -42,7 +42,10 @@ export default async function LoginPage() {
       </div>
 
       <div className="absolute bottom-5 flex w-full justify-between px-10">
-        <div className="text-sm">{APP_CONFIG.copyright}</div>
+        <div className="flex flex-col gap-0.5 text-sm">
+          <span>{APP_CONFIG.copyright}</span>
+          <span className="text-muted-foreground text-xs">{APP_CONFIG.independence}</span>
+        </div>
         <div className="flex items-center gap-1 text-sm">
           <Globe className="size-4 text-muted-foreground" />
           ENG

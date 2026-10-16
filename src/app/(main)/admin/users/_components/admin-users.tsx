@@ -83,7 +83,7 @@ export function AdminUsers() {
     role: user.platform_role ? PLATFORM_ROLE_LABELS[user.platform_role] : NO_PLATFORM_ROLE_LABEL,
     status: user.status === UserStatus.Active ? "Active" : "Suspended",
     team: "Platform",
-    workspace: ["ResearchLab AI"],
+    workspace: ["OpenAI Scientist"],
   }));
 
   const toggleStatus = (user: UserRow) => {
@@ -118,7 +118,7 @@ export function AdminUsers() {
     <div className="flex flex-col gap-4">
       <AdminPageHeader
         title="Users"
-        description="Manage the system accounts used by the ResearchLab AI platform."
+        description="Manage the system accounts used by the OpenAI Scientist platform."
         actions={
           <>
             {/* Export is not backed by an API yet. */}

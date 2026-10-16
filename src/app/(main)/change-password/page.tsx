@@ -9,7 +9,7 @@ import AuthShell from "../auth/_components/auth-shell";
 import { AuthStepHeading } from "../auth/_components/auth-step-heading";
 import { RequiredPasswordForm } from "./_components/required-password-form";
 
-export const metadata: Metadata = { title: "Change password · ResearchLab AI" };
+export const metadata: Metadata = { title: "Change password · OpenAI Scientist" };
 
 export default async function ChangePasswordPage() {
   const current = await getCurrentSession();

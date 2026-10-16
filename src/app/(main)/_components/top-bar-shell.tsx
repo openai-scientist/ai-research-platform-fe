@@ -2,8 +2,7 @@ import type { ReactNode } from "react";
 
 import Link from "next/link";
 
-import { Command } from "lucide-react";
-
+import { BrandMark } from "@/components/brand-mark";
 import { APP_CONFIG } from "@/config/app-config";
 import type { AuthUser } from "@/lib/auth/auth-config";
 
@@ -26,7 +25,7 @@ export function TopBarShell({
       <header className="sticky top-0 z-10 border-b bg-canvas/95 backdrop-blur supports-backdrop-filter:bg-canvas/80">
         <div className="mx-auto flex h-12 w-full max-w-screen-xl items-center justify-between gap-4 px-4 lg:px-6">
           <Link prefetch={false} href={homeUrl} className="flex items-center gap-2 rounded-md font-semibold">
-            <Command className="size-4" />
+            <BrandMark className="size-5" />
             <span className="truncate">{APP_CONFIG.shortName}</span>
           </Link>
           <div className="flex items-center gap-2">

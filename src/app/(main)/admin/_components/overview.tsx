@@ -1,9 +1,9 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-import { AnalyticsKpiStrip, type AnalyticsKpiItem } from "../../dashboard/analytics/_components/analytics-kpi-strip";
+import { type AnalyticsKpiItem, AnalyticsKpiStrip } from "../../dashboard/analytics/_components/analytics-kpi-strip";
 import { AnalyticsToolbar } from "../../dashboard/analytics/_components/analytics-toolbar";
-import { RealtimeVisitors, type RealtimeBreakdownItem } from "../../dashboard/analytics/_components/realtime-visitors";
-import { TopPages, type AnalyticsTableRow } from "../../dashboard/analytics/_components/top-pages";
+import { type RealtimeBreakdownItem, RealtimeVisitors } from "../../dashboard/analytics/_components/realtime-visitors";
+import { type AnalyticsTableRow, TopPages } from "../../dashboard/analytics/_components/top-pages";
 import { TopTrafficSources, type TrafficSourceTab } from "../../dashboard/analytics/_components/top-traffic-sources";
 import { TrafficQuality, type TrafficQualityPoint } from "../../dashboard/analytics/_components/traffic-quality";
 import { InlineProgress, SectionCard } from "./admin-primitives";
@@ -464,7 +464,7 @@ export function AdminOverview() {
   return (
     <div className="flex flex-col gap-4">
       <div className="space-y-1">
-        <h1 className="text-3xl tracking-tight">ResearchLab AI</h1>
+        <h1 className="text-3xl tracking-tight">OpenAI Scientist</h1>
         <p className="text-muted-foreground text-sm">
           Monitor projects, experiment runs, providers, and review activity in one view.
         </p>

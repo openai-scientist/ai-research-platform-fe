@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 
 import { ForgotPasswordForm } from "../_components/forgot-password-form";
 
-export const metadata: Metadata = { title: "Forgot password · ResearchLab AI" };
+export const metadata: Metadata = { title: "Forgot password · OpenAI Scientist" };
 
 export default function ForgotPasswordPage() {
   return (

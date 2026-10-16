@@ -10,7 +10,7 @@ import { GoogleConnectionFeedback } from "./_components/google-connection-feedba
 import { WorkspaceProjects } from "./_components/workspace-projects";
 
 export const metadata: Metadata = {
-  title: "Projects · ResearchLab AI",
+  title: "Projects · OpenAI Scientist",
   description: "Choose a research workspace to continue.",
 };
 

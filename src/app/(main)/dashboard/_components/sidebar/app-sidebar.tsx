@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 
-import { Command } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 
+import { BrandMark } from "@/components/brand-mark";
 import {
   Sidebar,
   SidebarContent,
@@ -70,7 +70,7 @@ export function AppSidebar({
             <SidebarMenuItem>
               <SidebarMenuButton asChild>
                 <Link prefetch={false} href={homeUrl}>
-                  <Command />
+                  <BrandMark />
                   <span className="truncate font-semibold text-base">{brandLabel}</span>
                 </Link>
               </SidebarMenuButton>

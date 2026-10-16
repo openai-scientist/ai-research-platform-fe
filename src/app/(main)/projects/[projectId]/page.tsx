@@ -8,7 +8,7 @@ import { getWorkspaceProject } from "@/server/projects";
 import { ProjectOverview } from "./_components/project-overview";
 
 export const metadata: Metadata = {
-  title: "Project overview · ResearchLab AI",
+  title: "Project overview · OpenAI Scientist",
   description: "Datasets, experiments, and findings for this research workspace.",
 };
 

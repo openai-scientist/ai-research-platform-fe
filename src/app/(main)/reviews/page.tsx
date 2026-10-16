@@ -10,7 +10,7 @@ import { TopBarShell } from "../_components/top-bar-shell";
 import { ReviewQueue } from "./_components/review-queue";
 
 export const metadata: Metadata = {
-  title: "Review queue · ResearchLab AI",
+  title: "Review queue · OpenAI Scientist",
   description: "Findings waiting for review across all research projects.",
 };
 
