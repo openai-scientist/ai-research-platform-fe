@@ -18,13 +18,11 @@ import {
 } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useApiQuery } from "@/hooks/use-api";
+import { useDatasetAccessRefresh, useProjectAccess } from "@/hooks/use-project-access";
 import { projectKeys } from "@/lib/api/query-keys";
 import { type DatasetVersionItem, fetchDatasets } from "@/lib/api/services/fetch-datasets";
 
-import { previewRows } from "./csv-preview";
 import { ListState } from "./workspace-ui";
-
-const PREVIEW_BYTES = 1024 * 1024;
 
 export function DatasetCsvPreview({
   projectId,
@@ -48,20 +46,27 @@ export function DatasetCsvPreview({
 }) {
   const [localOpen, setLocalOpen] = useState(false);
   const open = controlledOpen ?? localOpen;
+  const access = useProjectAccess(projectId);
+  const canRead = Boolean(access.context?.permissions.can_read_raw_datasets);
   const changeOpen = (value: boolean) => {
     setLocalOpen(value);
     onOpenChange?.(value);
   };
   const query = useApiQuery(
-    [...projectKeys.dataset(projectId, datasetId), "preview", version.id],
-    async (signal) => {
-      const { blob } = await fetchDatasets.downloadVersion(projectId, datasetId, version.id, signal);
-      const text = await blob.slice(0, PREVIEW_BYTES).text();
-      return previewRows(text, ",", blob.size <= PREVIEW_BYTES);
-    },
-    { enabled: inline ? true : open, staleTime: Infinity },
+    [
+      ...projectKeys.dataset(projectId, datasetId),
+      "preview",
+      version.id,
+      access.userId,
+      access.context?.settings_version,
+    ],
+    (signal) => fetchDatasets.preview(projectId, datasetId, version.id, signal),
+    { enabled: canRead && (inline ? true : open), gcTime: 0 },
   );
-  const rows = query.data ?? [];
+  useDatasetAccessRefresh(projectId, query.error);
+  const preview = !query.isError && canRead ? query.data?.data : undefined;
+  const rows = preview ? [preview.columns.slice(0, 50), ...preview.rows] : [];
+  if (!canRead) return null;
 
   const content = (
     <div className="flex min-h-0 min-w-0 flex-col gap-3">
@@ -113,9 +118,16 @@ export function DatasetCsvPreview({
       )}
       {note && (
         <p className="text-muted-foreground text-xs">
-          Preview shows up to 100 rows and 50 columns from the start of the file. Download CSV to view the complete
-          dataset.
+          Preview shows up to 100 rows and 50 columns from the first 1 MiB. Download CSV to view the complete dataset.
         </p>
+      )}
+      {preview?.masking_applied && (
+        <p className="text-muted-foreground text-xs">
+          Personal data is masked in this preview. Authorized downloads contain the original data.
+        </p>
+      )}
+      {preview?.truncated && (
+        <p className="text-muted-foreground text-xs">More rows are available in the full dataset.</p>
       )}
     </div>
   );

@@ -19,6 +19,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { useProjectAccess } from "@/hooks/use-project-access";
 
 import { ChoiceRow, DraftTab, NumberRow, type Option, ServiceRow, SwitchRow, useDraft } from "./settings-kit";
 import { SettingsGroup, SettingsRow, TagInput } from "./settings-panel";
@@ -30,6 +31,7 @@ const ROLE_OPTIONS: Option[] = [
 
 /** Who gets into the project, and how. */
 export function SettingsAccess({
+  projectId,
   readOnly,
   embedded = false,
 }: {
@@ -37,6 +39,7 @@ export function SettingsAccess({
   readOnly: boolean;
   embedded?: boolean;
 }) {
+  const access = useProjectAccess(projectId);
   const draft = useDraft("access", {
     inviters: "managers",
     defaultRole: "researcher",
@@ -83,7 +86,11 @@ export function SettingsAccess({
         <ChoiceRow
           id="access-expiry"
           label="Invitations expire after"
-          hint="Applied to new and renewed invitations, up to the platform maximum."
+          hint={
+            access.context?.invitation
+              ? `New and renewed invitations currently last ${access.context.invitation.effective_ttl_hours} hours, up to the platform maximum.`
+              : "Applied to new and renewed invitations, up to the platform maximum."
+          }
           value={v.expiry}
           onChange={set("expiry")}
           disabled={readOnly}
@@ -494,12 +501,13 @@ export function SettingsData({ readOnly }: { readOnly: boolean }) {
                 <Checkbox
                   id={`data-type-${type}`}
                   checked={v.types.includes(type)}
-                  disabled={readOnly}
+                  disabled={readOnly || ((type === "Parquet" || type === "JSON") && !v.types.includes(type))}
                   onCheckedChange={(on) =>
                     set("types")(on ? [...v.types, type] : v.types.filter((existing) => existing !== type))
                   }
                 />
                 {type}
+                {(type === "Parquet" || type === "JSON") && " (unavailable)"}
               </label>
             ))}
           </div>

@@ -23,7 +23,7 @@ export interface ProjectMemberItem {
 
 export interface CreateMemberRequest {
   email: string;
-  role: AssignableProjectRole;
+  role: ProjectRole;
 }
 export interface MemberListParams extends ListParams {
   q?: string;
@@ -81,7 +81,6 @@ export const fetchMembers = {
     return response.data;
   },
   create: async (projectId: string, data: CreateMemberRequest): Promise<MemberDetailResponse> => {
-    requireAssignableRole(data.role);
     const response = await apiService.post<MemberDetailResponse>(membersPath(projectId), data);
     return response.data;
   },

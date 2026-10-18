@@ -60,6 +60,22 @@ export interface ImportConnectionDatasetRequest extends ImportConnectionSource {
 
 export type DatasetListResponse = ApiResult<DatasetItem[]>;
 export type DatasetDetailResponse = ApiResult<DatasetItem>;
+export type DatasetUploadOutcome = "created_dataset" | "created_version" | "created_copy";
+export type DatasetUploadResponse = DatasetDetailResponse & {
+  meta: DatasetDetailResponse["meta"] & {
+    upload: { outcome: DatasetUploadOutcome; dataset_id: string; version_id: string };
+  };
+};
+export interface DatasetPreviewData {
+  dataset_id: string;
+  version_id: string;
+  columns: string[];
+  rows: string[][];
+  truncated: boolean;
+  masking_applied: boolean;
+  masked_cells: number;
+  detection_status: "ready" | "off";
+}
 export type DatasetVersionListResponse = ApiResult<DatasetVersionItem[]>;
 export type DatasetVersionDetailResponse = ApiResult<DatasetVersionItem>;
 
@@ -70,12 +86,12 @@ const versionDownloadPath = (projectId: string, datasetId: string, versionId: st
   `${datasetPath(projectId, datasetId)}/versions/${encodeURIComponent(versionId)}/download`;
 
 export const fetchDatasets = {
-  importConnection: (projectId: string, input: ImportConnectionDatasetRequest): Promise<DatasetDetailResponse> =>
+  importConnection: (projectId: string, input: ImportConnectionDatasetRequest): Promise<DatasetUploadResponse> =>
     connectionRequest(
       projectId,
       async () =>
         (
-          await apiService.post<DatasetDetailResponse>(`${datasetsPath(projectId)}/from-connection`, input, {
+          await apiService.post<DatasetUploadResponse>(`${datasetsPath(projectId)}/from-connection`, input, {
             timeout: 330_000,
           })
         ).data,
@@ -114,12 +130,12 @@ export const fetchDatasets = {
     projectId: string,
     data: CreateDatasetRequest,
     onProgress?: (progress: number) => void,
-  ): Promise<DatasetDetailResponse> => {
+  ): Promise<DatasetUploadResponse> => {
     const form = new FormData();
     form.append("name", data.name);
     if (data.description !== undefined) form.append("description", data.description);
     form.append("file", data.file);
-    const response = await apiService.upload<DatasetDetailResponse>(datasetsPath(projectId), form, onProgress);
+    const response = await apiService.upload<DatasetUploadResponse>(datasetsPath(projectId), form, onProgress);
     return response.data;
   },
   update: async (projectId: string, datasetId: string, data: UpdateDatasetRequest): Promise<DatasetDetailResponse> => {
@@ -167,4 +183,12 @@ export const fetchDatasets = {
   },
   getVersionDownloadUrl: (projectId: string, datasetId: string, versionId: string): string =>
     downloadUrl(versionDownloadPath(projectId, datasetId, versionId)),
+  preview: async (projectId: string, datasetId: string, versionId: string, signal?: AbortSignal) => {
+    const response = await apiService.get<ApiResult<DatasetPreviewData>>(
+      `${datasetPath(projectId, datasetId)}/versions/${encodeURIComponent(versionId)}/preview`,
+      { limit: 100 },
+      { signal },
+    );
+    return response.data;
+  },
 };

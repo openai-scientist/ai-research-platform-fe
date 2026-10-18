@@ -7,6 +7,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useApiMutation, useApiQuery } from "@/hooks/use-api";
+import { projectAccessKey } from "@/hooks/use-project-access";
 import { projectKeys } from "@/lib/api/query-keys";
 import { fetchProject, type ProjectItem, type UpdateProjectRequest } from "@/lib/api/services/fetch-project";
 import {
@@ -90,6 +91,12 @@ export function SettingsApiProvider({ project: initial, children }: { project: P
     try {
       const result = await saveMutation.mutateAsync({ section: id, version, values: wire });
       client.setQueryData<ApiResult<ProjectSettingsSnapshot>>(key, result);
+      if (id === "access" || id === "data") {
+        const datasets = { queryKey: [...projectKeys.detail(initial.id), "datasets"] };
+        await client.cancelQueries(datasets);
+        client.removeQueries(datasets);
+        await client.invalidateQueries({ queryKey: projectAccessKey(initial.id) });
+      }
       return { values: settingsFormValues(id, result.data.sections[id]), version: result.data.version };
     } catch (error) {
       if (error instanceof ApiError && error.code === "SETTINGS_VERSION_CONFLICT") {

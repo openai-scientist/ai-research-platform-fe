@@ -10,14 +10,13 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { useAllDataConnections } from "@/hooks/use-data-connections";
+import { useDatasetFileTypes } from "@/hooks/use-dataset-file-types";
 import { adminKeys, projectKeys } from "@/lib/api/query-keys";
-import { fetchDatasets } from "@/lib/api/services/fetch-datasets";
-import { ApiError } from "@/types/api";
+import { type DatasetUploadOutcome, fetchDatasets } from "@/lib/api/services/fetch-datasets";
+import { datasetFileAccept, datasetFileRejection } from "@/lib/dataset-file";
 
 import { ConnectionLogo } from "./data-connections/connection-display";
 import { formatSize } from "./dataset-format";
-
-const MAX_BYTES = 50 * 1024 * 1024;
 
 type QueuedUpload = {
   id: string;
@@ -30,15 +29,8 @@ type QueuedUpload = {
 
 /** The dataset name a file gets: its name without the extension, kept within the 2 to 160 characters allowed. */
 export function datasetNameFor(fileName: string) {
-  const base = fileName.replace(/\.csv$/i, "").trim();
+  const base = fileName.replace(/\.(csv|xlsx)$/i, "").trim();
   return (base.length >= 2 ? base : `Dataset ${base}`.trim()).slice(0, 160);
-}
-
-function rejectReason(file: File) {
-  if (!file.name.toLowerCase().endsWith(".csv")) return `${file.name} is not a CSV file.`;
-  if (file.size === 0) return `${file.name} is empty.`;
-  if (file.size > MAX_BYTES) return `${file.name} is larger than 50 MiB.`;
-  return null;
 }
 
 /** Drop or pick CSV files: each becomes a dataset named after its file, uploaded one at a time. */
@@ -53,6 +45,8 @@ export function DatasetUpload({
   onImport: () => void;
 }) {
   const queryClient = useQueryClient();
+  const fileTypes = useDatasetFileTypes(projectId);
+  const accept = datasetFileAccept(fileTypes.types);
   const connections = useAllDataConnections(projectId).data ?? [];
   const input = useRef<HTMLInputElement>(null);
   const dragDepth = useRef(0);
@@ -69,8 +63,11 @@ export function DatasetUpload({
     const timer = setTimeout(() => setHighlight(false), 1600);
     return () => clearTimeout(timer);
   }, []);
-  const finished = useRef(0);
-  const lastUploaded = useRef("");
+  const finished = useRef<Record<DatasetUploadOutcome, number>>({
+    created_dataset: 0,
+    created_version: 0,
+    created_copy: 0,
+  });
 
   const patch = useCallback(
     (id: string, change: Partial<QueuedUpload>) =>
@@ -78,18 +75,20 @@ export function DatasetUpload({
     [],
   );
 
-  // Upload the queue one file at a time; a name already taken gets " (2)", " (3)" and so on.
+  // Upload once per queue entry; the server applies the version/copy policy atomically.
   useEffect(() => {
     if (running.current) return;
     const next = uploads.find((item) => item.status === "queued");
     if (!next) {
-      if (finished.current && !uploads.some((item) => item.status === "uploading")) {
-        toast.success(
-          finished.current === 1
-            ? `Dataset "${lastUploaded.current}" uploaded.`
-            : `${finished.current} datasets uploaded.`,
-        );
-        finished.current = 0;
+      if (!uploads.some((item) => item.status === "uploading")) {
+        const counts = finished.current;
+        if (counts.created_dataset)
+          toast.success(`${counts.created_dataset} dataset${counts.created_dataset === 1 ? "" : "s"} uploaded.`);
+        if (counts.created_version)
+          toast.success(`${counts.created_version} new version${counts.created_version === 1 ? "" : "s"} added.`);
+        if (counts.created_copy)
+          toast.success(`${counts.created_copy} separate dataset${counts.created_copy === 1 ? "" : "s"} created.`);
+        finished.current = { created_dataset: 0, created_version: 0, created_copy: 0 };
       }
       return;
     }
@@ -98,21 +97,13 @@ export function DatasetUpload({
     void (async () => {
       const base = datasetNameFor(next.file.name);
       try {
-        for (let attempt = 1; ; attempt++) {
-          const suffix = attempt === 1 ? "" : ` (${attempt})`;
-          const name = `${base.slice(0, 160 - suffix.length)}${suffix}`;
-          try {
-            const { data: dataset } = await fetchDatasets.create(projectId, { name, file: next.file }, (progress) =>
-              patch(next.id, { progress }),
-            );
-            patch(next.id, { status: "done", progress: 100, datasetId: dataset.id, datasetName: dataset.name });
-            finished.current += 1;
-            lastUploaded.current = dataset.name;
-            break;
-          } catch (error) {
-            if (!(error instanceof ApiError && error.code === "DATASET_NAME_EXISTS") || attempt >= 20) throw error;
-          }
-        }
+        const { data: dataset, meta } = await fetchDatasets.create(
+          projectId,
+          { name: base, file: next.file },
+          (progress) => patch(next.id, { progress }),
+        );
+        patch(next.id, { status: "done", progress: 100, datasetId: dataset.id, datasetName: dataset.name });
+        finished.current[meta.upload.outcome] += 1;
         await Promise.all(
           [projectKeys.detail(projectId), projectKeys.lists(), adminKeys.all].map((queryKey) =>
             queryClient.invalidateQueries({ queryKey }),
@@ -122,8 +113,8 @@ export function DatasetUpload({
         setTimeout(() => setUploads((list) => list.filter((item) => item.id !== next.id)), 2500);
       } catch (error) {
         patch(next.id, { status: "failed" });
-        toast.error(`Couldn't upload ${next.file.name}`, {
-          description: error instanceof Error ? error.message : "Please try again.",
+        toast.error(error instanceof Error ? error.message : "Unable to upload the dataset. Please try again.", {
+          description: next.file.name,
         });
       } finally {
         running.current = false;
@@ -133,11 +124,11 @@ export function DatasetUpload({
   }, [uploads, projectId, queryClient, patch]);
 
   function add(files: FileList | null) {
-    if (!files?.length) return;
+    if (!fileTypes.ready || !files?.length) return;
     const accepted: QueuedUpload[] = [];
     for (const file of Array.from(files)) {
-      const reason = rejectReason(file);
-      if (reason) toast.error(reason, { description: "Upload a UTF-8 CSV with a header row, up to 50 MiB." });
+      const reason = datasetFileRejection(file, fileTypes.types);
+      if (reason) toast.error(reason, { description: file.name });
       else accepted.push({ id: crypto.randomUUID(), file, progress: 0, status: "queued" });
     }
     if (accepted.length) setUploads((list) => [...list, ...accepted]);
@@ -158,7 +149,8 @@ export function DatasetUpload({
       <input
         ref={input}
         type="file"
-        accept=".csv,text/csv"
+        accept={accept}
+        disabled={!fileTypes.ready || !fileTypes.types.length}
         multiple
         className="hidden"
         tabIndex={-1}
@@ -171,6 +163,7 @@ export function DatasetUpload({
       <div className="p-3">
         <button
           type="button"
+          disabled={!fileTypes.ready || !fileTypes.types.length}
           onClick={() => input.current?.click()}
           onDragEnter={(event) => {
             if (!event.dataTransfer.types.includes("Files")) return;
@@ -214,13 +207,13 @@ export function DatasetUpload({
                 "Drop to upload"
               ) : (
                 <>
-                  <span className="sm:hidden">Tap to choose CSV files</span>
-                  <span className="hidden sm:inline">Drag CSV files here, or click to browse</span>
+                  <span className="sm:hidden">Tap to choose dataset files</span>
+                  <span className="hidden sm:inline">Drag dataset files here, or click to browse</span>
                 </>
               )}
             </span>
             <span className="text-muted-foreground text-xs">
-              Each file becomes a dataset named after it · CSV with a header row · up to 50 MiB
+              {fileTypes.types.join(" or ")} · up to 50 MiB · existing names follow the project's version/copy policy
             </span>
           </span>
         </button>
@@ -279,9 +272,13 @@ export function DatasetUpload({
         </ul>
       )}
       <div className="flex flex-wrap items-center gap-2 border-t bg-muted/30 px-4 py-3">
-        <Button variant="outline" onClick={() => input.current?.click()}>
+        <Button
+          variant="outline"
+          disabled={!fileTypes.ready || !fileTypes.types.length}
+          onClick={() => input.current?.click()}
+        >
           <Upload data-icon="inline-start" />
-          Upload CSV
+          Upload files
         </Button>
         <Button variant="outline" onClick={onImport}>
           {shownConnections.length > 0 ? (

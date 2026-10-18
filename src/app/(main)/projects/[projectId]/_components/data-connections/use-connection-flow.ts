@@ -79,7 +79,7 @@ export function useConnectionFlow(
     name: string;
     source: ConnectionSource;
     connectionId: string;
-    previousIds: ReadonlySet<string>;
+    previousVersions: ReadonlyMap<string, string | undefined>;
   } | null>(null);
   const source = useMemo<ConnectionSource | null>(() => {
     if (isTimeSeriesConnection(kind)) return table ? buildTimeSeriesSource(kind, table, timeSeriesDraft) : null;
@@ -217,13 +217,15 @@ export function useConnectionFlow(
     const pending = pendingImport.current;
     if (!pending) return;
     const datasets = await collectPages((params) => fetchDatasets.getList(projectId, params));
-    const found = datasets.find(
+    const matches = datasets.filter(
       (item) =>
-        !pending.previousIds.has(item.id) &&
-        item.name.toLowerCase() === pending.name.toLowerCase() &&
+        (!pending.previousVersions.has(item.id) || pending.previousVersions.get(item.id) !== item.latest_version?.id) &&
+        (item.name.toLowerCase() === pending.name.toLowerCase() ||
+          item.name.toLowerCase().startsWith(`${pending.name.toLowerCase()} (`)) &&
         item.latest_version?.source?.connection_id === pending.connectionId &&
         sameConnectionSource(item.latest_version.source.source, pending.source),
     );
+    const found = matches.length === 1 ? matches[0] : undefined;
     if (found) {
       setReconcileRequired(false);
       pendingImport.current = null;
@@ -232,7 +234,7 @@ export function useConnectionFlow(
       onComplete(found);
       return;
     }
-    setReconcileRequired(false);
+    // An uncertain import may still finish. Keep reconciliation active rather than offer a duplicate POST.
     await queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) });
   }
 
@@ -249,7 +251,7 @@ export function useConnectionFlow(
         name,
         source,
         connectionId: connection.id,
-        previousIds: new Set(previous.map((item) => item.id)),
+        previousVersions: new Map(previous.map((item) => [item.id, item.latest_version?.id])),
       };
       try {
         const result = await fetchDatasets.importConnection(projectId, {
@@ -260,7 +262,12 @@ export function useConnectionFlow(
         });
         pendingImport.current = null;
         await queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) });
-        toast.success("Dataset imported", { description: result.data.name });
+        const titles = {
+          created_version: "New version imported",
+          created_copy: "Separate dataset imported",
+          created_dataset: "Dataset imported",
+        };
+        toast.success(titles[result.meta.upload.outcome], { description: result.data.name });
         onComplete(result.data);
       } catch (error) {
         if (error instanceof ApiError && error.status !== 0 && error.status < 500) throw error;

@@ -2,6 +2,10 @@
 
 import type { ComponentType, ReactNode } from "react";
 
+import { Button } from "@/components/ui/button";
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useProjectAccess } from "@/hooks/use-project-access";
 import { useProjectDetailQuery } from "@/hooks/use-projects-query";
 import type { ProjectItem } from "@/lib/api/services/fetch-project";
 import { getProjectAccess } from "@/lib/auth/project-access";
@@ -50,7 +54,28 @@ export function WorkspaceSection({
   const project = query.data?.data ?? initial;
   const Screen = screens[section];
   const access = getProjectAccess(project.my_role, project.status);
+  const policy = useProjectAccess(project.id);
   if (!access.canRead) return null;
+  if (section === "datasets" || section === "dataset-detail") {
+    if (policy.isPending) return <Skeleton className="h-64 w-full" aria-label="Loading dataset access" />;
+    if (policy.isError)
+      return (
+        <Button variant="outline" onClick={() => void policy.refetch()}>
+          Reload access
+        </Button>
+      );
+    if (!policy.context?.permissions.can_read_raw_datasets)
+      return (
+        <Empty>
+          <EmptyHeader>
+            <EmptyTitle>Dataset access is restricted</EmptyTitle>
+            <EmptyDescription>
+              This project's settings limit dataset access. You can still review research results.
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+      );
+  }
   const props = {
     project,
     userId,

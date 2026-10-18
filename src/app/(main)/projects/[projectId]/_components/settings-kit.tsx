@@ -93,8 +93,8 @@ export function DraftTab({
       {inactive && (
         <p className="text-muted-foreground text-xs">
           {id === "access"
-            ? "Invitation expiry is applied, up to the platform maximum. Other access preferences are saved but not enforced yet."
-            : "These preferences are saved to your project but are not applied by the research engine yet."}
+            ? "Invite links and join approvals are saved preferences and are not available yet. Other supported access policies apply to this project."
+            : "Some preferences in this section are saved to your project but are not applied yet."}
         </p>
       )}
       <form

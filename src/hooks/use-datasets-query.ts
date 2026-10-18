@@ -15,6 +15,7 @@ import type { ListParams } from "@/lib/api/types";
 
 import { type ApiQueryOptions, useApiMutation, useApiQuery } from "./use-api";
 import { type InfiniteQueryOptions, useInfinityScroll } from "./use-infinity-scroll";
+import { useDatasetAccessRefresh } from "./use-project-access";
 
 export function useInfiniteDatasets(projectId: string, options?: InfiniteQueryOptions<DatasetItem>) {
   const query = useInfinityScroll<DatasetItem, ListParams>({
@@ -23,6 +24,7 @@ export function useInfiniteDatasets(projectId: string, options?: InfiniteQueryOp
     fetchPage: (params, signal) => fetchDatasets.getList(projectId, params, signal),
     enabled: Boolean(projectId) && (options?.enabled ?? true),
   });
+  useDatasetAccessRefresh(projectId, query.error);
   return { ...query, datasets: query.items };
 }
 
@@ -37,6 +39,7 @@ export function useInfiniteDatasetVersions(
     fetchPage: (params, signal) => fetchDatasets.getVersions(projectId, datasetId, params, signal),
     enabled: Boolean(projectId && datasetId) && (options?.enabled ?? true),
   });
+  useDatasetAccessRefresh(projectId, query.error);
   return { ...query, versions: query.items };
 }
 
@@ -56,11 +59,13 @@ export function useDatasetDetailQuery(
   datasetId: string,
   options?: ApiQueryOptions<DatasetDetailResponse>,
 ) {
-  return useApiQuery(
+  const query = useApiQuery(
     projectKeys.dataset(projectId, datasetId),
     (signal) => fetchDatasets.getById(projectId, datasetId, signal),
     { ...options, enabled: Boolean(projectId && datasetId) && (options?.enabled ?? true) },
   );
+  useDatasetAccessRefresh(projectId, query.error);
+  return query;
 }
 export function useDatasetVersionsQuery(
   projectId: string,

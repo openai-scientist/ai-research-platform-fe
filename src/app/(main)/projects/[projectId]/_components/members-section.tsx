@@ -15,6 +15,7 @@ import {
   useResendProjectInviteMutation,
   useUpdateMemberMutation,
 } from "@/hooks/use-members-query";
+import { useProjectAccess } from "@/hooks/use-project-access";
 import { projectKeys } from "@/lib/api/query-keys";
 import { fetchMembers, type MemberListParams, type ProjectMemberItem } from "@/lib/api/services/fetch-members";
 import { type AssignableProjectRole, canManageProjectMember, PROJECT_ROLE_LABELS } from "@/lib/auth/project-access";
@@ -75,8 +76,11 @@ export function MembersSection({
   const update = useUpdateMemberMutation(project.id);
   const remove = useRemoveMemberMutation(project.id);
   const resend = useResendProjectInviteMutation(project.id);
+  const access = useProjectAccess(project.id);
+  const canInvite = Boolean(access.context?.permissions.can_invite && access.context.invitation);
 
-  const writable = canManage && project.status !== ProjectStatus.Archived;
+  const writable =
+    canManage && Boolean(access.context?.permissions.can_manage_members) && project.status !== ProjectStatus.Archived;
   const busy = update.isPending || remove.isPending || resend.isPending;
   const filtered = Boolean(q) || role !== "all";
   const editable = (member: ProjectMemberItem) => writable && canManageProjectMember(project, member);
@@ -88,14 +92,17 @@ export function MembersSection({
     });
   async function resendInvitation(member: ProjectMemberItem) {
     const result = await perform(() => resend.mutateAsync(member.id));
-    if (!result) return;
+    if (!result) {
+      void access.refetch();
+      return;
+    }
     toast.success("Invitation sent again", { description: member.email });
     if (result.data.invite_email_sent === false) toast.info("The invitation was renewed, but its email was not sent.");
   }
 
   const toolbar = (
     <div className="flex w-full flex-col gap-3 @2xl/members:flex-row @2xl/members:items-center @2xl/members:justify-between">
-      {writable && (
+      {canInvite && (
         <Button type="button" onClick={() => setInviteOpen(true)}>
           <UserPlus data-icon="inline-start" />
           Invite member
@@ -325,7 +332,14 @@ export function MembersSection({
         {accessPanel && <TabsContent value="access">{accessPanel}</TabsContent>}
       </Tabs>
 
-      {inviteOpen && writable && <InviteMemberDialog key={project.id} projectId={project.id} onClose={closeInvite} />}
+      {inviteOpen && canInvite && access.context?.invitation && (
+        <InviteMemberDialog
+          key={project.id}
+          projectId={project.id}
+          defaults={access.context.invitation}
+          onClose={closeInvite}
+        />
+      )}
     </div>
   );
 }

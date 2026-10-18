@@ -6,6 +6,7 @@ import { cn } from "cn";
 
 import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { useDatasetFileTypes } from "@/hooks/use-dataset-file-types";
 import { useCreateDatasetVersionMutation } from "@/hooks/use-datasets-query";
 import type { DatasetItem, DatasetVersionItem } from "@/lib/api/services/fetch-datasets";
 
@@ -13,11 +14,12 @@ import { CsvFileInput } from "./csv-file-input";
 import { DatasetCsvPreview } from "./dataset-csv-preview";
 import { timeAgo } from "./dataset-format";
 import { WorkspaceFormDialog } from "./workspace-form-dialog";
-import { ListState, perform, validateCsv } from "./workspace-ui";
+import { ListState, perform, validateDatasetFile } from "./workspace-ui";
 
 /** Adds a CSV as the dataset's next version; earlier versions stay as they are. */
 export function UploadVersionButton({ dataset, projectId }: { dataset: DatasetItem; projectId: string }) {
   const upload = useCreateDatasetVersionMutation(projectId, dataset.id);
+  const fileTypes = useDatasetFileTypes(projectId);
   const [file, setFile] = useState<File | null>(null);
   const [fileKey, setFileKey] = useState(0);
   const next = (dataset.latest_version?.version_number ?? 0) + 1;
@@ -30,10 +32,11 @@ export function UploadVersionButton({ dataset, projectId }: { dataset: DatasetIt
       triggerLabel="Upload new version"
       triggerVariant="default"
       pending={upload.isPending}
+      disabled={!fileTypes.ready || !fileTypes.types.length}
       noValidate
       onSubmit={async (event) => {
         event.preventDefault();
-        if (!validateCsv(file)) return;
+        if (!fileTypes.ready || !validateDatasetFile(file, fileTypes.types)) return;
         if (
           await perform(() => upload.mutateAsync(file), { title: `Uploaded as v${next}`, description: dataset.name })
         ) {
@@ -45,15 +48,18 @@ export function UploadVersionButton({ dataset, projectId }: { dataset: DatasetIt
     >
       <FieldGroup>
         <Field>
-          <FieldLabel htmlFor="dataset-version-file">CSV file</FieldLabel>
+          <FieldLabel htmlFor="dataset-version-file">Dataset file</FieldLabel>
           <CsvFileInput
             key={fileKey}
             id="dataset-version-file"
             file={file}
             onChange={setFile}
-            disabled={upload.isPending}
+            disabled={upload.isPending || !fileTypes.ready || !fileTypes.types.length}
+            types={fileTypes.types}
           />
-          <FieldDescription>UTF-8 CSV with a header row, up to 50 MiB.</FieldDescription>
+          <FieldDescription>
+            {fileTypes.types.join(" or ")} with a header row, up to 50 MiB. Excel uses the first sheet.
+          </FieldDescription>
         </Field>
       </FieldGroup>
     </WorkspaceFormDialog>

@@ -17,6 +17,7 @@ import {
   isAssignableProjectRole,
   PROJECT_ROLE_LABELS,
 } from "@/lib/auth/project-access";
+import { DATASET_FILE_TYPES, type DatasetFileType, datasetFileRejection } from "@/lib/dataset-file";
 import { ProjectRole } from "@/types/enums";
 
 export interface WorkspaceProps {
@@ -128,7 +129,7 @@ export function ConfirmAction({
 /** What each role a manager can hand out lets that person do. */
 export const ROLE_DESCRIPTIONS: Record<AssignableProjectRole, string> = {
   [ProjectRole.Researcher]: "Uploads data, starts research runs and works on the results.",
-  [ProjectRole.Reviewer]: "Sees everything and reviews results, but can't change data or start runs.",
+  [ProjectRole.Reviewer]: "Reviews results. Dataset access follows the project's settings.",
 };
 
 /** A role picker whose options say what the role allows; the closed trigger shows the name only. */
@@ -176,17 +177,13 @@ export function ActionRow({ children }: { children: ReactNode }) {
   return <div className="flex flex-wrap items-center gap-2">{children}</div>;
 }
 
-export function validateCsv(file: File | null): file is File {
-  if (!file) {
-    toast.error("Choose a CSV file.");
-    return false;
-  }
-  if (!file.name.toLowerCase().endsWith(".csv")) {
-    toast.error("Only CSV files are supported.");
-    return false;
-  }
-  if (file.size > 50 * 1024 * 1024) {
-    toast.error("The file must be no larger than 50 MiB.");
+export function validateDatasetFile(
+  file: File | null,
+  types: readonly DatasetFileType[] = DATASET_FILE_TYPES,
+): file is File {
+  const reason = datasetFileRejection(file, types);
+  if (reason) {
+    toast.error(reason);
     return false;
   }
   return true;

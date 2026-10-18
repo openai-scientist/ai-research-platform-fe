@@ -6,19 +6,22 @@ import { FileSpreadsheet, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { DATASET_FILE_TYPES, type DatasetFileType, datasetFileAccept } from "@/lib/dataset-file";
 
-import { validateCsv } from "./workspace-ui";
+import { validateDatasetFile } from "./workspace-ui";
 
 export function CsvFileInput({
   id,
   file,
   onChange,
   disabled = false,
+  types = DATASET_FILE_TYPES,
 }: {
   id: string;
   file: File | null;
   onChange: (file: File | null) => void;
   disabled?: boolean;
+  types?: readonly DatasetFileType[];
 }) {
   const input = useRef<HTMLInputElement>(null);
   const dragDepth = useRef(0);
@@ -27,11 +30,11 @@ export function CsvFileInput({
   function selectFiles(files: FileList | null) {
     if (disabled || !files?.length) return;
     if (files.length > 1) {
-      toast.error("Choose one CSV file at a time.");
+      toast.error("Choose one dataset file at a time.");
       return;
     }
     const selected = files[0];
-    if (validateCsv(selected)) onChange(selected);
+    if (validateDatasetFile(selected, types)) onChange(selected);
   }
 
   return (
@@ -39,7 +42,7 @@ export function CsvFileInput({
       <input
         ref={input}
         type="file"
-        accept=".csv,text/csv"
+        accept={datasetFileAccept(types)}
         className="hidden"
         tabIndex={-1}
         aria-hidden="true"
@@ -85,7 +88,7 @@ export function CsvFileInput({
       >
         {file ? <FileSpreadsheet aria-hidden="true" /> : <Upload aria-hidden="true" />}
         <span className="w-full truncate" aria-live="polite" title={file?.name}>
-          {dragging ? "Drop your CSV file here" : (file?.name ?? "Drag and drop a CSV file here")}
+          {dragging ? "Drop your dataset file here" : (file?.name ?? "Drag and drop a dataset file here")}
         </span>
         <span className="text-muted-foreground font-normal">
           {file ? "Click to browse or drop another file to replace it" : "or click to browse"}
