@@ -2,6 +2,40 @@
 
 Ngày lập: 2026-10-16. Sản phẩm: OpenAI Scientist.
 
+> **Cập nhật tích hợp FE — 2026-10-18:** Nội dung từ mục 1 trở đi là bản đề xuất gốc.
+> FE hiện đã đối chiếu source BE trong `src/management/projects/router/settings.py`,
+> `schemas/settings.py`, `settings_service.py` và `router/ownership.py` của repository BE cùng cấp,
+> rồi nối theo contract thực tế bên dưới. Chưa chạy validation hoặc gọi API live trong lượt tích hợp này.
+
+### Contract thực tế đã nối vào FE
+
+- GET `/projects/{projectId}/settings` trả trực tiếp snapshot trong `data`:
+  `version`, `updated_at`, `updated_by_user_id`, `sections`, `capabilities`.
+  Không trả `{ project, settings }` như đề xuất gốc.
+- PATCH `/projects/{projectId}/settings/{section}` nhận `{ version, values }`.
+  Có 8 section: `general`, `access`, `runs`, `models`, `literature`, `review`, `data`, `spending`.
+  FE chỉ gửi field thay đổi, cập nhật form từ response canonical và giữ draft khi request thất bại.
+- Tên field theo schema BE: `access.default_role`, `expiry_days`, `join_link`, `join_approval`,
+  `reviewers_see_data`; `runs.stage_limit`, `pause_on_failure`; `literature.per_round`;
+  `review.self_approval`; `data.same_name`; `spending.warn_at`, `at_limit`, `billing_email`.
+  Các key còn lại giữ dạng tương ứng của form. Count/TTL/time-limit vẫn là string theo BE.
+- `capabilities` là object keyed `section.field`, không phải array.
+  Source BE hiện chỉ đánh dấu `access.expiry_days` supported; các field khác lưu được nhưng
+  `reason_code=NOT_ENFORCED_YET`. UI có ghi chú phân biệt lưu cấu hình với áp dụng runtime.
+- TTL hiệu lực được BE cap bởi platform maximum. FE đã bỏ copy “24 hours” cố định và
+  hiển thị expiry theo dữ liệu từng invitation.
+- General metadata dùng PATCH `/projects/{projectId}` có sẵn; preferences dùng settings PATCH riêng.
+  Hai thao tác **không atomic** trong BE hiện tại. FE không báo toàn bộ thành công nếu một request lỗi.
+- Archive/restore/complete/reopen nối lại adapter thật; transfer dùng POST
+  `/projects/{projectId}/transfer-ownership` với `{ new_owner_user_id }`; delete dùng
+  DELETE `/projects/{projectId}`. Chưa thực thi thao tác phá hủy khi kiểm tra tích hợp.
+- Source BE chưa có route tương ứng cho personal notification preferences, integrations/webhooks,
+  join links/requests, project activity và duplicate. UI không chạy sample/mock thành công cho những
+  mục này; hiển thị chưa khả dụng hoặc khóa thao tác. Export settings là JSON snapshot đã tải từ BE.
+- Source FE: `fetch-project-settings.ts` và `settings-api.tsx`. `settings-preview*.tsx` còn trong
+  repository nhưng không được compose trong màn Settings đang nối API.
+
+
 ## 1. Mục đích và mức độ xác nhận
 
 Tài liệu bàn giao các nhu cầu BE xuất phát từ giao diện Project Settings hiện tại.

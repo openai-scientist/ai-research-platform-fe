@@ -4,8 +4,6 @@ import { type ReactNode, useState } from "react";
 
 import { useRouter } from "next/navigation";
 
-import { toast } from "sonner";
-
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { ManagementStatusBadge } from "@/components/management-status-badge";
 import { Button } from "@/components/ui/button";
@@ -21,6 +19,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useApiMutation } from "@/hooks/use-api";
 import { useMembersQuery } from "@/hooks/use-members-query";
 import {
   useArchiveProjectMutation,
@@ -28,7 +27,8 @@ import {
   useReopenProjectMutation,
   useRestoreProjectMutation,
 } from "@/hooks/use-projects-query";
-import type { ProjectItem } from "@/lib/api/services/fetch-project";
+import { authKeys, projectKeys } from "@/lib/api/query-keys";
+import { fetchProject, type ProjectItem } from "@/lib/api/services/fetch-project";
 import { PROJECT_ROLE_LABELS } from "@/lib/auth/project-access";
 import { ProjectStatus } from "@/types/enums";
 
@@ -113,6 +113,11 @@ function DangerRow({ title, description, action }: { title: string; description:
 }
 
 function TransferOwnership({ project, userId, disabled }: { project: ProjectItem; userId: string; disabled: boolean }) {
+  const router = useRouter();
+  const transfer = useApiMutation(
+    (userId: string) => fetchProject.transferOwnership(project.id, userId),
+    [projectKeys.all, authKeys.me],
+  );
   const [open, setOpen] = useState(false);
   const [to, setTo] = useState("");
   const members = useMembersQuery(project.id, { limit: 100, offset: 0, status: "active" }, { enabled: open });
@@ -122,6 +127,7 @@ function TransferOwnership({ project, userId, disabled }: { project: ProjectItem
     <Dialog
       open={open}
       onOpenChange={(next) => {
+        if (transfer.isPending) return;
         setOpen(next);
         if (!next) setTo("");
       }}
@@ -142,7 +148,7 @@ function TransferOwnership({ project, userId, disabled }: { project: ProjectItem
           <label htmlFor="transfer-owner" className="font-medium text-sm">
             New owner
           </label>
-          <Select value={to} onValueChange={setTo} disabled={members.isPending}>
+          <Select value={to} onValueChange={setTo} disabled={members.isPending || transfer.isPending}>
             <SelectTrigger id="transfer-owner" className="w-full">
               <SelectValue placeholder={members.isPending ? "Loading members…" : "Choose a member"} />
             </SelectTrigger>
@@ -168,10 +174,12 @@ function TransferOwnership({ project, userId, disabled }: { project: ProjectItem
             <Button variant="outline">Cancel</Button>
           </DialogClose>
           <Button
-            disabled={!to}
-            onClick={() => {
-              // TODO(BE): no endpoint to transfer ownership yet.
-              toast.error("Transferring ownership isn't available yet.");
+            disabled={!to || transfer.isPending}
+            onClick={async () => {
+              if (!(await perform(() => transfer.mutateAsync(to), "Project ownership transferred"))) return;
+              setOpen(false);
+              router.replace(`/projects/${project.id}`);
+              router.refresh();
             }}
           >
             Transfer ownership
@@ -183,6 +191,8 @@ function TransferOwnership({ project, userId, disabled }: { project: ProjectItem
 }
 
 function DeleteProject({ project, disabled }: { project: ProjectItem; disabled: boolean }) {
+  const router = useRouter();
+  const remove = useApiMutation(() => fetchProject.remove(project.id), [projectKeys.all]);
   const [typed, setTyped] = useState("");
   const matches = typed.trim() === project.name;
 
@@ -204,11 +214,13 @@ function DeleteProject({ project, disabled }: { project: ProjectItem; disabled: 
         <form
           id="delete-project"
           className="flex flex-col gap-2"
-          onSubmit={(event) => {
+          onSubmit={async (event) => {
             event.preventDefault();
-            if (!matches) return;
-            // TODO(BE): no endpoint to delete a project yet.
-            toast.error("Deleting projects isn't available yet.");
+            if (!matches || remove.isPending) return;
+            if (!(await perform(() => remove.mutateAsync(), { title: "Project deleted", description: project.name })))
+              return;
+            router.replace("/projects");
+            router.refresh();
           }}
         >
           <label htmlFor="delete-project-name" className="text-sm">
@@ -226,7 +238,7 @@ function DeleteProject({ project, disabled }: { project: ProjectItem; disabled: 
           <DialogClose asChild>
             <Button variant="outline">Cancel</Button>
           </DialogClose>
-          <Button type="submit" form="delete-project" variant="destructive" disabled={!matches}>
+          <Button type="submit" form="delete-project" variant="destructive" disabled={!matches || remove.isPending}>
             Delete project
           </Button>
         </DialogFooter>

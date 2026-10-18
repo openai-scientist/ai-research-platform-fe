@@ -114,6 +114,8 @@ export interface TrafficQualityProps {
   description?: string;
   title?: string;
   tooltipLabel?: string;
+  tooltipLabelFormatter?: (value: number) => string;
+  showPoints?: boolean;
   xDomain?: [number, number];
   xTickFormatter?: (value: number) => string;
   xTicks?: number[];
@@ -135,6 +137,8 @@ export function TrafficQuality({
   description,
   title = "Traffic Quality",
   tooltipLabel,
+  tooltipLabelFormatter,
+  showPoints = false,
   xDomain = [1, 28],
   xTickFormatter = formatDefaultWeek,
   xTicks = defaultWeeklyTicks,
@@ -188,7 +192,16 @@ export function TrafficQuality({
             />
             <ChartTooltip
               cursor={false}
-              content={<ChartTooltipContent className="w-40" labelFormatter={() => tooltipLabel ?? title} />}
+              content={
+                <ChartTooltipContent
+                  className="min-w-40"
+                  labelFormatter={(_, payload) =>
+                    tooltipLabelFormatter
+                      ? tooltipLabelFormatter(Number(payload[0]?.payload.dayIndex))
+                      : (tooltipLabel ?? title)
+                  }
+                />
+              }
             />
             <Line
               dataKey="baselineQuality"
@@ -201,7 +214,7 @@ export function TrafficQuality({
             />
             <Line
               dataKey="actualQuality"
-              dot={false}
+              dot={showPoints ? { r: 2.5, fill: "var(--color-actualQuality)", strokeWidth: 0 } : false}
               activeDot={{ r: 4 }}
               stroke="var(--color-actualQuality)"
               strokeWidth={2.5}

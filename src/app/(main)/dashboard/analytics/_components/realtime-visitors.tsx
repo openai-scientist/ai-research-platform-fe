@@ -112,6 +112,7 @@ export function RealtimeVisitors({
   value = "24",
   live = true,
   emptyText,
+  tooltipLabelFormatter,
   yDomain = [0, 22],
 }: {
   readonly breakdown?: readonly RealtimeBreakdownItem[];
@@ -123,6 +124,7 @@ export function RealtimeVisitors({
   readonly value?: string;
   readonly live?: boolean;
   readonly emptyText?: string;
+  readonly tooltipLabelFormatter?: (value: number) => string;
   readonly yDomain?: [number, number | "auto"];
 }) {
   const chartConfig = {
@@ -167,7 +169,15 @@ export function RealtimeVisitors({
             <BarChart data={[...data]} margin={{ bottom: 0, left: 0, right: 0, top: 0 }} barCategoryGap={3}>
               <XAxis dataKey="minute" hide />
               <YAxis hide domain={yDomain} />
-              <ChartTooltip cursor={false} content={<ChartTooltipContent hideLabel />} />
+              <ChartTooltip
+                cursor={false}
+                content={
+                  <ChartTooltipContent
+                    hideLabel={!tooltipLabelFormatter}
+                    labelFormatter={(_, payload) => tooltipLabelFormatter?.(Number(payload[0]?.payload.minute))}
+                  />
+                }
+              />
               <Bar dataKey="visitors" fill="var(--color-visitors)" shape={RealtimeBarShape} />
             </BarChart>
           </ChartContainer>

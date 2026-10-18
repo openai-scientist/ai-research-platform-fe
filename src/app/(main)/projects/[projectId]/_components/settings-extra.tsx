@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import { Copy, FolderGit2, Library, MessageSquare, RotateCw, Webhook } from "lucide-react";
+import { FolderGit2, Library, MessageSquare, Webhook } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -30,7 +30,6 @@ const ROLE_OPTIONS: Option[] = [
 
 /** Who gets into the project, and how. */
 export function SettingsAccess({
-  projectId,
   readOnly,
   embedded = false,
 }: {
@@ -46,10 +45,8 @@ export function SettingsAccess({
     link: false,
     approval: true,
     reviewersSeeData: true,
-    linkVersion: 1,
   });
   const { values: v, set } = draft;
-  const inviteLink = `https://research.example/join/${projectId.slice(0, 8)}-${v.linkVersion}`;
 
   return (
     <DraftTab
@@ -86,6 +83,7 @@ export function SettingsAccess({
         <ChoiceRow
           id="access-expiry"
           label="Invitations expire after"
+          hint="Applied to new and renewed invitations, up to the platform maximum."
           value={v.expiry}
           onChange={set("expiry")}
           disabled={readOnly}
@@ -103,51 +101,20 @@ export function SettingsAccess({
         <SwitchRow
           id="access-link"
           label="Join with a link"
-          hint="Anyone signed in with the link can ask to join."
+          hint="Saved policy only. The backend does not issue invite links yet."
           checked={v.link}
           onChange={set("link")}
           disabled={readOnly}
         />
         {v.link && (
-          <>
-            <SettingsRow label="Sample link" hint="For preview only. This link does not grant project access.">
-              <div className="flex min-w-0 items-center gap-1.5">
-                <Input readOnly value={inviteLink} className="font-mono text-muted-foreground" />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  aria-label="Copy invite link"
-                  onClick={() =>
-                    navigator.clipboard.writeText(inviteLink).then(
-                      () => toast.success("Invite link copied."),
-                      () => toast.error("Couldn't copy to the clipboard."),
-                    )
-                  }
-                >
-                  <Copy />
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  aria-label="Make a new link"
-                  disabled={readOnly}
-                  onClick={() => set("linkVersion")(v.linkVersion + 1)}
-                >
-                  <RotateCw />
-                </Button>
-              </div>
-            </SettingsRow>
-            <SwitchRow
-              id="access-approval"
-              label="Approve each request"
-              hint="A manager accepts people who join with the link."
-              checked={v.approval}
-              onChange={set("approval")}
-              disabled={readOnly}
-            />
-          </>
+          <SwitchRow
+            id="access-approval"
+            label="Approve each request"
+            hint="Saved policy only; join requests are not implemented by the backend yet."
+            checked={v.approval}
+            onChange={set("approval")}
+            disabled={readOnly}
+          />
         )}
       </SettingsGroup>
       <SettingsGroup title="Reviewers">
@@ -166,9 +133,9 @@ export function SettingsAccess({
 
 const MODEL_OPTIONS: Option[] = [
   { value: "default", label: "Platform default" },
-  { value: "claude-opus", label: "Claude Opus" },
-  { value: "claude-sonnet", label: "Claude Sonnet" },
-  { value: "claude-haiku", label: "Claude Haiku" },
+  { value: "claude-opus-5-5", label: "Claude Opus 5.5" },
+  { value: "claude-sonnet-5-5", label: "Claude Sonnet 5.5" },
+  { value: "claude-haiku-5-5", label: "Claude Haiku 5.5" },
   { value: "gpt-5", label: "GPT-5" },
   { value: "gemini-2-5-pro", label: "Gemini 2.5 Pro" },
 ];

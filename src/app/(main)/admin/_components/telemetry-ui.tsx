@@ -14,6 +14,7 @@ const reasons: Record<string, string> = {
   SOURCE_NOT_CONFIGURED: "This source is not configured yet.",
   INSUFFICIENT_SAMPLES: "Not enough observations to calculate this metric.",
   NO_TERMINAL_RUNS: "No completed or failed runs in this time window.",
+  OUTCOME_MAPPING_UNDEFINED: "Decision outcomes are not configured for this chart yet.",
 };
 export function availabilityReason(reason?: string | null) {
   return reason ? (reasons[reason] ?? readableKey(reason)) : "This source is not measured yet.";

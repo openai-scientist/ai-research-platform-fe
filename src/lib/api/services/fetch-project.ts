@@ -42,6 +42,16 @@ export type ProjectDetailResponse = ApiResult<ProjectItem>;
 export type Project = ProjectItem;
 
 export const fetchProject = {
+  transferOwnership: async (id: string, newOwnerUserId: string): Promise<ProjectDetailResponse> => {
+    const response = await apiService.post<ProjectDetailResponse>(`${projectPath(id)}/transfer-ownership`, {
+      new_owner_user_id: newOwnerUserId,
+    });
+    return response.data;
+  },
+  remove: async (id: string): Promise<ApiResult<null>> => {
+    const response = await apiService.delete<ApiResult<null>>(projectPath(id));
+    return response.data;
+  },
   getList: async (params?: ProjectListParams, signal?: AbortSignal): Promise<ProjectListResponse> => {
     const response = await apiService.get<ProjectListResponse>("/projects", params, { signal });
     return response.data;

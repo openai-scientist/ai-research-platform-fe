@@ -14,6 +14,16 @@ import { availabilityReason, formatMeasurement, readableKey, TelemetryEmpty } fr
 
 type Props = { data?: AdminOverviewData; section: OverviewSection };
 
+function formatBucketTime(timestamp: number, timezone?: string) {
+  return new Date(timestamp).toLocaleString("en-US", {
+    timeZone: timezone,
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 function OverviewTrend({
   data,
   seriesKey,
@@ -48,15 +58,27 @@ function OverviewTrend({
       baselineLabel={baselineLabel}
       chartData={points}
       tooltipLabel={title}
+      tooltipLabelFormatter={(timestamp) => formatBucketTime(timestamp, data?.window.timezone)}
+      showPoints
       xDomain={[start, end]}
       xTicks={[0.1, 0.35, 0.6, 0.85].map((fraction) => start + (end - start) * fraction)}
-      xTickFormatter={(value) => new Date(value).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+      xTickFormatter={(value) =>
+        new Date(value).toLocaleDateString("en-US", {
+          timeZone: data?.window.timezone,
+          month: "short",
+          day: "numeric",
+        })
+      }
       yDomain={[0, series?.unit === "percent" ? 100 : max]}
       yTickFormatter={(value) => formatMeasurement(value, series?.unit)}
       emptyText={
         !data
           ? "Loading…"
-          : availabilityReason(data.unavailable_fields.find((item) => item.key === `series.${seriesKey}`)?.reason_code)
+          : series?.available
+            ? "No observations in this time window."
+            : availabilityReason(
+                data.unavailable_fields.find((item) => item.key === `series.${seriesKey}`)?.reason_code,
+              )
       }
     />
   );
@@ -82,12 +104,17 @@ function RealtimeMetric({
   return (
     <RealtimeVisitors
       title={title}
-      chartLabel={title}
+      chartLabel={seriesKey === "active_runs" ? "Runs in progress during bucket" : title}
       live={false}
       liveLabel="Snapshot"
       unit={unit}
       value={metric?.available ? formatMeasurement(metric.value) : "—"}
-      data={series?.available ? series.points.map((point, index) => ({ minute: index, visitors: point.value })) : []}
+      data={
+        series?.available
+          ? series.points.map((point) => ({ minute: Date.parse(point.timestamp), visitors: point.value }))
+          : []
+      }
+      tooltipLabelFormatter={(timestamp) => formatBucketTime(timestamp, data?.window.timezone)}
       breakdown={liveBreakdown(data, breakdownKey)}
       yDomain={[0, "auto"]}
       emptyText={

@@ -12,19 +12,15 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { useRestoreProjectMutation } from "@/hooks/use-projects-query";
 import type { ProjectItem } from "@/lib/api/services/fetch-project";
 import { ProjectStatus } from "@/types/enums";
 
 import { MembersSection } from "./members-section";
-import {
-  SettingsAccess,
-  SettingsData,
-  SettingsIntegrations,
-  SettingsLiterature,
-  SettingsModels,
-  SettingsReview,
-} from "./settings-extra";
+import { SettingsApiProvider, useProjectSettings } from "./settings-api";
+import { SettingsAccess, SettingsData, SettingsLiterature, SettingsModels, SettingsReview } from "./settings-extra";
 import { ChoiceRow, useDraft } from "./settings-kit";
+import { SettingsDangerZone, StatusRow } from "./settings-lifecycle";
 import {
   CharacterCount,
   SaveBar,
@@ -34,11 +30,8 @@ import {
   TagInput,
   useUnsavedWarning,
 } from "./settings-panel";
-import { SettingsPreviewProvider, useSettingsPreview } from "./settings-preview";
-import { SettingsPreviewActivity } from "./settings-preview-activity";
-import { PreviewStatusRow, SettingsPreviewDangerZone, usePreviewLifecycle } from "./settings-preview-lifecycle";
-import { SettingsNotifications, SettingsRuns, SettingsSpending } from "./settings-system";
-import type { WorkspaceProps } from "./workspace-ui";
+import { SettingsRuns, SettingsSpending } from "./settings-system";
+import { perform, type WorkspaceProps } from "./workspace-ui";
 
 const GROUPS: { label: string; tabs: { id: string; label: string }[] }[] = [
   {
@@ -121,7 +114,7 @@ const sameTags = (a: string[], b: string[]) => a.length === b.length && a.every(
 
 /** Everything that describes the project, edited and saved together. */
 function GeneralTab({ project, readOnly }: { project: ProjectItem; readOnly: boolean }) {
-  const preview = useSettingsPreview();
+  const settings = useProjectSettings();
   const initial = {
     name: project.name,
     description: project.description ?? "",
@@ -153,13 +146,13 @@ function GeneralTab({ project, readOnly }: { project: ProjectItem; readOnly: boo
   };
 
   return (
-    <div className="flex flex-col gap-6">
+    <fieldset disabled={settings.pending} className="flex min-w-0 flex-col gap-6">
       <SettingsHeading title="General" />
       <form
         id="settings-general"
         noValidate
         className="flex flex-col gap-6"
-        onSubmit={(event) => {
+        onSubmit={async (event) => {
           event.preventDefault();
           const trimmed = name.trim();
           if (trimmed.length < 2) return void toast.error("The project name needs at least 2 characters.");
@@ -174,10 +167,9 @@ function GeneralTab({ project, readOnly }: { project: ProjectItem; readOnly: boo
             domain: domain.trim() || null,
             tags,
           };
-          preview.updateProject(data);
-          prefs.save();
-          preview.record("updated the general project settings.");
-          toast.success("Changes saved in this preview.");
+          if (dirty && !(await settings.updateProject(data))) return;
+          if (!(await prefs.save())) return;
+          toast.success("Project settings saved");
           setName(trimmed);
           setDescription(description.trim());
           setObjective(objective.trim());
@@ -237,6 +229,9 @@ function GeneralTab({ project, readOnly }: { project: ProjectItem; readOnly: boo
           </SettingsRow>
         </SettingsGroup>
       </form>
+      <p className="text-muted-foreground text-xs">
+        Workspace preferences are saved but not applied to project access, scheduling or report formatting yet.
+      </p>
       <SettingsGroup title="Workspace">
         <ChoiceRow
           id="settings-visibility"
@@ -247,7 +242,7 @@ function GeneralTab({ project, readOnly }: { project: ProjectItem; readOnly: boo
           wide
           options={[
             { value: "members", label: "Members only" },
-            { value: "organization", label: "Everyone in the organization can view" },
+            { value: "organization", label: "Organization visibility (unavailable)", disabled: true },
           ]}
         />
         <ChoiceRow
@@ -274,7 +269,7 @@ function GeneralTab({ project, readOnly }: { project: ProjectItem; readOnly: boo
         />
       </SettingsGroup>
       <SettingsGroup title="About">
-        <PreviewStatusRow />
+        <StatusRow project={project} />
         <SettingsRow label="Project ID">
           <CopyValue value={project.id} label="Project ID" />
         </SettingsRow>
@@ -289,55 +284,53 @@ function GeneralTab({ project, readOnly }: { project: ProjectItem; readOnly: boo
         </SettingsRow>
       </SettingsGroup>
       <SettingsGroup title="Copy and export">
-        <SettingsRow label="Export" hint="Download the project details and preview preferences as JSON." inline>
+        <SettingsRow label="Export" hint="Download the saved project details and settings as JSON." inline>
           <Button
             type="button"
             variant="outline"
             size="sm"
             onClick={() => {
-              const file = new Blob([JSON.stringify({ project, preferences: prefs.values, preview: true }, null, 2)], {
+              const file = new Blob([JSON.stringify({ project, settings: settings.snapshot }, null, 2)], {
                 type: "application/json",
               });
               const url = URL.createObjectURL(file);
               const link = document.createElement("a");
               link.href = url;
-              link.download = "project-settings-preview.json";
+              link.download = "project-settings.json";
               link.click();
               setTimeout(() => URL.revokeObjectURL(url), 0);
-              toast.success("Preview settings exported.");
+              toast.success("Project settings exported.");
             }}
           >
             Export settings
           </Button>
         </SettingsRow>
-        <SettingsRow label="Duplicate" hint="Preview copying the project settings and research brief." inline>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              preview.record("previewed duplicating the project.");
-              toast.info("Duplicate preview complete. No project was created.");
-            }}
-          >
+        <SettingsRow label="Duplicate" hint="Project duplication is not available from the backend yet." inline>
+          <Button type="button" variant="outline" size="sm" disabled>
             Duplicate
           </Button>
         </SettingsRow>
       </SettingsGroup>
-      <SaveBar dirty={dirty || prefs.dirty} form="settings-general" onDiscard={discard} />
-    </div>
+      <SaveBar dirty={dirty || prefs.dirty} pending={settings.pending} form="settings-general" onDiscard={discard} />
+    </fieldset>
   );
 }
 
 function ArchivedNotice() {
-  const lifecycle = usePreviewLifecycle();
+  const settings = useProjectSettings();
+  const restore = useRestoreProjectMutation();
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card py-2.5 pr-2.5 pl-4">
       <p className="flex items-center gap-2.5 text-sm">
         <Archive className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-        This preview is archived and read only.
+        This project is archived and read only.
       </p>
-      <Button variant="outline" size="sm" onClick={lifecycle.restore}>
+      <Button
+        variant="outline"
+        size="sm"
+        disabled={restore.isPending}
+        onClick={() => void perform(() => restore.mutateAsync(settings.project.id), "Project restored")}
+      >
         Restore
       </Button>
     </div>
@@ -366,7 +359,7 @@ function TabLink({ id, label, active }: { id: Tab; label: string; active: boolea
 }
 
 function SettingsContent({ workspace }: { workspace: WorkspaceProps }) {
-  const { project } = useSettingsPreview();
+  const { project } = useProjectSettings();
   const archived = project.status === ProjectStatus.Archived;
   const requested = useSearchParams().get("tab");
   const tab: Tab = TABS.find((item) => item.id === requested)?.id ?? "general";
@@ -434,11 +427,26 @@ function SettingsContent({ workspace }: { workspace: WorkspaceProps }) {
           {tab === "literature" && <SettingsLiterature readOnly={archived} />}
           {tab === "review" && <SettingsReview readOnly={archived} />}
           {tab === "data" && <SettingsData readOnly={archived} />}
-          {tab === "integrations" && <SettingsIntegrations readOnly={archived} />}
+          {tab === "integrations" && (
+            <UnavailableSettings
+              title="Integrations"
+              description="Integration connections and webhooks are not available from the backend yet."
+            />
+          )}
           {tab === "spending" && <SettingsSpending readOnly={archived} />}
-          {tab === "notifications" && <SettingsNotifications />}
-          {tab === "activity" && <SettingsPreviewActivity />}
-          {tab === "danger" && <SettingsPreviewDangerZone />}
+          {tab === "notifications" && (
+            <UnavailableSettings
+              title="Notifications"
+              description="Personal notification preferences are not available from the backend yet."
+            />
+          )}
+          {tab === "activity" && (
+            <UnavailableSettings
+              title="Activity"
+              description="The backend has not exposed a project activity endpoint for Project Managers yet."
+            />
+          )}
+          {tab === "danger" && <SettingsDangerZone project={project} userId={workspace.userId} />}
         </div>
       </div>
     </div>
@@ -448,8 +456,17 @@ function SettingsContent({ workspace }: { workspace: WorkspaceProps }) {
 export function SettingsSection(workspace: WorkspaceProps) {
   const { project, userId } = workspace;
   return (
-    <SettingsPreviewProvider key={`${project.id}:${userId}`} project={project}>
+    <SettingsApiProvider key={`${project.id}:${userId}`} project={project}>
       <SettingsContent workspace={workspace} />
-    </SettingsPreviewProvider>
+    </SettingsApiProvider>
+  );
+}
+
+function UnavailableSettings({ title, description }: { title: string; description: string }) {
+  return (
+    <div className="flex flex-col gap-4">
+      <SettingsHeading title={title} />
+      <p className="max-w-prose text-muted-foreground text-sm">{description}</p>
+    </div>
   );
 }

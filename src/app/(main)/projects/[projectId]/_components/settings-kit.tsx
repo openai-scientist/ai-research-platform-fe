@@ -8,29 +8,56 @@ import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import type { SettingValues } from "@/lib/api/services/fetch-project-settings";
 
+import { settingsFormValues, useProjectSettings } from "./settings-api";
 import { SaveBar, SettingsHeading, SettingsRow, useUnsavedWarning } from "./settings-panel";
-import { useSettingsPreview } from "./settings-preview";
 
-/** Saved mock values survive tab changes until the preview is reset or the page reloads. */
+/** Form edits remain local until the server acknowledges the save. */
 export function useDraft<T extends Record<string, unknown>>(id: string, initial: T) {
-  const preview = useSettingsPreview();
-  const [saved, setSaved] = useState(() => (preview.drafts.get(id) as T | undefined) ?? initial);
+  const settings = useProjectSettings();
+  const section = settings.snapshot.sections[id as keyof typeof settings.snapshot.sections];
+  const [saved, setSaved] = useState(() => ({ ...initial, ...settingsFormValues(id, section ?? {}) }) as T);
   const [values, setValues] = useState(saved);
+  const [version, setVersion] = useState(settings.snapshot.version);
   const dirty = JSON.stringify(values) !== JSON.stringify(saved);
   useUnsavedWarning(dirty);
   const set =
     <K extends keyof T>(key: K) =>
     (value: T[K]) =>
       setValues((current) => ({ ...current, [key]: value }));
-  const save = () => {
-    preview.drafts.set(id, values);
-    setSaved(values);
+  const save = async () => {
+    const changed = Object.fromEntries(
+      Object.entries(values).filter(([key, value]) => JSON.stringify(value) !== JSON.stringify(saved[key])),
+    ) as SettingValues;
+    if (!Object.keys(changed).length) return true;
+    const result = await settings.save(id, changed, version);
+    if (!result) return false;
+    if ("conflictVersion" in result) {
+      setVersion(result.conflictVersion);
+      return false;
+    }
+    const canonical = { ...values, ...result.values } as T;
+    setSaved(canonical);
+    setValues(canonical);
+    setVersion(result.version);
+    return true;
   };
-  return { values, set, dirty, save, discard: () => setValues(saved) };
+  return {
+    values,
+    set,
+    dirty,
+    save,
+    discard: () => {
+      const canonical = { ...initial, ...settingsFormValues(id, section ?? {}) } as T;
+      setSaved(canonical);
+      setValues(canonical);
+      setVersion(settings.snapshot.version);
+    },
+  };
 }
 
-/** A settings tab with explicit session-only mock saving. */
+/** A form that saves one backend settings section. */
 export function DraftTab({
   id,
   title,
@@ -45,43 +72,53 @@ export function DraftTab({
 }: {
   id: string;
   title: string;
-  /** Names the settings in the mock save feedback. */
+  /** Names the settings in the save feedback. */
   what: string;
   dirty: boolean;
   onDiscard: () => void;
-  onSave: () => void;
+  onSave: () => Promise<boolean>;
   /** Returns an error to show, or nothing when the values are fine. */
   validate?: () => string | undefined;
   action?: ReactNode;
   children: ReactNode;
   hideHeading?: boolean;
 }) {
-  const preview = useSettingsPreview();
+  const settings = useProjectSettings();
+  const inactive = Object.entries(settings.snapshot.capabilities).some(
+    ([key, capability]) => key.startsWith(`${id}.`) && !capability.supported,
+  );
   return (
     <div className="flex flex-col gap-6">
       {!hideHeading && <SettingsHeading title={title} action={action} />}
+      {inactive && (
+        <p className="text-muted-foreground text-xs">
+          {id === "access"
+            ? "Invitation expiry is applied, up to the platform maximum. Other access preferences are saved but not enforced yet."
+            : "These preferences are saved to your project but are not applied by the research engine yet."}
+        </p>
+      )}
       <form
         id={`settings-${id}`}
         aria-label={title}
         noValidate
         className="flex flex-col gap-6"
-        onSubmit={(event) => {
+        onSubmit={async (event) => {
           event.preventDefault();
           const problem = validate?.();
           if (problem) return void toast.error(problem);
-          onSave();
-          preview.record(`updated ${what}.`);
-          toast.success("Changes saved in this preview.");
+          if (await onSave()) toast.success("Settings saved", { description: what });
         }}
       >
-        {children}
+        <fieldset disabled={settings.pending} className="flex min-w-0 flex-col gap-6">
+          {children}
+        </fieldset>
       </form>
-      <SaveBar dirty={dirty} form={`settings-${id}`} onDiscard={onDiscard} />
+      <SaveBar dirty={dirty} pending={settings.pending} form={`settings-${id}`} onDiscard={onDiscard} />
     </div>
   );
 }
 
-export type Option = { value: string; label: string };
+export type Option = { value: string; label: string; disabled?: boolean };
 
 export function ChoiceRow({
   id,
@@ -111,7 +148,7 @@ export function ChoiceRow({
         <SelectContent>
           <SelectGroup>
             {options.map((option) => (
-              <SelectItem key={option.value} value={option.value}>
+              <SelectItem key={option.value} value={option.value} disabled={option.disabled}>
                 {option.label}
               </SelectItem>
             ))}

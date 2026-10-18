@@ -285,7 +285,8 @@ export function MembersSection({
           ) ?? (
             <>
               <p className="text-muted-foreground text-xs">
-                People join with the role shown once they accept. An invitation lasts 24 hours.
+                People join with the role shown once they accept. Each invitation shows its expiry below. The project
+                expiry policy is capped by the platform maximum.
               </p>
               <div className="hidden @3xl/members:block">
                 <MembersTable
