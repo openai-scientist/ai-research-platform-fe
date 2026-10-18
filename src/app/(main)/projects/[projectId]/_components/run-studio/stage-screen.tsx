@@ -259,7 +259,6 @@ export function StageScreen({
   live,
   scroller,
   onOpenReport,
-  onOpenFindings,
   onClose,
 }: {
   state: RunState;
@@ -268,7 +267,6 @@ export function StageScreen({
   live: boolean;
   scroller: RefObject<HTMLElement | null>;
   onOpenReport(): void;
-  onOpenFindings(): void;
   onClose(): void;
 }) {
   const report = state.stages.report?.content;
@@ -299,7 +297,6 @@ export function StageScreen({
           runLabel={runLabel}
           scroller={scroller}
           onOpenReport={onOpenReport}
-          onOpenFindings={onOpenFindings}
           onClose={onClose}
         />
       </div>

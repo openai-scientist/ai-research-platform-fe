@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   beginGoogleConnection,
   consumeGoogleConnectionCallback,
+  googleCallbackElsewhere,
   takeGoogleConnectionIntent,
 } from "./google-connection-state";
 
@@ -25,18 +26,17 @@ describe("Google connection handoff", () => {
     });
   });
 
-  it.each(["google_sheets", "google_drive"] as const)("restores %s while stripping secrets and grants", (kind) => {
+  it.each(["google_sheets", "google_drive"] as const)("restores %s while stripping anything else", (kind) => {
     beginGoogleConnection("p", "u", {
       action: "create",
-      draft: { kind, name: "Study data", target: "source-id", password: "secret", grantId: "secret-grant" },
+      kind,
+      password: "secret",
+      grantId: "secret-grant",
     } as unknown as Parameters<typeof beginGoogleConnection>[2]);
     expect(assign).toHaveBeenCalledWith("/api/v1/projects/p/connections/google/start");
     expect(takeGoogleConnectionIntent("p", "other-user")).toBeNull();
     expect(takeGoogleConnectionIntent("other-project", "u")).toBeNull();
-    expect(takeGoogleConnectionIntent("p", "u")).toEqual({
-      action: "create",
-      draft: { kind, name: "Study data", target: "source-id" },
-    });
+    expect(takeGoogleConnectionIntent("p", "u")).toEqual({ action: "create", kind, returnTo: "connections" });
     expect(takeGoogleConnectionIntent("p", "u")).toBeNull();
   });
 
@@ -61,6 +61,24 @@ describe("Google connection handoff", () => {
     expect(consumeGoogleConnectionCallback()).toBeNull();
   });
 
+  it("passes Google's answer on, untouched, to the page that asked for it", () => {
+    const grant = "b923cabc-0754-4384-88d5-151c9af46788";
+    const kind = "google_sheets";
+    window.location.href = `https://app.example.com/projects/p/connections?google_grant=${grant}`;
+    expect(googleCallbackElsewhere("p", "u", "connections")).toBeNull();
+
+    beginGoogleConnection("p", "u", { action: "create", kind, returnTo: "datasets" });
+    expect(googleCallbackElsewhere("p", "u", "connections")).toBe(`/projects/p/datasets?google_grant=${grant}`);
+    expect(googleCallbackElsewhere("p", "u", "datasets")).toBeNull();
+    expect(takeGoogleConnectionIntent("p", "u")).toMatchObject({ returnTo: "datasets" });
+
+    beginGoogleConnection("p", "u", { action: "create", kind });
+    expect(googleCallbackElsewhere("p", "u", "connections")).toBeNull();
+    window.location.href = "https://app.example.com/projects/p/connections";
+    beginGoogleConnection("p", "u", { action: "create", kind, returnTo: "datasets" });
+    expect(googleCallbackElsewhere("p", "u", "connections")).toBeNull();
+  });
+
   it("rejects malformed grants and handles error callbacks without a grant", () => {
     window.location.href = "https://app.example.com/projects?google_grant=invalid&error=GOOGLE_ACCESS_NOT_GRANTED";
     expect(consumeGoogleConnectionCallback()).toEqual({ grantId: null, error: "GOOGLE_ACCESS_NOT_GRANTED" });
@@ -73,12 +91,9 @@ describe("Google connection handoff", () => {
         throw new Error("blocked");
       },
     });
-    expect(() =>
-      beginGoogleConnection("p", "u", {
-        action: "create",
-        draft: { kind: "google_sheets", name: "Study", target: "id" },
-      }),
-    ).toThrow("Allow browser session storage");
+    expect(() => beginGoogleConnection("p", "u", { action: "create", kind: "google_sheets" })).toThrow(
+      "Allow browser session storage",
+    );
     expect(assign).not.toHaveBeenCalled();
   });
 });

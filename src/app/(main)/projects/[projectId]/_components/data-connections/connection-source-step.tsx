@@ -45,7 +45,7 @@ export function ConnectionCatalogRefresh({ flow }: { flow: ConnectionFlowState }
   return (
     <Button
       variant="ghost"
-      size="icon"
+      size="icon-lg"
       disabled={flow.disabled}
       onClick={() => void flow.reloadCatalog()}
       aria-label="Reload catalog"

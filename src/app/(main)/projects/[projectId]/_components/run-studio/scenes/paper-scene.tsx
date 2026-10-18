@@ -3,7 +3,7 @@
 import { type RefObject, useEffect, useState } from "react";
 
 import { cn } from "cn";
-import { ArrowLeft, FileText, Lightbulb } from "lucide-react";
+import { ArrowLeft, FileText } from "lucide-react";
 import { motion } from "motion/react";
 
 import { Button } from "@/components/ui/button";
@@ -22,7 +22,6 @@ export function PaperScene({
   runLabel,
   scroller,
   onOpenReport,
-  onOpenFindings,
   onClose,
 }: {
   state: RunState;
@@ -31,7 +30,6 @@ export function PaperScene({
   runLabel: string;
   scroller: RefObject<HTMLElement | null>;
   onOpenReport(): void;
-  onOpenFindings(): void;
   onClose(): void;
 }) {
   const [current, setCurrent] = useState(paper.sections[0]?.id);
@@ -181,11 +179,7 @@ export function PaperScene({
           </ol>
         </section>
         <div className="flex flex-col gap-2">
-          <Button onClick={onOpenFindings} className="justify-start">
-            <Lightbulb />
-            Open in Findings
-          </Button>
-          <Button variant="outline" onClick={onOpenReport} className="justify-start">
+          <Button onClick={onOpenReport} className="justify-start">
             <FileText />
             View the report
           </Button>

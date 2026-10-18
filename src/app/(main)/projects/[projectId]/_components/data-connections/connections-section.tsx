@@ -1,161 +1,39 @@
 "use client";
 
-import { type ReactNode, useCallback, useMemo, useRef, useState } from "react";
+import { type ReactNode, useMemo, useRef, useState } from "react";
 
 import { useRouter } from "next/navigation";
 
-import { cn } from "cn";
-import { Download, MoreHorizontal, Plug, PlugZap, Search, X } from "lucide-react";
-import { toast } from "sonner";
+import { Plug, PlugZap, Search, X } from "lucide-react";
 
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import {
   useAllDataConnections,
   useConnectionAccess,
   useConnectionActions,
+  useDatasetsByConnection,
   useGoogleConnectionsAvailable,
 } from "@/hooks/use-data-connections";
 import {
   type ConnectionItem,
   type ConnectionKind,
   isGoogleConnection,
-  isTimeSeriesConnection,
 } from "@/lib/api/services/fetch-data-connections";
 
-import { WorkspaceFormDialog } from "../workspace-form-dialog";
+import { ConnectionCardsSkeleton } from "../workspace-skeletons";
 import { ListState, perform, type WorkspaceProps } from "../workspace-ui";
-import { CONNECTION_PROVIDERS, ConnectionLogo, connectionStatus, connectionTarget } from "./connection-display";
+import { ConnectionCard } from "./connection-card";
+import { CONNECTION_PROVIDERS, connectionTarget } from "./connection-display";
 import { ConnectionFlow } from "./connection-flow";
 import { ConnectionProviderPicker, type ProviderCounts } from "./connection-provider-picker";
-import { GoogleReconnectButton } from "./google-reconnect-button";
+import type { GoogleSelectionResult } from "./google-connection-selection";
+import { PickedImportFlow } from "./picked-import-flow";
 import { useGoogleConnectionCallback } from "./use-google-connection-callback";
-
-function RenameConnection({
-  connection,
-  projectId,
-  onClose,
-}: {
-  connection: ConnectionItem;
-  projectId: string;
-  onClose: () => void;
-}) {
-  const [name, setName] = useState(connection.name);
-  const maxNameLength = isTimeSeriesConnection(connection.kind) ? 160 : 120;
-  const actions = useConnectionActions(projectId);
-  const access = useConnectionAccess(projectId);
-  return (
-    <WorkspaceFormDialog
-      title="Rename connection"
-      description="Only the name can be changed. Credentials stay unchanged."
-      open
-      onOpenChange={(open) => {
-        if (!open) onClose();
-      }}
-      showTrigger={false}
-      submitLabel="Save name"
-      pending={actions.rename.isPending}
-      disabled={access.rateLimited}
-      noValidate
-      onSubmit={async () => {
-        const trimmed = name.trim();
-        if (trimmed.length < 2 || trimmed.length > maxNameLength) {
-          toast.error(`Connection name must contain 2 to ${maxNameLength} characters.`);
-          return;
-        }
-        return Boolean(
-          await perform(() => actions.rename.mutateAsync({ id: connection.id, name: trimmed }), {
-            title: "Connection renamed",
-            description: trimmed,
-          }),
-        );
-      }}
-    >
-      <FieldGroup>
-        <Field>
-          <FieldLabel htmlFor="connection-rename-name">Connection name</FieldLabel>
-          <Input
-            id="connection-rename-name"
-            value={name}
-            maxLength={maxNameLength}
-            disabled={actions.rename.isPending}
-            onChange={(event) => setName(event.target.value)}
-          />
-        </Field>
-      </FieldGroup>
-    </WorkspaceFormDialog>
-  );
-}
-
-const DETAIL_LABELS: Record<string, string> = {
-  ssl: "TLS mode",
-  url: "Server URL",
-  project_id: "Project ID",
-  account_email: "Google account",
-  folder_name: "Folder",
-  title: "Spreadsheet",
-};
-
-function detailValue(value: unknown) {
-  if (value === null || value === "") return "—";
-  if (typeof value === "boolean") return value ? "Yes" : "No";
-  return String(value);
-}
-
-function ConnectionDetails({ connection, onClose }: { connection: ConnectionItem; onClose: () => void }) {
-  return (
-    <WorkspaceFormDialog
-      title={connection.name}
-      description={`${CONNECTION_PROVIDERS[connection.kind].label} connection`}
-      open
-      onOpenChange={(open) => {
-        if (!open) onClose();
-      }}
-      showTrigger={false}
-      hideSubmit
-      submitLabel="Close"
-      onSubmit={() => undefined}
-    >
-      <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        {Object.entries(connection.config)
-          .filter(([key]) => key !== "google_subject")
-          .map(([key, value]) => (
-            <div key={key} className="min-w-0">
-              <dt className="text-muted-foreground text-xs first-letter:uppercase">
-                {DETAIL_LABELS[key] ?? key.replaceAll("_", " ")}
-              </dt>
-              <dd className="mt-1 break-words text-sm">{detailValue(value)}</dd>
-            </div>
-          ))}
-        <div>
-          <dt className="text-muted-foreground text-xs">Status</dt>
-          <dd className="mt-1 text-sm">{connectionStatus(connection)}</dd>
-        </div>
-        <div>
-          <dt className="text-muted-foreground text-xs">Last tested</dt>
-          <dd className="mt-1 text-sm">
-            {connection.last_tested_at ? new Date(connection.last_tested_at).toLocaleString("en-US") : "Not tested"}
-          </dd>
-        </div>
-      </dl>
-    </WorkspaceFormDialog>
-  );
-}
 
 function matches(connection: ConnectionItem, term: string) {
   const text = [
@@ -172,24 +50,33 @@ function matches(connection: ConnectionItem, term: string) {
 // Search only helps once there are more connections than fit at a glance.
 const SEARCH_FROM = 7;
 
-export function ConnectionsSection({ project, canWrite, userId, header }: WorkspaceProps & { header?: ReactNode }) {
+export function ConnectionsSection({
+  project,
+  canWrite,
+  canManage,
+  userId,
+  header,
+}: WorkspaceProps & { header?: ReactNode }) {
   const router = useRouter();
   const access = useConnectionAccess(project.id);
   const query = useAllDataConnections(project.id);
-  const connections = useMemo(() => query.data ?? [], [query.data]);
+  const all = useMemo(() => query.data ?? [], [query.data]);
+  // The member's own Google account picks files and is not a source: it shows on the Google cards instead.
+  const account = all.find((connection) => connection.kind === "google" && connection.created_by_user_id === userId);
+  const connections = useMemo(() => all.filter((connection) => connection.kind !== "google"), [all]);
   const [search, setSearch] = useState("");
   const [kindFilter, setKindFilter] = useState<ConnectionKind | null>(null);
   const listRef = useRef<HTMLElement>(null);
   const actions = useConnectionActions(project.id);
   const googleAvailable = useGoogleConnectionsAvailable(canWrite);
-  const [flow, setFlow] = useState<{
-    connection?: ConnectionItem;
-    kind?: ConnectionKind;
-  } | null>(null);
-  const resumeGoogle = useCallback((connection: ConnectionItem) => setFlow({ connection }), []);
-  const googleCallback = useGoogleConnectionCallback(project.id, userId, canWrite, resumeGoogle);
-  const [rename, setRename] = useState<ConnectionItem | null>(null);
-  const [details, setDetails] = useState<ConnectionItem | null>(null);
+  const datasets = useDatasetsByConnection(project.id);
+  // A provider without Google's sign-in starts with its details form, then goes on to import from it.
+  const [adding, setAdding] = useState<ConnectionKind | null>(null);
+  const [importing, setImporting] = useState<ConnectionItem | null>(null);
+  // A picked spreadsheet or folder goes straight on to its import; it is listed once something was imported.
+  const [picked, setPicked] = useState<GoogleSelectionResult | null>(null);
+  const googleCallback = useGoogleConnectionCallback(project.id, userId, canWrite, account, setPicked);
+  const [disconnecting, setDisconnecting] = useState(false);
   const [remove, setRemove] = useState<ConnectionItem | null>(null);
   const disabled = actions.pending || googleCallback.pending || access.rateLimited;
   const canAdd = canWrite && access.configured;
@@ -210,15 +97,30 @@ export function ConnectionsSection({ project, canWrite, userId, header }: Worksp
   );
   const loading = query.isPending && !access.rateLimited;
   const hasConnections = connections.length > 0;
+  const canImport = canWrite && access.configured;
+  // Anyone who can edit the project imports through it; its creator or a manager changes it.
+  const datasetsOf = (connection: ConnectionItem) =>
+    datasets.data ? (datasets.data.get(connection.id) ?? []) : undefined;
+  // A source with data opens its most recent dataset; one with nothing imported yet starts its import.
+  const open = (connection: ConnectionItem) => {
+    const imported = datasetsOf(connection);
+    if (!imported) return;
+    const latest = imported.reduce<(typeof imported)[number] | undefined>(
+      (newest, dataset) => (!newest || dataset.updated_at > newest.updated_at ? dataset : newest),
+      undefined,
+    );
+    if (latest) router.push(`/projects/${project.id}/datasets/${latest.id}`);
+    else if (canImport) setImporting(connection);
+  };
 
   const add = (kind: ConnectionKind) => {
     if (disabled || !canAdd) return;
     if (!isGoogleConnection(kind)) {
-      setFlow({ kind });
+      setAdding(kind);
       return;
     }
-    // Finish Google's popup on this page, then open the saved connection at source selection.
-    googleCallback.startCreate(kind);
+    // Google Picker opens with the saved account, after signing in when there is none yet.
+    googleCallback.startCreate(kind === "google_drive" ? "google_drive" : "google_sheets");
   };
   const show = (kind: ConnectionKind) => {
     setKindFilter(kind);
@@ -249,7 +151,7 @@ export function ConnectionsSection({ project, canWrite, userId, header }: Worksp
           <div className="flex min-h-9 flex-wrap items-center justify-between gap-3">
             <div className="flex min-w-0 flex-wrap items-center gap-2.5">
               <h2 id="saved-connections-title" className="font-semibold text-lg">
-                Your connections
+                Connections
               </h2>
               {hasConnections && (
                 <span className="text-muted-foreground text-sm tabular-nums">
@@ -287,7 +189,14 @@ export function ConnectionsSection({ project, canWrite, userId, header }: Worksp
               </InputGroup>
             )}
           </div>
-          <ListState pending={loading} failed={query.isError} empty={false} title="Connections" retry={query.refetch} />
+          <ListState
+            pending={loading}
+            failed={query.isError}
+            empty={false}
+            title="Connections"
+            retry={query.refetch}
+            loading={<ConnectionCardsSkeleton label="Loading connections" />}
+          />
           {hasConnections && !shown.length && (
             <div className="flex flex-wrap items-center gap-3 rounded-xl border border-dashed px-4 py-5 text-muted-foreground text-sm">
               No connections match {term ? <>“{search.trim()}”</> : "this filter"}.
@@ -304,116 +213,21 @@ export function ConnectionsSection({ project, canWrite, userId, header }: Worksp
             </div>
           )}
           <ul className="grid min-w-0 grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {shown.map((connection) => {
-              const revoked = isRevoked(connection);
-              const failed = Boolean(connection.last_error_code) || revoked;
-              const target =
-                isGoogleConnection(connection.kind) && typeof connection.config.account_email === "string"
-                  ? connection.config.account_email
-                  : connectionTarget(connection);
-              return (
-                <li key={connection.id} className="min-w-0">
-                  <Card size="sm" className="h-full">
-                    <CardHeader className="flex flex-row items-center gap-3">
-                      <span className="grid size-10 shrink-0 place-items-center [&_img]:size-9 [&_svg]:size-9">
-                        <ConnectionLogo kind={connection.kind} />
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <CardTitle>
-                          <button
-                            type="button"
-                            className="max-w-full cursor-pointer break-words text-left font-medium text-sm underline-offset-4 outline-none hover:underline focus-visible:underline"
-                            onClick={() => setDetails(connection)}
-                          >
-                            {connection.name}
-                          </button>
-                        </CardTitle>
-                        <CardDescription className="truncate" title={target || undefined}>
-                          {CONNECTION_PROVIDERS[connection.kind].label}
-                          {target && <> · {target}</>}
-                        </CardDescription>
-                      </div>
-                      {canWrite && (
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon-sm"
-                              className="-mr-1 shrink-0 self-start"
-                              disabled={disabled}
-                              aria-label={`Manage ${connection.name}`}
-                            >
-                              <MoreHorizontal />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="min-w-44">
-                            <DropdownMenuGroup>
-                              <DropdownMenuItem onSelect={() => setDetails(connection)}>Details</DropdownMenuItem>
-                              <DropdownMenuItem onSelect={() => setRename(connection)}>Rename</DropdownMenuItem>
-                              {access.configured && (
-                                <DropdownMenuItem
-                                  onSelect={() => {
-                                    void perform(async () => {
-                                      const result = await actions.test.mutateAsync(connection.id);
-                                      if (result.data.last_error_code) toast.error(connectionStatus(result.data));
-                                      else toast.success("Connection test succeeded.");
-                                    });
-                                  }}
-                                >
-                                  Test connection
-                                </DropdownMenuItem>
-                              )}
-                            </DropdownMenuGroup>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem variant="destructive" onSelect={() => setRemove(connection)}>
-                              Delete connection
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      )}
-                    </CardHeader>
-                    <CardContent className="mt-auto flex flex-wrap items-center justify-between gap-2">
-                      <Badge
-                        variant={failed ? "destructive" : "outline"}
-                        title={
-                          connection.last_tested_at
-                            ? `Last tested ${new Date(connection.last_tested_at).toLocaleString("en-US")}`
-                            : undefined
-                        }
-                        className={cn(
-                          !failed &&
-                            connection.last_tested_at &&
-                            "border-transparent bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
-                        )}
-                      >
-                        {revoked ? "Reconnect required" : connectionStatus(connection)}
-                      </Badge>
-                      {canAdd && (
-                        <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
-                          {revoked && (
-                            <GoogleReconnectButton
-                              projectId={project.id}
-                              connectionId={connection.id}
-                              accountEmail={String(connection.config.account_email ?? "")}
-                              disabled={disabled}
-                            />
-                          )}
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={disabled || revoked}
-                            onClick={() => setFlow({ connection })}
-                          >
-                            <Download data-icon="inline-start" />
-                            Import data
-                          </Button>
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                </li>
-              );
-            })}
+            {shown.map((connection) => (
+              <li key={connection.id} className="min-w-0">
+                <ConnectionCard
+                  connection={connection}
+                  projectId={project.id}
+                  datasetCount={datasetsOf(connection)?.length}
+                  canImport={canImport}
+                  canRemove={canWrite && (canManage || connection.created_by_user_id === userId)}
+                  revoked={isRevoked(connection)}
+                  disabled={disabled}
+                  onOpen={() => open(connection)}
+                  onRemove={() => setRemove(connection)}
+                />
+              </li>
+            ))}
           </ul>
         </section>
       )}
@@ -424,6 +238,8 @@ export function ConnectionsSection({ project, canWrite, userId, header }: Worksp
           </h2>
           <ConnectionProviderPicker
             counts={counts}
+            googleAccount={account && String(account.config.account_email ?? "")}
+            onDisconnectGoogle={() => setDisconnecting(true)}
             googleAvailable={googleAvailable}
             disabled={disabled || !canAdd}
             onAdd={add}
@@ -447,25 +263,41 @@ export function ConnectionsSection({ project, canWrite, userId, header }: Worksp
           </Empty>
         )
       )}
-      {flow && canWrite && (flow.connection ?? (flow.kind && !isGoogleConnection(flow.kind))) && (
+      {adding && canWrite && (
         <ConnectionFlow
           project={project}
-          initialConnection={flow.connection}
-          initialKind={flow.kind}
-          googleAvailable={googleAvailable}
-          userId={userId}
+          initialKind={adding}
           canWrite={canWrite}
-          onClose={() => setFlow(null)}
+          onClose={() => setAdding(null)}
           onComplete={(dataset) => {
-            setFlow(null);
+            setAdding(null);
             router.push(`/projects/${project.id}/datasets/${dataset.id}`);
           }}
         />
       )}
-      {rename && canWrite && (
-        <RenameConnection connection={rename} projectId={project.id} onClose={() => setRename(null)} />
+      {picked && canWrite && (
+        <PickedImportFlow
+          project={project}
+          canWrite={canWrite}
+          picked={picked}
+          backLabel="Data connections"
+          onClose={() => setPicked(null)}
+        />
       )}
-      {details && <ConnectionDetails connection={details} onClose={() => setDetails(null)} />}
+      {importing && canWrite && (
+        <ConnectionFlow
+          key={importing.id}
+          project={project}
+          initialConnection={importing}
+          canWrite={canWrite}
+          backLabel="Data connections"
+          onClose={() => setImporting(null)}
+          onComplete={(dataset) => {
+            setImporting(null);
+            router.push(`/projects/${project.id}/datasets/${dataset.id}`);
+          }}
+        />
+      )}
       {canWrite && googleAvailable && (
         <ConfirmDialog
           open={Boolean(googleCallback.reconnect) && !googleCallback.pending}
@@ -484,12 +316,29 @@ export function ConnectionsSection({ project, canWrite, userId, header }: Worksp
         />
       )}
       <ConfirmDialog
+        open={disconnecting && Boolean(account)}
+        onOpenChange={setDisconnecting}
+        title="Disconnect your Google account?"
+        description="Spreadsheets and folders already added keep working for the project. To add more, you will sign in with Google again."
+        confirmLabel="Disconnect"
+        cancelLabel="Keep it"
+        destructive
+        onConfirm={() => {
+          if (!account || disabled) return;
+          void perform(() => actions.remove.mutateAsync(account.id), {
+            title: "Google account disconnected",
+            description: String(account.config.account_email ?? ""),
+          });
+          setDisconnecting(false);
+        }}
+      />
+      <ConfirmDialog
         open={Boolean(remove)}
         onOpenChange={(open) => {
           if (!open) setRemove(null);
         }}
-        title="Delete connection?"
-        description="Saved dataset versions will remain. Future refreshes using this connection will stop working."
+        title={`Delete ${remove?.name ?? "connection"}?`}
+        description="Datasets already imported from it stay. Refreshing them from this source will stop working."
         confirmLabel="Delete connection"
         destructive
         onConfirm={() => {

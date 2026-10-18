@@ -9,7 +9,7 @@ import { getProjectDashboard, type ProjectDashboard } from "./project-dashboard-
 
 export type ProjectPreview = Pick<
   ProjectDashboard,
-  "activeHypothesis" | "candidateHypotheses" | "runPhase" | "outcomes" | "recentFindings" | "warnings" | "report"
+  "activeHypothesis" | "candidateHypotheses" | "runPhase" | "outcomes" | "warnings" | "report"
 >;
 
 const previews = new Map<string, ProjectPreview>();
@@ -32,7 +32,6 @@ export function createProjectPreview(): ProjectPreview {
     candidateHypotheses: sample.candidateHypotheses,
     runPhase: sample.runPhase,
     outcomes: sample.outcomes,
-    recentFindings: sample.recentFindings,
     warnings: sample.warnings,
     report: sample.report,
   });

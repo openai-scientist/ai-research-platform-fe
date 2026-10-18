@@ -76,6 +76,7 @@ export function GoogleReconnectButton({
               action: "reauthorize",
               connectionId,
               accountEmail: email ?? "",
+              returnTo: window.location.pathname,
             });
           } catch (error) {
             showConnectionError(error, projectId);

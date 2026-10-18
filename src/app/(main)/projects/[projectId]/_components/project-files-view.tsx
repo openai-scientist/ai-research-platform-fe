@@ -4,8 +4,8 @@ import { cn } from "cn";
 import { format } from "date-fns";
 import { FileSpreadsheet, FileText } from "lucide-react";
 
+import { FileCardsSkeleton, ListRowsSkeleton } from "@/app/(main)/_components/content-skeletons";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { ProjectFileItem, ProjectFileKind } from "@/lib/api/services/fetch-project-files";
 
@@ -61,13 +61,9 @@ export function ProjectFilesView({
 
   if (pending) {
     return view === "grid" ? (
-      <div className={gridClassName} role="status" aria-label="Loading documents">
-        {[0, 1, 2, 3].map((index) => (
-          <Skeleton key={index} className="h-56 w-full" />
-        ))}
-      </div>
+      <FileCardsSkeleton label="Loading documents" />
     ) : (
-      <Skeleton className="h-32 w-full" aria-label="Loading documents" />
+      <ListRowsSkeleton rows={4} label="Loading documents" />
     );
   }
 

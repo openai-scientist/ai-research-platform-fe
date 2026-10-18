@@ -1,5 +1,5 @@
-import { PageSkeleton } from "@/app/(main)/_components/page-skeleton";
+import { ExperimentsSkeleton } from "../_components/workspace-skeletons";
 
 export default function Loading() {
-  return <PageSkeleton layout="form" label="Loading research flow" />;
+  return <ExperimentsSkeleton />;
 }

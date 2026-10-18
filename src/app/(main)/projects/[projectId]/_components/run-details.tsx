@@ -33,6 +33,7 @@ import { ExperimentTabs } from "./experiment-tabs";
 import { FrameReviews } from "./frame-reviews";
 import { RunComment } from "./run-comment";
 import { WorkspaceFormDialog } from "./workspace-form-dialog";
+import { RunSummarySkeleton } from "./workspace-skeletons";
 import { ActionRow, ConfirmAction, ListState, LoadMore, perform, type WorkspaceProps } from "./workspace-ui";
 
 export function RunDetails({
@@ -162,6 +163,7 @@ export function RunDetails({
             empty={!run}
             title="Run details"
             retry={query.refetch}
+            loading={<RunSummarySkeleton label="Loading run details" />}
           />
           {run && (
             <>

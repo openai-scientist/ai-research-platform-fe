@@ -4,9 +4,7 @@ import { useState } from "react";
 
 import { toast } from "sonner";
 
-import { DataTable } from "@/components/data-table";
 import { DialogScrollArea } from "@/components/dialog-scroll-area";
-import { ManagementStatusBadge } from "@/components/management-status-badge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -25,8 +23,7 @@ import { Textarea } from "@/components/ui/textarea";
 
 import { RUN_PHASES, type RunPhase } from "./project-dashboard-data";
 import { type ProjectPreview, useProjectPreview } from "./use-project-preview";
-import { WorkspaceFormDialog } from "./workspace-form-dialog";
-import { ActionRow, perform, type WorkspaceProps } from "./workspace-ui";
+import { ActionRow, perform } from "./workspace-ui";
 
 type HypothesisDraft = { statement: string; status: ProjectPreview["activeHypothesis"]["status"]; phase: RunPhase };
 
@@ -318,154 +315,5 @@ export function ResearchPreviewDialog({ projectId, canEdit }: { projectId: strin
         {open && <ResearchPreviewPanel query={query} canEdit={canEdit} onClose={() => setOpen(false)} />}
       </DialogContent>
     </Dialog>
-  );
-}
-
-export function FindingsSection({ project, canWrite }: WorkspaceProps) {
-  const query = useProjectPreview(project.id);
-  const [statement, setStatement] = useState("");
-  const [outcome, setOutcome] = useState("Finding — supported");
-  return (
-    <div className="rounded-xl border bg-card p-4">
-      <DataTable
-        toolbar={
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="secondary" title="Sample data. Changes reset on page reload.">
-              Sample data
-            </Badge>
-            <div className="ml-auto flex flex-wrap items-center gap-2">
-              <ResearchPreviewDialog projectId={project.id} canEdit={canWrite} />
-              {canWrite && (
-                <WorkspaceFormDialog
-                  title="Add finding"
-                  triggerVariant="default"
-                  description="Create a sample research finding. Changes reset on page reload."
-                  submitLabel="Add finding"
-                  pending={query.update.isPending}
-                  noValidate
-                  onSubmit={async (event) => {
-                    event.preventDefault();
-                    if (!statement.trim()) {
-                      toast.error("A finding statement is required.");
-                      return;
-                    }
-                    const result = await perform(() =>
-                      query.update.mutateAsync((current) => ({
-                        ...current,
-                        outcomes: {
-                          ...current.outcomes,
-                          finding: current.outcomes.finding + (outcome === "Finding — supported" ? 1 : 0),
-                          negative: current.outcomes.negative + (outcome === "Negative result" ? 1 : 0),
-                          inconclusive: current.outcomes.inconclusive + (outcome === "Inconclusive" ? 1 : 0),
-                        },
-                        recentFindings: [
-                          {
-                            id: `FND-${crypto.randomUUID().slice(0, 8)}`,
-                            statement: statement.trim(),
-                            outcome,
-                            status: "Needs Review",
-                            claimLevel: "Sample finding",
-                            updatedAt: "Just now",
-                          },
-                          ...current.recentFindings,
-                        ],
-                      })),
-                    );
-                    if (result) {
-                      setStatement("");
-                      return true;
-                    }
-                  }}
-                >
-                  <FieldGroup>
-                    <Field>
-                      <FieldLabel htmlFor="finding-statement">Finding statement</FieldLabel>
-                      <Textarea
-                        id="finding-statement"
-                        value={statement}
-                        onChange={(event) => setStatement(event.target.value)}
-                      />
-                    </Field>
-                    <Field>
-                      <FieldLabel>Outcome</FieldLabel>
-                      <Select value={outcome} onValueChange={setOutcome}>
-                        <SelectTrigger aria-label="Finding outcome">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectGroup>
-                            {["Finding — supported", "Negative result", "Inconclusive"].map((value) => (
-                              <SelectItem key={value} value={value}>
-                                {value}
-                              </SelectItem>
-                            ))}
-                          </SelectGroup>
-                        </SelectContent>
-                      </Select>
-                    </Field>
-                  </FieldGroup>
-                </WorkspaceFormDialog>
-              )}
-            </div>
-          </div>
-        }
-        rows={query.data?.recentFindings ?? []}
-        getRowId={(finding) => finding.id}
-        columns={[
-          {
-            id: "Finding",
-            label: "Finding",
-            hideable: false,
-            cellClassName: "max-w-lg whitespace-normal",
-            cell: (finding) => <>{finding.statement}</>,
-          },
-          { id: "Outcome", label: "Outcome", cell: (finding) => <>{finding.outcome}</> },
-          {
-            id: "Status",
-            label: "Status",
-            cell: (finding) => (
-              <>
-                <ManagementStatusBadge status={finding.status} />
-              </>
-            ),
-          },
-          ...(canWrite
-            ? [
-                {
-                  id: "Review",
-                  label: "Review",
-                  align: "right" as const,
-                  cell: (finding: ProjectPreview["recentFindings"][number]) => (
-                    <>
-                      <div className="flex justify-end gap-2">
-                        {["Validated", "Rejected"].map((status) => (
-                          <Button
-                            key={status}
-                            variant="outline"
-                            size="sm"
-                            disabled={query.update.isPending || finding.status === status}
-                            onClick={() =>
-                              void perform(() =>
-                                query.update.mutateAsync((current) => ({
-                                  ...current,
-                                  recentFindings: current.recentFindings.map((item) =>
-                                    item.id === finding.id ? { ...item, status } : item,
-                                  ),
-                                })),
-                              )
-                            }
-                          >
-                            {status === "Validated" ? "Validate" : "Reject"}
-                          </Button>
-                        ))}
-                      </div>
-                    </>
-                  ),
-                },
-              ]
-            : []),
-        ]}
-      />
-    </div>
   );
 }

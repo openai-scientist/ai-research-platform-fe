@@ -1,5 +1,5 @@
-import { TopBarSkeleton } from "../_components/top-bar-skeleton";
+import { WorkspaceShellSkeleton } from "./_components/workspace-shell-skeleton";
 
 export default function Loading() {
-  return <TopBarSkeleton layout="cards" label="Loading projects" />;
+  return <WorkspaceShellSkeleton />;
 }

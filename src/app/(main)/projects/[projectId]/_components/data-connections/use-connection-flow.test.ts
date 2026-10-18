@@ -1,47 +1,29 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ConnectionItem } from "@/lib/api/services/fetch-data-connections";
-import { ApiError } from "@/types/api";
 
-import type { GoogleConnectionResume } from "./google-connection-state";
 import { useConnectionFlow } from "./use-connection-flow";
 
-const {
-  effects,
-  updates,
-  create,
-  getSchemas,
-  getTables,
-  getList,
-  getGooglePicker,
-  openPicker,
-  beginGoogle,
-  invalidate,
-  showError,
-  access,
-  restoreDraft,
-} = vi.hoisted(() => ({
-  effects: [] as (() => void)[],
-  updates: [] as { initial: unknown; set: ReturnType<typeof vi.fn> }[],
-  create: vi.fn(),
-  getSchemas: vi.fn(),
-  getTables: vi.fn(),
-  getList: vi.fn(),
-  getGooglePicker: vi.fn(),
-  openPicker: vi.fn(),
-  beginGoogle: vi.fn(),
-  invalidate: vi.fn(),
-  showError: vi.fn(),
-  access: vi.fn(),
-  restoreDraft: vi.fn<(initial: unknown) => unknown>(),
-}));
+const { effects, updates, create, getSchemas, getTables, invalidate, showError, access, restoreDraft, toast } =
+  vi.hoisted(() => ({
+    effects: [] as (() => void)[],
+    updates: [] as { initial: unknown; set: ReturnType<typeof vi.fn> }[],
+    create: vi.fn(),
+    getSchemas: vi.fn(),
+    getTables: vi.fn(),
+    invalidate: vi.fn(),
+    showError: vi.fn(),
+    access: vi.fn(),
+    restoreDraft: vi.fn<(initial: unknown) => unknown>(),
+    toast: { success: vi.fn() },
+  }));
 
 vi.mock("react", async (importOriginal) => ({
   ...(await importOriginal<typeof import("react")>()),
   useState: (initial: unknown) => {
     const initialValue = typeof initial === "function" ? initial() : initial;
     const value =
-      initialValue && typeof initialValue === "object" && "googleTarget" in initialValue
+      initialValue && typeof initialValue === "object" && "serviceAccountJson" in initialValue
         ? restoreDraft(initialValue)
         : initialValue;
     const set = vi.fn();
@@ -57,29 +39,18 @@ vi.mock("@tanstack/react-query", () => ({ useQueryClient: () => ({ invalidateQue
 vi.mock("@/hooks/use-data-connections", () => ({ useConnectionAccess: access, showConnectionError: showError }));
 vi.mock("@/lib/api/services/fetch-data-connections", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/api/services/fetch-data-connections")>()),
-  fetchDataConnections: { create, getSchemas, getTables, getList, getGooglePicker },
+  fetchDataConnections: { create, getSchemas, getTables },
 }));
-vi.mock("./google-picker", () => ({ openGooglePicker: openPicker }));
-vi.mock("./google-connection-state", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("./google-connection-state")>()),
-  beginGoogleConnection: beginGoogle,
-}));
-vi.mock("sonner", () => ({ toast: { success: vi.fn() } }));
+vi.mock("sonner", () => ({ toast }));
 
-describe("resuming Google connection creation", () => {
-  const grantId = "b923cabc-0754-4384-88d5-151c9af46788";
-  const resume: GoogleConnectionResume = { kind: "google_drive", name: "Study", target: "folder-id", grantId };
+describe("connecting a source and importing from it", () => {
   const saved = {
     id: "connection-id",
-    name: "Study",
-    kind: "google_drive",
+    name: "Rfam",
+    kind: "mysql",
     config: {},
     last_error_code: null,
   } as ConnectionItem;
-
-  function useRenderConnectionFlow(value: GoogleConnectionResume | null = resume, canWrite = true) {
-    return useConnectionFlow("project-id", undefined, vi.fn(), canWrite, "user-id", true, value ?? undefined);
-  }
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -88,12 +59,9 @@ describe("resuming Google connection creation", () => {
     restoreDraft.mockImplementation((value) => value);
     access.mockReturnValue({ configured: true, rateLimited: false, waitSeconds: 0, revokedConnectionIds: new Set() });
     create.mockResolvedValue({ data: saved });
-    getSchemas.mockResolvedValue({ data: ["Spreadsheet"] });
+    getSchemas.mockResolvedValue({ data: ["Rfam"] });
     getTables.mockResolvedValue({ data: [] });
     invalidate.mockResolvedValue(undefined);
-    getGooglePicker.mockResolvedValue({ data: { access_token: "short-lived", api_key: "key", app_id: "123" } });
-    openPicker.mockResolvedValue({ id: "folder-id", name: "Study" });
-    getList.mockResolvedValue({ data: [], meta: { pagination: null } });
   });
 
   it("fills URL and token missing from a draft preserved by Fast Refresh without losing input", () => {
@@ -105,7 +73,7 @@ describe("resuming Google connection creation", () => {
         ),
       );
     });
-    const flow = useRenderConnectionFlow(null);
+    const flow = useConnectionFlow("project-id", undefined, vi.fn(), true, "postgres");
     expect(flow.draft.url.trim()).toBe("");
     expect(flow.draft.token).toBe("");
     expect(flow.draft.name).toBe("My source");
@@ -114,20 +82,23 @@ describe("resuming Google connection creation", () => {
 
   it("normalizes undefined time series fields and keeps populated credentials", () => {
     restoreDraft.mockImplementation((value) => ({ ...(value as object), url: undefined, token: undefined }));
-    expect(useRenderConnectionFlow(null).draft).toMatchObject({ url: "", token: "" });
+    expect(useConnectionFlow("project-id", undefined, vi.fn(), true, "prometheus").draft).toMatchObject({
+      url: "",
+      token: "",
+    });
     restoreDraft.mockImplementation((value) => ({
       ...(value as object),
       url: "https://metrics.example.com",
       token: "read-only-token",
     }));
-    expect(useRenderConnectionFlow(null).draft).toMatchObject({
+    expect(useConnectionFlow("project-id", undefined, vi.fn(), true, "prometheus").draft).toMatchObject({
       url: "https://metrics.example.com",
       token: "read-only-token",
     });
   });
 
   it.each(["prometheus", "influxdb"] as const)("bypasses schema browsing for %s", async (kind) => {
-    const flow = useConnectionFlow("project-id", { ...saved, kind }, vi.fn(), true, "user-id", false);
+    const flow = useConnectionFlow("project-id", { ...saved, kind }, vi.fn(), true);
     for (const setup of effects) setup();
     await vi.waitFor(() => expect(getTables).toHaveBeenCalledOnce());
     expect(getSchemas).not.toHaveBeenCalled();
@@ -136,145 +107,55 @@ describe("resuming Google connection creation", () => {
   });
 
   it("does not browse time series without contributor access", () => {
-    useConnectionFlow("project-id", { ...saved, kind: "prometheus" }, vi.fn(), false, "user-id", false);
+    useConnectionFlow("project-id", { ...saved, kind: "prometheus" }, vi.fn(), false);
     for (const setup of effects) setup();
     expect(getTables).not.toHaveBeenCalled();
     expect(getSchemas).not.toHaveBeenCalled();
   });
 
-  it.each(["google_drive", "google_sheets"] as const)(
-    "creates %s once after consent, then advances and loads sources even if effects replay",
-    async (kind) => {
-      create.mockResolvedValue({ data: { ...saved, kind } });
-      useRenderConnectionFlow({ ...resume, kind });
-      for (const setup of effects) setup();
-      for (const setup of effects) setup();
-      await vi.waitFor(() => expect(getTables).toHaveBeenCalledOnce());
-      expect(create).toHaveBeenCalledExactlyOnceWith("project-id", {
-        name: "Study",
-        kind,
-        config: kind === "google_drive" ? { folder: "folder-id" } : { spreadsheet: "folder-id" },
-        grant_id: grantId,
-      });
-      expect(updates[0].set).toHaveBeenCalledWith(2);
-    },
-  );
+  it("opens a new provider on its details step and a saved connection on its source", () => {
+    useConnectionFlow("project-id", undefined, vi.fn(), true, "mysql");
+    expect(updates[0].initial).toBe(1);
+    const start = updates.length;
+    useConnectionFlow("project-id", saved, vi.fn(), true);
+    expect(updates[start].initial).toBe(2);
+  });
 
-  it("keeps a rejected source's grant and retries only on an explicit action", async () => {
-    const error = new ApiError(422, "CONNECTION_FAILED", "This source cannot be read.");
-    create.mockRejectedValueOnce(error);
-    const flow = useRenderConnectionFlow();
-    for (const setup of effects) setup();
-    await vi.waitFor(() => expect(showError).toHaveBeenCalledWith(error, "project-id"));
-    for (const setup of effects) setup();
+  it("goes on to choose a source once the connection is saved", async () => {
+    restoreDraft.mockImplementation((value) => ({
+      ...(value as object),
+      name: "Rfam",
+      host: "mysql-rfam-public.ebi.ac.uk",
+      port: "4497",
+      database: "Rfam",
+      username: "rfamro",
+    }));
+    const flow = useConnectionFlow("project-id", undefined, vi.fn(), true, "mysql");
+    await flow.connect();
     expect(create).toHaveBeenCalledOnce();
-    expect(updates.find((state) => state.initial === grantId)?.set).not.toHaveBeenCalled();
-    expect(updates[0].set).not.toHaveBeenCalledWith(2);
-    await flow.chooseGoogleSource();
-    expect(create).toHaveBeenCalledTimes(2);
-    expect(create.mock.calls[1][1].grant_id).toBe(grantId);
+    expect(updates[0].set).toHaveBeenCalledWith(2);
+    expect(toast.success).toHaveBeenCalledWith("Connection saved", { description: "Rfam" });
+    expect(getSchemas).toHaveBeenCalledWith("project-id", "connection-id");
+    expect(showError).not.toHaveBeenCalled();
   });
 
-  it("discards an expired grant and leaves the form open to authorize again", async () => {
-    const error = new ApiError(422, "GOOGLE_GRANT_INVALID", "Reconnect your Google account.");
-    create.mockRejectedValueOnce(error);
-    useRenderConnectionFlow();
-    for (const setup of effects) setup();
-    await vi.waitFor(() => expect(showError).toHaveBeenCalled());
-    expect(updates.find((state) => state.initial === grantId)?.set).toHaveBeenCalledWith(undefined);
-    expect(updates[0].set).not.toHaveBeenCalledWith(2);
+  it("goes on with the connection the project already has for the same source", async () => {
+    restoreDraft.mockImplementation((value) => ({
+      ...(value as object),
+      name: "Rfam copy",
+      host: "mysql-rfam-public.ebi.ac.uk",
+      database: "Rfam",
+      username: "rfamro",
+    }));
+    create.mockResolvedValue({ data: saved, reused: true });
+    await useConnectionFlow("project-id", undefined, vi.fn(), true, "mysql").connect();
+    expect(updates[0].set).toHaveBeenCalledWith(2);
+    expect(toast.success).toHaveBeenCalledWith("Already connected", { description: "Rfam" });
   });
 
-  it.each([
-    { callback: { ...resume, grantId: undefined }, canWrite: true },
-    { callback: resume, canWrite: false },
-  ])("does not create without a grant or contributor access: $canWrite", ({ callback, canWrite }) => {
-    useRenderConnectionFlow(callback, canWrite);
-    for (const setup of effects) setup();
-    expect(create).not.toHaveBeenCalled();
-  });
-
-  it("waits when Retry-After is active", () => {
+  it("waits when Retry-After is active", async () => {
     access.mockReturnValue({ configured: true, rateLimited: true, waitSeconds: 30, revokedConnectionIds: new Set() });
-    useRenderConnectionFlow();
-    for (const setup of effects) setup();
+    await useConnectionFlow("project-id", undefined, vi.fn(), true, "mysql").connect();
     expect(create).not.toHaveBeenCalled();
-  });
-
-  it("allows consent before a source is chosen and restores the draft afterwards", async () => {
-    const flow = useRenderConnectionFlow({ ...resume, name: "", target: "", grantId: undefined });
-    await flow.authorizeGoogle();
-    expect(beginGoogle).toHaveBeenCalledWith("project-id", "user-id", {
-      action: "create",
-      draft: { kind: "google_drive", name: "", target: "" },
-    });
-    expect(showError).not.toHaveBeenCalled();
-    expect(create).not.toHaveBeenCalled();
-  });
-
-  it("opens the picker once after consent without submitting an empty source", async () => {
-    openPicker.mockResolvedValue(null);
-    useRenderConnectionFlow({ ...resume, target: "" });
-    for (const setup of effects) setup();
-    for (const setup of effects) setup();
-    await vi.waitFor(() => expect(openPicker).toHaveBeenCalledOnce());
-    expect(getGooglePicker).toHaveBeenCalledWith("project-id", grantId, expect.any(AbortSignal));
-    expect(create).not.toHaveBeenCalled();
-    expect(showError).not.toHaveBeenCalled();
-  });
-
-  it("creates the connection with the selected source's name and ID, ignoring an old draft name", async () => {
-    openPicker.mockResolvedValue({ id: "selected-folder", name: "Study files" });
-    const flow = useRenderConnectionFlow({ ...resume, name: "Old connection name", target: "" });
-    await flow.chooseGoogleSource();
-    expect(create).toHaveBeenCalledWith("project-id", {
-      name: "Study files",
-      kind: "google_drive",
-      config: { folder: "selected-folder" },
-      grant_id: grantId,
-    });
-    expect(updates[0].set).toHaveBeenCalledWith(2);
-  });
-
-  it("keeps the previous source when the picker is cancelled", async () => {
-    openPicker.mockResolvedValue(null);
-    const flow = useRenderConnectionFlow();
-    await flow.chooseGoogleSource();
-    expect(updates.find((state) => state.initial === flow.draft)?.set).not.toHaveBeenCalled();
-    expect(create).not.toHaveBeenCalled();
-  });
-
-  it.each(["google_drive", "google_sheets"] as const)(
-    "starts %s authorization directly from provider selection without showing the details step",
-    async (kind) => {
-      const flow = useRenderConnectionFlow(null);
-      flow.chooseKind(kind);
-      await vi.waitFor(() => expect(beginGoogle).toHaveBeenCalled());
-      expect(beginGoogle).toHaveBeenCalledWith("project-id", "user-id", {
-        action: "create",
-        draft: { kind, name: "", target: "" },
-      });
-      expect(updates[0].set).not.toHaveBeenCalledWith(1);
-    },
-  );
-
-  it("adds the next available suffix when the source name already exists", async () => {
-    create.mockRejectedValueOnce(new ApiError(409, "CONNECTION_NAME_EXISTS", "Already exists."));
-    getList.mockResolvedValue({
-      data: [{ name: "Study" }, { name: "Study (2)" }],
-      meta: { pagination: null },
-    });
-    const flow = useRenderConnectionFlow();
-    await flow.chooseGoogleSource();
-    expect(create.mock.calls[1][1]).toMatchObject({ name: "Study (3)", grant_id: grantId });
-    expect(showError).not.toHaveBeenCalled();
-    expect(updates[0].set).toHaveBeenCalledWith(2);
-  });
-
-  it("keeps the details step for database providers", () => {
-    const flow = useRenderConnectionFlow(null);
-    flow.chooseKind("mysql");
-    expect(updates[0].set).toHaveBeenCalledWith(1);
-    expect(beginGoogle).not.toHaveBeenCalled();
   });
 });

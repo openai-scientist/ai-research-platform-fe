@@ -106,6 +106,8 @@ function ReplacementConnection({
                 {query.connections
                   .filter(
                     (connection) =>
+                      // A member's Google account only picks files; it is not a source.
+                      connection.kind !== "google" &&
                       !isTimeSeriesConnection(connection.kind) &&
                       (sourceType !== "query" || !isGoogleConnection(connection.kind)),
                   )

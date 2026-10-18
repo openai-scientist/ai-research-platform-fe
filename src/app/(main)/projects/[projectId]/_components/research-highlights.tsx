@@ -99,32 +99,6 @@ export function RecentExperimentsCard({
   );
 }
 
-export function RecentFindingsCard({
-  baseUrl,
-  findings,
-  live,
-}: {
-  readonly baseUrl: string;
-  readonly findings: ProjectDashboard["recentFindings"];
-  readonly live?: boolean;
-}) {
-  return (
-    <SectionCard title="Recent findings" action={<ViewAllLink href={`${baseUrl}/findings`} />} className="h-full">
-      {live && <p className="text-muted-foreground text-sm">Finding details are not available yet.</p>}
-      <ul className="divide-y">
-        {findings.slice(0, MAX_ITEMS).map((finding) => (
-          <HighlightRow
-            key={finding.id}
-            title={finding.statement}
-            meta={`${finding.id} · ${finding.updatedAt}`}
-            badge={<StateBadge label={finding.status} />}
-          />
-        ))}
-      </ul>
-    </SectionCard>
-  );
-}
-
 export function WarningsCard({
   baseUrl,
   warnings,

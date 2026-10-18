@@ -1,19 +1,38 @@
 "use client";
 
+import { useState } from "react";
+
 import { Button } from "@/components/ui/button";
 import { useInfiniteDatasets } from "@/hooks/use-datasets-query";
 
+import { DatasetConnectionImport } from "./dataset-connection-import";
 import { DatasetLibrary } from "./dataset-library";
 import { DatasetUpload } from "./dataset-upload";
 import { LoadMore, type WorkspaceProps } from "./workspace-ui";
 
-export function DatasetsSection({ project, canWrite }: WorkspaceProps) {
+export function DatasetsSection({ project, canWrite, userId }: WorkspaceProps) {
   const query = useInfiniteDatasets(project.id);
+  const [picking, setPicking] = useState(false);
   const hasDatasets = query.datasets.length > 0;
 
   return (
     <div className="flex min-w-0 flex-col gap-6">
-      {canWrite && <DatasetUpload projectId={project.id} compact={hasDatasets || query.isPending} />}
+      {canWrite && (
+        <>
+          <DatasetUpload
+            projectId={project.id}
+            compact={hasDatasets || query.isPending}
+            onImport={() => setPicking(true)}
+          />
+          <DatasetConnectionImport
+            project={project}
+            userId={userId}
+            canWrite={canWrite}
+            picking={picking}
+            onPickingChange={setPicking}
+          />
+        </>
+      )}
       {query.isError && !hasDatasets ? (
         <Button variant="outline" className="self-start" onClick={() => void query.refetch()}>
           Reload datasets

@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import { cn } from "cn";
-import { Plus, Search } from "lucide-react";
+import { Check, Plus, Search, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
@@ -23,6 +23,41 @@ function matches(kind: ConnectionKind, term: string) {
 
 export type ProviderCounts = Partial<Record<ConnectionKind, { total: number; failing: number }>>;
 
+// The Google cards pick with the member's saved account: they add a file or folder, not another account.
+const GOOGLE_ACTIONS: Partial<Record<ConnectionKind, string>> = {
+  google_sheets: "Import spreadsheet",
+  google_drive: "Import folder",
+};
+
+/** "Connected", turning into "Disconnect" on hover or focus. */
+function DisconnectBadge({
+  disabled,
+  title,
+  label,
+  onClick,
+}: {
+  disabled: boolean;
+  title: string;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      title={title}
+      aria-label={label}
+      className="group/account relative z-10 inline-flex h-6 cursor-pointer items-center gap-1 rounded-full bg-emerald-500/10 px-2 font-medium text-emerald-700 text-xs outline-none transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:bg-destructive/10 focus-visible:text-destructive focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed dark:text-emerald-400"
+    >
+      <Check className="size-3.5 group-hover/account:hidden group-focus-visible/account:hidden" />
+      <X className="hidden size-3.5 group-hover/account:block group-focus-visible/account:block" />
+      <span className="group-hover/account:hidden group-focus-visible/account:hidden">Connected</span>
+      <span className="hidden group-hover/account:inline group-focus-visible/account:inline">Disconnect</span>
+    </button>
+  );
+}
+
 function statusLabel({ total, failing }: { total: number; failing: number }) {
   if (!failing) return `${total} connected`;
   if (total === 1) return "Needs attention";
@@ -32,12 +67,17 @@ function statusLabel({ total, failing }: { total: number; failing: number }) {
 /** Every provider stays in view: pick one to connect it, or jump to the connections it already has. */
 export function ConnectionProviderPicker({
   counts,
+  googleAccount,
+  onDisconnectGoogle,
   googleAvailable,
   disabled,
   onAdd,
   onShow,
 }: {
   counts: ProviderCounts;
+  /** The address of the member's saved Google account, when they have one. */
+  googleAccount?: string;
+  onDisconnectGoogle: () => void;
   googleAvailable: boolean;
   disabled: boolean;
   onAdd: (kind: ConnectionKind) => void;
@@ -102,6 +142,9 @@ export function ConnectionProviderPicker({
         {kinds.map((kind) => {
           const provider = CONNECTION_PROVIDERS[kind];
           const count = counts[kind];
+          const google = googleAccount !== undefined ? GOOGLE_ACTIONS[kind] : undefined;
+          let action = count ? "Add another" : "Connect";
+          if (google) action = google;
           return (
             <li
               key={kind}
@@ -114,7 +157,13 @@ export function ConnectionProviderPicker({
                 type="button"
                 disabled={disabled}
                 onClick={() => onAdd(kind)}
-                aria-label={count ? `Add another ${provider.label} connection` : `Connect ${provider.label}`}
+                aria-label={
+                  google
+                    ? `${google} from Google`
+                    : count
+                      ? `Add another ${provider.label} connection`
+                      : `Connect ${provider.label}`
+                }
                 className="absolute inset-0 rounded-xl outline-none focus-visible:ring-3 focus-visible:ring-ring/50 enabled:cursor-pointer disabled:cursor-not-allowed"
               />
               <span className="grid size-11 shrink-0 place-items-center [&_img]:size-11 [&_svg]:size-11">
@@ -124,7 +173,15 @@ export function ConnectionProviderPicker({
                 <h4 className="font-medium text-sm">{provider.label}</h4>
                 <p className="text-pretty text-muted-foreground text-xs leading-relaxed">{provider.description}</p>
                 <div className="mt-2.5 flex min-h-6 flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
-                  {count ? (
+                  {google ? (
+                    // Connected as the member's Google account; hovering offers to disconnect it.
+                    <DisconnectBadge
+                      disabled={disabled}
+                      title={`Connected as ${googleAccount}`}
+                      label={`Disconnect Google account ${googleAccount}`}
+                      onClick={onDisconnectGoogle}
+                    />
+                  ) : count ? (
                     <button
                       type="button"
                       onClick={() => onShow(kind)}
@@ -152,7 +209,7 @@ export function ConnectionProviderPicker({
                     )}
                   >
                     <Plus className="size-3.5" />
-                    {count ? "Add another" : "Connect"}
+                    {action}
                   </span>
                 </div>
               </div>

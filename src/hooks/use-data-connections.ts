@@ -7,12 +7,13 @@ import { toast } from "sonner";
 
 import { getConnectionAccess, recordConnectionError, subscribeConnectionAccess } from "@/lib/api/connection-runtime";
 import { collectPages } from "@/lib/api/infinite-pagination";
-import { connectionKeys } from "@/lib/api/query-keys";
+import { connectionKeys, projectKeys } from "@/lib/api/query-keys";
 import {
   type ConnectionItem,
   type ConnectionListParams,
   fetchDataConnections,
 } from "@/lib/api/services/fetch-data-connections";
+import { type DatasetItem, fetchDatasets } from "@/lib/api/services/fetch-datasets";
 import { ApiError } from "@/types/api";
 
 import { useInfinityScroll } from "./use-infinity-scroll";
@@ -119,6 +120,25 @@ export function useAllDataConnections(projectId: string) {
   });
 }
 
+/** The project's datasets by the connection their latest version was imported from. */
+export function useDatasetsByConnection(projectId: string) {
+  return useQuery({
+    // Under the project's dataset keys, so a finished import refreshes it.
+    queryKey: [...projectKeys.dataset(projectId, "by-connection")],
+    queryFn: async ({ signal }) => {
+      const datasets = await collectPages((params) => fetchDatasets.getList(projectId, params, signal));
+      const byConnection = new Map<string, DatasetItem[]>();
+      for (const dataset of datasets) {
+        const id = dataset.latest_version?.source?.connection_id;
+        if (id) byConnection.set(id, [...(byConnection.get(id) ?? []), dataset]);
+      }
+      return byConnection;
+    },
+    enabled: Boolean(projectId),
+    refetchOnWindowFocus: false,
+  });
+}
+
 export function useConnectionActions(projectId: string) {
   const queryClient = useQueryClient();
   const options = {
@@ -128,11 +148,6 @@ export function useConnectionActions(projectId: string) {
       await queryClient.invalidateQueries({ queryKey: connectionKeys.project(projectId) });
     },
   };
-  const rename = useMutation({
-    ...options,
-    mutationFn: ({ id, name }: { id: string; name: string }) => fetchDataConnections.rename(projectId, id, name),
-  });
   const remove = useMutation({ ...options, mutationFn: (id: string) => fetchDataConnections.remove(projectId, id) });
-  const test = useMutation({ ...options, mutationFn: (id: string) => fetchDataConnections.test(projectId, id) });
-  return { rename, remove, test, pending: rename.isPending || remove.isPending || test.isPending };
+  return { remove, pending: remove.isPending };
 }

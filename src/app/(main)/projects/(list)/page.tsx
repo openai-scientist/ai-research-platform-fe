@@ -5,9 +5,9 @@ import type { Metadata } from "next";
 import { canCreateProject } from "@/lib/auth/auth-config";
 import { getAuthenticatedUser } from "@/server/auth";
 
-import { TopBarShell } from "../_components/top-bar-shell";
-import { GoogleConnectionFeedback } from "./_components/google-connection-feedback";
-import { WorkspaceProjects } from "./_components/workspace-projects";
+import { TopBarShell } from "../../_components/top-bar-shell";
+import { GoogleConnectionFeedback } from "../_components/google-connection-feedback";
+import { WorkspaceProjects } from "../_components/workspace-projects";
 
 export const metadata: Metadata = {
   title: "Projects · OpenAI Scientist",
