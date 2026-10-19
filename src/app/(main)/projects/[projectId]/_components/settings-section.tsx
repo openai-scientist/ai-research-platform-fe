@@ -14,9 +14,10 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useRestoreProjectMutation } from "@/hooks/use-projects-query";
 import type { ProjectItem } from "@/lib/api/services/fetch-project";
-import { ProjectStatus } from "@/types/enums";
+import { ProjectRole, ProjectStatus } from "@/types/enums";
 
 import { MembersSection } from "./members-section";
+import { SettingsIntegrations } from "./project-integrations/settings-integrations";
 import { SettingsApiProvider, useProjectSettings } from "./settings-api";
 import { SettingsAccess, SettingsData, SettingsLiterature, SettingsModels, SettingsReview } from "./settings-extra";
 import { ChoiceRow, useDraft } from "./settings-kit";
@@ -31,6 +32,9 @@ import {
   useUnsavedWarning,
 } from "./settings-panel";
 import { SettingsRuns, SettingsSpending } from "./settings-system";
+import { WorkspaceActivityPreview } from "./workspace-activity-preview";
+import { WorkspaceNotificationsPreview } from "./workspace-notifications-preview";
+import { WorkspaceSpendingPreview } from "./workspace-spending-preview";
 import { perform, type WorkspaceProps } from "./workspace-ui";
 
 const GROUPS: { label: string; tabs: { id: string; label: string }[] }[] = [
@@ -428,24 +432,21 @@ function SettingsContent({ workspace }: { workspace: WorkspaceProps }) {
           {tab === "review" && <SettingsReview readOnly={archived} />}
           {tab === "data" && <SettingsData readOnly={archived} />}
           {tab === "integrations" && (
-            <UnavailableSettings
-              title="Integrations"
-              description="Integration connections and webhooks are not available from the backend yet."
+            <SettingsIntegrations
+              key={project.id}
+              projectId={project.id}
+              readOnly={archived}
+              canManage={project.my_role === ProjectRole.ProjectManager}
             />
           )}
-          {tab === "spending" && <SettingsSpending readOnly={archived} />}
-          {tab === "notifications" && (
-            <UnavailableSettings
-              title="Notifications"
-              description="Personal notification preferences are not available from the backend yet."
-            />
+          {tab === "spending" && (
+            <>
+              <WorkspaceSpendingPreview />
+              <SettingsSpending readOnly={archived} />
+            </>
           )}
-          {tab === "activity" && (
-            <UnavailableSettings
-              title="Activity"
-              description="The backend has not exposed a project activity endpoint for Project Managers yet."
-            />
-          )}
+          {tab === "notifications" && <WorkspaceNotificationsPreview />}
+          {tab === "activity" && <WorkspaceActivityPreview />}
           {tab === "danger" && <SettingsDangerZone project={project} userId={workspace.userId} />}
         </div>
       </div>
@@ -455,18 +456,10 @@ function SettingsContent({ workspace }: { workspace: WorkspaceProps }) {
 
 export function SettingsSection(workspace: WorkspaceProps) {
   const { project, userId } = workspace;
+  if (project.my_role !== ProjectRole.ProjectManager) return null;
   return (
     <SettingsApiProvider key={`${project.id}:${userId}`} project={project}>
       <SettingsContent workspace={workspace} />
     </SettingsApiProvider>
-  );
-}
-
-function UnavailableSettings({ title, description }: { title: string; description: string }) {
-  return (
-    <div className="flex flex-col gap-4">
-      <SettingsHeading title={title} />
-      <p className="max-w-prose text-muted-foreground text-sm">{description}</p>
-    </div>
   );
 }

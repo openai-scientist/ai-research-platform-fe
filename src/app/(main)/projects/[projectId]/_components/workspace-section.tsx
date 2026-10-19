@@ -15,7 +15,7 @@ import { ConnectionsSection } from "./data-connections/connections-section";
 import { DatasetDetails } from "./dataset-details";
 import { DatasetsSection } from "./datasets-section";
 import { ExperimentsSection } from "./experiments-section";
-import { MembersSection } from "./members-section";
+import { MemberDirectory } from "./member-directory";
 import { ProjectFilesSection } from "./project-files-section";
 import { RunDetails } from "./run-details";
 import { SettingsSection } from "./settings-section";
@@ -25,7 +25,7 @@ const screens: Record<string, ComponentType<WorkspaceProps>> = {
   connections: ConnectionsSection,
   datasets: DatasetsSection,
   experiments: ExperimentsSection,
-  members: MembersSection,
+  members: MemberDirectory,
   settings: SettingsSection,
 };
 
@@ -86,7 +86,8 @@ export function WorkspaceSection({
     return <DatasetDetails key={datasetId} {...props} datasetId={datasetId} />;
   if (section === "run" && runId)
     return <RunDetails key={runId} {...props} runId={runId} section={experimentSection} />;
-  if (section === "members") return <MembersSection {...props} header={membersHeader} />;
+  if (section === "members")
+    return <MemberDirectory key={`${project.id}:${userId}`} {...props} header={membersHeader} />;
   if (section === "connections") return <ConnectionsSection {...props} header={connectionsHeader} />;
   if (section === "files") return <ProjectFilesSection key={project.id} {...props} header={filesHeader} />;
   if (!Screen || (section === "settings" && (!access.canAccessSettings || query.isError))) return null;

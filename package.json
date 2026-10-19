@@ -3,7 +3,7 @@
   "version": "2.2.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "node --require ./src/scripts/dev-watch.cjs ./node_modules/next/dist/bin/next dev",
     "build": "next build",
     "start": "next start",
     "test": "vitest run",

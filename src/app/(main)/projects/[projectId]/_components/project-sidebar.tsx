@@ -4,6 +4,7 @@ import type { ComponentProps } from "react";
 
 import { AppSidebar } from "@/app/(main)/dashboard/_components/sidebar/app-sidebar";
 import { useProjectAccess } from "@/hooks/use-project-access";
+import { useProjectDetailQuery } from "@/hooks/use-projects-query";
 import type { ProjectItem } from "@/lib/api/services/fetch-project";
 import type { AuthUser } from "@/lib/auth/auth-config";
 import type { ProjectSummary } from "@/lib/projects/project-data";
@@ -27,7 +28,9 @@ export function ProjectSidebar({
   readonly variant: ComponentProps<typeof AppSidebar>["variant"];
 }) {
   const access = useProjectAccess(activeProject.id);
-  const items = getProjectSidebarItems(activeProject.id, activeProject.my_role).map((group) => ({
+  const projectQuery = useProjectDetailQuery(activeProject.id);
+  const currentRole = projectQuery.isError ? null : (projectQuery.data?.data ?? activeProject).my_role;
+  const items = getProjectSidebarItems(activeProject.id, currentRole).map((group) => ({
     ...group,
     items: group.items.filter(
       (item) => item.id !== "project-datasets" || access.context?.permissions.can_read_raw_datasets,

@@ -67,10 +67,9 @@ export function useSignalR() {
           },
           invitation ? "Project invitation" : "New notification",
         );
-        toast.info(title, {
+        const notify = notification.kind === NotificationKind.IntegrationFailed ? toast.warning : toast.info;
+        notify(title, {
           id: toastId,
-          // Incoming notifications rise from the corner; their motion below assumes the bottom edge.
-          position: "bottom-right",
           // Our motion uses wall time instead of a frozen browser animation timeline.
           className: "notification-toast transition-none! select-none",
           classNames: { description: "text-muted-foreground!" },

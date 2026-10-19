@@ -462,10 +462,7 @@ export function RunWorkspaceHost({ projectId }: { projectId: string }) {
   useEffect(() => {
     if (!gate || !away || !runId || told.current === gate.id) return;
     told.current = gate.id;
-    // Run news arrives on its own, like other notifications, so it sits in the corner rather than
-    // where the feedback for your own actions appears.
     toast.warning(`${label} needs you`, {
-      position: "bottom-right",
       description: gate.title,
       duration: 12_000,
       action: { label: "Review now", onClick: () => openWorkspace(runId) },
@@ -486,12 +483,10 @@ export function RunWorkspaceHost({ projectId }: { projectId: string }) {
     if (!runId || before.runId !== runId || !live) return;
     if (completed && !before.completed && away)
       toast.success(`${label} finished`, {
-        position: "bottom-right",
         description: withPaper ? "The paper is in Findings." : "The hypotheses are ready.",
       });
     if (failed && !before.failed)
       toast.error(`${label} stopped`, {
-        position: "bottom-right",
         description: failure ?? "Popper could not finish this run.",
       });
   }, [runId, completed, failed, away, label, withPaper, failure, live]);

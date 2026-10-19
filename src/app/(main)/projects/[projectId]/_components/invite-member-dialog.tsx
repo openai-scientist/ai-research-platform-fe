@@ -147,7 +147,7 @@ export function InviteMemberDialog({
                 </SelectGroup>
               </SelectContent>
             </Select>
-            <FieldDescription>You can change it later.</FieldDescription>
+            <FieldDescription>Choose the role they will have when they join.</FieldDescription>
           </Field>
           <p className="text-muted-foreground text-xs">
             {defaults.allowed_domains.length > 0 && `Allowed domains: ${defaults.allowed_domains.join(", ")}. `}

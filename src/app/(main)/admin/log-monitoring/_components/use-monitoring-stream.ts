@@ -54,7 +54,7 @@ export function useMonitoringStream({
       client.removeQueries({ queryKey: monitoringKeys.all });
       toast.error(
         message ?? (sessionEnded ? "Your session has ended. Sign in again." : "Platform Admin access is required."),
-        { id: "monitoring-access", position: "bottom-right" },
+        { id: "monitoring-access" },
       );
       if (sessionEnded) window.dispatchEvent(new Event("auth:expired"));
     };
@@ -97,7 +97,6 @@ export function useMonitoringStream({
         }
         toast.error(error instanceof Error ? error.message : "Unable to connect to monitoring updates.", {
           id: "monitoring-stream",
-          position: "bottom-right",
         });
       }
       if (!ended && !controller.signal.aborted) {

@@ -1,4 +1,4 @@
-import { Flag, MessageSquare, UserPlus, Workflow } from "lucide-react";
+import { Flag, MessageSquare, PlugZap, UserPlus, Workflow } from "lucide-react";
 
 import type { NotificationItem } from "@/lib/api/services/fetch-notifications";
 import { researchRunUrl } from "@/lib/research-workspace";
@@ -15,6 +15,12 @@ export function getNotificationContent(notification: NotificationItem) {
     : `${projectHref}/experiments`;
 
   switch (notification.kind) {
+    case NotificationKind.IntegrationFailed:
+      return {
+        icon: PlugZap,
+        text: `An integration in ${project} stopped posting. Check its settings.`,
+        href: `${projectHref}/settings?tab=integrations`,
+      };
     case NotificationKind.ProjectInvited:
       return {
         icon: UserPlus,

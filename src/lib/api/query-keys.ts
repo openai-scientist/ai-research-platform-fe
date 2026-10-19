@@ -15,6 +15,12 @@ export const invitationKeys = {
   all: ["invitations"] as const,
   list: (params?: ListParams) => ["invitations", params] as const,
 };
+export const integrationKeys = {
+  catalog: ["integrations", "catalog"] as const,
+  project: (id: string) => ["projects", "detail", id, "integrations"] as const,
+  deliveries: (projectId: string, id: string) =>
+    ["projects", "detail", projectId, "integrations", id, "deliveries"] as const,
+};
 export const projectKeys = {
   all: ["projects"] as const,
   lists: () => ["projects", "list"] as const,
