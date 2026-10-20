@@ -11,14 +11,13 @@ vi.mock("../core", () => ({ default: { post: vi.fn(), put: vi.fn() } }));
 beforeEach(() => vi.clearAllMocks());
 
 describe("project member role request guards", () => {
-  it("rejects inviting a PM before sending a request", async () => {
-    await expect(
-      fetchMembers.create("project", {
-        email: "member@example.com",
-        role: ProjectRole.ProjectManager as AssignableProjectRole,
-      }),
-    ).rejects.toMatchObject({ code: "INVALID_PROJECT_MEMBER_ROLE" });
-    expect(apiService.post).not.toHaveBeenCalled();
+  it("leaves the invited role to the backend, which applies the project's allowed roles", async () => {
+    vi.mocked(apiService.post).mockResolvedValue({ data: { success: true } } as Awaited<
+      ReturnType<typeof apiService.post>
+    >);
+    const invite = { email: "member@example.com", role: ProjectRole.ProjectManager };
+    await fetchMembers.create("project", invite);
+    expect(apiService.post).toHaveBeenCalledWith("/projects/project/members", invite);
   });
 
   it("rejects assigning PM before sending a request", async () => {
