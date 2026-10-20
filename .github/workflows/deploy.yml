@@ -1,0 +1,81 @@
+name: Deploy
+
+# On every push to main: check and test, build the web image, push it to Docker Hub and ask Dokploy
+# to redeploy the stack (docker/docker-compose.prod.yml), which pulls the new image.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+        env:
+          HUSKY: "0"
+      - run: npx biome ci .
+      - run: npm test
+
+  image:
+    needs: [check]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          push: true
+          # Build-time settings (see docker/Dockerfile). Repository variables override the defaults.
+          build-args: |
+            API_URL=${{ vars.API_URL || 'http://api:8080' }}
+            SITE_URL=${{ vars.SITE_URL || 'http://localhost:3000' }}
+            NEXT_PUBLIC_COOKIE_DOMAIN=${{ vars.NEXT_PUBLIC_COOKIE_DOMAIN }}
+          tags: |
+            ${{ secrets.DOCKER_USERNAME }}/capstone-fe:latest
+            ${{ secrets.DOCKER_USERNAME }}/capstone-fe:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max,ignore-error=true
+
+  deploy:
+    name: Dokploy redeploy
+    needs: [image]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: production
+    steps:
+      - name: Trigger Dokploy
+        env:
+          DOKPLOY_URL: ${{ secrets.DOKPLOY_URL }}
+          DOKPLOY_API_KEY: ${{ secrets.DOKPLOY_API_KEY }}
+          DOKPLOY_COMPOSE_ID: ${{ secrets.DOKPLOY_COMPOSE_ID }}
+        run: |
+          for name in DOKPLOY_URL DOKPLOY_API_KEY DOKPLOY_COMPOSE_ID; do
+            test -n "${!name}" || { echo "$name secret is required"; exit 1; }
+          done
+          curl --fail-with-body --silent --show-error --max-time 60 \
+            -X POST "$DOKPLOY_URL/api/compose.deploy" \
+            -H "x-api-key: $DOKPLOY_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d "{\"composeId\":\"$DOKPLOY_COMPOSE_ID\"}"
