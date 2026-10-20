@@ -3,7 +3,7 @@ import { RefreshCw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
-import { AnalyticsKpiStrip, type AnalyticsKpiItem } from "../../dashboard/analytics/_components/analytics-kpi-strip";
+import { type AnalyticsKpiItem, AnalyticsKpiStrip } from "../../dashboard/analytics/_components/analytics-kpi-strip";
 import { TopTrafficSources, type TrafficSourceTab } from "../../dashboard/analytics/_components/top-traffic-sources";
 import { TrafficQuality, type TrafficQualityPoint } from "../../dashboard/analytics/_components/traffic-quality";
 import { AdminPageHeader, InlineProgress, SectionCard, StatusBadge } from "./admin-primitives";

@@ -1,17 +1,18 @@
+import { useId } from "react";
+
 import {
   ArrowRight,
   CheckCircle2,
   Clock3,
   KeyRound,
+  type LucideIcon,
   Plus,
   RefreshCw,
   RotateCcw,
   ServerCog,
   Settings2,
   ShieldCheck,
-  type LucideIcon,
 } from "lucide-react";
-import { useId } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,14 +20,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
+import { type AnalyticsKpiItem, AnalyticsKpiStrip } from "../../dashboard/analytics/_components/analytics-kpi-strip";
+import { type RealtimeBreakdownItem, RealtimeVisitors } from "../../dashboard/analytics/_components/realtime-visitors";
+import { TopTrafficSources, type TrafficSourceTab } from "../../dashboard/analytics/_components/top-traffic-sources";
+import { TrafficQuality, type TrafficQualityPoint } from "../../dashboard/analytics/_components/traffic-quality";
 import {
   PerformanceOverview,
   type PerformanceOverviewPoint,
 } from "../../dashboard/default/_components/performance-overview";
-import { AnalyticsKpiStrip, type AnalyticsKpiItem } from "../../dashboard/analytics/_components/analytics-kpi-strip";
-import { RealtimeVisitors, type RealtimeBreakdownItem } from "../../dashboard/analytics/_components/realtime-visitors";
-import { TopTrafficSources, type TrafficSourceTab } from "../../dashboard/analytics/_components/top-traffic-sources";
-import { TrafficQuality, type TrafficQualityPoint } from "../../dashboard/analytics/_components/traffic-quality";
 import { providerModels } from "./admin-data";
 import { AdminPageHeader, InlineProgress, SectionCard, StatusBadge } from "./admin-primitives";
 
