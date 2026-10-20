@@ -1,6 +1,7 @@
 import Link from "next/link";
+
+import { ArrowLeft, Database, FlaskConical, FolderKanban, Lightbulb, type LucideIcon, Users } from "lucide-react";
 import type { Metadata } from "next";
-import { ArrowLeft, Database, FlaskConical, FolderKanban, Lightbulb, Users, type LucideIcon } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,7 +12,7 @@ import { projects } from "../../_components/admin-data";
 import { AdminPageHeader, SectionCard } from "../../_components/admin-primitives";
 
 export const metadata: Metadata = {
-  title: "Project detail · ResearchLab AI",
+  title: "Project detail · OpenAI Scientist",
   description: "Review project activity, datasets, experiments, findings, and usage.",
 };
 

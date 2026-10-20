@@ -24,6 +24,7 @@ const chartConfig = {
 export function ExperimentActivityCard({ activity }: { readonly activity: ProjectDashboard["experimentActivity"] }) {
   return (
     <SectionCard title="Experiment runs per week" className="h-full" contentClassName="flex flex-1 flex-col">
+      {activity.length === 0 && <p className="text-muted-foreground text-sm">No runs yet.</p>}
       {/* Grows with the neighbouring budget card; aspect-auto drops the container's default aspect-video. */}
       <ChartContainer config={chartConfig} className="aspect-auto min-h-64 w-full flex-1">
         <BarChart accessibilityLayer data={activity} margin={{ left: -20, right: 0, top: 0, bottom: 0 }}>

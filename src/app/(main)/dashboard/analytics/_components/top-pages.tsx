@@ -1,9 +1,11 @@
 import { Ellipsis } from "lucide-react";
 
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 export type AnalyticsTableRow = {
+  id?: string;
   bounce: string;
   path: string;
   time: string;
@@ -24,12 +26,14 @@ export function TopPages({
   timeLabel = "Avg Time",
   title = "Page Performance",
   viewsLabel = "Views",
+  emptyText = "No records in this time window.",
 }: {
   readonly bounceLabel?: string;
   readonly rows?: readonly AnalyticsTableRow[];
   readonly timeLabel?: string;
   readonly title?: string;
   readonly viewsLabel?: string;
+  readonly emptyText?: string;
 }) {
   return (
     <Card className="h-full gap-2">
@@ -51,8 +55,20 @@ export function TopPages({
             </TableRow>
           </TableHeader>
           <TableBody className="[&_tr]:border-border/50">
+            {rows.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={4}>
+                  <Empty>
+                    <EmptyHeader>
+                      <EmptyTitle>No records</EmptyTitle>
+                      <EmptyDescription>{emptyText}</EmptyDescription>
+                    </EmptyHeader>
+                  </Empty>
+                </TableCell>
+              </TableRow>
+            )}
             {rows.map((page) => (
-              <TableRow className="hover:bg-transparent" key={page.path}>
+              <TableRow className="hover:bg-transparent" key={page.id ?? page.path}>
                 <TableCell className="max-w-0 truncate py-4 font-medium">{page.path}</TableCell>
                 <TableCell className="text-right tabular-nums">{page.views}</TableCell>
                 <TableCell className="text-right text-muted-foreground tabular-nums">{page.time}</TableCell>

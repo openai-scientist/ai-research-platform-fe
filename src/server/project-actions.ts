@@ -19,7 +19,7 @@ export type CreateProjectResult =
 export async function createProject(input: { name: string; description: string }): Promise<CreateProjectResult> {
   const user = await getAuthenticatedUser();
 
-  if (!user || !canCreateProject(user.role)) {
+  if (!user || !canCreateProject(user.platform_role)) {
     return { success: false, error: "Bạn không có quyền tạo project." };
   }
 

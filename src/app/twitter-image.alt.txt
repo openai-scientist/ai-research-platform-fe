@@ -1,1 +1,1 @@
-Studio Admin open source admin dashboard with shadcn/ui
+OpenAI Scientist. From a research idea to a validated, evidence-based scientific report. Independent project. Not affiliated with OpenAI.

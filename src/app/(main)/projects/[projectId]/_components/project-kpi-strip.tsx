@@ -61,12 +61,12 @@ function KpiCell({
 }) {
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="rounded-none">
         <CardTitle className="font-normal text-muted-foreground text-sm">{label}</CardTitle>
         {badge && <CardAction>{badge}</CardAction>}
       </CardHeader>
       <CardContent className="flex flex-1 flex-col justify-between gap-4">
-        <p className="text-3xl leading-none tracking-tight tabular-nums">
+        <p className="text-3xl tabular-nums leading-none tracking-tight">
           {value}
           {unit && <span className="ml-1 text-base text-muted-foreground">{unit}</span>}
         </p>
@@ -85,11 +85,12 @@ const reportBadgeClassNames: Record<ProjectDashboard["report"]["status"], string
 
 export function ProjectKpiStrip({ dashboard }: { readonly dashboard: ProjectDashboard }) {
   const { experimentStats: stats, outcomes, report, warnings } = dashboard;
+  const unavailable = dashboard.live && !dashboard.sampleInsights;
   const finishedRuns = stats.completed + stats.failed;
   const successRate = finishedRuns === 0 ? 0 : Math.round((stats.completed / finishedRuns) * 100);
   const warningCount = (severity: ProjectDashboard["warnings"][number]["severity"]) =>
     warnings.filter((warning) => warning.severity === severity).length;
-  const reportPercent = Math.round((report.sectionsDone / report.sectionsTotal) * 100);
+  const reportPercent = report.sectionsTotal > 0 ? Math.round((report.sectionsDone / report.sectionsTotal) * 100) : 0;
 
   return (
     <div className="overflow-hidden rounded-xl bg-card shadow-xs ring-1 ring-foreground/10">
@@ -98,7 +99,9 @@ export function ProjectKpiStrip({ dashboard }: { readonly dashboard: ProjectDash
           label="Experiments"
           value={String(stats.total)}
           badge={
-            <Badge className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400">{successRate}% success</Badge>
+            finishedRuns > 0 ? (
+              <Badge className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400">{successRate}% success</Badge>
+            ) : undefined
           }
         >
           <SegmentBar
@@ -113,39 +116,58 @@ export function ProjectKpiStrip({ dashboard }: { readonly dashboard: ProjectDash
 
         <KpiCell
           label="Official outcomes"
-          value={String(outcomes.finding + outcomes.negative + outcomes.inconclusive)}
+          value={unavailable ? "—" : String(outcomes.finding + outcomes.negative + outcomes.inconclusive)}
+          badge={dashboard.sampleInsights ? <Badge variant="outline">Sample</Badge> : undefined}
         >
-          <SegmentBar
-            segments={[
-              { label: "findings", value: outcomes.finding, className: "bg-chart-3" },
-              { label: "negative", value: outcomes.negative, className: "bg-chart-4" },
-              { label: "inconclusive", value: outcomes.inconclusive, className: "bg-chart-1" },
-            ]}
-          />
+          {unavailable ? (
+            <p className="text-muted-foreground text-xs">Outcome details are not available yet.</p>
+          ) : (
+            <SegmentBar
+              segments={[
+                { label: "findings", value: outcomes.finding, className: "bg-chart-3" },
+                { label: "negative", value: outcomes.negative, className: "bg-chart-4" },
+                { label: "inconclusive", value: outcomes.inconclusive, className: "bg-chart-1" },
+              ]}
+            />
+          )}
         </KpiCell>
 
-        <KpiCell label="Unresolved warnings" value={String(warnings.length)}>
-          <SegmentBar
-            segments={[
-              { label: "blocking", value: warningCount("Blocking"), className: "bg-chart-2", emphasize: true },
-              { label: "warning", value: warningCount("Warning"), className: "bg-chart-4" },
-              { label: "info", value: warningCount("Info"), className: "bg-chart-1" },
-            ]}
-          />
+        <KpiCell
+          label="Unresolved warnings"
+          value={unavailable ? "—" : String(warnings.length)}
+          badge={dashboard.sampleInsights ? <Badge variant="outline">Sample</Badge> : undefined}
+        >
+          {unavailable ? (
+            <p className="text-muted-foreground text-xs">Warning details are not available yet.</p>
+          ) : (
+            <SegmentBar
+              segments={[
+                { label: "blocking", value: warningCount("Blocking"), className: "bg-chart-2", emphasize: true },
+                { label: "warning", value: warningCount("Warning"), className: "bg-chart-4" },
+                { label: "info", value: warningCount("Info"), className: "bg-chart-1" },
+              ]}
+            />
+          )}
         </KpiCell>
 
         <KpiCell
           label="Report"
-          value={`${report.sectionsDone}/${report.sectionsTotal}`}
-          unit="sections"
-          badge={<Badge className={reportBadgeClassNames[report.status]}>{report.status}</Badge>}
+          value={unavailable ? "—" : `${report.sectionsDone}/${report.sectionsTotal}`}
+          unit={unavailable ? undefined : "sections"}
+          badge={
+            unavailable ? undefined : <Badge className={reportBadgeClassNames[report.status]}>{report.status}</Badge>
+          }
         >
           <div className="flex flex-col gap-2">
             <div className="h-1.5 overflow-hidden rounded-full bg-muted" aria-hidden="true">
               <div className="h-full rounded-full bg-chart-3" style={{ width: `${reportPercent}%` }} />
             </div>
             <p className="truncate text-muted-foreground text-xs">
-              <span className="font-medium text-foreground tabular-nums">{reportPercent}%</span> complete ·{" "}
+              {!unavailable && (
+                <>
+                  <span className="font-medium text-foreground tabular-nums">{reportPercent}%</span> complete ·{" "}
+                </>
+              )}
               {report.detail}
             </p>
           </div>

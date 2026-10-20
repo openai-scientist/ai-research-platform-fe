@@ -1,31 +1,22 @@
 "use client";
 
-import { Download, FolderPlus, Grid2X2, List } from "lucide-react";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
+
+import { Download, FolderOpen, FolderPlus, Grid2X2, List } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
-import type {
-  FileManagerFile,
-  FileManagerFolder,
-  FileManagerView,
-} from "../../dashboard/file-manager/_components/data";
+import type { FileManagerFile, FileManagerView } from "../../dashboard/file-manager/_components/data";
 import { FileGridView } from "../../dashboard/file-manager/_components/file-grid-view";
 import { FileListView } from "../../dashboard/file-manager/_components/file-list-view";
 import {
-  FileManagerToolbar,
   type FileManagerShowLabels,
+  FileManagerToolbar,
   type FileManagerTypeOption,
 } from "../../dashboard/file-manager/_components/file-manager-toolbar";
-import { FoldersSection } from "../../dashboard/file-manager/_components/folders-section";
-
-const projectCollections: FileManagerFolder[] = [
-  { fileCount: 4, id: "active", name: "Active research", size: "$18.4K monthly spend", updatedAt: "4 min ago" },
-  { fileCount: 12, id: "review", name: "Review queue", size: "42 findings pending", updatedAt: "18 min ago" },
-  { fileCount: 8, id: "shared", name: "Shared workspaces", size: "27 collaborators", updatedAt: "2 hr ago" },
-  { fileCount: 3, id: "archived", name: "Archived projects", size: "Retained for audit", updatedAt: "Yesterday" },
-];
+import { RecentProjects } from "../../projects/_components/recent-projects";
 
 export const projectActions = {
   archive: "Archive project",
@@ -174,16 +165,20 @@ const projectFilterLabels: FileManagerShowLabels = {
 function ProjectActions({
   canCreateProject,
   onCreateProject,
+  secondaryAction,
 }: {
   readonly canCreateProject: boolean;
   readonly onCreateProject?: () => void;
+  readonly secondaryAction?: ReactNode;
 }) {
   return (
     <div className="flex items-center gap-2">
-      <Button variant="outline">
-        <Download data-icon="inline-start" />
-        Export
-      </Button>
+      {secondaryAction ?? (
+        <Button variant="outline">
+          <Download data-icon="inline-start" />
+          Export
+        </Button>
+      )}
       {canCreateProject && (
         <Button onClick={onCreateProject}>
           <FolderPlus data-icon="inline-start" />
@@ -200,12 +195,14 @@ export function AdminProjects({
   embedded = false,
   onCreateProject,
   projects = defaultProjects,
+  secondaryAction,
 }: {
   readonly activeView?: FileManagerView;
   readonly canCreateProject?: boolean;
   readonly embedded?: boolean;
   readonly onCreateProject?: () => void;
   readonly projects?: FileManagerFile[];
+  readonly secondaryAction?: ReactNode;
 }) {
   const [activeView, setActiveView] = useState<FileManagerView>(initialView);
 
@@ -213,7 +210,11 @@ export function AdminProjects({
     <div className="flex flex-col gap-4">
       {embedded ? (
         <div className="flex justify-end">
-          <ProjectActions canCreateProject={canCreateProject} onCreateProject={onCreateProject} />
+          <ProjectActions
+            canCreateProject={canCreateProject}
+            onCreateProject={onCreateProject}
+            secondaryAction={secondaryAction}
+          />
         </div>
       ) : (
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -223,53 +224,69 @@ export function AdminProjects({
               Browse research workspaces, activity, and experiment status.
             </p>
           </div>
-          <ProjectActions canCreateProject={canCreateProject} onCreateProject={onCreateProject} />
+          <ProjectActions
+            canCreateProject={canCreateProject}
+            onCreateProject={onCreateProject}
+            secondaryAction={secondaryAction}
+          />
         </div>
       )}
 
-      <FileManagerToolbar
-        filterLabels={projectFilterLabels}
-        itemLabel="projects"
-        placeholder="Search projects..."
-        typeLabel="Project status"
-        typeOptions={projectTypeOptions}
-      />
+      {projects.length > 0 && (
+        <FileManagerToolbar
+          filterLabels={projectFilterLabels}
+          itemLabel="projects"
+          placeholder="Search projects..."
+          typeLabel="Project status"
+          typeOptions={projectTypeOptions}
+        />
+      )}
 
-      <FoldersSection
-        actionLabels={{ open: "Open collection", rename: "Rename collection", share: "Copy collection link" }}
-        folders={projectCollections}
-        itemCountLabel="projects"
-        sectionTitle="Project collections"
-        totalLabel="collections"
-      />
+      {projects.length > 0 && <RecentProjects projects={projects} />}
 
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between gap-4">
           <h2 className="font-medium text-lg">All projects</h2>
-          <ToggleGroup
-            type="single"
-            variant="outline"
-            size="sm"
-            spacing={0}
-            value={activeView}
-            onValueChange={(value) => {
-              if (value === "grid" || value === "list") {
-                setActiveView(value);
-              }
-            }}
-            aria-label="Project view"
-          >
-            <ToggleGroupItem value="grid">
-              <Grid2X2 />
-              Grid View
-            </ToggleGroupItem>
-            <ToggleGroupItem value="list">
-              <List />
-              List View
-            </ToggleGroupItem>
-          </ToggleGroup>
+          {projects.length > 0 && (
+            <ToggleGroup
+              type="single"
+              variant="outline"
+              size="sm"
+              spacing={0}
+              value={activeView}
+              onValueChange={(value) => {
+                if (value === "grid" || value === "list") {
+                  setActiveView(value);
+                }
+              }}
+              aria-label="Project view"
+            >
+              <ToggleGroupItem value="grid">
+                <Grid2X2 />
+                Grid View
+              </ToggleGroupItem>
+              <ToggleGroupItem value="list">
+                <List />
+                List View
+              </ToggleGroupItem>
+            </ToggleGroup>
+          )}
         </div>
-        {activeView === "list" ? (
+        {projects.length === 0 ? (
+          <Empty className="min-h-64 border" role="status">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <FolderOpen aria-hidden="true" />
+              </EmptyMedia>
+              <EmptyTitle>No projects yet</EmptyTitle>
+              <EmptyDescription>
+                {canCreateProject
+                  ? "Create a research project to get started, or accept an invitation to join a workspace."
+                  : "You haven't joined any projects. Check your invitations or ask a project manager to invite you."}
+              </EmptyDescription>
+            </EmptyHeader>
+          </Empty>
+        ) : activeView === "list" ? (
           <FileListView
             files={projects}
             labels={{ modified: "Last activity", name: "Project", owner: "Owner", size: "Runs" }}

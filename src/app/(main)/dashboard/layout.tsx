@@ -8,10 +8,10 @@ import { cn } from "cn";
 import { AppSidebar } from "@/app/(main)/dashboard/_components/sidebar/app-sidebar";
 import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { users } from "@/data/users";
 import { getAuthenticatedUser } from "@/server/auth";
 import { getPreference } from "@/server/server-actions";
 
+import { NotificationBell } from "../_components/notifications/notification-bell";
 import { AccountSwitcher } from "./_components/header/account-switcher";
 import { LayoutControls } from "./_components/header/layout-controls";
 import { SearchDialog } from "./_components/header/search-dialog";
@@ -27,7 +27,7 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
   ]);
 
   if (!authenticatedUser) {
-    redirect("/auth/v2/login");
+    redirect("/auth/login");
   }
 
   return (
@@ -39,7 +39,7 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
         } as React.CSSProperties
       }
     >
-      <AppSidebar variant={variant} collapsible={collapsible} />
+      <AppSidebar user={{ ...authenticatedUser, avatar: "" }} variant={variant} collapsible={collapsible} />
       <SidebarInset
         className={cn(
           "[html[data-content-layout=centered]_&>*]:mx-auto",
@@ -67,9 +67,20 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
               <SearchDialog />
             </div>
             <div className="flex items-center gap-2">
+              <NotificationBell />
               <LayoutControls />
               <ThemeSwitcher />
-              <AccountSwitcher users={users} />
+              <AccountSwitcher
+                users={[
+                  {
+                    id: authenticatedUser.id,
+                    name: authenticatedUser.name,
+                    email: authenticatedUser.email,
+                    avatar: "",
+                    role: authenticatedUser.platform_role,
+                  },
+                ]}
+              />
             </div>
           </div>
         </header>

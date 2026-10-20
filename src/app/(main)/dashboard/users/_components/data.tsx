@@ -1,4 +1,4 @@
-export type UserStatus = "Active" | "Pending invite" | "Deactivated" | "Locked" | "Suspended";
+export type UserStatus = "Active" | "Pending invite" | "Expired invitation" | "Deactivated" | "Locked" | "Suspended";
 
 const teamValues = [
   "Platform",
@@ -14,9 +14,11 @@ const teamValues = [
 export type UserTeam = (typeof teamValues)[number];
 
 export type UserRow = {
+  id?: string;
+  avatar_url?: string | null;
   email: string;
   joinedDate: string;
-  lastActive: number;
+  lastActive?: number;
   name: string;
   role: string;
   status: UserStatus;
@@ -302,6 +304,10 @@ export const statusMeta: Record<UserStatus, { badgeClass: string; dotClass: stri
   "Pending invite": {
     badgeClass: "border-amber-500/20 bg-amber-500/10 text-amber-600 dark:text-amber-400",
     dotClass: "bg-amber-500",
+  },
+  "Expired invitation": {
+    badgeClass: "border-destructive/20 bg-destructive/10 text-destructive",
+    dotClass: "bg-destructive",
   },
   Deactivated: {
     badgeClass: "border-border bg-muted/50 text-muted-foreground",

@@ -1,11 +1,20 @@
 "use client";
+import type { ReactNode } from "react";
+
 import type { ColumnDef } from "@tanstack/react-table";
 import { Subscribe } from "@tanstack/react-table";
 import { cn } from "cn";
 import { parse } from "date-fns";
 import { Check, Clock, MoreHorizontal, X } from "lucide-react";
 
-import { Avatar, AvatarBadge, AvatarFallback, AvatarGroup, AvatarGroupCount } from "@/components/ui/avatar";
+import {
+  Avatar,
+  AvatarBadge,
+  AvatarFallback,
+  AvatarGroup,
+  AvatarGroupCount,
+  AvatarImage,
+} from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -16,21 +25,61 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { resolveAvatarUrl } from "@/lib/auth/avatar";
 import type { DataTableFeatures } from "@/lib/data-table-features";
 import { getInitials } from "@/lib/utils";
 
 import { statusMeta, type UserRow } from "./data";
 
-function RoleCell({ role, team }: { role: string; team: string }) {
+function RoleCell({ role, team }: { role: string; team?: string }) {
   return (
     <div className="grid gap-0.5">
       <span className="whitespace-nowrap">{role}</span>
-      <span className="text-muted-foreground text-xs">{team}</span>
+      {team ? <span className="text-muted-foreground text-xs">{team}</span> : null}
     </div>
   );
 }
 
-function StatusBadge({ status }: { status: UserRow["status"] }) {
+export function RoleSelect({
+  user,
+  choices,
+  onChange,
+  className = "w-40",
+  disabled = false,
+}: {
+  user: UserRow;
+  choices: readonly string[];
+  onChange: (user: UserRow, role: string) => void;
+  className?: string;
+  disabled?: boolean;
+}) {
+  if (choices.length === 0) return <RoleCell role={user.role} />;
+  return (
+    <Select
+      disabled={disabled}
+      value={user.role}
+      onValueChange={(value) => {
+        if (value !== user.role) onChange(user, value);
+      }}
+    >
+      <SelectTrigger size="sm" className={className} aria-label={`Role for ${user.name}`}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent position="popper" align="start">
+        <SelectGroup>
+          {choices.map((choice) => (
+            <SelectItem key={choice} value={choice}>
+              {choice}
+            </SelectItem>
+          ))}
+        </SelectGroup>
+      </SelectContent>
+    </Select>
+  );
+}
+
+export function StatusBadge({ status }: { status: UserRow["status"] }) {
   const meta = statusMeta[status];
 
   return (
@@ -41,7 +90,7 @@ function StatusBadge({ status }: { status: UserRow["status"] }) {
   );
 }
 
-function getAvatarTone(name: string) {
+export function getAvatarTone(name: string) {
   const tones = [
     "[&_[data-slot=avatar-fallback]]:bg-amber-100 [&_[data-slot=avatar-fallback]]:text-amber-700 after:border-amber-200 dark:[&_[data-slot=avatar-fallback]]:bg-amber-500/15 dark:[&_[data-slot=avatar-fallback]]:text-amber-300 dark:after:border-amber-500/20",
     "[&_[data-slot=avatar-fallback]]:bg-orange-100 [&_[data-slot=avatar-fallback]]:text-orange-700 after:border-orange-200 dark:[&_[data-slot=avatar-fallback]]:bg-orange-500/15 dark:[&_[data-slot=avatar-fallback]]:text-orange-300 dark:after:border-orange-500/20",
@@ -86,14 +135,23 @@ function getLastActiveBadge(lastActive: number) {
   };
 }
 
-function AvatarCell({ lastActive, name }: { lastActive: number; name: string }) {
-  const badge = getLastActiveBadge(lastActive);
-  const BadgeIcon = badge.icon;
+export function AvatarCell({
+  lastActive,
+  name,
+  avatarUrl,
+}: {
+  lastActive?: number;
+  name: string;
+  avatarUrl?: string | null;
+}) {
+  const badge = lastActive === undefined ? null : getLastActiveBadge(lastActive);
+  const BadgeIcon = badge?.icon;
 
   return (
     <Avatar size="lg" className={cn("font-medium", getAvatarTone(name))}>
+      <AvatarImage src={resolveAvatarUrl(avatarUrl)} alt={name} crossOrigin="use-credentials" />
       <AvatarFallback>{getInitials(name)}</AvatarFallback>
-      <AvatarBadge className={badge.className}>{BadgeIcon ? <BadgeIcon /> : null}</AvatarBadge>
+      {badge && <AvatarBadge className={badge.className}>{BadgeIcon ? <BadgeIcon /> : null}</AvatarBadge>}
     </Avatar>
   );
 }
@@ -116,7 +174,71 @@ function WorkspaceCell({ workspaces }: { workspaces: string[] }) {
   );
 }
 
-export const usersColumns: ColumnDef<DataTableFeatures, UserRow>[] = [
+export function UserActionsMenu({ user, onToggleStatus }: { user: UserRow; onToggleStatus?: (user: UserRow) => void }) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          aria-label={`Open actions for ${user.name}`}
+          className="size-8 rounded-md text-muted-foreground hover:bg-muted/50"
+          size="icon-sm"
+          variant="ghost"
+        >
+          <MoreHorizontal className="size-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem>View profile</DropdownMenuItem>
+        <DropdownMenuItem>Edit user</DropdownMenuItem>
+        <DropdownMenuItem>Manage team</DropdownMenuItem>
+        <DropdownMenuItem>Resend invite</DropdownMenuItem>
+        <DropdownMenuSeparator />
+        {onToggleStatus && user.status !== "Active" ? (
+          <DropdownMenuItem onSelect={() => onToggleStatus(user)}>Activate user</DropdownMenuItem>
+        ) : (
+          <DropdownMenuItem variant="destructive" onSelect={() => onToggleStatus?.(user)}>
+            Deactivate user
+          </DropdownMenuItem>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+const workspaceColumn: ColumnDef<DataTableFeatures, UserRow> = {
+  accessorKey: "workspace",
+  header: "Workspace",
+  filterFn: "arrIncludes",
+  cell: ({ row }) => <WorkspaceCell workspaces={row.original.workspace} />,
+};
+
+export type UsersColumnsOptions = {
+  readonly getRoleChoices?: (user: UserRow) => readonly string[];
+  readonly roleChangeDisabled?: boolean;
+  readonly showActions?: boolean;
+  readonly nameColumnLabel?: string;
+  readonly joinedDateLabel?: string;
+  readonly renderActions?: (user: UserRow) => ReactNode;
+  readonly onChangeRole?: (user: UserRow, role: string) => void;
+  readonly onToggleStatus?: (user: UserRow) => void;
+  readonly roleChoices?: readonly string[];
+  readonly showTeam?: boolean;
+  readonly showWorkspace?: boolean;
+};
+
+export const createUsersColumns = ({
+  getRoleChoices,
+  roleChangeDisabled = false,
+  showActions = true,
+  nameColumnLabel = "User",
+  joinedDateLabel = "Joined date",
+  renderActions,
+  onChangeRole,
+  onToggleStatus,
+  roleChoices = [],
+  showTeam = true,
+  showWorkspace = true,
+}: UsersColumnsOptions = {}): ColumnDef<DataTableFeatures, UserRow>[] => [
   {
     id: "select",
     header: ({ table }) => (
@@ -162,10 +284,10 @@ export const usersColumns: ColumnDef<DataTableFeatures, UserRow>[] = [
   },
   {
     accessorKey: "name",
-    header: "User",
+    header: nameColumnLabel,
     cell: ({ row }) => (
       <div className="flex items-center gap-3">
-        <AvatarCell name={row.original.name} lastActive={row.original.lastActive} />
+        <AvatarCell name={row.original.name} lastActive={row.original.lastActive} avatarUrl={row.original.avatar_url} />
         <div className="min-w-0">
           <div className="truncate font-medium text-foreground text-sm">{row.original.name}</div>
           <div className="truncate text-muted-foreground text-sm">{row.original.email}</div>
@@ -175,9 +297,19 @@ export const usersColumns: ColumnDef<DataTableFeatures, UserRow>[] = [
   },
   {
     accessorKey: "role",
-    header: "Role / Team",
+    header: showTeam ? "Role / Team" : "Role",
     filterFn: "equalsString",
-    cell: ({ row }) => <RoleCell role={row.original.role} team={row.original.team} />,
+    cell: ({ row }) =>
+      onChangeRole && roleChoices.length > 0 ? (
+        <RoleSelect
+          user={row.original}
+          choices={getRoleChoices?.(row.original) ?? roleChoices}
+          onChange={onChangeRole}
+          disabled={roleChangeDisabled}
+        />
+      ) : (
+        <RoleCell role={row.original.role} team={showTeam ? row.original.team : undefined} />
+      ),
   },
   {
     accessorKey: "team",
@@ -185,12 +317,7 @@ export const usersColumns: ColumnDef<DataTableFeatures, UserRow>[] = [
     filterFn: "equalsString",
     cell: ({ row }) => <div className="text-sm">{row.original.team}</div>,
   },
-  {
-    accessorKey: "workspace",
-    header: "Workspace",
-    filterFn: "arrIncludes",
-    cell: ({ row }) => <WorkspaceCell workspaces={row.original.workspace} />,
-  },
+  ...(showWorkspace ? [workspaceColumn] : []),
   {
     accessorKey: "status",
     header: "Status",
@@ -200,37 +327,28 @@ export const usersColumns: ColumnDef<DataTableFeatures, UserRow>[] = [
   {
     id: "joinedDate",
     accessorFn: (row) => parse(row.joinedDate, "dd MMM yyyy, h:mm a", new Date()).getTime(),
-    header: "Joined date",
+    header: joinedDateLabel,
     cell: ({ row }) => <div className="text-foreground text-sm">{row.original.joinedDate}</div>,
   },
-  {
-    id: "actions",
-    header: () => <div className="text-right">Actions</div>,
-    cell: ({ row }) => (
-      <div className="text-right">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              aria-label={`Open actions for ${row.original.name}`}
-              className="size-8 rounded-md text-muted-foreground hover:bg-muted/50"
-              size="icon-sm"
-              variant="ghost"
-            >
-              <MoreHorizontal className="size-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem>View profile</DropdownMenuItem>
-            <DropdownMenuItem>Edit user</DropdownMenuItem>
-            <DropdownMenuItem>Manage team</DropdownMenuItem>
-            <DropdownMenuItem>Resend invite</DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem variant="destructive">Deactivate user</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-    ),
-    enableHiding: false,
-    enableSorting: false,
-  },
+  ...(!showActions
+    ? []
+    : [
+        {
+          id: "actions",
+          header: () => <div className="text-right">Actions</div>,
+          cell: ({ row }) => (
+            <div className="text-right">
+              {renderActions ? (
+                renderActions(row.original)
+              ) : (
+                <UserActionsMenu user={row.original} onToggleStatus={onToggleStatus} />
+              )}
+            </div>
+          ),
+          enableHiding: false,
+          enableSorting: false,
+        } satisfies ColumnDef<DataTableFeatures, UserRow>,
+      ]),
 ];
+
+export const usersColumns = createUsersColumns();

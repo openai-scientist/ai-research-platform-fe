@@ -1,15 +1,16 @@
+import { useId } from "react";
+
 import {
   Bell,
   Database,
   FlaskConical,
   Globe2,
   LockKeyhole,
+  type LucideIcon,
   Save,
   ServerCog,
   ShieldCheck,
-  type LucideIcon,
 } from "lucide-react";
-import { useId } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -36,7 +37,7 @@ export function AdminSettings() {
       <div className="grid gap-4 xl:grid-cols-2">
         <SettingsCard icon={Globe2} title="General" description="Identity and regional defaults for the platform.">
           <SettingsGrid>
-            <SettingsField label="Platform name" value="ResearchLab AI AI Research Experimentation Platform" />
+            <SettingsField label="Platform name" value="OpenAI Scientist" />
             <SettingsField label="Default language" value="English (US)" />
             <SettingsField label="Timezone" value="Asia/Ho_Chi_Minh" />
             <ToggleField label="Maintenance mode" description="Temporarily prevent new runs from starting." />

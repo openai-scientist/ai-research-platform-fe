@@ -1,7 +1,5 @@
 "use client";
 
-import { useState } from "react";
-
 import Link from "next/link";
 
 import { cn } from "cn";
@@ -14,6 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 
 import { type FileManagerFile, fileIcons } from "./data";
 import { FileActions } from "./file-actions";
+import { useFileStars } from "./use-file-stars";
 
 interface FileListViewProps {
   files: FileManagerFile[];
@@ -31,11 +30,7 @@ export function FileListView({
   labels = { modified: "Modified", name: "Name", owner: "Owner", size: "Size" },
   sharedLabel = "Shared",
 }: FileListViewProps) {
-  const [listFiles, setListFiles] = useState(files);
-
-  function toggleStar(fileId: string) {
-    setListFiles((current) => current.map((file) => (file.id === fileId ? { ...file, starred: !file.starred } : file)));
-  }
+  const { files: listFiles, toggleStar } = useFileStars(files);
 
   return (
     <Table>

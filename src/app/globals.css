@@ -18,6 +18,7 @@
   --radius-3xl: calc(var(--radius) + 12px);
   --radius-4xl: calc(var(--radius) + 16px);
   --color-background: var(--background);
+  --color-canvas: var(--canvas);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
@@ -77,11 +78,11 @@ These serve as the fallback; there is no separate default.css file. */
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.985 0 0);
+  --sidebar: oklch(0.97 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.205 0 0);
   --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent: oklch(0.93 0 0);
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
@@ -91,10 +92,13 @@ These serve as the fallback; there is no separate default.css file. */
   --font-mono: var(--font-geist-mono);
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
+  /* The page behind cards: a shade off white, so white cards stand out. Controls keep --background. */
+  --canvas: oklch(0.985 0 0);
 }
 
 .dark {
   --background: oklch(0.145 0 0);
+  --canvas: var(--background);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);
   --card-foreground: oklch(0.985 0 0);
@@ -127,17 +131,75 @@ These serve as the fallback; there is no separate default.css file. */
   --sidebar-ring: oklch(0.556 0 0);
 }
 
+/* A preset sets its own page colour; keep its canvas the same as its background. */
+:root[data-theme-preset]:not([data-theme-preset="default"]) {
+  --canvas: var(--background);
+}
+
+@layer utilities {
+  /* Every signed-in page sits on the canvas, whichever role's layout it uses. */
+  :root [data-slot="sidebar-inset"] {
+    background-color: var(--canvas);
+  }
+
+  /* Fields stay white on the canvas, as they are on a card. */
+  :root:not(.dark)
+  :is([data-slot="input-group"], [data-slot="input"], [data-slot="select-trigger"], [data-slot="textarea"]):not(
+    :disabled,
+    [data-slot="input-group"] *
+  ) {
+    background-color: var(--background);
+  }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-canvas text-foreground;
     font-family: var(--font-sans), system-ui, sans-serif;
   }
   html {
     @apply font-sans;
+  }
+
+  /*
+   * Thin, quiet scrollbars in the theme's colours: a rounded thumb against the edge, on a clear track, darker while
+   * you point at what scrolls. Chrome and Safari draw them from the WebKit parts, which place the thumb; they would
+   * ignore those parts if the standard properties were set, so only Firefox gets the standard ones.
+   */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track,
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    border-top: 0 solid transparent;
+    border-left: 2px solid transparent;
+    border-radius: 9999px;
+    background-color: color-mix(in oklab, var(--foreground) 16%, transparent);
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:horizontal {
+    border-top-width: 2px;
+    border-left-width: 0;
+  }
+  *:hover::-webkit-scrollbar-thumb {
+    background-color: color-mix(in oklab, var(--foreground) 28%, transparent);
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: color-mix(in oklab, var(--foreground) 40%, transparent);
+  }
+  @supports not selector(::-webkit-scrollbar) {
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: color-mix(in oklab, var(--foreground) 16%, transparent) transparent;
+    }
   }
 }
 
@@ -253,6 +315,142 @@ html:has([data-landing-page]) {
 
 .disable-transitions * {
   transition: none !important;
+}
+
+/* Toasts: each kind gets its own icon colour and a tinted edge, so an error never reads like a success.
+   The extra [data-sonner-toaster] outranks Sonner's own styles, which load after this file. */
+[data-sonner-toaster] [data-sonner-toast][data-styled="true"] {
+  --toast-tone: var(--color-zinc-500);
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.75rem 2.25rem 0.75rem 0.75rem;
+  /* Mixed into the opaque popover colour, so the edge reads the same over any backdrop. */
+  border-color: color-mix(in oklab, var(--toast-tone) 30%, var(--popover));
+  /* A close, even shadow plus a soft lift: no edge looks heavier than the others. */
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 0.05),
+    0 6px 20px -4px rgb(0 0 0 / 0.1);
+  font-size: 0.875rem;
+}
+
+[data-sonner-toaster] [data-sonner-toast][data-type="success"] {
+  --toast-tone: var(--color-emerald-600);
+}
+
+[data-sonner-toaster] [data-sonner-toast][data-type="error"] {
+  --toast-tone: var(--color-red-600);
+}
+
+[data-sonner-toaster] [data-sonner-toast][data-type="warning"] {
+  --toast-tone: var(--color-amber-600);
+}
+
+[data-sonner-toaster] [data-sonner-toast][data-type="info"] {
+  --toast-tone: var(--color-sky-600);
+}
+
+.dark [data-sonner-toaster] [data-sonner-toast][data-type="success"] {
+  --toast-tone: var(--color-emerald-400);
+}
+
+.dark [data-sonner-toaster] [data-sonner-toast][data-type="error"] {
+  --toast-tone: var(--color-red-400);
+}
+
+.dark [data-sonner-toaster] [data-sonner-toast][data-type="warning"] {
+  --toast-tone: var(--color-amber-400);
+}
+
+.dark [data-sonner-toaster] [data-sonner-toast][data-type="info"] {
+  --toast-tone: var(--color-sky-400);
+}
+
+[data-sonner-toaster] [data-sonner-toast][data-styled="true"] [data-icon] {
+  width: 1.75rem;
+  height: 1.75rem;
+  margin: 0;
+  justify-content: center;
+  border-radius: 9999px;
+  color: var(--toast-tone);
+  background: color-mix(in oklab, var(--toast-tone) 13%, transparent);
+}
+
+[data-sonner-toaster] [data-sonner-toast][data-styled="true"] [data-icon] svg {
+  margin: 0;
+}
+
+/* Centre a one-line message on the icon. */
+[data-sonner-toaster] [data-sonner-toast][data-styled="true"] [data-content] {
+  padding-top: 0.25rem;
+}
+
+[data-sonner-toaster] [data-sonner-toast][data-styled="true"] [data-title] {
+  font-weight: 500;
+  line-height: 1.25rem;
+  text-wrap: pretty;
+}
+
+[data-sonner-toaster] [data-sonner-toast][data-styled="true"] [data-description] {
+  overflow-wrap: anywhere;
+  color: var(--muted-foreground);
+  font-size: 0.8125rem;
+  line-height: 1.125rem;
+}
+
+[data-sonner-toaster] [data-sonner-toast][data-styled="true"] [data-close-button] {
+  inset: 0.875rem 0.625rem auto auto;
+  width: 1.5rem;
+  height: 1.5rem;
+  transform: none;
+  border: 0;
+  border-radius: 0.375rem;
+  background: transparent;
+  color: var(--muted-foreground);
+}
+
+/* An action button: compact, centred on the toast, and in the toast's own tone. */
+[data-sonner-toaster] [data-sonner-toast][data-styled="true"] [data-button] {
+  align-self: center;
+  height: 1.75rem;
+  margin-left: 0.25rem;
+  padding-inline: 0.625rem;
+  border-radius: 0.375rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--foreground);
+  background: color-mix(in oklab, var(--toast-tone) 14%, transparent);
+  transition: background 150ms;
+}
+
+[data-sonner-toaster] [data-sonner-toast][data-styled="true"] [data-button]:hover {
+  background: color-mix(in oklab, var(--toast-tone) 24%, transparent);
+}
+
+[data-sonner-toaster] [data-sonner-toast][data-styled="true"]:hover [data-close-button]:hover {
+  background: var(--muted);
+  color: var(--foreground);
+}
+
+/* Keep Sonner's stack positioning; animate the notification's own offset. */
+.notification-toast[data-sonner-toast][data-mounted="true"][data-visible="true"] {
+  translate: var(--notification-toast-x, 0px)
+    calc(var(--notification-toast-offset, 0px) + var(--notification-toast-y, 0px));
+  opacity: var(--notification-toast-opacity, 1);
+}
+
+.notification-toast[data-sonner-toast][data-mounted="true"][data-visible="true"][data-removed="true"] {
+  opacity: var(--notification-toast-opacity, 0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .notification-toast[data-sonner-toast][data-mounted="true"][data-visible="true"] {
+    translate: none;
+    opacity: 1;
+  }
+
+  .notification-toast[data-sonner-toast][data-mounted="true"][data-visible="true"][data-removed="true"] {
+    opacity: 0;
+  }
 }
 
 [data-print-root] {

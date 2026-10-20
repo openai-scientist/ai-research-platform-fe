@@ -1,76 +1,49 @@
-export const AUTH_COOKIE_NAME = "research_platform_auth";
-export const DEFAULT_DEMO_PASSWORD = "123456";
+import { PlatformRole, type ProjectRole } from "@/types/enums";
 
-export const USER_ROLES = ["SYSTEM_ADMIN", "PROJECT_MANAGER", "RESEARCHER", "REVIEWER"] as const;
+import type { CurrentUser } from "./types";
 
-export type UserRole = (typeof USER_ROLES)[number];
+export const AUTH_COOKIE_NAME = "platform_session";
+export const LOGIN_PATH = "/auth/login";
+export const CHANGE_PASSWORD_PATH = "/change-password";
+export const PUBLIC_AUTH_PATHS = [
+  "/auth/login",
+  "/auth/register",
+  "/auth/verify-email",
+  "/auth/resend-verification",
+  "/auth/forgot-password",
+  "/auth/verify-reset-password",
+  "/auth/reset-password",
+];
+export const SESSION_INVALID_CODES = ["SESSION_EXPIRED", "UNAUTHENTICATED", "USER_SUSPENDED"];
+export const PLATFORM_ROLE_LABELS: Record<PlatformRole, string> = {
+  [PlatformRole.PlatformAdmin]: "Admin",
+  [PlatformRole.User]: "User",
+};
 
-export function canAccessProjects(role: UserRole) {
-  return role === "PROJECT_MANAGER" || role === "RESEARCHER";
-}
-
-export function canCreateProject(role: UserRole) {
-  return role === "PROJECT_MANAGER";
-}
-
-export function getRoleHomePath(role: UserRole) {
-  switch (role) {
-    case "SYSTEM_ADMIN":
-      return "/admin";
-    case "REVIEWER":
-      return "/reviews";
-    default:
-      return "/projects";
-  }
-}
-
-export type AuthUser = {
-  email: string;
+export type AuthUser = CurrentUser["user"] & {
   name: string;
-  role: UserRole;
+  projectRole: ProjectRole | null;
+  memberships: CurrentUser["memberships"];
+  session: CurrentUser["session"];
 };
 
-type AuthUserRecord = AuthUser & {
-  password: string;
-};
-
-export const AUTH_USERS: readonly AuthUserRecord[] = [
-  {
-    email: "admin@gmail.com",
-    name: "System Admin",
-    password: DEFAULT_DEMO_PASSWORD,
-    role: "SYSTEM_ADMIN",
-  },
-  {
-    email: "manager@gmail.com",
-    name: "Project Manager",
-    password: DEFAULT_DEMO_PASSWORD,
-    role: "PROJECT_MANAGER",
-  },
-  {
-    email: "researcher@gmail.com",
-    name: "Researcher",
-    password: DEFAULT_DEMO_PASSWORD,
-    role: "RESEARCHER",
-  },
-  {
-    email: "reviewer@gmail.com",
-    name: "Reviewer",
-    password: DEFAULT_DEMO_PASSWORD,
-    role: "REVIEWER",
-  },
-] as const;
-
-function normalizeEmail(email: string) {
-  return email.trim().toLowerCase();
+export function toAuthUser(current: CurrentUser, projectId?: string): AuthUser {
+  const projectRole = current.memberships.find((membership) => membership.project_id === projectId)?.role ?? null;
+  return {
+    ...current.user,
+    name: current.user.display_name ?? current.user.email,
+    projectRole,
+    memberships: current.memberships,
+    session: current.session,
+  };
 }
-
-export function findUserByCredentials(email: string, password: string): AuthUserRecord | undefined {
-  const normalizedEmail = normalizeEmail(email);
-  return AUTH_USERS.find((user) => user.email === normalizedEmail && user.password === password);
+export function canAccessProjects(role: PlatformRole) {
+  return role === PlatformRole.User || role === PlatformRole.PlatformAdmin;
 }
-
-export function findUserByEmail(email: string): AuthUser | undefined {
-  const normalizedEmail = normalizeEmail(email);
-  return AUTH_USERS.find((user) => user.email === normalizedEmail);
+export function canCreateProject(role: PlatformRole) {
+  // Creating a project makes its creator project_manager, regardless of roles in other projects.
+  return canAccessProjects(role);
+}
+export function getRoleHomePath(role: PlatformRole) {
+  return role === PlatformRole.PlatformAdmin ? "/admin" : "/projects";
 }

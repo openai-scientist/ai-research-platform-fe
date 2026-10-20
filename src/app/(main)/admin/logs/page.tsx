@@ -1,12 +1,11 @@
 import type { Metadata } from "next";
 
-import { PatientMonitoringScreen } from "../../dashboard/patient-monitoring/_components/patient-monitoring-screen";
+import { AdminAuditScreen } from "./_components/admin-audit-screen";
 
 export const metadata: Metadata = {
-  title: "ResearchLab AI Log Monitoring",
-  description: "ResearchLab AI log monitoring.",
+  title: "Audit log · OpenAI Scientist",
+  description: "Review recorded platform actions.",
 };
-
 export default function Page() {
-  return <PatientMonitoringScreen mode="logs" title="RESEARCHLAB AI LOG MONITORING" />;
+  return <AdminAuditScreen />;
 }

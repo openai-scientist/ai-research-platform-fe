@@ -17,10 +17,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { createProject } from "@/server/project-actions";
+import { useCreateProjectMutation } from "@/hooks/use-projects-query";
 
 const formSchema = z.object({
   name: z
@@ -41,6 +41,7 @@ export function CreateProjectDialog({
   readonly onOpenChange: (open: boolean) => void;
 }) {
   const router = useRouter();
+  const createProject = useCreateProjectMutation();
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: { name: "", description: "" },
@@ -55,22 +56,26 @@ export function CreateProjectDialog({
   };
 
   async function onSubmit(data: FormValues) {
-    const result = await createProject(data);
-
-    if (!result.success) {
-      form.setError("root", { type: "server", message: result.error });
-      return;
+    try {
+      const result = await createProject.mutateAsync(data);
+      toast.success("Project created", { description: data.name });
+      handleOpenChange(false);
+      router.push(`/projects/${result.data.id}`);
+    } catch {
+      // The shared mutation hook displays the backend error through Sonner.
     }
-
-    toast.success(`Đã tạo project "${data.name}".`);
-    handleOpenChange(false);
-    router.push(`/projects/${result.projectId}`);
   }
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-md">
-        <form noValidate onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-4">
+        <form
+          noValidate
+          onSubmit={form.handleSubmit(onSubmit, (errors) => {
+            toast.error(errors.name?.message ?? errors.description?.message ?? "Please review the project details.");
+          })}
+          className="flex flex-col gap-4"
+        >
           <DialogHeader>
             <DialogTitle>New project</DialogTitle>
             <DialogDescription>Create a research workspace. You can invite members afterwards.</DialogDescription>
@@ -89,7 +94,6 @@ export function CreateProjectDialog({
                     autoComplete="off"
                     aria-invalid={fieldState.invalid}
                   />
-                  {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
                 </Field>
               )}
             />
@@ -107,12 +111,10 @@ export function CreateProjectDialog({
                     aria-invalid={fieldState.invalid}
                   />
                   <FieldDescription>Optional. Shown on the project list.</FieldDescription>
-                  {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
                 </Field>
               )}
             />
           </FieldGroup>
-          {form.formState.errors.root && <FieldError errors={[form.formState.errors.root]} />}
           <DialogFooter>
             <DialogClose asChild>
               <Button type="button" variant="outline">

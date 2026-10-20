@@ -1,12 +1,11 @@
 import type { Metadata } from "next";
 
-import { AdminUsage } from "../_components/operations-pages";
+import { AdminUsageScreen } from "./_components/admin-usage-screen";
 
 export const metadata: Metadata = {
-  title: "Usage & Cost · ResearchLab AI",
-  description: "Track ResearchLab AI token usage, requests, agent runs, and cost.",
+  title: "Usage & Cost · OpenAI Scientist",
+  description: "Review run costs and budgets by project.",
 };
-
 export default function Page() {
-  return <AdminUsage />;
+  return <AdminUsageScreen />;
 }

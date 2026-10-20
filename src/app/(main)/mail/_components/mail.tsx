@@ -7,6 +7,7 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/componen
 import { useSidebar } from "@/components/ui/sidebar";
 import { setClientCookie } from "@/lib/cookie.client";
 
+import { PageSkeleton } from "../../_components/page-skeleton";
 import type { Mail } from "./data";
 import { MailInbox } from "./mail-inbox";
 import {
@@ -33,7 +34,9 @@ export function MailComponent({ mails, defaultLayout = [...DEFAULT_MAIL_LAYOUT] 
 
   if (!isMounted) {
     return (
-      <div className="flex size-full items-center justify-center text-muted-foreground text-sm">Loading mail...</div>
+      <div className="p-4">
+        <PageSkeleton layout="split" heading={false} label="Loading mail" />
+      </div>
     );
   }
 

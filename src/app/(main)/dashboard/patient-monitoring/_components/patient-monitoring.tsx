@@ -12,7 +12,7 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import type { MonitoringMode, PatientRecord } from "./data";
-import { logStreamEvents, type LogStreamEvent } from "./log-monitoring-data";
+import { type LogStreamEvent, logStreamEvents } from "./log-monitoring-data";
 import { PatientCard } from "./patient-card";
 import { PatientDetail } from "./patient-detail";
 import { PatientTrends } from "./patient-trends";

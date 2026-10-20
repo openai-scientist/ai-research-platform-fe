@@ -19,7 +19,7 @@ value: tangerine
   --accent-foreground: oklch(0.38 0.14 265.52);
   --destructive: oklch(0.64 0.21 25.33);
   --border: oklch(0.9 0.01 247.88);
-  --input: oklch(0.97 0 264.54);
+  --input: color-mix(in oklch, var(--foreground) 40%, var(--card));
   --ring: oklch(0.64 0.17 36.44);
   --chart-1: oklch(0.72 0.06 248.68);
   --chart-2: oklch(0.79 0.09 35.96);
@@ -63,7 +63,7 @@ value: tangerine
   --accent-foreground: oklch(0.88 0.06 254.13);
   --destructive: oklch(0.64 0.21 25.33);
   --border: oklch(0.38 0.03 269.73);
-  --input: oklch(0.38 0.03 269.73);
+  --input: color-mix(in oklch, var(--foreground) 40%, var(--card));
   --ring: oklch(0.64 0.17 36.44);
   --chart-1: oklch(0.72 0.06 248.68);
   --chart-2: oklch(0.77 0.09 34.19);
@@ -86,4 +86,32 @@ value: tangerine
   --shadow-lg: 0px 1px 3px 0px hsl(0 0% 0% / 0.1), 0px 4px 6px -1px hsl(0 0% 0% / 0.1);
   --shadow-xl: 0px 1px 3px 0px hsl(0 0% 0% / 0.1), 0px 8px 10px -1px hsl(0 0% 0% / 0.1);
   --shadow-2xl: 0px 1px 3px 0px hsl(0 0% 0% / 0.25);
+}
+
+/* A consistent field surface for this preset, including controls inside password and combobox groups.
+   Keep disabled fills, focus rings and invalid borders controlled by the component state utilities. */
+:root[data-theme-preset="tangerine"]
+:is(
+  [data-slot="input"],
+  [data-slot="textarea"],
+  [data-slot="select-trigger"],
+  [data-slot="native-select"],
+  [data-slot="input-group"],
+  [data-slot="combobox-chips"],
+  [data-slot="input-otp-slot"]
+):not(:disabled):not(:has(:disabled)) {
+  background-color: var(--card);
+}
+
+/* Trigger wrappers can replace data-slot, so identify buttons by their variant and size instead. */
+:root[data-theme-preset="tangerine"]:not(.dark) :is(button, a, [role="button"])[data-variant="outline"][data-size] {
+  background-color: var(--card);
+}
+
+:root[data-theme-preset="tangerine"]:not(.dark)
+  :is(button, a, [role="button"])[data-variant="outline"][data-size]:not(:disabled):not([aria-disabled="true"]):is(
+    :hover,
+    [aria-expanded="true"]
+  ) {
+  background-color: var(--muted);
 }

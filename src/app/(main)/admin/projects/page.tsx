@@ -3,8 +3,8 @@ import type { Metadata } from "next";
 import { AdminProjects } from "../_components/admin-projects";
 
 export const metadata: Metadata = {
-  title: "Projects · ResearchLab AI",
-  description: "Review and manage ResearchLab AI research projects.",
+  title: "Projects · OpenAI Scientist",
+  description: "Review and manage OpenAI Scientist research projects.",
 };
 
 interface PageProps {

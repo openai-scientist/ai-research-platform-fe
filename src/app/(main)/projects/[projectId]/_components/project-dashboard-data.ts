@@ -1,4 +1,5 @@
 import type { WorkspaceProject } from "@/lib/projects/project-data";
+import { ProjectStatus } from "@/types/enums";
 
 // Run lifecycle per PRD §40.8, condensed to the phases shown on the dashboard.
 export const RUN_PHASES = [
@@ -17,6 +18,8 @@ export type RunPhase = (typeof RUN_PHASES)[number];
 export type WarningSeverity = "Blocking" | "Warning" | "Info";
 
 export type ProjectDashboard = {
+  live?: boolean;
+  sampleInsights?: boolean;
   objective: string;
   datasetVersion: string;
   researchQuestion: string;
@@ -44,20 +47,12 @@ export type ProjectDashboard = {
     };
   };
   recentExperiments: { id: string; title: string; method: string; state: string; updatedAt: string }[];
-  recentFindings: {
-    id: string;
-    statement: string;
-    outcome: string;
-    claimLevel: string;
-    status: string;
-    updatedAt: string;
-  }[];
   warnings: {
     title: string;
     source: string;
     detail: string;
     severity: WarningSeverity;
-    section: "datasets" | "experiments" | "findings";
+    section: "datasets" | "experiments";
   }[];
   report: {
     status: "Not started" | "Drafting" | "In review" | "Published";
@@ -139,32 +134,6 @@ const dashboards: Record<string, Omit<ProjectDashboard, "experimentStats" | "out
         updatedAt: "Yesterday",
       },
     ],
-    recentFindings: [
-      {
-        id: "FND-881",
-        updatedAt: "1 hr ago",
-        statement: "Folding confidence drops for sequences above 600 residues.",
-        outcome: "Finding — supported",
-        claimLevel: "Associational · held-out",
-        status: "Needs Review",
-      },
-      {
-        id: "FND-876",
-        updatedAt: "Yesterday",
-        statement: "Expression host has no practical effect on Tm.",
-        outcome: "Negative result",
-        claimLevel: "Associational · held-out",
-        status: "Validated",
-      },
-      {
-        id: "FND-870",
-        updatedAt: "2 days ago",
-        statement: "Fold class and stability association remains unclear.",
-        outcome: "Inconclusive",
-        claimLevel: "Associational · hypothesis-generating",
-        status: "Inconclusive",
-      },
-    ],
     warnings: [
       {
         title: "Assumption check failed",
@@ -185,7 +154,7 @@ const dashboards: Record<string, Omit<ProjectDashboard, "experimentStats" | "out
         source: "FND-881",
         detail: "Review trigger fired",
         severity: "Info",
-        section: "findings",
+        section: "experiments",
       },
     ],
     report: { status: "Drafting", detail: "Finding brief in progress", sectionsDone: 3, sectionsTotal: 6 },
@@ -193,10 +162,10 @@ const dashboards: Record<string, Omit<ProjectDashboard, "experimentStats" | "out
 };
 
 function getFallbackRunPhase(status: WorkspaceProject["status"]): RunPhase {
-  if (status === "Completed") {
+  if (status === ProjectStatus.Completed) {
     return "Completed";
   }
-  if (status === "Needs Review") {
+  if (status === ProjectStatus.NeedsReview) {
     return "Assessing";
   }
   return "Exploring";
@@ -206,10 +175,10 @@ function getFallbackReport(
   status: WorkspaceProject["status"],
   baseReport: ProjectDashboard["report"],
 ): ProjectDashboard["report"] {
-  if (status === "Completed") {
+  if (status === ProjectStatus.Completed) {
     return { status: "Published", detail: "Final research report published", sectionsDone: 6, sectionsTotal: 6 };
   }
-  if (status === "Data Ready") {
+  if (status === ProjectStatus.DataReady) {
     return { status: "Not started", detail: "No confirmation outcomes yet", sectionsDone: 0, sectionsTotal: 6 };
   }
   return baseReport;
@@ -230,7 +199,7 @@ export function getProjectDashboard(project: WorkspaceProject): ProjectDashboard
   const dashboard = dashboards[project.id] ?? buildFallbackDashboard(project);
   const failed = Math.round(project.experiments * 0.12);
   const needsReview = Math.round(project.experiments * 0.08);
-  const running = project.status === "Completed" || project.status === "Archived" ? 0 : 2;
+  const running = project.status === ProjectStatus.Completed || project.status === ProjectStatus.Archived ? 0 : 2;
   const negative = Math.round(project.findings * 0.3);
   const inconclusive = Math.round(project.findings * 0.2);
 

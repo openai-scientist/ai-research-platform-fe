@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 
-import { Command } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 
+import { BrandMark } from "@/components/brand-mark";
 import {
   Sidebar,
   SidebarContent,
@@ -25,6 +25,8 @@ import { NavUser } from "./nav-user";
 
 interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   readonly brandLabel?: string;
+  /** Extra sidebar content shown below the main navigation. */
+  readonly extra?: React.ReactNode;
   readonly header?: React.ReactNode;
   readonly homeUrl?: string;
   readonly items?: readonly NavGroup[];
@@ -39,6 +41,7 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
 
 export function AppSidebar({
   brandLabel = APP_CONFIG.shortName,
+  extra,
   header,
   homeUrl = "/dashboard/default",
   items: customItems,
@@ -67,7 +70,7 @@ export function AppSidebar({
             <SidebarMenuItem>
               <SidebarMenuButton asChild>
                 <Link prefetch={false} href={homeUrl}>
-                  <Command />
+                  <BrandMark />
                   <span className="truncate font-semibold text-base">{brandLabel}</span>
                 </Link>
               </SidebarMenuButton>
@@ -77,6 +80,7 @@ export function AppSidebar({
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={items} showQuickCreate={showQuickCreate} />
+        {extra}
       </SidebarContent>
       <SidebarFooter>
         <NavUser user={{ ...user, avatar: user.avatar ?? "" }} />

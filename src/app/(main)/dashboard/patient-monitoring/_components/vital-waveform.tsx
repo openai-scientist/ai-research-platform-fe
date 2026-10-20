@@ -8,7 +8,7 @@ import { getVerticalGridCoordinates } from "./chart-grid";
 export type WaveformKind = "arterial" | "ecg" | "pleth" | "respiration";
 
 export interface SignalPoint {
-  value: number;
+  value: number | null;
 }
 
 interface VitalWaveformProps {

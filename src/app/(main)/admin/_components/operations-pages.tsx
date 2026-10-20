@@ -2,12 +2,12 @@ import { Activity, AlertTriangle, CheckCircle2, Clock3, Gauge, RefreshCw, Server
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-import { AnalyticsKpiStrip, type AnalyticsKpiItem } from "../../dashboard/analytics/_components/analytics-kpi-strip";
+import { type AnalyticsKpiItem, AnalyticsKpiStrip } from "../../dashboard/analytics/_components/analytics-kpi-strip";
 import { AnalyticsToolbar } from "../../dashboard/analytics/_components/analytics-toolbar";
-import { RealtimeVisitors, type RealtimeBreakdownItem } from "../../dashboard/analytics/_components/realtime-visitors";
+import { type RealtimeBreakdownItem, RealtimeVisitors } from "../../dashboard/analytics/_components/realtime-visitors";
 import { TopTrafficSources, type TrafficSourceTab } from "../../dashboard/analytics/_components/top-traffic-sources";
 import {
   PerformanceOverview,
