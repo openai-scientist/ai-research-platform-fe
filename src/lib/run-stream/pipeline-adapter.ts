@@ -713,7 +713,7 @@ export class PipelineAdapter {
         this.closeGate(String(payload.gate_id ?? ""), String(payload.action ?? ""));
         break;
       case "stage.status_changed":
-        this.stageStatus(String(payload.status ?? ""));
+        this.stageStatus(String(payload.status ?? ""), payload.reason);
         break;
       case "run.failed":
         this.fail(String(payload.message || "The engine could not finish this run."));
@@ -763,7 +763,7 @@ export class PipelineAdapter {
     this.emit("run.status", { status: "running" });
   }
 
-  private stageStatus(status: string) {
+  private stageStatus(status: string, reason?: unknown) {
     if (status === "COMPLETED") {
       this.openStep("accept");
       this.gate = { id: `accept-${this.stageRun ?? "stage"}`, kind: "accept", engineKind: null };
@@ -789,7 +789,12 @@ export class PipelineAdapter {
       if (this.screen) this.emit("stage.completed", { summary: this.summary(this.screen.key) });
       this.emit("run.completed", {});
     } else if (status === "FAILED") this.fail("The engine could not finish this run.");
-    else if (status === "STOPPED") this.fail("The run was stopped.");
+    else if (status === "STOPPED")
+      this.fail(
+        reason === "project_budget_exceeded"
+          ? "The run stopped because the project reached its monthly model budget. A Project Manager can raise the limit in Settings → Spending."
+          : "The run was stopped.",
+      );
   }
 
   private fail(reason: string) {

@@ -21,6 +21,13 @@ export const integrationKeys = {
   deliveries: (projectId: string, id: string) =>
     ["projects", "detail", projectId, "integrations", id, "deliveries"] as const,
 };
+export const workspaceKeys = {
+  preferenceLists: (id: string) => ["projects", "detail", id, "notification-preferences"] as const,
+  activity: (id: string) => ["projects", "detail", id, "activity"] as const,
+  spending: (id: string) => ["projects", "detail", id, "spending"] as const,
+  usage: (id: string, month?: string) => ["projects", "detail", id, "spending", "usage", month] as const,
+  preferences: (id: string, userId: string) => ["projects", "detail", id, "notification-preferences", userId] as const,
+};
 export const projectKeys = {
   all: ["projects"] as const,
   lists: () => ["projects", "list"] as const,

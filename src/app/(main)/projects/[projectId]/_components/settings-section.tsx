@@ -17,6 +17,7 @@ import type { ProjectItem } from "@/lib/api/services/fetch-project";
 import { ProjectRole, ProjectStatus } from "@/types/enums";
 
 import { MembersSection } from "./members-section";
+import { ProjectEmailSettings } from "./project-email-settings";
 import { SettingsIntegrations } from "./project-integrations/settings-integrations";
 import { SettingsApiProvider, useProjectSettings } from "./settings-api";
 import { SettingsAccess, SettingsData, SettingsLiterature, SettingsModels, SettingsReview } from "./settings-extra";
@@ -31,10 +32,9 @@ import {
   TagInput,
   useUnsavedWarning,
 } from "./settings-panel";
-import { SettingsRuns, SettingsSpending } from "./settings-system";
-import { WorkspaceActivityPreview } from "./workspace-activity-preview";
-import { WorkspaceNotificationsPreview } from "./workspace-notifications-preview";
-import { WorkspaceSpendingPreview } from "./workspace-spending-preview";
+import { SettingsRuns } from "./settings-system";
+import { WorkspaceActivity } from "./workspace-activity";
+import { WorkspaceSpending } from "./workspace-spending";
 import { perform, type WorkspaceProps } from "./workspace-ui";
 
 const GROUPS: { label: string; tabs: { id: string; label: string }[] }[] = [
@@ -363,7 +363,7 @@ function TabLink({ id, label, active }: { id: Tab; label: string; active: boolea
 }
 
 function SettingsContent({ workspace }: { workspace: WorkspaceProps }) {
-  const { project } = useProjectSettings();
+  const { project, snapshot } = useProjectSettings();
   const archived = project.status === ProjectStatus.Archived;
   const requested = useSearchParams().get("tab");
   const tab: Tab = TABS.find((item) => item.id === requested)?.id ?? "general";
@@ -440,13 +440,27 @@ function SettingsContent({ workspace }: { workspace: WorkspaceProps }) {
             />
           )}
           {tab === "spending" && (
-            <>
-              <WorkspaceSpendingPreview />
-              <SettingsSpending readOnly={archived} />
-            </>
+            <WorkspaceSpending
+              key={project.id}
+              projectId={project.id}
+              timezone={String(snapshot.sections.general.timezone ?? "UTC")}
+              readOnly={archived}
+            />
           )}
-          {tab === "notifications" && <WorkspaceNotificationsPreview />}
-          {tab === "activity" && <WorkspaceActivityPreview />}
+          {tab === "notifications" && (
+            <ProjectEmailSettings
+              key={`${project.id}:${workspace.userId}`}
+              userId={workspace.userId}
+              readOnly={archived}
+            />
+          )}
+          {tab === "activity" && (
+            <WorkspaceActivity
+              key={project.id}
+              projectId={project.id}
+              timezone={String(snapshot.sections.general.timezone ?? "UTC")}
+            />
+          )}
           {tab === "danger" && <SettingsDangerZone project={project} userId={workspace.userId} />}
         </div>
       </div>

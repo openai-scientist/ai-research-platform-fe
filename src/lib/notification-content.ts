@@ -1,4 +1,4 @@
-import { Flag, MessageSquare, PlugZap, UserPlus, Workflow } from "lucide-react";
+import { CircleDollarSign, Flag, MessageSquare, PlugZap, UserPlus, Workflow } from "lucide-react";
 
 import type { NotificationItem } from "@/lib/api/services/fetch-notifications";
 import { researchRunUrl } from "@/lib/research-workspace";
@@ -15,6 +15,18 @@ export function getNotificationContent(notification: NotificationItem) {
     : `${projectHref}/experiments`;
 
   switch (notification.kind) {
+    case NotificationKind.BudgetWarning:
+      return {
+        icon: CircleDollarSign,
+        text: `${project} is approaching its monthly model budget.`,
+        href: `${projectHref}/settings?tab=spending`,
+      };
+    case NotificationKind.BudgetExceeded:
+      return {
+        icon: CircleDollarSign,
+        text: `${project} has reached its monthly model budget. Check its spending settings.`,
+        href: `${projectHref}/settings?tab=spending`,
+      };
     case NotificationKind.IntegrationFailed:
       return {
         icon: PlugZap,

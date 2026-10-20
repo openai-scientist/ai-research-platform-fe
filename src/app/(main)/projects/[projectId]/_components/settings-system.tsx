@@ -5,6 +5,7 @@ import { Switch } from "@/components/ui/switch";
 import type { ReviewMode } from "@/lib/run-stream/contract";
 
 import { MODES } from "./run-studio/run-meta";
+import { useProjectSettings } from "./settings-api";
 import { ChoiceRow, DraftTab, NumberRow, SwitchRow, TextRow, useDraft } from "./settings-kit";
 import { SettingsGroup, SettingsRow, TagInput } from "./settings-panel";
 
@@ -184,6 +185,8 @@ export function SettingsRuns({ readOnly }: { readOnly: boolean }) {
 
 /** A monthly ceiling on what the project's runs may spend, with an early warning. */
 export function SettingsSpending({ readOnly }: { readOnly: boolean }) {
+  const { snapshot } = useProjectSettings();
+  const unsupported = (field: string) => readOnly || !snapshot.capabilities[`spending.${field}`]?.supported;
   const draft = useDraft("spending", {
     capped: false,
     limit: "100",
@@ -210,10 +213,10 @@ export function SettingsSpending({ readOnly }: { readOnly: boolean }) {
         <SwitchRow
           id="spending-cap"
           label="Limit monthly spending"
-          hint="Counts every run in the project. Resets on the 1st."
+          hint="A soft limit on recorded model costs. Resets on the 1st in the project's timezone; work already dispatched may still incur costs."
           checked={v.capped}
           onChange={set("capped")}
-          disabled={readOnly}
+          disabled={unsupported("capped")}
         />
         {v.capped && (
           <>
@@ -224,14 +227,14 @@ export function SettingsSpending({ readOnly }: { readOnly: boolean }) {
               unit="per month"
               value={v.limit}
               onChange={set("limit")}
-              disabled={readOnly}
+              disabled={unsupported("limit")}
             />
             <ChoiceRow
               id="spending-warn"
               label="Warn at"
               value={v.warnAt}
               onChange={set("warnAt")}
-              disabled={readOnly}
+              disabled={unsupported("warn_at")}
               options={["50", "75", "80", "90"].map((percent) => ({
                 value: percent,
                 label: `${percent}% of the limit`,
@@ -242,11 +245,18 @@ export function SettingsSpending({ readOnly }: { readOnly: boolean }) {
               label="At the limit"
               value={v.atLimit}
               onChange={set("atLimit")}
-              disabled={readOnly}
+              disabled={unsupported("at_limit")}
+              hint={
+                v.atLimit === "pause"
+                  ? "The saved pause policy currently acts as stop. Select a supported option to replace it."
+                  : "Stop blocks supported start and continuation actions at the limit; it does not cancel engine work already dispatched."
+              }
               wide
               options={[
-                { value: "stop", label: "Don't start new runs" },
-                { value: "pause", label: "Pause runs in progress too" },
+                { value: "stop", label: "Stop new work at the limit" },
+                ...(v.atLimit === "pause"
+                  ? [{ value: "pause", label: "Legacy pause (acts as stop)", disabled: true }]
+                  : []),
                 { value: "notify", label: "Only notify managers" },
               ]}
             />
@@ -257,12 +267,12 @@ export function SettingsSpending({ readOnly }: { readOnly: boolean }) {
         <TextRow
           id="spending-email"
           label="Billing contact"
-          hint="Gets the monthly cost summary and limit warnings."
+          hint="Billing email delivery is not available yet. Budget alerts are sent in-app to active Project Managers."
           type="email"
           value={v.billingEmail}
           onChange={set("billingEmail")}
           placeholder="finance@example.com"
-          disabled={readOnly}
+          disabled={unsupported("billing_email")}
         />
       </SettingsGroup>
     </DraftTab>

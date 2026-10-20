@@ -12,6 +12,7 @@ export const SETTINGS_SECTIONS = [
   "review",
   "data",
   "spending",
+  "notifications",
 ] as const;
 export type SettingsSectionId = (typeof SETTINGS_SECTIONS)[number];
 export type SettingValue = string | boolean | string[];

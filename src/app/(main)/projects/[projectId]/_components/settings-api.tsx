@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useApiMutation, useApiQuery } from "@/hooks/use-api";
 import { projectAccessKey } from "@/hooks/use-project-access";
-import { projectKeys } from "@/lib/api/query-keys";
+import { projectKeys, workspaceKeys } from "@/lib/api/query-keys";
 import { fetchProject, type ProjectItem, type UpdateProjectRequest } from "@/lib/api/services/fetch-project";
 import {
   fetchProjectSettings,
@@ -91,6 +91,13 @@ export function SettingsApiProvider({ project: initial, children }: { project: P
     try {
       const result = await saveMutation.mutateAsync({ section: id, version, values: wire });
       client.setQueryData<ApiResult<ProjectSettingsSnapshot>>(key, result);
+      void client.invalidateQueries({ queryKey: workspaceKeys.activity(initial.id) });
+      if (id === "notifications") {
+        await client.invalidateQueries({ queryKey: workspaceKeys.preferenceLists(initial.id) });
+      }
+      if (id === "spending" || id === "general") {
+        void client.invalidateQueries({ queryKey: workspaceKeys.spending(initial.id) });
+      }
       if (id === "access" || id === "data") {
         const datasets = { queryKey: [...projectKeys.detail(initial.id), "datasets"] };
         await client.cancelQueries(datasets);

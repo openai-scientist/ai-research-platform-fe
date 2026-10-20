@@ -67,9 +67,13 @@ export function useSignalR() {
           },
           invitation ? "Project invitation" : "New notification",
         );
-        const notify = notification.kind === NotificationKind.IntegrationFailed ? toast.warning : toast.info;
+        const budgetNotice =
+          notification.kind === NotificationKind.BudgetWarning || notification.kind === NotificationKind.BudgetExceeded;
+        const notify =
+          notification.kind === NotificationKind.IntegrationFailed || budgetNotice ? toast.warning : toast.info;
         notify(title, {
           id: toastId,
+          ...(budgetNotice ? { position: "bottom-right" as const } : {}),
           // Our motion uses wall time instead of a frozen browser animation timeline.
           className: "notification-toast transition-none! select-none",
           classNames: { description: "text-muted-foreground!" },

@@ -65,4 +65,6 @@ export enum NotificationKind {
   AddedToProject = "added_to_project",
   RunCommented = "run_commented",
   IntegrationFailed = "integration_failed",
+  BudgetWarning = "budget_warning",
+  BudgetExceeded = "budget_exceeded",
 }
