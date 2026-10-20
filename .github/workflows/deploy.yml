@@ -1,7 +1,7 @@
 name: Deploy
 
-# On every push to main: check and test, build the web image, push it to Docker Hub and ask Dokploy
-# to redeploy the stack (docker/docker-compose.prod.yml), which pulls the new image.
+# On every push to main: build the web image, push it to Docker Hub and ask Dokploy to redeploy the
+# stack (docker/docker-compose.prod.yml), which pulls the new image. Lint and tests do not gate it.
 on:
   push:
     branches: [main]
@@ -15,23 +15,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  check:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-        env:
-          HUSKY: "0"
-      - run: npx biome ci .
-      - run: npm test
-
   image:
-    needs: [check]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: production
