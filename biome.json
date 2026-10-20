@@ -41,7 +41,8 @@
       "!dist",
       "!out",
       "!src/components/ui",
-      "!src/components/calendar"
+      "!src/components/calendar",
+      "!**/*.svg"
     ]
   },
   "formatter": {
@@ -106,7 +107,8 @@
   },
   "css": {
     "parser": {
-      "tailwindDirectives": true
+      "tailwindDirectives": true,
+      "cssModules": true
     }
   },
   "javascript": {
