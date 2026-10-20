@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import Link from "next/link";
 
 import { History, RefreshCw } from "lucide-react";
+import { toast } from "sonner";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -24,6 +25,8 @@ import { resolveAvatarUrl } from "@/lib/auth/avatar";
 import { researchRunUrl } from "@/lib/research-workspace";
 import { getInitials } from "@/lib/utils";
 
+import { ActivityDateFilters, type ActivityDates } from "./activity-date-filters";
+import { projectDayBoundary } from "./activity-date-range";
 import { WorkspaceSettingsLoading, WorkspaceSettingsReload } from "./workspace-settings-state";
 
 const CATEGORIES: Record<ActivityCategory, string> = {
@@ -109,9 +112,18 @@ function changeValue(value: unknown): string {
 
 export function WorkspaceActivity({ projectId, timezone }: { projectId: string; timezone: string }) {
   const [category, setCategory] = useState<ActivityCategory | "all">("all");
+  const [dates, setDates] = useState<ActivityDates>({});
+  const dateParams = useMemo(
+    () => ({
+      from: dates.from ? projectDayBoundary(dates.from, timezone) : undefined,
+      // API `to` is exclusive; include the whole To date by using the next day's start.
+      to: dates.to ? projectDayBoundary(dates.to, timezone, true) : undefined,
+    }),
+    [dates.from, dates.to, timezone],
+  );
   const query = useInfinityScroll<ProjectActivity, ActivityParams>({
     queryKey: workspaceKeys.activity(projectId),
-    filters: category === "all" ? {} : { category },
+    filters: { ...dateParams, ...(category === "all" ? {} : { category }) },
     pageSize: 50,
     fetchPage: (params, signal) => fetchWorkspaceSettings.activity(projectId, params, signal),
   });
@@ -145,21 +157,33 @@ export function WorkspaceActivity({ projectId, timezone }: { projectId: string; 
         <p className="text-muted-foreground text-sm">
           {query.totalItems === null ? "Project history" : `${query.totalItems} recorded events`}
         </p>
-        <Select value={category} onValueChange={(value) => setCategory(value as ActivityCategory | "all")}>
-          <SelectTrigger aria-label="Filter activity" className="w-full sm:w-44">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectGroup>
-              <SelectItem value="all">All activity</SelectItem>
-              {Object.entries(CATEGORIES).map(([value, label]) => (
-                <SelectItem key={value} value={value}>
-                  {label}
-                </SelectItem>
-              ))}
-            </SelectGroup>
-          </SelectContent>
-        </Select>
+        <div className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto">
+          <ActivityDateFilters
+            value={dates}
+            onChange={(next) => {
+              if (next.from && next.to && next.from > next.to) {
+                toast.error("The From date must be on or before the To date.");
+                return;
+              }
+              setDates(next);
+            }}
+          />
+          <Select value={category} onValueChange={(value) => setCategory(value as ActivityCategory | "all")}>
+            <SelectTrigger aria-label="Filter activity" className="w-full sm:w-44">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                <SelectItem value="all">All activity</SelectItem>
+                {Object.entries(CATEGORIES).map(([value, label]) => (
+                  <SelectItem key={value} value={value}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
       {query.isPending ? (
         <WorkspaceSettingsLoading />
@@ -173,9 +197,11 @@ export function WorkspaceActivity({ projectId, timezone }: { projectId: string; 
             </EmptyMedia>
             <EmptyTitle>No recorded activity</EmptyTitle>
             <EmptyDescription>
-              {category === "all"
-                ? "Activity will appear here as project events are recorded. Older events may not have been captured."
-                : "No recorded events match this category."}
+              {dates.from || dates.to
+                ? "No recorded events match these date filters. Try another date range or clear the dates."
+                : category === "all"
+                  ? "Activity will appear here as project events are recorded. Older events may not have been captured."
+                  : "No recorded events match this category."}
             </EmptyDescription>
           </EmptyHeader>
         </Empty>
