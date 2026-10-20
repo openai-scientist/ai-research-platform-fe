@@ -1,0 +1,14 @@
+.git
+.github
+.husky
+.kilo
+.next
+node_modules
+media
+docs
+tests
+coverage
+*.tsbuildinfo
+.env
+.env.*
+!.env.example

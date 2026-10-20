@@ -1,0 +1,37 @@
+# Production web app, deployed by Dokploy from the image on Docker Hub. It reaches the backend
+# over the shared external network `capstone-net` (service `api` of ai-research-platform-be);
+# the browser only ever talks to this app, which passes /api/v1 on to the backend.
+# Create the network once on the server: docker network create capstone-net
+name: capstone-fe
+
+services:
+  fe:
+    image: ${DOCKER_USERNAME:?Set DOCKER_USERNAME}/capstone-fe:${IMAGE_TAG:-latest}
+    pull_policy: always
+    restart: unless-stopped
+    init: true
+    mem_limit: ${FE_MEMORY_LIMIT:-512m}
+    environment:
+      # Server-side calls to the backend. Must match the API_URL the image was built with.
+      API_URL: ${API_URL:-http://api:8080}
+      SITE_URL: ${SITE_URL:-http://localhost:3000}
+    ports:
+      # Set FE_BIND to the Tailscale address to reach the app from the tailnet.
+      - "${FE_BIND:-127.0.0.1}:${FE_PORT:-3010}:3000"
+    networks:
+      - capstone-net
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').then(r => process.exit(r.status < 500 ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+networks:
+  capstone-net:
+    external: true

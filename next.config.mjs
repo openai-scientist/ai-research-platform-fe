@@ -6,6 +6,8 @@ const backend = (process.env.API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // A self-contained server in .next/standalone, used by docker/Dockerfile.
+  output: "standalone",
   reactCompiler: true,
   compiler: {
     removeConsole: process.env.NODE_ENV === "production",
