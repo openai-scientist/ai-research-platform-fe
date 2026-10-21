@@ -198,10 +198,7 @@ export const sidebarItems: NavGroup[] = [
         id: "authentication",
         title: "Authentication",
         icon: Fingerprint,
-        subItems: [
-          { id: "auth-login", title: "Login", url: "/auth/login", newTab: true },
-          { id: "auth-register", title: "Register", url: "/auth/register", newTab: true },
-        ],
+        subItems: [{ id: "auth-login", title: "Login", url: "/auth/login", newTab: true }],
       },
     ],
   },
