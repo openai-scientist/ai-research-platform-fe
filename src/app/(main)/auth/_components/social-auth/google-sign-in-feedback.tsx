@@ -7,7 +7,7 @@ import { toast } from "sonner";
 function getErrorMessage(code: string): string {
   switch (code) {
     case "GOOGLE_EMAIL_NOT_VERIFIED":
-      return "Use a verified Gmail or Google Workspace account, or sign in with your password.";
+      return "Use a verified Gmail or Google Workspace account, or sign in with an emailed code.";
     case "USER_SUSPENDED":
       return "This account is suspended. Please contact an administrator.";
     case "GOOGLE_SIGN_IN_FAILED":

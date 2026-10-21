@@ -2,7 +2,6 @@
 
 import { type Control, Controller, type FieldValues, type Path } from "react-hook-form";
 
-import { PasswordInput } from "@/components/password-input";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 
@@ -11,7 +10,7 @@ interface AuthTextFieldProps<T extends FieldValues> {
   name: Path<T>;
   id: string;
   label: string;
-  type?: "text" | "email" | "password";
+  type?: "text" | "email";
   autoComplete: string;
   placeholder?: string;
   disabled?: boolean;
@@ -26,7 +25,6 @@ export function AuthTextField<T extends FieldValues>({
   placeholder,
   disabled,
 }: AuthTextFieldProps<T>) {
-  const InputComponent = type === "password" ? PasswordInput : Input;
   return (
     <Controller
       control={control}
@@ -34,7 +32,7 @@ export function AuthTextField<T extends FieldValues>({
       render={({ field, fieldState }) => (
         <Field className="gap-1.5" data-invalid={fieldState.invalid} data-disabled={disabled}>
           <FieldLabel htmlFor={id}>{label}</FieldLabel>
-          <InputComponent
+          <Input
             {...field}
             value={typeof field.value === "string" ? field.value : ""}
             id={id}
