@@ -111,7 +111,7 @@ describe("session termination", () => {
   it("ignores a late session restore that would otherwise redirect away from logout", async () => {
     useAuthSyncAcrossTabs();
     window.dispatchEvent(new Event("auth:expired"));
-    pending.resolve({ type: restoreSession.fulfilled.type, payload: { user: { must_change_password: true } } });
+    pending.resolve({ type: restoreSession.fulfilled.type, payload: { user: { onboarded: false } } });
     await pending.promise;
 
     expect(routerReplace).not.toHaveBeenCalled();

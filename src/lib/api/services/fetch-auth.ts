@@ -3,38 +3,17 @@ import type { ApiResult } from "@/types/api";
 
 import apiService from "../core";
 
-export interface LoginRequest {
-  email: string;
-  password: string;
-}
-export interface RegisterRequest extends LoginRequest {
-  display_name?: string;
-}
 export interface VerificationPending {
   email: string;
   expires_in_seconds: number;
   resend_after_seconds: number;
 }
-export interface VerifyEmailRequest extends LoginRequest {
-  code: string;
-}
-export interface ResetPasswordRequest {
-  email: string;
-  reset_token: string;
-  new_password: string;
-}
-export interface VerifyResetPasswordRequest {
+export interface EmailCodeSignIn {
   email: string;
   code: string;
 }
-export interface PasswordResetGrant {
-  reset_token: string;
-  expires_in_seconds: number;
-}
-
-export interface ChangePasswordRequest {
-  current_password: string;
-  new_password: string;
+export interface SignInLinkInfo {
+  email: string;
 }
 
 export interface CsrfToken {
@@ -46,9 +25,9 @@ export type CurrentUserResponse = ApiResult<CurrentUser>;
 export type CsrfTokenResponse = ApiResult<CsrfToken>;
 export type AuthMutationResponse = ApiResult<null>;
 
-async function authenticate(path: string, credentials: LoginRequest | VerifyEmailRequest): Promise<SessionResult> {
+async function authenticate(path: string, body: EmailCodeSignIn | { token: string }): Promise<SessionResult> {
   if (typeof window !== "undefined") window.dispatchEvent(new Event("auth:authenticating"));
-  const response = await apiService.post<SessionResponse>(path, credentials);
+  const response = await apiService.post<SessionResponse>(path, body);
   const result = response.data.data;
   apiService.setCsrfToken(result.csrf_token);
   return result;
@@ -68,30 +47,19 @@ export const fetchAuth = {
     const response = await apiService.delete<ApiResult<UserProfile>>("/auth/me/avatar");
     return response.data;
   },
-  login: async (data: LoginRequest): Promise<SessionResult> => {
-    return authenticate("/auth/login", data);
-  },
-  register: async (data: RegisterRequest): Promise<VerificationPending> => {
-    const response = await apiService.post<ApiResult<VerificationPending>>("/auth/register", data);
+  startEmailSignIn: async (email: string): Promise<VerificationPending> => {
+    const response = await apiService.post<ApiResult<VerificationPending>>("/auth/email/start", { email });
     return response.data.data;
   },
-  verifyEmail: async (data: VerifyEmailRequest): Promise<SessionResult> => {
-    return authenticate("/auth/verify-email", data);
+  verifyEmailCode: async (data: EmailCodeSignIn): Promise<SessionResult> => {
+    return authenticate("/auth/email/verify", data);
   },
-  resendVerification: async (email: string): Promise<VerificationPending> => {
-    const response = await apiService.post<ApiResult<VerificationPending>>("/auth/resend-verification", { email });
+  linkInfo: async (token: string): Promise<SignInLinkInfo> => {
+    const response = await apiService.post<ApiResult<SignInLinkInfo>>("/auth/email/link-info", { token });
     return response.data.data;
   },
-  forgotPassword: async (email: string): Promise<VerificationPending> => {
-    const response = await apiService.post<ApiResult<VerificationPending>>("/auth/forgot-password", { email });
-    return response.data.data;
-  },
-  verifyResetPassword: async (data: VerifyResetPasswordRequest): Promise<PasswordResetGrant> => {
-    const response = await apiService.post<ApiResult<PasswordResetGrant>>("/auth/verify-reset-password", data);
-    return response.data.data;
-  },
-  resetPassword: async (data: ResetPasswordRequest): Promise<void> => {
-    await apiService.post<AuthMutationResponse>("/auth/reset-password", data);
+  verifyLink: async (token: string): Promise<SessionResult> => {
+    return authenticate("/auth/email/verify-link", { token });
   },
   me: async (signal?: AbortSignal): Promise<CurrentUser> => {
     const response = await apiService.get<CurrentUserResponse>("/auth/me", undefined, { signal });
@@ -102,9 +70,6 @@ export const fetchAuth = {
     const result = response.data.data;
     apiService.setCsrfToken(result.csrf_token);
     return result;
-  },
-  changePassword: async (data: ChangePasswordRequest): Promise<void> => {
-    await apiService.post<AuthMutationResponse>("/auth/change-password", data);
   },
   logout: async (allDevices = false): Promise<void> => {
     await apiService.post<AuthMutationResponse>(allDevices ? "/auth/logout-all" : "/auth/logout");

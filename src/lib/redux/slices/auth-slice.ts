@@ -2,7 +2,7 @@ import { createAsyncThunk, createSlice, type PayloadAction } from "@reduxjs/tool
 
 import { fetchAuth } from "@/lib/api/services/fetch-auth";
 import { SESSION_INVALID_CODES } from "@/lib/auth/auth-config";
-import type { CurrentUser } from "@/lib/auth/types";
+import type { CurrentUser, ProfileChange } from "@/lib/auth/types";
 import { ApiError } from "@/types/api";
 
 import type { RootState } from "../store";
@@ -46,8 +46,9 @@ const authSlice = createSlice({
   name: "auth",
   initialState,
   reducers: {
-    updateUserProfile: (state, action: PayloadAction<CurrentUser["user"]>) => {
-      if (state.user?.id === action.payload.id) state.user = action.payload;
+    // Admin endpoints answer without `onboarded`; the fields they do return replace the stored ones.
+    updateUserProfile: (state, action: PayloadAction<ProfileChange>) => {
+      if (state.user?.id === action.payload.id) state.user = { ...state.user, ...action.payload };
     },
     setSession: (state, action: PayloadAction<CurrentUser>) => {
       state.user = action.payload.user;

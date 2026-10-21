@@ -8,7 +8,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import apiService from "@/lib/api/core";
-import { CHANGE_PASSWORD_PATH, LOGIN_PATH, SESSION_INVALID_CODES } from "@/lib/auth/auth-config";
+import { LOGIN_PATH, ONBOARDING_PATH, SESSION_INVALID_CODES } from "@/lib/auth/auth-config";
 import { AUTH_CHANNEL, broadcastAuthChange } from "@/lib/auth/session-events";
 import { useAppDispatch } from "@/lib/redux/hooks";
 import { logout, restoreSession } from "@/lib/redux/slices/auth-slice";
@@ -18,7 +18,7 @@ export function useAuthSyncAcrossTabs() {
   const router = useRouter();
   const pathname = usePathname();
   const queryClient = useQueryClient();
-  const shouldRestoreSession = ["/admin", "/projects", "/reviews", "/dashboard", CHANGE_PASSWORD_PATH].some(
+  const shouldRestoreSession = ["/admin", "/projects", "/reviews", "/dashboard", ONBOARDING_PATH].some(
     (path) => pathname === path || pathname.startsWith(`${path}/`),
   );
 
@@ -30,11 +30,11 @@ export function useAuthSyncAcrossTabs() {
         if (endingSession) return;
         if (
           restoreSession.fulfilled.match(action) &&
-          action.payload.user.must_change_password &&
-          window.location.pathname !== CHANGE_PASSWORD_PATH
+          !action.payload.user.onboarded &&
+          window.location.pathname !== ONBOARDING_PATH
         ) {
           const next = `${window.location.pathname}${window.location.search}`;
-          router.replace(`${CHANGE_PASSWORD_PATH}?${new URLSearchParams({ next })}`);
+          router.replace(`${ONBOARDING_PATH}?${new URLSearchParams({ next })}`);
         }
         if (
           restoreSession.rejected.match(action) &&
@@ -78,12 +78,7 @@ export function useAuthSyncAcrossTabs() {
     if (channel) {
       channel.onmessage = ({ data }: MessageEvent<unknown>) => {
         if (data === "signed-out") clearSession();
-        if (
-          data === "signed-in" ||
-          data === "password-changed" ||
-          data === "profile-changed" ||
-          data === "memberships-changed"
-        ) {
+        if (data === "signed-in" || data === "profile-changed" || data === "memberships-changed") {
           if (endingSession && !window.location.pathname.startsWith("/auth/")) return;
           endingSession = false;
           apiService.setCsrfToken(null);

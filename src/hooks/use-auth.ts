@@ -5,27 +5,19 @@ import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
-import apiService from "@/lib/api/core";
-import {
-  type ChangePasswordRequest,
-  fetchAuth,
-  type LoginRequest,
-  type RegisterRequest,
-  type ResetPasswordRequest,
-  type VerifyEmailRequest,
-} from "@/lib/api/services/fetch-auth";
-import { CHANGE_PASSWORD_PATH, LOGIN_PATH, SESSION_INVALID_CODES } from "@/lib/auth/auth-config";
+import { type EmailCodeSignIn, fetchAuth } from "@/lib/api/services/fetch-auth";
+import { ONBOARDING_PATH, SESSION_INVALID_CODES } from "@/lib/auth/auth-config";
 import { broadcastAuthChange } from "@/lib/auth/session-events";
 import type { SessionResult } from "@/lib/auth/types";
 import { useAppDispatch, useAppSelector } from "@/lib/redux/hooks";
-import { logout as clearSession, restoreSession, selectAuth, setSession } from "@/lib/redux/slices/auth-slice";
+import { restoreSession, selectAuth, setSession } from "@/lib/redux/slices/auth-slice";
 import { ApiError } from "@/types/api";
 import { PlatformRole, ProjectRole } from "@/types/enums";
 
-function destination(result: Pick<SessionResult, "user">) {
+export function destination(result: Pick<SessionResult, "user">) {
   const next = new URLSearchParams(window.location.search).get("next");
-  if (result.user.must_change_password) {
-    return next ? `${CHANGE_PASSWORD_PATH}?${new URLSearchParams({ next })}` : CHANGE_PASSWORD_PATH;
+  if (!result.user.onboarded) {
+    return next ? `${ONBOARDING_PATH}?${new URLSearchParams({ next })}` : ONBOARDING_PATH;
   }
   const fallback = result.user.platform_role === PlatformRole.PlatformAdmin ? "/admin" : "/projects";
   if (!next?.startsWith("/") || next.startsWith("//") || next.includes("\\")) return fallback;
@@ -58,17 +50,14 @@ export function useAuth(projectId?: string) {
     router.refresh();
     return result;
   };
-  const login = async (credentials: LoginRequest) => completeLogin(await fetchAuth.login(credentials));
-  const register = (credentials: RegisterRequest) => fetchAuth.register(credentials);
-  const verifyEmail = async (credentials: VerifyEmailRequest) =>
-    completeLogin(await fetchAuth.verifyEmail(credentials));
-  const resetPassword = async (data: ResetPasswordRequest) => {
-    await fetchAuth.resetPassword(data);
-    apiService.setCsrfToken(null);
-    dispatch(clearSession());
-    queryClient.clear();
-    broadcastAuthChange("signed-out");
-    router.replace(LOGIN_PATH);
+  const signInWithCode = async (data: EmailCodeSignIn) => completeLogin(await fetchAuth.verifyEmailCode(data));
+  const signInWithLink = async (token: string) => completeLogin(await fetchAuth.verifyLink(token));
+  const completeOnboarding = async (displayName: string) => {
+    const result = await fetchAuth.updateProfile({ display_name: displayName });
+    const action = await dispatch(restoreSession());
+    broadcastAuthChange("profile-changed");
+    // The name is saved; a temporary /me failure must not keep the user on this step.
+    router.replace(destination(restoreSession.fulfilled.match(action) ? action.payload : { user: result.data }));
     router.refresh();
   };
   const logout = async (allDevices = false) => {
@@ -81,30 +70,6 @@ export function useAuth(projectId?: string) {
     window.dispatchEvent(new Event("auth:expired"));
     toast.success(allDevices ? "Signed out of all devices." : "Signed out successfully.");
   };
-  const changePassword = async (data: ChangePasswordRequest) => {
-    await fetchAuth.changePassword(data);
-    const action = await dispatch(restoreSession());
-    broadcastAuthChange("password-changed");
-    toast.success("Password changed. Other devices have been signed out.");
-    if (window.location.pathname === CHANGE_PASSWORD_PATH) {
-      if (restoreSession.fulfilled.match(action) && !action.payload.user.must_change_password) {
-        router.replace(destination(action.payload));
-      } else if (
-        restoreSession.rejected.match(action) &&
-        auth.user &&
-        auth.session &&
-        !SESSION_INVALID_CODES.includes(action.payload?.code ?? "")
-      ) {
-        // A successful password change clears this backend flag, even if /me is temporarily unavailable.
-        const current = { user: { ...auth.user, must_change_password: false }, session: auth.session, memberships: [] };
-        dispatch(setSession(current));
-        router.replace(destination(current));
-      } else {
-        router.replace(LOGIN_PATH);
-      }
-      router.refresh();
-    }
-  };
   return {
     ...auth,
     isAdmin,
@@ -112,14 +77,10 @@ export function useAuth(projectId?: string) {
     isProjectManager: projectRole === ProjectRole.ProjectManager,
     isResearcher: projectRole === ProjectRole.Researcher,
     isReviewer: projectRole === ProjectRole.Reviewer,
-    login,
-    register,
-    verifyEmail,
-    resendVerification: fetchAuth.resendVerification,
-    forgotPassword: fetchAuth.forgotPassword,
-    verifyResetPassword: fetchAuth.verifyResetPassword,
-    resetPassword,
+    startEmailSignIn: fetchAuth.startEmailSignIn,
+    signInWithCode,
+    signInWithLink,
+    completeOnboarding,
     logout,
-    changePassword,
   };
 }

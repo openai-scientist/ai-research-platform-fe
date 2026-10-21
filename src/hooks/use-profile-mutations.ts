@@ -8,7 +8,7 @@ import { adminKeys, authKeys, notificationKeys, projectKeys } from "@/lib/api/qu
 import { fetchAdmin } from "@/lib/api/services/fetch-admin";
 import { fetchAuth } from "@/lib/api/services/fetch-auth";
 import { broadcastAuthChange } from "@/lib/auth/session-events";
-import type { CurrentUser, UserProfile } from "@/lib/auth/types";
+import type { CurrentUser, ProfileChange } from "@/lib/auth/types";
 import { useAppDispatch, useAppSelector } from "@/lib/redux/hooks";
 import { selectUser, updateUserProfile } from "@/lib/redux/slices/auth-slice";
 import type { ApiResult } from "@/types/api";
@@ -20,11 +20,11 @@ export function useProfileMutations(adminUserId?: string) {
   const currentUser = useAppSelector(selectUser);
   const queryClient = useQueryClient();
   const router = useRouter();
-  const complete = async (response: ApiResult<UserProfile>) => {
+  const complete = async (response: ApiResult<ProfileChange>) => {
     if (response.data.id === currentUser?.id) {
       dispatch(updateUserProfile(response.data));
       queryClient.setQueryData<CurrentUser>(authKeys.me, (current) =>
-        current ? { ...current, user: response.data } : undefined,
+        current ? { ...current, user: { ...current.user, ...response.data } } : undefined,
       );
       broadcastAuthChange("profile-changed");
       router.refresh();

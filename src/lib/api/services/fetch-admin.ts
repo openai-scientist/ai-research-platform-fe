@@ -15,7 +15,6 @@ export interface UserAdminItem {
   platform_role: PlatformRole;
   avatar_url: string | null;
   email_verified: boolean;
-  must_change_password: boolean;
   invite_sent_at: string | null;
   last_login_at: string | null;
   created_by_user_id: string | null;
@@ -57,7 +56,6 @@ export interface CreateUserRequest {
   send_email?: boolean;
 }
 export interface UserCreated extends UserAdminItem {
-  temporary_password: string;
   invite_email_sent: boolean;
 }
 
