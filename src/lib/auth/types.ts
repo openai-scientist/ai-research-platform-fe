@@ -9,9 +9,12 @@ export interface UserProfile {
   status: UserStatus;
   platform_role: PlatformRole;
   email_verified: boolean;
-  must_change_password: boolean;
+  // False until the user has chosen a name; the app asks for one before anything else.
+  onboarded: boolean;
   created_at: string;
 }
+/** A profile as an endpoint that edits it returns it, which may leave out `onboarded`. */
+export type ProfileChange = Omit<UserProfile, "onboarded"> & Partial<Pick<UserProfile, "onboarded">>;
 export interface SessionDetails {
   created_at: string;
   last_seen_at: string;

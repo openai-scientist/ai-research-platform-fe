@@ -14,7 +14,7 @@ import { useInfinityScroll } from "./use-infinity-scroll";
 export function useInvitationsQuery(params?: InvitationListParams) {
   const auth = useAppSelector(selectAuth);
   return useApiQuery(invitationKeys.list(params), (signal) => fetchInvitations.getList(params, signal), {
-    enabled: auth.initialized && auth.isAuthenticated && !auth.user?.must_change_password,
+    enabled: auth.initialized && auth.isAuthenticated,
   });
 }
 export function useInfiniteInvitations(q = "") {
@@ -25,7 +25,7 @@ export function useInfiniteInvitations(q = "") {
     queryKey: invitationKeys.all,
     filters: search ? { q: search } : undefined,
     fetchPage: (params, signal) => fetchInvitations.getList(params, signal),
-    enabled: valid && auth.initialized && auth.isAuthenticated && !auth.user?.must_change_password,
+    enabled: valid && auth.initialized && auth.isAuthenticated,
     pageSize: 20,
   });
 }

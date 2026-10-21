@@ -16,7 +16,10 @@ export default function PrivacyPage() {
 
       <h2>What we collect</h2>
       <ul>
-        <li>Account details: your name, email address, profile picture and password (stored only as a hash).</li>
+        <li>
+          Account details: your name, email address and profile picture. There is no password: you sign in with a code
+          sent to your email, or with Google.
+        </li>
         <li>
           If you sign in with Google: your Google account&apos;s name, email address and profile picture. We do not
           receive your Google password.
@@ -54,7 +57,7 @@ export default function PrivacyPage() {
         <li>
           To provide the platform: run research stages, store your files and show results to your project members.
         </li>
-        <li>To send emails you need, such as sign-up codes, password resets, invitations and project notices.</li>
+        <li>To send emails you need, such as sign-in codes and links, invitations and project notices.</li>
         <li>To keep the service secure and fix problems.</li>
       </ul>
       <p>We do not sell personal data and do not use it for advertising.</p>

@@ -51,8 +51,12 @@ export function AdminSettings() {
         >
           <SettingsGrid>
             <SettingsField label="Session timeout" value="30 days" />
-            <SettingsField label="Minimum password length" value="8 characters" />
-            <ToggleField label="Account lock policy" description="Lock after five failed login attempts." enabled />
+            <SettingsField label="Sign-in code lifetime" value="10 minutes" />
+            <ToggleField
+              label="Account lock policy"
+              description="Lock the sign-in code after ten wrong attempts."
+              enabled
+            />
             <ToggleField label="Require MFA for admins" description="Enforce MFA for SYSTEM_ADMIN accounts." enabled />
           </SettingsGrid>
         </SettingsCard>

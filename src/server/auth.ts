@@ -7,7 +7,7 @@ import { getServerApiBaseUrl } from "@/lib/api/server-config";
 import {
   AUTH_COOKIE_NAME,
   type AuthUser,
-  CHANGE_PASSWORD_PATH,
+  ONBOARDING_PATH,
   SESSION_INVALID_CODES,
   toAuthUser,
 } from "@/lib/auth/auth-config";
@@ -41,6 +41,6 @@ export const getCurrentSession = cache(async (): Promise<CurrentUser | null> => 
 
 export async function getAuthenticatedUser(projectId?: string): Promise<AuthUser | null> {
   const current = await getCurrentSession();
-  if (current?.user.must_change_password) redirect(CHANGE_PASSWORD_PATH);
+  if (current && !current.user.onboarded) redirect(ONBOARDING_PATH);
   return current ? toAuthUser(current, projectId) : null;
 }

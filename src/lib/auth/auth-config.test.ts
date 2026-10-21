@@ -15,7 +15,7 @@ function session(platformRole = PlatformRole.User): CurrentUser {
       status: UserStatus.Active,
       platform_role: platformRole,
       email_verified: true,
-      must_change_password: false,
+      onboarded: true,
       created_at: "2026-10-08T00:00:00Z",
     },
     session: {

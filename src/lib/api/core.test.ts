@@ -34,7 +34,7 @@ describe("session API client", () => {
   });
 
   it.each(PUBLIC_AUTH_PATHS)("exempts %s from CSRF", async (url) => {
-    await api.post(url, { email: "test@example.com", password: "password" });
+    await api.post(url, { email: "test@example.com" });
     expect(adapter).toHaveBeenCalledTimes(1);
     expect(adapter.mock.calls[0][0].headers.has("X-CSRF-Token")).toBe(false);
   });
@@ -121,24 +121,24 @@ describe("session API client", () => {
     const dispatchEvent = vi.fn();
     vi.stubGlobal("window", { dispatchEvent });
     adapter.mockImplementation(async (config) => respond(config, failure("INVALID_CREDENTIALS"), 401));
-    await expect(api.post("/auth/login")).rejects.toMatchObject({ code: "INVALID_CREDENTIALS" });
+    await expect(api.post("/auth/email/start")).rejects.toMatchObject({ code: "INVALID_CREDENTIALS" });
     expect(dispatchEvent).not.toHaveBeenCalled();
   });
 
-  it.each([200, 429])("blocks login/register during Retry-After for HTTP %s", async (status) => {
+  it.each([200, 429])("blocks the sign-in calls during Retry-After for HTTP %s", async (status) => {
     const now = vi.spyOn(Date, "now").mockReturnValue(100000);
     adapter.mockImplementation(async (config) =>
       respond(config, failure("RATE_LIMITED", "Wait for your next attempt"), status, { "retry-after": "30" }),
     );
-    await expect(api.post("/auth/login")).rejects.toMatchObject({ code: "RATE_LIMITED", retryAfter: 30 });
-    await expect(api.post("/auth/register")).rejects.toMatchObject({
+    await expect(api.post("/auth/email/start")).rejects.toMatchObject({ code: "RATE_LIMITED", retryAfter: 30 });
+    await expect(api.post("/auth/email/verify")).rejects.toMatchObject({
       message: "Wait for your next attempt",
       retryAfter: 30,
     });
     expect(adapter).toHaveBeenCalledTimes(1);
     now.mockReturnValue(131000);
     adapter.mockImplementation(async (config) => respond(config, success(null)));
-    await api.post("/auth/login");
+    await api.post("/auth/email/start");
     expect(adapter).toHaveBeenCalledTimes(2);
   });
 

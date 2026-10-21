@@ -20,6 +20,10 @@ const nextConfig = {
   async rewrites() {
     return [{ source: "/api/v1/:path*", destination: `${backend}/api/v1/:path*` }];
   },
+  async headers() {
+    // The sign-in link carries its token in the fragment; no referrer leaves this page either way.
+    return [{ source: "/auth/verify", headers: [{ key: "Referrer-Policy", value: "no-referrer" }] }];
+  },
   async redirects() {
     return [
       {
