@@ -100,12 +100,8 @@ export function AdminUsers() {
   const changeRole = (user: UserRow, role: string) => {
     if (!user.id || roleMutation.isPending) return;
     const target = users.data?.data.find((item) => item.id === user.id);
-    if (
-      role === PLATFORM_ROLE_LABELS[PlatformRole.PlatformAdmin] &&
-      target &&
-      (!target.email_verified || target.must_change_password)
-    ) {
-      toast.error("The user must verify their email and change their temporary password before becoming an admin.");
+    if (role === PLATFORM_ROLE_LABELS[PlatformRole.PlatformAdmin] && target && !target.email_verified) {
+      toast.error("The user must sign in once before becoming an admin.");
       return;
     }
     roleMutation.mutate(

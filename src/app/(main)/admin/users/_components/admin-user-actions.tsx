@@ -54,7 +54,7 @@ export function AdminUserActions({
   const statusLabel = active ? "Suspend" : "Activate";
   const roleLabel = admin ? "Remove admin" : "Grant admin";
   const self = user.id === currentUserId;
-  const canGrantAdmin = admin || (user.email_verified && !user.must_change_password);
+  const canGrantAdmin = admin || user.email_verified;
   const statusDescription = active
     ? "This user will lose access to the platform."
     : "This user will be able to sign in again.";

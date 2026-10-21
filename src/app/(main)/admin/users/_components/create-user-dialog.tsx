@@ -17,8 +17,6 @@ import type { UserCreated } from "@/lib/api/services/fetch-admin";
 import { notifyValidationError } from "@/lib/auth/form-errors";
 import { emailSchema } from "@/lib/auth/schemas";
 
-import { UserCredentials } from "./user-credentials";
-
 const createSchema = emailSchema.extend({
   display_name: z.string().trim().max(200, "Display name must be no more than 200 characters."),
   send_email: z.boolean(),
@@ -66,14 +64,16 @@ export function CreateUserDialog({ onClose }: { onClose: () => void }) {
         <DialogHeader>
           <DialogTitle>{created ? "User created" : "Add user"}</DialogTitle>
           <DialogDescription>
-            {created
-              ? "Save the temporary credentials before closing."
-              : "Create a standard user with a temporary password."}
+            {created ? created.email : "Create a standard user. They sign in with a code sent to their email."}
           </DialogDescription>
         </DialogHeader>
         {created ? (
           <>
-            <UserCredentials user={created} />
+            <p className="text-muted-foreground text-sm">
+              {created.invite_email_sent
+                ? "An email told the user how to sign in."
+                : "No email was sent. Ask the user to sign in with this address."}
+            </p>
             <Button type="button" onClick={onClose}>
               Done
             </Button>
