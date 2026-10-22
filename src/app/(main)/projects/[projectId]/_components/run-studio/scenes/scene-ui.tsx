@@ -107,6 +107,32 @@ function decisionMark(text: string): { Icon: LucideIcon; tone: string } {
   return { Icon: CornerDownRight, tone: "text-muted-foreground" };
 }
 
+/**
+ * How many of `length` characters of `text` are shown: all of them at once, or counting up at `speed` a second while
+ * live. The live view does not move to the next stage while text is still being typed.
+ */
+export function useTyping(text: string, length: number, live: boolean, speed: number) {
+  const [shown, setShown] = useState(live ? 0 : length);
+  useEffect(() => {
+    void text;
+    if (!live || typeof window === "undefined" || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setShown(length);
+      return;
+    }
+    const t0 = performance.now();
+    let raf = 0;
+    const step = (now: number) => {
+      const next = Math.min(length, Math.round(((now - t0) / 1000) * speed));
+      setShown(next);
+      if (next < length) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [text, length, live, speed]);
+  useBusy(live && shown < length);
+  return shown;
+}
+
 /** Types `text` out at `speed` characters a second while live; shows it whole otherwise. */
 export function TypeText({
   text,
@@ -126,24 +152,7 @@ export function TypeText({
         ? ((text as any).text ?? (text as any).value ?? (text as any).statement ?? JSON.stringify(text))
         : String(text ?? "");
 
-  const [shown, setShown] = useState(live ? 0 : safeText.length);
-  useEffect(() => {
-    if (!live || typeof window === "undefined" || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      setShown(safeText.length);
-      return;
-    }
-    const t0 = performance.now();
-    let raf = 0;
-    const step = (now: number) => {
-      const next = Math.min(safeText.length, Math.round(((now - t0) / 1000) * speed));
-      setShown(next);
-      if (next < safeText.length) raf = requestAnimationFrame(step);
-    };
-    raf = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(raf);
-  }, [safeText, live, speed]);
-  // The live view does not move to the next stage while this is still being typed.
-  useBusy(live && shown < safeText.length);
+  const shown = useTyping(safeText, safeText.length, live, speed);
   return (
     <span className={className}>
       {safeText.slice(0, shown)}

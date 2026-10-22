@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { cn } from "cn";
 import { ArrowRight, Check, ChevronDown, ChevronUp, Info } from "lucide-react";
@@ -13,6 +13,8 @@ import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import type { Decision, Gate, GateAnswer, OwnFinding } from "@/lib/run-stream/contract";
 
+import { AcceptReview } from "./accept-review";
+import { CharterReview } from "./charter-panel";
 import { ForkDiagram } from "./fork-diagram";
 import { RevisePicker } from "./revise-picker";
 import { PulseDot } from "./run-bits";
@@ -55,6 +57,19 @@ export function GateSheet({
   );
   const [own, setOwn] = useState<OwnFinding[]>([]);
   const revising = choice === "revise" && Boolean(gate.review);
+
+  // Escape hides the sheet like "Hide to look at the work"; a menu or dialog open over it closes first.
+  useEffect(() => {
+    if (minimized) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      if (window.document.querySelector("[data-radix-popper-content-wrapper], [role='dialog'][data-state='open']"))
+        return;
+      onMinimize(true);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [minimized, onMinimize]);
   const sendCount = sendBack.length + own.length;
   const option = gate.options.find((o) => o.id === choice);
   const picked = (gate.selection ?? []).filter((item) => !left.includes(item.id));
@@ -109,6 +124,27 @@ export function GateSheet({
     });
   };
 
+  // The charter and the accept are documents to read before answering: they get a wider sheet of their own.
+  const document = gate.kind === "charter" || gate.kind === "accept";
+  const header = (
+    <>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="inline-flex h-6 items-center gap-2 rounded-full bg-amber-500/15 px-2.5 font-medium text-amber-800 text-xs dark:text-amber-300">
+          <PulseDot className="bg-amber-500" />
+          Your turn
+        </span>
+        <span className="text-muted-foreground text-xs">
+          Stop {gate.stop_index} of {gate.stop_total} · {MODES[mode].label} mode
+        </span>
+        <Button variant="ghost" size="sm" className="ml-auto" onClick={() => onMinimize(true)}>
+          <ChevronDown />
+          Hide to look at the work
+        </Button>
+      </div>
+      <h3 className="font-semibold text-lg tracking-tight">{gate.title}</h3>
+    </>
+  );
+
   return (
     <>
       <motion.div
@@ -124,142 +160,142 @@ export function GateSheet({
         animate={{ y: 0 }}
         exit={{ y: "110%" }}
         transition={{ type: "spring", stiffness: 260, damping: 30 }}
-        className="absolute inset-x-4 bottom-4 z-30 mx-auto flex max-h-[calc(100%-2rem)] max-w-[700px] flex-col overflow-hidden rounded-2xl bg-popover text-popover-foreground shadow-2xl ring-1 ring-foreground/10"
+        className={cn(
+          "absolute inset-x-4 bottom-4 z-30 mx-auto flex max-h-[calc(100%-2rem)] flex-col overflow-hidden rounded-2xl bg-popover text-popover-foreground shadow-2xl ring-1 ring-foreground/10",
+          document ? "max-w-[880px]" : "max-w-[700px]",
+        )}
       >
-        <div className="flex flex-col gap-3.5 overflow-y-auto px-5 pt-4.5 pb-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex h-6 items-center gap-2 rounded-full bg-amber-500/15 px-2.5 font-medium text-amber-800 text-xs dark:text-amber-300">
-              <PulseDot className="bg-amber-500" />
-              Your turn
-            </span>
-            <span className="text-muted-foreground text-xs">
-              Stop {gate.stop_index} of {gate.stop_total} · {MODES[mode].label} mode
-            </span>
-            <Button variant="ghost" size="sm" className="ml-auto" onClick={() => onMinimize(true)}>
-              <ChevronDown />
-              Hide to look at the work
-            </Button>
-          </div>
-          <h3 className="font-semibold text-lg tracking-tight">{gate.title}</h3>
-          <div className="grid grid-cols-[auto_1fr] gap-2.5 rounded-xl bg-muted px-3 py-2.5 text-sm">
-            <Info className="mt-0.5 size-4 text-muted-foreground" />
-            <p>
-              <b className="font-semibold">Why Popper stopped here.</b> {gate.why}
-            </p>
-          </div>
-          {shownDecision ? (
-            <ForkDiagram choice={shownDecision} round={round} className="max-w-[520px]" />
-          ) : (
-            gate.summary.length > 0 && (
-              <ul className="flex flex-col gap-1.5 text-sm">
-                {gate.summary.map((line) => (
-                  <li key={line} className="flex items-start gap-2">
-                    <Check className="mt-1 size-3.5 shrink-0 text-emerald-600" />
-                    {line}
-                  </li>
-                ))}
-              </ul>
-            )
-          )}
-          {gate.selection ? (
-            <fieldset className="flex flex-col gap-1.5">
-              <legend className="mb-1.5 flex w-full items-baseline justify-between gap-2 text-xs">
-                <span className="font-medium">Take forward</span>
-                <span className="text-muted-foreground tabular-nums">
-                  {picked.length} of {gate.selection.length} picked
-                </span>
-              </legend>
-              {gate.selection.map((item) => {
-                const on = !left.includes(item.id);
-                return (
-                  <label
-                    key={item.id}
-                    htmlFor={`pick-${item.id}`}
-                    className={cn(
-                      "grid cursor-pointer grid-cols-[auto_auto_minmax(0,1fr)] items-start gap-x-3 rounded-xl border px-3.5 py-2.5 text-sm transition-colors hover:bg-muted/60",
-                      on ? "border-foreground/15" : "border-dashed",
-                    )}
-                  >
-                    <Checkbox
-                      id={`pick-${item.id}`}
-                      checked={on}
-                      onCheckedChange={() => toggle(item.id)}
-                      className="mt-0.5"
-                    />
-                    <span
+        {gate.kind === "charter" ? (
+          <CharterReview gate={gate} header={header} pending={pending} onAnswer={onAnswer} />
+        ) : gate.kind === "accept" ? (
+          <AcceptReview gate={gate} header={header} pending={pending} onAnswer={onAnswer} />
+        ) : (
+          <>
+            <div className="flex flex-col gap-3.5 overflow-y-auto px-5 pt-4.5 pb-4">
+              {header}
+              <div className="grid grid-cols-[auto_1fr] gap-2.5 rounded-xl bg-muted px-3 py-2.5 text-sm">
+                <Info className="mt-0.5 size-4 text-muted-foreground" />
+                <p>
+                  <b className="font-semibold">Why Popper stopped here.</b> {gate.why}
+                </p>
+              </div>
+              {shownDecision ? (
+                <ForkDiagram choice={shownDecision} round={round} className="max-w-[520px]" />
+              ) : (
+                gate.summary.length > 0 && (
+                  <ul className="flex flex-col gap-1.5 text-sm">
+                    {gate.summary.map((line) => (
+                      <li key={line} className="flex items-start gap-2">
+                        <Check className="mt-1 size-3.5 shrink-0 text-emerald-600" />
+                        {line}
+                      </li>
+                    ))}
+                  </ul>
+                )
+              )}
+              {gate.selection ? (
+                <fieldset className="flex flex-col gap-1.5">
+                  <legend className="mb-1.5 flex w-full items-baseline justify-between gap-2 text-xs">
+                    <span className="font-medium">Take forward</span>
+                    <span className="text-muted-foreground tabular-nums">
+                      {picked.length} of {gate.selection.length} picked
+                    </span>
+                  </legend>
+                  {gate.selection.map((item) => {
+                    const on = !left.includes(item.id);
+                    return (
+                      <label
+                        key={item.id}
+                        htmlFor={`pick-${item.id}`}
+                        className={cn(
+                          "grid cursor-pointer grid-cols-[auto_auto_minmax(0,1fr)] items-start gap-x-3 rounded-xl border px-3.5 py-2.5 text-sm transition-colors hover:bg-muted/60",
+                          on ? "border-foreground/15" : "border-dashed",
+                        )}
+                      >
+                        <Checkbox
+                          id={`pick-${item.id}`}
+                          checked={on}
+                          onCheckedChange={() => toggle(item.id)}
+                          className="mt-0.5"
+                        />
+                        <span
+                          className={cn(
+                            "inline-flex h-5 items-center rounded-md px-1.5 font-mono font-semibold text-[11px] transition-colors",
+                            on ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground",
+                          )}
+                        >
+                          {item.id}
+                        </span>
+                        <span
+                          className={cn("leading-snug transition-colors", !on && "text-muted-foreground line-through")}
+                        >
+                          {item.label}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </fieldset>
+              ) : (
+                <RadioGroup value={choice} onValueChange={setChoice} className="gap-2" aria-label={gate.title}>
+                  {gate.options.map((o) => (
+                    <label
+                      key={o.id}
+                      htmlFor={`gate-${o.id}`}
+                      onMouseEnter={() => !o.disabled && setHover(o.id)}
+                      onMouseLeave={() => setHover(null)}
                       className={cn(
-                        "inline-flex h-5 items-center rounded-md px-1.5 font-mono font-semibold text-[11px] transition-colors",
-                        on ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground",
+                        "grid cursor-pointer grid-cols-[auto_1fr] gap-x-3 gap-y-1 rounded-xl border px-3.5 py-3 transition-[background-color,border-color,box-shadow] hover:bg-muted/60",
+                        choice === o.id && "border-foreground ring-1 ring-foreground",
+                        o.disabled && "cursor-not-allowed opacity-50",
                       )}
                     >
-                      {item.id}
-                    </span>
-                    <span className={cn("leading-snug transition-colors", !on && "text-muted-foreground line-through")}>
-                      {item.label}
-                    </span>
-                  </label>
-                );
-              })}
-            </fieldset>
-          ) : (
-            <RadioGroup value={choice} onValueChange={setChoice} className="gap-2" aria-label={gate.title}>
-              {gate.options.map((o) => (
-                <label
-                  key={o.id}
-                  htmlFor={`gate-${o.id}`}
-                  onMouseEnter={() => !o.disabled && setHover(o.id)}
-                  onMouseLeave={() => setHover(null)}
-                  className={cn(
-                    "grid cursor-pointer grid-cols-[auto_1fr] gap-x-3 gap-y-1 rounded-xl border px-3.5 py-3 transition-[background-color,border-color,box-shadow] hover:bg-muted/60",
-                    choice === o.id && "border-foreground ring-1 ring-foreground",
-                    o.disabled && "cursor-not-allowed opacity-50",
-                  )}
-                >
-                  <RadioGroupItem
-                    id={`gate-${o.id}`}
-                    value={o.id}
-                    disabled={o.disabled}
-                    className="row-span-3 mt-0.5"
-                  />
-                  <span className="flex flex-wrap items-center gap-2 font-semibold text-sm">
-                    {o.label}
-                    {o.recommended && (
-                      <span className="rounded-full bg-muted px-1.5 py-px font-medium text-[11px] text-muted-foreground">
-                        PI recommends
+                      <RadioGroupItem
+                        id={`gate-${o.id}`}
+                        value={o.id}
+                        disabled={o.disabled}
+                        className="row-span-3 mt-0.5"
+                      />
+                      <span className="flex flex-wrap items-center gap-2 font-semibold text-sm">
+                        {o.label}
+                        {o.recommended && (
+                          <span className="rounded-full bg-muted px-1.5 py-px font-medium text-[11px] text-muted-foreground">
+                            PI recommends
+                          </span>
+                        )}
                       </span>
-                    )}
-                  </span>
-                  <span className="text-muted-foreground text-xs">{o.description}</span>
-                  <span className="flex items-center gap-1.5 text-xs">
-                    <ArrowRight className="size-3 text-muted-foreground" />
-                    {o.leads_to}
-                  </span>
-                </label>
-              ))}
-            </RadioGroup>
-          )}
-          {revising && gate.review && (
-            <RevisePicker review={gate.review} picked={sendBack} onPick={setSendBack} own={own} onOwn={setOwn} />
-          )}
-          <Input
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            placeholder="Optional: a note for the agents, kept with your decision"
-            aria-label="Note for the agents"
-          />
-        </div>
-        <div className="flex items-center gap-3 border-t bg-popover px-5 py-3.5">
-          <span className="flex-1 text-muted-foreground text-xs">Nothing runs until you confirm.</span>
-          <Button onClick={confirm} disabled={!option || option.disabled || pending}>
-            {pending
-              ? "Sending…"
-              : gate.selection
-                ? `${option?.confirm_label ?? "Confirm"} ${picked.length}`
-                : revising
-                  ? `${option?.confirm_label ?? "Send back"} ${sendCount}`
-                  : (option?.confirm_label ?? "Confirm")}
-          </Button>
-        </div>
+                      <span className="text-muted-foreground text-xs">{o.description}</span>
+                      <span className="flex items-center gap-1.5 text-xs">
+                        <ArrowRight className="size-3 text-muted-foreground" />
+                        {o.leads_to}
+                      </span>
+                    </label>
+                  ))}
+                </RadioGroup>
+              )}
+              {revising && gate.review && (
+                <RevisePicker review={gate.review} picked={sendBack} onPick={setSendBack} own={own} onOwn={setOwn} />
+              )}
+              <Input
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="Optional: a note for the agents, kept with your decision"
+                aria-label="Note for the agents"
+              />
+            </div>
+            <div className="flex items-center gap-3 border-t bg-popover px-5 py-3.5">
+              <span className="flex-1 text-muted-foreground text-xs">Nothing runs until you confirm.</span>
+              <Button onClick={confirm} disabled={!option || option.disabled || pending}>
+                {pending
+                  ? "Sending…"
+                  : gate.selection
+                    ? `${option?.confirm_label ?? "Confirm"} ${picked.length}`
+                    : revising
+                      ? `${option?.confirm_label ?? "Send back"} ${sendCount}`
+                      : (option?.confirm_label ?? "Confirm")}
+              </Button>
+            </div>
+          </>
+        )}
       </motion.div>
     </>
   );

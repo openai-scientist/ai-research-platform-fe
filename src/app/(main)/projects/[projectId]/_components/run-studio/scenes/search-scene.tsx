@@ -1,9 +1,9 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useContext, useRef, useState } from "react";
 
 import { cn } from "cn";
-import { ArrowRight, Check, FileText, Merge } from "lucide-react";
+import { ArrowRight, Check, FileText, Merge, RotateCcw } from "lucide-react";
 import { motion } from "motion/react";
 
 import { Button } from "@/components/ui/button";
@@ -11,12 +11,13 @@ import type { SearchContent } from "@/lib/run-stream/run-state";
 
 import { AnimatedNumber } from "../animated-number";
 import { AgentCursor, PulseDot } from "../run-bits";
-import { useReveal } from "../workspace-context";
+import { useReveal, WorkspaceContext } from "../workspace-context";
 import { Pane, Placeholder, TypeText } from "./scene-ui";
 
 const SOURCE_TONE: Record<string, string> = {
   openalex: "bg-cyan-600",
   s2: "bg-blue-600",
+  semantic_scholar: "bg-blue-600",
   arxiv: "bg-rose-600",
 };
 
@@ -48,6 +49,21 @@ function WordMeter({ words }: { words: number }) {
       <span className="text-[11px] text-muted-foreground tabular-nums">{words} words</span>
     </span>
   );
+}
+
+/** A strategy title the model wrote as an identifier, "benchmarks_and_evidence", reads "Benchmarks and evidence". */
+const titleOf = (title: string) =>
+  /^[a-z0-9]+(_[a-z0-9]+)+$/.test(title) ? `${title[0].toUpperCase()}${title.slice(1).replaceAll("_", " ")}` : title;
+
+/** Why a source returned less than it was asked for, from the errors the engine kept. */
+function sourceTrouble(name: string, stats?: { requests: number; errors?: string[] }) {
+  const failed = stats?.errors?.length ?? 0;
+  if (!stats || !failed) return null;
+  const limited = stats.errors?.some((e) => /429|rate.?limit/i.test(e));
+  const of = failed >= stats.requests ? `all ${stats.requests}` : `${failed} of ${stats.requests}`;
+  return limited
+    ? `${name} turned away ${of} requests: it rate-limited the search, so its column stays empty.`
+    : `${name} failed on ${of} requests.`;
 }
 
 /** "2026-10-06T07:48:12Z" → "07:48 UTC". */
@@ -92,6 +108,17 @@ export function SearchScene({ data, live }: { data: SearchContent; live: boolean
   const bySourceOrder = (records: SearchContent["merged"][number]["records"]) =>
     [...records].sort((a, b) => order.indexOf(a.source) - order.indexOf(b.source));
   const bySource = (sourceId: string) => data.queries.reduce((a, q) => a + (data.cells[`${q.id}:${sourceId}`] ?? 0), 0);
+  // The planner usually gives three angles; it may give more.
+  const angles = Math.max(3, data.strategies.length);
+  const trouble = data.sources
+    .map((s) => sourceTrouble(s.name, data.collected?.per_source?.[s.id]))
+    .filter((t): t is string => Boolean(t));
+  const merging = data.merged.length > 0 || Boolean(data.collected);
+  // A shortlist you rejected sends the run back here; the new search replaces the old one on this screen.
+  const again = (useContext(WorkspaceContext)?.state.decisions ?? []).filter(
+    (d) => d.gateKind === "screen" && d.option === "reject",
+  );
+  const lastAgain = again.at(-1);
 
   let target: string | null = data.queries.length ? `query:${data.queries[data.queries.length - 1].id}` : null;
   if (lastCell) target = `cell:${lastCell}`;
@@ -100,7 +127,23 @@ export function SearchScene({ data, live }: { data: SearchContent; live: boolean
 
   return (
     <div ref={scene} className="relative flex flex-col gap-4">
-      <div className="grid gap-4 lg:grid-cols-3">
+      {lastAgain && (
+        <p className="flex items-start gap-2 rounded-lg bg-muted/60 px-3 py-2 text-muted-foreground text-xs">
+          <RotateCcw className="mt-px size-3.5 shrink-0" />
+          <span>
+            <b className="font-medium text-foreground">Search {again.length + 1}.</b> You rejected the shortlist of the
+            search before, so this one replaces it
+            {lastAgain.note ? (
+              <>
+                , with your note: <q className="text-foreground">{lastAgain.note}</q>
+              </>
+            ) : (
+              "."
+            )}
+          </span>
+        </p>
+      )}
+      <div className={cn("grid gap-4", angles === 4 ? "lg:grid-cols-2" : "lg:grid-cols-3")}>
         {data.strategies.map((strategy, si) => {
           const queries = data.queries.filter((q) => q.strategy_id === strategy.id);
           return (
@@ -111,12 +154,14 @@ export function SearchScene({ data, live }: { data: SearchContent; live: boolean
               transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
               className="flex min-w-0 flex-col gap-2.5 rounded-xl bg-card p-4 ring-1 ring-foreground/10"
             >
-              <header className="flex items-center gap-2 text-sm">
-                <b className="inline-flex h-5 items-center rounded-md bg-cyan-500/12 px-1.5 font-mono font-semibold text-[11px] text-cyan-700 dark:text-cyan-300">
+              <header className="flex items-start gap-2 text-sm">
+                <b className="inline-flex h-5 shrink-0 items-center rounded-md bg-cyan-500/12 px-1.5 font-mono font-semibold text-[11px] text-cyan-700 dark:text-cyan-300">
                   {strategy.id}
                 </b>
-                <b className="font-semibold">{strategy.title}</b>
-                <span className="ml-auto text-[11px] text-muted-foreground">angle {si + 1} of 3</span>
+                <b className="min-w-0 text-pretty font-semibold leading-5">{titleOf(strategy.title)}</b>
+                <span className="ml-auto shrink-0 whitespace-nowrap text-[11px] text-muted-foreground leading-5">
+                  angle {si + 1} of {angles}
+                </span>
               </header>
               <p className="-mt-1 text-muted-foreground text-xs">{strategy.why}</p>
               <ul className="flex flex-col gap-1.5">
@@ -151,10 +196,10 @@ export function SearchScene({ data, live }: { data: SearchContent; live: boolean
           );
         })}
         {data.strategies.length > 0 &&
-          data.strategies.length < 3 &&
-          Array.from({ length: 3 - data.strategies.length }, (_, i) => (
+          data.strategies.length < angles &&
+          Array.from({ length: angles - data.strategies.length }, (_, i) => (
             <Placeholder key={`angle-${data.strategies.length + i}`} className="h-full">
-              Angle {data.strategies.length + i + 1} of 3
+              Angle {data.strategies.length + i + 1} of {angles}
             </Placeholder>
           ))}
         {!data.strategies.length && (
@@ -162,7 +207,7 @@ export function SearchScene({ data, live }: { data: SearchContent; live: boolean
         )}
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(300px,1fr)]">
+      <div className={cn("grid gap-4", merging && "xl:grid-cols-[minmax(0,1.5fr)_minmax(300px,1fr)]")}>
         <div ref={collectRef} className="flex min-w-0 flex-col gap-4">
           {data.sources.length ? (
             <Pane
@@ -267,6 +312,11 @@ export function SearchScene({ data, live }: { data: SearchContent; live: boolean
                   </tfoot>
                 </table>
               </div>
+              {trouble.map((t) => (
+                <p key={t} className="mt-3 text-muted-foreground text-xs">
+                  {t}
+                </p>
+              ))}
             </Pane>
           ) : (
             <Placeholder>Each query then goes to every source</Placeholder>
@@ -298,8 +348,8 @@ export function SearchScene({ data, live }: { data: SearchContent; live: boolean
 
         {/* Side by side, the collecting column sets the height and the merge list scrolls inside it, so the
             cards on the left keep their own height. */}
-        <div ref={mergeRef} className="relative flex min-w-0 flex-col">
-          {data.merged.length || data.collected ? (
+        <div ref={mergeRef} className={cn("relative min-w-0 flex-col", merging ? "flex" : "hidden")}>
+          {merging && (
             <Pane title="Merging duplicates" className="flex flex-1 flex-col xl:absolute xl:inset-0">
               <p className="-mt-2 mb-3 text-muted-foreground text-xs">
                 Same DOI, arXiv ID or title. Keeps the record with the most citations, then the longer abstract; the
@@ -406,8 +456,6 @@ export function SearchScene({ data, live }: { data: SearchContent; live: boolean
                 )}
               </div>
             </Pane>
-          ) : (
-            <Placeholder>Papers found more than once are merged</Placeholder>
           )}
         </div>
       </div>

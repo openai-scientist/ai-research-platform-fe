@@ -18,8 +18,14 @@ function beat(event: RunEvent): number {
       const { text = "", done } = event.payload as { text?: string; done?: boolean };
       return Math.min(done ? 1600 : 900, (done ? 300 : 200) + text.length * (done ? 12 : 8));
     }
+    // Each is typed out as it arrives: the next waits until most of it is read.
     case "scope.goal":
+      return 800;
     case "problem.subquestion":
+      return 1300;
+    // Typed out one at a time, at 220 characters a second.
+    case "review.finding":
+      return 1000;
     case "search.strategy":
     case "screen.kept":
     case "card.extracted":
@@ -29,7 +35,6 @@ function beat(event: RunEvent): number {
     case "synthesis.overview":
     case "debate.turn":
     case "hypothesis.drafted":
-    case "review.finding":
     case "map.node":
     case "canvas.piece":
       return 450;

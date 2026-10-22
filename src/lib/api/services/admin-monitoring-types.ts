@@ -46,7 +46,8 @@ export interface AdminOverviewData {
   window: { from: string; to: string; timezone: string };
   comparison_window: { from: string; to: string };
   metrics: Record<string, OverviewMetric>;
-  money_metrics: Record<
+  /** Gone since the Platform counts spending in tokens; older servers still send it. */
+  money_metrics?: Record<
     string,
     {
       value_usd: string | null;

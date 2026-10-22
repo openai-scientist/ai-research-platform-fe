@@ -15,6 +15,7 @@ import type {
   Figure,
   Gap,
   Gate,
+  GateKind,
   GoalField,
   Hypothesis,
   KnowledgeCard,
@@ -107,12 +108,15 @@ export interface SearchContent {
     repeats?: number | null;
     files: { name: string; detail: string }[];
     collected_at: string;
+    per_source?: Record<string, { requests: number; papers: number; errors?: string[] }>;
   };
 }
 
 export interface ScreenContent {
   stage: "screen";
   criteria?: { rules: string[]; relevanceMin: number; qualityMin: number; candidates?: number };
+  /** Candidates the scoring takes on, and those set aside before it. */
+  planned?: { toScreen: number; setAside: number };
   points: ScreenPoint[];
   rejected: RejectedPaper[];
   kept: ShortlistPaper[];
@@ -162,6 +166,8 @@ export interface HypothesizeContent {
   findings: ReviewFinding[];
   /** For a revision: the comments sent back from the round before, which this round answers. */
   sent: ReviewFinding[];
+  /** Who sent them back: you at the hypotheses stop, or the independent reviewer before it. */
+  sentBy: "you" | "reviewer";
 }
 
 export type NodeStatus = "writing" | "ready" | "running" | NodeOutcome;
@@ -260,6 +266,9 @@ export interface StageState {
   currentStepId: string | null;
   doneStepIds: string[];
   summary?: string;
+  /** When the stage started, and the last time it did any work: a wait at its review stop isn't counted. */
+  startedAt?: string;
+  workedUntil?: string;
   /** Skills matched to this stage. */
   skills: Skill[];
   content: StageContent;
@@ -276,6 +285,9 @@ export interface FeedItem {
   note?: string;
   /** The review stop a decision answered. */
   gateId?: string;
+  /** The kind of that stop, and the option picked there. */
+  gateKind?: GateKind;
+  option?: string;
 }
 
 export interface RunState {
@@ -307,6 +319,10 @@ export interface RunState {
   paperTitle?: string;
   /** Why the run stopped, once it failed. */
   failure?: string;
+  /** The run ended because a person stopped it. */
+  stopped?: boolean;
+  /** The engine has been quiet this long, in minutes; cleared by the next thing it does. */
+  stalled?: number;
 }
 
 export function emptyContent(plan: StagePlan): StageContent {
@@ -354,6 +370,7 @@ export function emptyContent(plan: StagePlan): StageContent {
         dropped: [],
         findings: [],
         sent: [],
+        sentBy: "you",
       };
     case "map":
       return { stage: "map", nodes: [], edges: [], pieces: [] };

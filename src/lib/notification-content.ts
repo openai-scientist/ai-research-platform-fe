@@ -8,10 +8,8 @@ export function getNotificationContent(notification: NotificationItem) {
   const project = notification.project_name;
   const actor = notification.actor_display_name;
   const projectHref = `/projects/${encodeURIComponent(notification.project_id)}`;
-  const runHref = notification.run_id ? researchRunUrl(notification.project_id, notification.run_id) : projectHref;
-  // The research flow opens a run started from a topic in its workspace, and any other run on its own page.
-  const flowHref = notification.run_id
-    ? `${projectHref}/experiments?run=${encodeURIComponent(notification.run_id)}`
+  const runHref = notification.run_id
+    ? researchRunUrl(notification.project_id, notification.run_id)
     : `${projectHref}/experiments`;
 
   switch (notification.kind) {
@@ -65,16 +63,16 @@ export function getNotificationContent(notification: NotificationItem) {
       return {
         icon: Workflow,
         text: `A research run in ${project} needs your decision.`,
-        href: notification.run_id ? `${flowHref}#frame-review` : flowHref,
+        href: runHref,
       };
     case NotificationKind.RunFinished:
       // Finished also includes failed and budget-exceeded runs; do not imply success.
-      return { icon: Flag, text: `A run in ${project} has finished.`, href: flowHref };
+      return { icon: Flag, text: `A run in ${project} has finished.`, href: runHref };
     case NotificationKind.RunCommented:
       return {
         icon: MessageSquare,
         text: actor ? `${actor} commented on a run in ${project}.` : `A run in ${project} has a new comment.`,
-        href: notification.run_id ? researchRunUrl(notification.project_id, notification.run_id, "comments") : runHref,
+        href: runHref,
       };
   }
 }

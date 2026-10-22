@@ -20,6 +20,7 @@ import {
   sidesOfPatch,
 } from "@/lib/run-stream/revision";
 
+import { CitedText } from "../cite";
 import { WorkOrb } from "../run-bits";
 import { useWorkspace } from "../workspace-context";
 import { bySeverity, FINDING_SEVERITY, findingTarget } from "./findings";
@@ -75,8 +76,9 @@ interface Revision {
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 /**
- * What the engine published for the revision of round `round`: its answer to each comment and the diff of the
- * hypotheses. Null until the rewritten set has been reviewed, which is when both go up.
+ * What the engine published for the rewrite that round `round` is: its answer to each comment of the round before and
+ * the diff of the hypotheses. The engine files both under the review round of the rewritten set. Null until that set
+ * has been reviewed, which is when both go up.
  */
 function useRevision(round: number, ready: boolean) {
   const { session } = useWorkspace();
@@ -105,8 +107,9 @@ function useRevision(round: number, ready: boolean) {
     },
     {
       enabled: ready,
-      // Both go up with the review of the rewritten set; until then, look again.
-      refetchInterval: (query) => (query.state.data || query.state.error ? false : 5000),
+      // Both go up with the review of the rewritten set; until then, look again, less often the longer it takes.
+      refetchInterval: (query) =>
+        query.state.data || query.state.error ? false : Math.min(30_000, 5000 * (1 + query.state.dataUpdateCount)),
     },
   );
 }
@@ -175,7 +178,9 @@ function CommentRow({ finding, answer, index }: { finding: ReviewFinding; answer
             </span>
           )}
         </p>
-        <p className="mt-1 text-sm leading-relaxed">{finding.issue}</p>
+        <p className="mt-1 text-sm leading-relaxed">
+          <CitedText text={finding.issue} />
+        </p>
         {answer && tone && (
           <motion.p
             initial={{ opacity: 0, height: 0 }}
@@ -184,7 +189,7 @@ function CommentRow({ finding, answer, index }: { finding: ReviewFinding; answer
           >
             <b className={cn("font-semibold", tone.text)}>{tone.label}.</b>{" "}
             <span className="text-foreground/85">
-              {answer.note?.trim() ? answer.note : "The rewritten hypothesis addresses it."}
+              <CitedText text={answer.note?.trim() ? answer.note : "The rewritten hypothesis addresses it."} />
             </span>
           </motion.p>
         )}
@@ -231,7 +236,9 @@ function FieldDiff({ change }: { change: FieldChange }) {
               <span className="rounded bg-rose-500/10 px-1.5 py-px font-semibold text-[10px] text-rose-700 uppercase tracking-wide dark:text-rose-300">
                 Before
               </span>
-              <p className="whitespace-pre-line text-muted-foreground text-sm leading-relaxed">{change.before}</p>
+              <p className="whitespace-pre-line text-muted-foreground text-sm leading-relaxed">
+                <CitedText text={change.before} />
+              </p>
             </>
           )}
           {change.after && (
@@ -240,7 +247,7 @@ function FieldDiff({ change }: { change: FieldChange }) {
                 After
               </span>
               <p className={cn("whitespace-pre-line leading-relaxed", claim ? "font-medium text-[15px]" : "text-sm")}>
-                {change.after}
+                <CitedText text={change.after} />
               </p>
             </>
           )}
@@ -289,8 +296,18 @@ function Changes({ id, revision }: { id: string; revision: Revision | null }) {
  * A round that revises the hypotheses: the comments sent back from the round before, how the writers answered each,
  * and what changed in each hypothesis.
  */
-export function RevisionPanel({ sent, round, ready }: { sent: ReviewFinding[]; round: number; ready: boolean }) {
-  const revision = useRevision(round - 1, ready).data ?? null;
+export function RevisionPanel({
+  sent,
+  by = "you",
+  round,
+  ready,
+}: {
+  sent: ReviewFinding[];
+  by?: "you" | "reviewer";
+  round: number;
+  ready: boolean;
+}) {
+  const revision = useRevision(round, ready).data ?? null;
   const groups = new Map<string, ReviewFinding[]>();
   for (const finding of [...sent].sort(bySeverity)) {
     const { id } = findingTarget(finding.locator);
@@ -311,10 +328,15 @@ export function RevisionPanel({ sent, round, ready }: { sent: ReviewFinding[]; r
           <GitCompareArrows className="size-5" />
         </span>
         <div className="min-w-0 flex-1">
-          <h3 className="font-semibold text-[15px] tracking-tight">Revised after your review of round {round - 1}</h3>
+          <h3 className="font-semibold text-[15px] tracking-tight">
+            {by === "reviewer"
+              ? `Revised for the reviewer's findings on round ${round - 1}`
+              : `Revised after your review of round ${round - 1}`}
+          </h3>
           <p className="mt-0.5 max-w-[70ch] text-muted-foreground text-sm">
-            {plural(sent.length, "comment")} went back to the writers. Each one gets an answer: fixed, or rebutted with
-            a reason.
+            {by === "reviewer"
+              ? `The independent reviewer sent the set back with ${plural(sent.length, "blocking finding")}. Each one gets an answer: fixed, or rebutted with a reason.`
+              : `${plural(sent.length, "comment")} went back to the writers. Each one gets an answer: fixed, or rebutted with a reason.`}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">

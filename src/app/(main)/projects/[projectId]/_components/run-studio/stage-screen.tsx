@@ -6,7 +6,7 @@ import { cn } from "cn";
 import { ArrowRight, Check, CircleCheck, FileText } from "lucide-react";
 import { motion } from "motion/react";
 
-import type { Figure, KnowledgeCard } from "@/lib/run-stream/contract";
+import type { Figure, KnowledgeCard, PlannedStage } from "@/lib/run-stream/contract";
 import type { RunState, StageState } from "@/lib/run-stream/run-state";
 import { liveStageKey, pipelineLabel } from "@/lib/run-stream/selectors";
 
@@ -176,13 +176,23 @@ function StageHeader({
   index,
   total,
   showRound,
+  planned,
+  ended,
 }: {
   stage: StageState;
   index: number;
   total: number;
   showRound: boolean;
+  /** The run stopped or failed: a stage it did not finish no longer goes on. */
+  ended?: boolean;
+  /** This stage in the run's latest plan: a round learns its number once the next round exists. */
+  planned?: PlannedStage;
 }) {
-  const { plan } = stage;
+  const plan = {
+    ...stage.plan,
+    round: planned?.round ?? stage.plan.round,
+    round_kind: planned?.round_kind ?? stage.plan.round_kind,
+  };
   const done = stage.status === "done";
   return (
     <header className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-3.5 gap-y-2 border-b pb-3.5 sm:grid-cols-[auto_minmax(0,1fr)_auto]">
@@ -204,9 +214,13 @@ function StageHeader({
             <span className="rounded-md bg-muted px-1.5 py-0.5 font-medium font-mono text-[11.5px] text-muted-foreground">
               Round {plan.round}
               {
-                { pivot: " · new direction", refine: " · rerun", revise: " · revision", first: "" }[
-                  plan.round_kind ?? "first"
-                ]
+                {
+                  pivot: " · new direction",
+                  refine: " · rerun",
+                  revise: " · revision",
+                  review: " · revised for the reviewer",
+                  first: "",
+                }[plan.round_kind ?? "first"]
               }
             </span>
           )}
@@ -241,6 +255,10 @@ function StageHeader({
             <Check className="size-3" />
             Done
           </motion.span>
+        ) : ended ? (
+          <span className="inline-flex h-6 items-center rounded-full bg-muted px-2.5 font-medium text-muted-foreground text-xs">
+            Not finished
+          </span>
         ) : (
           <span className="inline-flex h-6 items-center gap-2 rounded-full bg-sky-500/12 px-2.5 font-medium text-sky-700 text-xs dark:text-sky-300">
             <PulseDot className="bg-sky-500" />
@@ -399,6 +417,8 @@ export function StageScreen({
         index={index}
         total={state.plan.length}
         showRound={state.plan.filter((s) => s.stage === "hypothesize").length > 1}
+        planned={state.plan.find((s) => s.key === stageKey)}
+        ended={state.lifecycle === "failed"}
       />
       {endsHere && content.stage === "hypothesize" && <RunEnd state={state} count={set(content).length} />}
       {endsHere && content.stage === "map" && (

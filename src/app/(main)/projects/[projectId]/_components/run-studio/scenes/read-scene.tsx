@@ -232,7 +232,40 @@ export function ReadScene({
   const target = data.cards.length ? `card:${data.cards[data.cards.length - 1].id}` : null;
 
   return (
-    <div ref={scene} className="relative grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+    // The limitations collect in a strip above the cards: a side column holding only them left the cards narrow and
+    // the column mostly empty.
+    <div ref={scene} className="relative flex flex-col gap-4">
+      <div ref={tray}>
+        <Pane title="Gap material" aside={`${limited.length} limitation${limited.length === 1 ? "" : "s"}`}>
+          {limited.length ? (
+            // Each card already shows its limitation in full; here they only collect, so the strip stays short.
+            <ul className="flex flex-wrap gap-1.5">
+              {limited.map((card) => {
+                const isNew = live && data.cards.indexOf(card) >= fresh;
+                return (
+                  <motion.li
+                    key={card.id}
+                    data-tray={card.id}
+                    title={card.limitations}
+                    initial={isNew ? { opacity: 0, scale: 0.8 } : false}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: isNew ? 0.25 + FIELDS.length * FIELD_STEP + 0.6 : 0 }}
+                    className="inline-flex h-6 items-center whitespace-nowrap rounded-md bg-amber-500/12 px-2 font-medium text-[11px] text-amber-800 dark:text-amber-300"
+                  >
+                    {shortCite(card.citation)}
+                  </motion.li>
+                );
+              })}
+            </ul>
+          ) : (
+            <p className="text-muted-foreground text-xs">
+              {data.cards.length
+                ? "None of the abstracts states a limitation so far."
+                : "What each paper couldn't answer collects here."}
+            </p>
+          )}
+        </Pane>
+      </div>
       <div className="grid min-w-0 gap-3 md:grid-cols-2 2xl:grid-cols-3">
         {data.cards.map((card, i) => (
           <CardView
@@ -256,39 +289,6 @@ export function ReadScene({
           <Placeholder className="md:col-span-2 2xl:col-span-3">Each shortlisted paper becomes a card</Placeholder>
         )}
       </div>
-      <aside className="flex min-w-0 flex-col gap-4 xl:sticky xl:top-3">
-        <div ref={tray}>
-          <Pane title="Gap material" aside={`${limited.length} limitation${limited.length === 1 ? "" : "s"}`}>
-            {limited.length ? (
-              // Each card already shows its limitation in full; here they only collect, so the column stays short.
-              <ul className="flex flex-wrap gap-1.5">
-                {limited.map((card) => {
-                  const isNew = live && data.cards.indexOf(card) >= fresh;
-                  return (
-                    <motion.li
-                      key={card.id}
-                      data-tray={card.id}
-                      title={card.limitations}
-                      initial={isNew ? { opacity: 0, scale: 0.8 } : false}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{ delay: isNew ? 0.25 + FIELDS.length * FIELD_STEP + 0.6 : 0 }}
-                      className="inline-flex h-6 items-center whitespace-nowrap rounded-md bg-amber-500/12 px-2 font-medium text-[11px] text-amber-800 dark:text-amber-300"
-                    >
-                      {shortCite(card.citation)}
-                    </motion.li>
-                  );
-                })}
-              </ul>
-            ) : (
-              <p className="text-muted-foreground text-xs">
-                {data.cards.length
-                  ? "None of the abstracts states a limitation so far."
-                  : "What each paper couldn't answer collects here."}
-              </p>
-            )}
-          </Pane>
-        </div>
-      </aside>
       <AgentCursor
         agent={live ? "librarian" : null}
         container={scene}

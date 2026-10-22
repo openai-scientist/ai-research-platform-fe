@@ -1,13 +1,15 @@
-// Pipeline runs: the backend runs a research run as stages on engines (`hypothesis` on idea2hypothesis) and relays
-// each engine's events in one envelope (`class`, `step_key`, `phase`, `stage_run_id`). The engine's content events
-// (`i2h.<type>`) carry the same payloads as a Popper run; the run, stage, step and gate events do not. This adapter
-// turns the envelopes back into the run studio's events, so the reducer and every scene work as they do for Popper.
+// Pipeline runs: the Platform (logos) runs a research run as stages on engines (`hypothesis`) and relays each
+// engine's events in one envelope (`class`, `step_key`, `phase`, `stage_run_id`). The engine's content events
+// (`<stage_key>.<kind>`, `logos_contract.activity`) carry the payloads the scenes draw; its progress events
+// (`<stage_key>.progress`) become the live narration; the run, stage, step and gate events do not map one to one. This
+// adapter turns the envelopes into the run studio's events, so the reducer and every scene work as they do for Popper.
 
 import type {
   AgentRole,
   Gate,
   GateAnswer,
   GateKind,
+  PiAdvice,
   PlannedStage,
   ReviewFinding,
   ReviewMode,
@@ -29,6 +31,8 @@ export interface PipelineEnvelope {
   step_key?: string | null;
   phase?: string | null;
   actor?: string | null;
+  /** A line the backend wrote about the event, such as the PI's reasoning for a decision. */
+  summary?: string | null;
   payload: Record<string, unknown>;
 }
 
@@ -42,12 +46,22 @@ export type GateRoute =
       artifactId?: string;
       findings?: Record<string, unknown>[];
     }
-  | { to: "accept"; stageRunId: string; hypothesisIds: string[] };
+  | { to: "accept"; stageRunId: string; hypothesisIds: string[] }
+  /** The PI's charter: endorse its draft, or write it yourself; `retry` asks the PI again after it failed. */
+  | { to: "charter"; consultationId: string };
 
 type Step = Omit<StagePlanStep, "id">;
 
-// The engine's steps (idea2hypothesis `platform_events._STEPS`), plus the independent review and the accept.
+// The steps the run studio shows for the engine's work, plus the independent review and the accept.
 const STEPS: Record<string, Step> = {
+  charter: {
+    title: "Draft the plan",
+    actor: "pi",
+    pipeline_stage: 1,
+    gate: "charter",
+    artifact: "Charter",
+    explain: "The PI drafts the question, the scope and the criteria every later stage is judged by.",
+  },
   goal: {
     title: "Set the goal",
     actor: "strategist",
@@ -173,7 +187,7 @@ const STEPS: Record<string, Step> = {
     actor: "pi",
     pipeline_stage: 8,
     gate: "hypotheses",
-    explain: "Read the review findings, then approve the set.",
+    explain: "Read the hypotheses with their review findings and map, then approve the set or send it back.",
   },
   questions: {
     title: "Lay out the questions",
@@ -231,7 +245,7 @@ interface Screen {
   steps: string[];
 }
 
-// The engine's screens (idea2hypothesis `platform_events.GROUPS`), keyed as a Popper run keys them.
+// The screens of a hypothesis stage, keyed as a Popper run keys them.
 const SCREENS: Screen[] = [
   {
     key: "scope",
@@ -242,7 +256,7 @@ const SCREENS: Screen[] = [
     purpose:
       "Your topic becomes a research goal and a tree of prioritised sub-questions, and the topic is rated before any search starts.",
     reads: ["Your topic", "Your fields"],
-    steps: ["goal", "decompose", "evaluate"],
+    steps: ["charter", "goal", "decompose", "evaluate"],
   },
   {
     key: "search",
@@ -293,9 +307,9 @@ const SCREENS: Screen[] = [
     pipeline: [8],
     cast: ["theorist", "methodologist", "skeptic", "librarian", "reviewer", "pi"],
     purpose:
-      "Several perspectives propose hypotheses; the final set links each one to a gap, to evidence and to the result that would prove it wrong. An independent reviewer checks the set before you see it.",
+      "Several perspectives propose hypotheses; the final set links each one to a gap, to evidence and to the result that would prove it wrong. An independent reviewer checks the set, then each prediction is checked against the literature.",
     reads: ["Gap map", "Shortlist"],
-    steps: ["debate", "write", "check", "select", "review", "hypotheses_gate"],
+    steps: ["debate", "write", "select", "review", "check"],
   },
   {
     key: "map",
@@ -306,22 +320,119 @@ const SCREENS: Screen[] = [
     purpose:
       "Everything the run found is drawn as one semantic graph, from the evidence to what each hypothesis would contribute, and laid out on the nine pieces of a research canvas.",
     reads: ["Sub-question tree", "Knowledge cards", "Gap map", "Hypotheses"],
-    steps: ["questions", "foundation", "reasoning", "contribution", "canvas", "accept"],
+    steps: ["questions", "foundation", "reasoning", "contribution", "canvas", "hypotheses_gate", "accept"],
   },
 ];
 
-/** The engine's pipeline steps (`step_key`) and the screen each one shows on. */
+/**
+ * The engine's steps (`step_key`) and the screen each one starts. `verify` checks novelty (the hypotheses screen) and
+ * then draws the argument map (the map screen), so its content picks the screen instead.
+ */
 const SCREEN_OF: Record<string, string> = {
-  topic_init: "scope",
-  problem_decompose: "scope",
-  search_strategy: "search",
-  literature_collect: "search",
-  literature_screen: "screen",
-  knowledge_extract: "read",
-  synthesis: "synthesize",
+  understand: "scope",
+  search: "search",
+  screen: "screen",
+  extract: "read",
+  synthesize: "synthesize",
   // Each round of hypotheses has its own screen, `r1-hypothesize`, `r2-hypothesize`…
-  hypothesis_gen: "hypothesize",
-  argument_map: "map",
+  hypothesize: "hypothesize",
+  critique: "hypothesize",
+  lock: "map",
+};
+
+/** The content kinds of the hypothesis engine (`logos_contract.activity.hypothesis`). */
+const CONTENT = new Set([
+  "scope.goal",
+  "problem.subquestion",
+  "problem.risk",
+  "topic.evaluated",
+  "search.strategy",
+  "search.query",
+  "search.sources",
+  "literature.batch",
+  "literature.merged",
+  "literature.collected",
+  "screen.criteria",
+  "screen.scored",
+  "screen.rejected",
+  "screen.kept",
+  "card.extracted",
+  "synthesis.cluster",
+  "synthesis.set_aside",
+  "synthesis.overview",
+  "synthesis.tension",
+  "synthesis.gap",
+  "synthesis.ranked",
+  "debate.turn",
+  "hypothesis.drafted",
+  "idea.set_aside",
+  "hypothesis.selected",
+  "hypothesis.checked",
+  "rule.checked",
+  "map.node",
+  "map.edge",
+  "canvas.piece",
+]);
+
+/** Withdraws the content of one scope: the engine is doing that work again. */
+const RESET = "content.reset";
+
+/** The screen that shows each content scope (a stage of the engine's science). */
+const SCOPE_SCREEN: Record<string, string> = {
+  "stage-01": "scope",
+  "stage-02": "scope",
+  "stage-03": "search",
+  "stage-04": "search",
+  "stage-05": "screen",
+  "stage-06": "read",
+  "stage-07": "synthesize",
+  "stage-08": "hypothesize",
+  "stage-09": "map",
+};
+
+/** The step each progress event of the engine narrates. */
+const PROGRESS_STEP: Record<string, string> = {
+  queries: "collect",
+  query: "collect",
+  screen_plan: "score",
+  screen_batch: "score",
+  cards_plan: "extract",
+  card: "extract",
+  perspectives_plan: "debate",
+  perspective: "debate",
+  critique: "debate",
+  review: "debate",
+  judged: "debate",
+  merge: "write",
+  novelty: "check",
+};
+
+/** The step each of the engine's nine science stages starts, and what is said while its model works. */
+const STARTED: Record<number, { step: string; text: string }> = {
+  1: { step: "goal", text: "Turning your topic into a research goal: problem, objective, scope and success." },
+  2: { step: "decompose", text: "Splitting the goal into sub-questions and noting the risks of each." },
+  3: { step: "strategy", text: "Planning search angles and short queries for each sub-question." },
+  4: { step: "collect", text: "Sending the queries to the literature sources." },
+  5: { step: "score", text: "Scoring every candidate for relevance and quality." },
+  6: { step: "extract", text: "Reading the shortlisted papers, one knowledge card each." },
+  7: { step: "cluster", text: "Grouping the cards into schools of thought to find the gaps." },
+  8: { step: "debate", text: "The perspectives are reading the gaps to propose hypotheses." },
+  9: {
+    step: "questions",
+    text: "Drawing the argument map: the questions, the foundation, the reasoning and the contribution.",
+  },
+};
+
+/** The agent who speaks for each perspective of the debate (prompt domains name them differently). */
+const PERSPECTIVE: Record<string, AgentRole> = {
+  innovator: "theorist",
+  pragmatist: "methodologist",
+  contrarian: "skeptic",
+  theorist: "theorist",
+  phenomenologist: "methodologist",
+  experimentalist: "skeptic",
+  model_builder: "theorist",
+  fba_analyst: "methodologist",
 };
 
 /**
@@ -333,7 +444,7 @@ const OPENS: Record<string, string> = {
   "problem.subquestion": "decompose",
   "topic.evaluated": "evaluate",
   "search.strategy": "strategy",
-  "literature.request": "collect",
+  "literature.batch": "collect",
   "screen.criteria": "score",
   "screen.scored": "score",
   "screen.kept": "shortlist",
@@ -387,12 +498,12 @@ const ROLES = new Set<string>([
 ]);
 
 /** Gates of a pipeline run: the shortlist, the hypotheses, then the accept. */
-const STOPS: GateKind[] = ["screen", "hypotheses", "accept"];
-
-/** Room in `seq` for the events made from one envelope. */
-const SPREAD = 64;
+const STOPS: GateKind[] = ["charter", "screen", "hypotheses", "accept"];
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+
+/** The first stop among a screen's steps, if it has one. */
+const firstGate = (steps: string[]) => steps.map((id) => STEPS[id].gate).find(Boolean);
 
 function stagePlan(screen: Screen): StagePlan {
   return {
@@ -401,6 +512,7 @@ function stagePlan(screen: Screen): StagePlan {
     ...(screen.round ? { round: screen.round, round_kind: screen.round_kind } : {}),
     title: screen.title,
     has_gate: screen.steps.some((id) => STEPS[id].gate),
+    ...(firstGate(screen.steps) ? { gate: firstGate(screen.steps) } : {}),
     pipeline: screen.pipeline,
     purpose: screen.purpose,
     reads: screen.reads,
@@ -413,6 +525,87 @@ function planned(screen: Screen): PlannedStage {
   const { purpose: _purpose, reads: _reads, cast: _cast, steps: _steps, ...rest } = stagePlan(screen);
   return rest;
 }
+
+/**
+ * A finding of the engine's own review (`<stage_key>.review.finding`) in the Platform's shape, numbered as the engine
+ * numbers it in the review it publishes: `F<round>-<n>`, anchored to one field of one hypothesis or to the whole set.
+ */
+function reviewFinding(raw: Record<string, unknown>, n: number, artifactId?: string): Record<string, unknown> {
+  const hypothesis = raw.hypothesis_id ? String(raw.hypothesis_id) : null;
+  return {
+    finding_id: `F${Number(raw.round ?? 1)}-${n}`,
+    anchor: {
+      artifact_id: artifactId ?? null,
+      locator: hypothesis ? `item:${hypothesis}/${String(raw.field ?? "")}` : "document:hypotheses",
+    },
+    severity: raw.severity ?? "minor",
+    kind: raw.kind ?? "fix",
+    category: raw.category ?? "other",
+    issue: String(raw.issue ?? ""),
+    ...(raw.suggestion ? { suggestion: String(raw.suggestion) } : {}),
+    author: "reviewer",
+    evidence_refs: [],
+  };
+}
+
+/** What a progress event of the engine says while the work goes on, or null when it says nothing new. */
+function narration(kind: string, p: Record<string, unknown>, sources: string[]): string | null {
+  const n = (key: string) => Number(p[key] ?? 0);
+  switch (kind) {
+    case "queries": {
+      const total = n("planned") + n("expanded");
+      const names =
+        sources.length > 2 ? `${sources.slice(0, -1).join(", ")} and ${sources.at(-1)}` : sources.join(" and ");
+      return `Sending ${plural(total, "query", "queries")} to ${names || "the sources"}.`;
+    }
+    case "query": {
+      const hits = Object.values((p.hits ?? {}) as Record<string, number>).reduce((a, b) => a + Number(b), 0);
+      const text = String(p.text ?? "");
+      const short = text.length > 60 ? `${text.slice(0, 57).trimEnd()}…` : text;
+      return `Query ${n("index")} of ${n("total")}: “${short}”, ${plural(hits, "hit")} (${n("raw")} so far).`;
+    }
+    case "scout":
+      return `Following the citations of ${plural(n("papers"), "paper")} for more candidates.`;
+    case "screen_plan": {
+      const aside = ((p.prefiltered ?? []) as unknown[]).length;
+      return `Scoring ${plural(n("to_screen"), "paper")} in ${plural(n("batches"), "batch", "batches")} against the relevance and quality bars${aside ? `; ${plural(aside, "paper")} set aside before scoring` : ""}.`;
+    }
+    case "screen_batch": {
+      const rows = (p.decisions ?? []) as { decision?: string }[];
+      const clear = rows.filter((d) => d.decision === "kept").length;
+      return `Batch ${n("index")} of ${n("total")} scored: ${clear} of ${rows.length} clear both bars.`;
+    }
+    case "cards_plan": {
+      const cached = n("cached");
+      return `Reading ${plural(n("total"), "abstract")}, one knowledge card each${cached ? ` (${cached} already read)` : ""}.`;
+    }
+    case "perspectives_plan": {
+      const roles = ((p.roles ?? []) as string[]).map((r) => AGENT_NAME[PERSPECTIVE[r] ?? "theorist"]);
+      return `${roles.length ? `The ${roles.join(", ")}` : "Each perspective"} ${roles.length === 1 ? "is" : "are"} proposing hypotheses from the gaps.`;
+    }
+    case "perspective":
+    case "critique":
+    case "review": {
+      const who = AGENT_NAME[PERSPECTIVE[String(p.role)] ?? "theorist"];
+      const round = n("round");
+      if (kind === "critique") return `The ${who} challenged the other perspectives' hypotheses in round ${round}.`;
+      if (kind === "review") return `The ${who} reviewed the answers to its challenges in round ${round}.`;
+      return round ? `The ${who} answered the challenges in round ${round}.` : `The ${who} proposed its hypotheses.`;
+    }
+    case "judged":
+      return "An independent reviewer model ranked the positions.";
+    case "merge":
+      return "Merging the positions into one set of hypotheses.";
+    case "novelty":
+      return `Searching the literature for each of the ${plural(n("hypotheses"), "hypothesis", "hypotheses")}.`;
+    case "restart":
+      return "Starting this step again.";
+    default:
+      return null;
+  }
+}
+
+const AGENT_NAME: Record<string, string> = { theorist: "Theorist", methodologist: "Methodologist", skeptic: "Skeptic" };
 
 /** A finding as the engine sends it, in the run studio's shape. */
 function toFinding(raw: Record<string, unknown>): ReviewFinding {
@@ -436,29 +629,17 @@ export interface PipelineRunInfo {
   mode: ReviewMode;
 }
 
-interface Counts {
-  subQuestions: number;
-  overall?: number;
-  collected?: { raw: number; unique: number; duplicates: number };
-  candidates?: number;
-  kept: string[];
-  excluded: Record<string, number>;
-  cards: number;
-  clusters: number;
-  tensions: number;
-  gaps: number;
-  drafts: Map<string, string>;
-  selected: string[];
-  findings: Record<string, number>;
-  nodes: number;
-  edges: number;
-  pieces: number;
-  filled: number;
+/** One content item as it was shown: the scenes' event and who said it. */
+interface Shown {
+  kind: string;
+  payload: Record<string, unknown>;
+  actor?: AgentRole;
 }
 
 /**
  * Turns a pipeline run's envelopes, in `seq` order, into run studio events. It keeps what it has seen (the screen and
- * step the run is on, counts for the summaries, the open gate), so one adapter follows one run from its first event.
+ * step the run is on, the content of each scope for the summaries and redraws, the open gate), so one adapter follows
+ * one run from its first event.
  */
 export class PipelineAdapter {
   private started = false;
@@ -470,30 +651,34 @@ export class PipelineAdapter {
   private gate: { id: string; kind: GateKind; engineKind: "question" | "artifact_review" | null } | null = null;
   private decision: Record<string, unknown> | null = null;
   private failed = false;
+  /** Who settles the charter: you (Light), or the PI on its own (Auto). */
+  private charterBy: "you" | "pi" = "pi";
+  /** The set the stage published: without the hypotheses dropped at the last stop, with any idea kept there. */
+  private published: string[] | null = null;
+  /** What the PI advised, by consultation kind (`charter`, `stage_outcome`). */
+  private advice: Record<string, PiAdvice> = {};
   /** The round of hypotheses: each set sent back for revision starts the next one. */
   private round = 1;
   /** Comments sent back at the last hypotheses gate; the next round answers them. */
   private sent: ReviewFinding[] | null = null;
   /** Comments each round was sent back with, by round. */
-  private sentBack: Record<number, number> = {};
-  /** This round's review: the findings as the engine sent them, and the set they are about. */
+  private sentBack: Record<number, { count: number; by: "you" | "reviewer" }> = {};
+  /** How each round of hypotheses began: the first set, your revision, or the reviewer's. */
+  private roundKinds: RoundKind[] = ["first"];
+  /** The independent review just failed the set: the engine revises it before you see it. */
+  private failedReview = false;
+  /** This round's review: the findings in the Platform's shape, and the set they are about. */
   private review: { raw: Record<string, unknown>[]; artifactId?: string } = { raw: [] };
-  private counts: Counts = {
-    subQuestions: 0,
-    kept: [],
-    excluded: {},
-    cards: 0,
-    clusters: 0,
-    tensions: 0,
-    gaps: 0,
-    drafts: new Map(),
-    selected: [],
-    findings: {},
-    nodes: 0,
-    edges: 0,
-    pieces: 0,
-    filled: 0,
-  };
+  /** Findings of each review round so far, to number the next one as the engine does. */
+  private reviewed: Record<number, number> = {};
+  /** What each content scope holds now, by item key: what the summaries count and a redraw shows again. */
+  private shown = new Map<string, Map<string, Shown>>();
+  /** The live narration line of the current step, if any. */
+  private message: { id: string; step: string | null; actor?: AgentRole } | null = null;
+  /** The card a progress event announced; the line names it once the card arrives. */
+  private cardAt: { index: number; total: number } | null = null;
+  private lastEnvelope = -1;
+  private seq = 0;
   private out: RunEvent[] = [];
   private at: PipelineEnvelope | null = null;
 
@@ -501,8 +686,9 @@ export class PipelineAdapter {
 
   /** Where an answer to this gate goes, or null when the gate is not open. */
   route(gateId: string): GateRoute | null {
+    if (this.gate?.kind === "charter" && this.gate.id === gateId) return { to: "charter", consultationId: gateId };
     if (!this.gate || this.gate.id !== gateId || !this.stageRun) return null;
-    if (this.gate.kind === "accept") return { to: "accept", stageRunId: this.stageRun, hypothesisIds: this.set() };
+    if (this.gate.kind === "accept") return { to: "accept", stageRunId: this.stageRun, hypothesisIds: this.final() };
     if (!this.gate.engineKind) return null;
     if (this.gate.engineKind === "question") return { to: "gate", stageRunId: this.stageRun, kind: "question" };
     return {
@@ -522,26 +708,58 @@ export class PipelineAdapter {
         ...screen,
         key: `r${i + 1}-hypothesize`,
         // Rounds are only told apart once there is more than one.
-        ...(this.round > 1 ? { round: i + 1, round_kind: (i ? "revise" : "first") as RoundKind } : {}),
+        ...(this.round > 1 ? { round: i + 1, round_kind: this.roundKinds[i] ?? "revise" } : {}),
       }));
     });
+  }
+
+  /** The key of the screen of this kind the run is on now: the hypotheses have one per round. */
+  private keyOf(stage: string) {
+    return stage === "hypothesize" ? `r${this.round}-hypothesize` : stage;
   }
 
   /** The hypotheses came back to be revised: the next round gets its own screen. */
   private revise() {
     const sent = this.sent ?? [];
     this.sent = null;
+    this.nextRound("revise", sent, "you");
+  }
+
+  /**
+   * The reviewer failed the set and the engine writes it again: the set it rejected stays on its own screen, with the
+   * findings that sent it back, and the rewrite starts the next round.
+   */
+  private reviseForReviewer() {
+    this.failedReview = false;
+    const blocking = this.review.raw.filter((f) => f.severity === "blocking").map(toFinding);
+    this.sentBack[this.round] = { count: blocking.length, by: "reviewer" };
+    this.nextRound("review", blocking, "reviewer");
+    this.say(
+      `The reviewer found ${plural(blocking.length, "blocking issue")}. The perspectives write the set again to answer ${blocking.length === 1 ? "it" : "them"}.`,
+      "reviewer",
+    );
+  }
+
+  private nextRound(kind: RoundKind, sent: ReviewFinding[], by: "you" | "reviewer") {
+    // The round was closed when the run moved to the map; it is summed up again now that it was sent back.
+    const previous = this.keyOf("hypothesize");
+    if (this.screen?.key !== previous)
+      this.emit("stage.completed", { summary: this.summary(previous) }, undefined, previous);
     this.round += 1;
+    this.published = null;
+    this.roundKinds[this.round - 1] = kind;
     this.emit("run.plan", { stages: this.screens().map(planned) });
-    // The round before is completed with its own counts, then they start again.
+    // The round before is completed with its own content, then the next one starts empty.
     this.enter(`r${this.round}-hypothesize`);
-    this.counts = { ...this.counts, drafts: new Map(), selected: [], findings: {} };
-    this.review = { raw: [] };
-    this.emit("review.sent", { findings: sent }, "reviewer");
+    this.review = { raw: [], ...(this.review.artifactId ? { artifactId: this.review.artifactId } : {}) };
+    this.emit("review.sent", { findings: sent, by }, "reviewer");
   }
 
   convert(envelope: PipelineEnvelope): RunEvent[] {
     this.out = [];
+    // A stream that reconnects may send an envelope again.
+    if (envelope.seq <= this.lastEnvelope) return this.out;
+    this.lastEnvelope = envelope.seq;
     this.at = envelope;
     if (envelope.stage_run_id) this.stageRun = envelope.stage_run_id;
     if (!this.started) {
@@ -549,28 +767,43 @@ export class PipelineAdapter {
       this.emit("run.started", { mode: this.run.mode, topic: this.run.topic, domains: this.run.domains });
       this.emit("run.plan", { stages: this.screens().map(planned) });
     }
-    if (this.sent && (envelope.phase === "revising" || envelope.step_key === "hypothesis_gen")) this.revise();
+    if (this.sent && (envelope.phase === "revising" || envelope.step_key === "critique")) this.revise();
     const base = envelope.step_key ? SCREEN_OF[envelope.step_key] : undefined;
-    const screen = base === "hypothesize" ? `r${this.round}-hypothesize` : base;
-    if (screen && screen !== this.screen?.key && envelope.type !== "decision.recorded") this.enter(screen);
+    if (base && envelope.type !== "decision.recorded") this.goTo(this.keyOf(base));
 
     const { type, payload } = envelope;
-    if (type.startsWith("i2h.")) this.activity(type.slice(4), payload, envelope.actor);
+    const engine = `${envelope.stage_key ?? "hypothesis"}.`;
+    if (type.startsWith(engine)) this.activity(type.slice(engine.length), payload);
     else this.lifecycle(type, payload, envelope.phase);
     return this.out;
   }
 
-  private emit(type: RunEvent["type"], payload: unknown, actor?: AgentRole) {
+  private emit(type: RunEvent["type"], payload: unknown, actor?: AgentRole, stageKey?: string) {
     const at = this.at as PipelineEnvelope;
+    this.seq += 1;
+    const key = stageKey ?? this.screen?.key;
     this.out.push({
-      seq: at.seq * SPREAD + this.out.length,
+      seq: this.seq,
       run_id: at.run_id,
       ts: at.ts,
       type,
-      ...(this.screen && type !== "run.started" && type !== "run.plan" ? { stage_key: this.screen.key } : {}),
+      ...(key && type !== "run.started" && type !== "run.plan" ? { stage_key: key } : {}),
       ...(actor ? { actor } : {}),
       payload,
     } as RunEvent);
+  }
+
+  /** Moves to a screen when the run reaches it; a screen the run has passed is never entered again from here. */
+  private goTo(key: string) {
+    if (key === this.screen?.key) return;
+    const order = this.screens().map((s) => s.key);
+    if (this.screen && order.indexOf(key) < order.indexOf(this.screen.key) && !this.again(key)) return;
+    this.enter(key);
+  }
+
+  /** The run goes back to a screen only when that work starts over: a new search after the shortlist. */
+  private again(key: string) {
+    return key === "search" && this.screen?.key === "screen";
   }
 
   private enter(key: string) {
@@ -580,6 +813,8 @@ export class PipelineAdapter {
       this.closeStep();
       this.emit("stage.completed", { summary: this.summary(this.screen.key) });
     }
+    // What its scopes showed before belongs to the earlier pass; the engine sends the new pass.
+    for (const scope of [...this.shown.keys()]) if (SCOPE_SCREEN[scope] === next.stage) this.shown.delete(scope);
     this.screen = next;
     this.reached = -1;
     this.emit("stage.started", { plan: stagePlan(next) });
@@ -591,6 +826,13 @@ export class PipelineAdapter {
     const index = this.screen.steps.indexOf(id);
     if (index <= this.reached) return;
     this.closeStep();
+    // A step the run passed without content of its own (papers rejected while the scores came in) is done too; a stop
+    // that did not open (none opens in auto mode) is not.
+    for (const passed of this.screen.steps.slice(this.reached + 1, index))
+      if (!STEPS[passed].gate) {
+        this.emit("step.started", { step_id: passed }, STEPS[passed].actor);
+        this.emit("step.completed", { step_id: passed });
+      }
     this.reached = index;
     this.step = id;
     this.emit("step.started", { step_id: id }, STEPS[id].actor);
@@ -598,30 +840,163 @@ export class PipelineAdapter {
 
   private closeStep() {
     if (!this.step) return;
-    this.emit("step.completed", { step_id: this.step });
+    const step = this.step;
+    const note = this.note(step);
+    const live = this.message?.step === step ? this.message : null;
+    if (live)
+      this.emit("agent.message", { message_id: live.id, ...(note ? { text: note } : {}), done: true }, live.actor);
+    else if (note)
+      this.emit("agent.message", { message_id: this.messageId(step), text: note, done: true }, STEPS[step].actor);
+    this.message = null;
+    this.emit("step.completed", { step_id: step });
     this.step = null;
   }
 
-  private activity(kind: string, payload: Record<string, unknown>, rawActor?: string | null) {
-    if (kind === "question.defaulted") return;
-    const actor = rawActor && ROLES.has(rawActor) ? (rawActor as AgentRole) : undefined;
-    if (kind === "agent.message") {
-      const step = String(payload.message_id ?? "")
-        .split(".")
-        .pop();
-      if (step && STEPS[step]) this.openStep(step);
-      this.emit("agent.message", payload, actor ?? (this.step ? STEPS[this.step].actor : undefined));
+  private messageId(step: string | null) {
+    return `${this.stageRun ?? "stage"}.${this.screen?.key ?? "run"}.${step ?? "stage"}`;
+  }
+
+  /** The live line of the current step: each new line replaces the one before. */
+  private say(text: string, actor?: AgentRole) {
+    if (!this.screen) return;
+    const step = this.step;
+    const id = this.messageId(step);
+    const speaker = actor ?? (step ? STEPS[step].actor : undefined);
+    this.message = { id, step, actor: speaker };
+    this.emit("agent.message", { message_id: id, text, done: false }, speaker);
+  }
+
+  private activity(kind: string, payload: Record<string, unknown>) {
+    if (CONTENT.has(kind)) this.content(kind, payload);
+    else if (kind === RESET) this.reset(String(payload.scope ?? ""));
+    else if (kind === "progress") this.progress(payload);
+    else if (kind === "review.finding") this.finding(payload);
+    else if (kind === "decision") this.claimCheck(payload);
+  }
+
+  /** The reviewer asks whether the papers a hypothesis cites back it, one hypothesis at a time. */
+  private claimCheck(payload: Record<string, unknown>) {
+    const name = String(payload.name ?? "");
+    if (!name.startsWith("claim_support:") || this.step !== "review" || this.screen?.stage !== "hypothesize") return;
+    const n = Array.isArray(payload.questions) ? payload.questions.length : 0;
+    const papers = n === 1 ? "the paper" : n ? `the ${n} papers` : "the papers";
+    this.say(`Checking whether ${papers} ${name.slice("claim_support:".length)} cites back it.`, "reviewer");
+  }
+
+  private content(kind: string, payload: Record<string, unknown>) {
+    const scope = String(payload.scope ?? "");
+    const stage = SCOPE_SCREEN[scope];
+    if (stage) this.goTo(this.keyOf(stage));
+    const target = stage ? this.keyOf(stage) : this.screen?.key;
+    const actor = this.actorOf(kind, payload);
+    const items = this.shown.get(scope) ?? new Map<string, Shown>();
+    items.set(String(payload.key ?? items.size), { kind, payload, actor });
+    this.shown.set(scope, items);
+    if (target !== this.screen?.key) {
+      // Content of a screen the run has moved past (a label added later): it updates that screen in place.
+      this.emit(kind as RunEvent["type"], payload, actor, target);
       return;
     }
     const step = this.stepOf(kind, payload);
     if (step) this.openStep(step);
-    this.observe(kind, payload);
-    if (kind === "review.finding") {
-      this.review.raw.push(payload);
-      this.emit("review.finding", { finding: toFinding(payload) }, "reviewer");
+    if (kind === "search.sources")
+      this.sources = ((payload.sources ?? []) as { name?: string }[]).map((s) => String(s.name));
+    // The pause between requests is optional in the payload; the search scene shows it.
+    const body = kind === "search.sources" ? { delay_ms: 0, ...payload } : payload;
+    this.emit(kind as RunEvent["type"], body, actor);
+    if (kind === "card.extracted" && this.cardAt) {
+      const card = payload.card as { title?: string; citation?: string } | undefined;
+      const title = [card?.title, card?.citation].find(Boolean) ?? "";
+      const short = title.length > 70 ? `${title.slice(0, 67).trimEnd()}…` : title;
+      this.say(`Card ${this.cardAt.index} of ${this.cardAt.total}: ${short}`);
+      this.cardAt = null;
+    }
+  }
+
+  private sources: string[] = [];
+
+  /** Who says a content item: a debate turn is its perspective's; anything else, its step's agent. */
+  private actorOf(kind: string, payload: Record<string, unknown>): AgentRole | undefined {
+    if (kind === "debate.turn") {
+      const actor = (payload.turn as { actor?: string } | undefined)?.actor;
+      if (actor && ROLES.has(actor)) return actor as AgentRole;
+    }
+    const step = this.stepOf(kind, payload);
+    return step ? STEPS[step].actor : undefined;
+  }
+
+  /**
+   * The engine does the work of a scope again (a retried step, a resumed run): what that scope showed is withdrawn.
+   * The screen showing it is drawn again from what its other scopes still hold; the engine then sends the new items.
+   */
+  private reset(scope: string) {
+    if (scope === "stage-08" && this.failedReview) {
+      this.reviseForReviewer();
       return;
     }
-    this.emit(kind as RunEvent["type"], payload, actor);
+    // Nothing of it is shown (a round that has just started): there is nothing to withdraw.
+    if (!this.shown.delete(scope)) return;
+    const stage = SCOPE_SCREEN[scope];
+    if (!stage) return;
+    if (stage === "hypothesize") {
+      this.review = { raw: [], ...(this.review.artifactId ? { artifactId: this.review.artifactId } : {}) };
+      delete this.reviewed[this.round];
+    }
+    if (!this.screen || this.screen.key !== this.keyOf(stage)) return; // drawn afresh when the run gets there
+    this.message = null;
+    this.step = null;
+    this.reached = -1;
+    this.emit("stage.started", { plan: stagePlan(this.screen) });
+    for (const [other, items] of this.shown) {
+      if (SCOPE_SCREEN[other] !== stage) continue;
+      for (const item of items.values()) {
+        const step = this.stepOf(item.kind, item.payload);
+        if (step) this.openStep(step);
+        this.emit(item.kind as RunEvent["type"], item.payload, item.actor);
+      }
+    }
+  }
+
+  private progress(payload: Record<string, unknown>) {
+    const kind = String(payload.kind ?? "");
+    if (kind === "started") {
+      // A set being rewritten announces its own round once the old one is withdrawn.
+      const started = STARTED[Number(payload.stage)];
+      if (!started || (Number(payload.stage) === 8 && (this.failedReview || this.sent))) return;
+      // A stage that starts on a screen ahead (the map, while novelty is still on the hypotheses screen) moves the
+      // run there first, so its first step and its narration land together.
+      const owner = this.screens().find((s) => s.steps.includes(started.step));
+      if (owner) this.goTo(this.keyOf(owner.stage));
+      this.openStep(started.step);
+      this.say(started.text);
+      return;
+    }
+    const step = PROGRESS_STEP[kind];
+    if (step) this.openStep(step);
+    if (kind === "card") {
+      this.cardAt = { index: Number(payload.index ?? 0), total: Number(payload.total ?? 0) };
+      return;
+    }
+    if (kind === "screen_plan" && payload.to_screen != null)
+      this.emit("screen.planned", {
+        to_screen: Number(payload.to_screen),
+        set_aside: ((payload.prefiltered ?? []) as unknown[]).length,
+      });
+    const text = narration(kind, payload, this.sources);
+    if (!text) return;
+    const role = payload.role ? PERSPECTIVE[String(payload.role)] : undefined;
+    this.say(text, role);
+  }
+
+  /** A finding of the engine's independent review. */
+  private finding(payload: Record<string, unknown>) {
+    const round = Number(payload.round ?? 1);
+    this.reviewed[round] = (this.reviewed[round] ?? 0) + 1;
+    const raw = reviewFinding(payload, this.reviewed[round], this.review.artifactId);
+    this.review.raw.push(raw);
+    const target = this.keyOf("hypothesize");
+    if (target === this.screen?.key) this.openStep("review");
+    this.emit("review.finding", { finding: toFinding(raw) }, "reviewer", target);
   }
 
   private stepOf(kind: string, payload: Record<string, unknown>) {
@@ -630,82 +1005,48 @@ export class PipelineAdapter {
     return OPENS[kind];
   }
 
-  /** Counts kept for the stage summaries and the review stops. */
-  private observe(kind: string, payload: Record<string, unknown>) {
-    const c = this.counts;
-    switch (kind) {
-      case "problem.subquestion":
-        c.subQuestions += 1;
-        break;
-      case "topic.evaluated":
-        c.overall = Number(payload.overall);
-        break;
-      case "literature.collected":
-        c.collected = payload as unknown as Counts["collected"];
-        break;
-      case "screen.criteria":
-        if (typeof payload.candidates === "number") c.candidates = payload.candidates;
-        break;
-      case "screen.kept": {
-        const id = (payload.paper as { id?: string } | undefined)?.id;
-        if (id && !c.kept.includes(id)) c.kept.push(id);
-        break;
-      }
-      case "screen.rejected": {
-        const decision = (payload.paper as { decision?: string } | undefined)?.decision ?? "rejected";
-        c.excluded[decision] = (c.excluded[decision] ?? 0) + 1;
-        break;
-      }
-      case "card.extracted":
-        c.cards += 1;
-        break;
-      case "synthesis.cluster":
-        c.clusters += 1;
-        break;
-      case "synthesis.tension":
-        c.tensions += 1;
-        break;
-      case "synthesis.gap":
-        c.gaps += 1;
-        break;
-      case "hypothesis.drafted": {
-        const h = payload.hypothesis as { id?: string; short?: string; statement?: string } | undefined;
-        if (h?.id) c.drafts.set(h.id, [h.short, h.statement].find(Boolean) ?? h.id);
-        break;
-      }
-      case "hypothesis.selected": {
-        const id = String(payload.hypothesis_id ?? "");
-        if (id && !c.selected.includes(id)) c.selected.push(id);
-        break;
-      }
-      case "review.finding": {
-        const severity = String(payload.severity ?? "minor");
-        c.findings[severity] = (c.findings[severity] ?? 0) + 1;
-        break;
-      }
-      case "map.node":
-        c.nodes += 1;
-        break;
-      case "map.edge":
-        c.edges += 1;
-        break;
-      case "canvas.piece":
-        c.pieces += 1;
-        if ((payload.piece as { status?: string } | undefined)?.status === "filled") c.filled += 1;
-        break;
-    }
+  /** The payloads of one content kind that the run shows now, across its scopes. */
+  private items<T = Record<string, unknown>>(kind: string): T[] {
+    const out: T[] = [];
+    for (const items of this.shown.values())
+      for (const item of items.values()) if (item.kind === kind) out.push(item.payload as T);
+    return out;
   }
 
   private lifecycle(type: string, payload: Record<string, unknown>, phase?: string | null) {
+    if (type.startsWith("pi.") || type === "attention.required") {
+      if (type === "pi.decision" && payload.kind) this.advise(String(payload.kind), payload);
+      if (payload.kind === "charter" || type.startsWith("pi.charter_")) this.charter(type, payload);
+      return;
+    }
     switch (type) {
+      case "review.completed":
+        // Only a failed review that the engine answers itself is followed by a rewrite of the set.
+        this.failedReview = payload.passed === false && !payload.error;
+        break;
+      case "run.gate_opened":
+      case "run.step_changed":
+        if (type === "run.step_changed" && this.screen?.stage === "hypothesize") break;
+        this.failedReview = false;
+        if (type === "run.gate_opened") this.openGate(payload);
+        break;
       case "run.phase_changed":
-        if (phase === "reviewing") this.openStep("review");
+        if (phase === "reviewing" && this.screen?.stage === "hypothesize") {
+          this.openStep("review");
+          const n = this.items("hypothesis.selected").length;
+          this.say(
+            `Reading ${n ? `the ${plural(n, "hypothesis", "hypotheses")}` : "the set"} against the papers they cite: the conditions, the statistics, and whether each paper backs the claim.`,
+            "reviewer",
+          );
+        }
         if (phase === "paused") this.emit("run.status", { status: "paused" });
         else if (payload.from === "paused") this.emit("run.status", { status: "running" });
         break;
-      case "run.gate_opened":
-        this.openGate(payload);
+      case "run.published": {
+        const ids = (payload.selection as { valid_ids?: unknown } | undefined)?.valid_ids;
+        if (Array.isArray(ids)) this.published = ids.map(String);
         break;
+      }
       case "decision.recorded":
         this.decision = payload;
         break;
@@ -721,7 +1062,140 @@ export class PipelineAdapter {
       case "run.cancelled":
         this.fail("The run was cancelled.");
         break;
+      // The Platform starts a stage that failed on its own again, after a wait.
+      case "stage.healing":
+        this.recover();
+        this.say(String(payload.reason || "The stage failed. Trying again by itself."));
+        break;
+      case "stage.heal_exhausted": {
+        const tries = Number(payload.attempts ?? 0);
+        this.say(`Tried again ${tries === 1 ? "once" : `${tries} times`} without success. The stage needs you now.`);
+        break;
+      }
+      case "stage.stalled":
+        this.emit("run.stalled", { minutes: Number(payload.minutes_since_last_event ?? 0) });
+        break;
     }
+  }
+
+  /**
+   * The PI's charter, before Scope: the PI drafts it, then you endorse or rewrite it (Light), or it stands as the PI
+   * wrote it (Auto). A PI that fails leaves it to you: ask again or write it yourself.
+   */
+  private charter(type: string, payload: Record<string, unknown>) {
+    const id = String(payload.consultation_id ?? "");
+    switch (type) {
+      case "pi.consultation_requested":
+        this.charterBy = payload.authority === "researcher" ? "you" : "pi";
+        // Asked again after a failure: the stop that offered the retry is answered.
+        if (this.gate?.kind === "charter") this.resolveCharter("Asked the PI to draft the plan again.", "retry");
+        this.goTo("scope");
+        this.openStep("charter");
+        this.say("Drafting the plan: the question, what is in and out of scope, and how the run will be judged.", "pi");
+        break;
+      case "pi.decision":
+        if (this.at?.summary) this.say(this.at.summary, "pi");
+        break;
+      case "pi.recommendation":
+        if (this.charterBy === "you") this.openCharter(id, false);
+        break;
+      case "attention.required":
+        if (payload.reason === "pi_failed") this.openCharter(id, true);
+        break;
+      case "pi.charter_settled": {
+        const yours = payload.author === "researcher";
+        if (this.gate?.kind === "charter")
+          this.resolveCharter(
+            yours ? "Wrote the plan yourself." : "Endorsed the PI's plan.",
+            yours ? "edit" : "endorse",
+          );
+        else this.say(yours ? "The plan you wrote stands." : "The PI endorsed its own plan.", "pi");
+        this.closeStep();
+        break;
+      }
+      case "pi.charter_skipped":
+        this.say("The PI could not write the plan, so the run goes on without one.", "pi");
+        this.closeStep();
+        break;
+    }
+  }
+
+  /** The PI's advice: kept for the stop it is about, and shown on that stop when it is already open. */
+  private advise(kind: string, payload: Record<string, unknown>) {
+    const text = this.at?.summary?.trim();
+    if (!text) return;
+    this.advice[kind] = {
+      consultationId: String(payload.consultation_id ?? ""),
+      action: String(payload.action ?? ""),
+      ...(typeof payload.confidence === "number" ? { confidence: payload.confidence } : {}),
+      text,
+    };
+    if (kind === "stage_outcome" && this.gate?.kind === "accept")
+      this.emit("gate.opened", { gate: this.acceptGate(this.gate.id) }, "pi");
+  }
+
+  private openCharter(id: string, failed: boolean) {
+    this.goTo("scope");
+    this.openStep("charter");
+    this.gate = { id, kind: "charter", engineKind: null };
+    this.emit("run.status", { status: "awaiting_review" });
+    this.emit("gate.opened", { gate: this.charterGate(id, failed) }, "pi");
+  }
+
+  private resolveCharter(summary: string, option: string) {
+    if (!this.gate) return;
+    this.emit("gate.resolved", { gate_id: this.gate.id, answer: { option_id: option }, summary }, "pi");
+    this.gate = null;
+    this.emit("run.status", { status: "running" });
+  }
+
+  private charterGate(id: string, failed: boolean): Gate {
+    return {
+      id,
+      kind: "charter",
+      title: failed ? "The PI could not draft the plan" : "Endorse the PI's plan",
+      why: failed
+        ? "Nothing starts without a plan. Ask the PI again, or write it yourself."
+        : "Every later stage, the reviewer and the final accept are judged against this plan, so it is fixed before any result exists.",
+      summary: [],
+      ...(!failed && this.advice.charter ? { advice: this.advice.charter } : {}),
+      options: failed
+        ? [
+            {
+              id: "retry",
+              label: "Ask the PI again",
+              description: "The PI drafts the plan from your topic once more.",
+              leads_to: "You review the new draft",
+              confirm_label: "Ask again",
+              recommended: true,
+            },
+            {
+              id: "write",
+              label: "Write the plan yourself",
+              description: "Fill in the question, the scope and the criteria.",
+              leads_to: "Scope starts from your plan",
+              confirm_label: "Save and start",
+            },
+          ]
+        : [
+            {
+              id: "endorse",
+              label: "Endorse the plan",
+              description: "Start the run with the plan as the PI wrote it.",
+              leads_to: "Scope starts",
+              confirm_label: "Endorse",
+              recommended: true,
+            },
+            {
+              id: "edit",
+              label: "Edit the plan",
+              description: "Change the question, the scope or the criteria first. Your version replaces the PI's.",
+              leads_to: "Scope starts from your version",
+              confirm_label: "Save and start",
+            },
+          ],
+      ...this.stop("charter"),
+    };
   }
 
   private openGate(payload: Record<string, unknown>) {
@@ -729,12 +1203,20 @@ export class PipelineAdapter {
     const id = String(payload.gate_id ?? "");
     const kind: GateKind = engineKind === "artifact_review" ? "hypotheses" : "screen";
     const reviewed = (payload.artifact_ids as string[] | undefined)?.[0];
-    if (kind === "hypotheses" && reviewed) this.review.artifactId = reviewed;
+    if (kind === "hypotheses" && reviewed) {
+      this.review.artifactId = reviewed;
+      this.review.raw = this.review.raw.map((f) => ({
+        ...f,
+        anchor: { ...(f.anchor as object), artifact_id: reviewed },
+      }));
+    }
+    const valid = (payload.selection as { valid_ids?: string[] } | undefined)?.valid_ids;
+    if (kind === "hypotheses") this.goTo("map");
     this.openStep(kind === "screen" ? "screen_gate" : "hypotheses_gate");
     this.gate = { id, kind, engineKind };
     this.decision = null;
     this.emit("run.status", { status: "awaiting_review" });
-    this.emit("gate.opened", { gate: kind === "screen" ? this.screenGate(id) : this.hypothesesGate(id) }, "pi");
+    this.emit("gate.opened", { gate: kind === "screen" ? this.screenGate(id, valid) : this.hypothesesGate(id) }, "pi");
   }
 
   private closeGate(gateId: string, action: string) {
@@ -747,7 +1229,7 @@ export class PipelineAdapter {
     if (option === "comment") {
       // What was sent back: the next round answers it.
       this.sent = ((decision.findings ?? []) as Record<string, unknown>[]).map(toFinding);
-      this.sentBack[this.round] = this.sent.length;
+      this.sentBack[this.round] = { count: this.sent.length, by: "you" };
     }
     const answer: GateAnswer = {
       option_id: option,
@@ -755,7 +1237,7 @@ export class PipelineAdapter {
       ...(params.kept?.length ? { kept: params.kept } : {}),
       ...(decision.text ? { note: String(decision.text) } : {}),
     };
-    const summary = this.answered(gate.kind, option, dropped, this.sent?.length ?? 0);
+    const summary = this.answered(gate.kind, option, dropped, this.sent?.length ?? 0, params.kept?.length ?? 0);
     this.emit("gate.resolved", { gate_id: gateId, answer, summary }, "pi");
     this.closeStep();
     this.gate = null;
@@ -764,14 +1246,16 @@ export class PipelineAdapter {
   }
 
   private stageStatus(status: string, reason?: unknown) {
+    if (status === "RUNNING" || status === "PENDING") this.recover();
     if (status === "COMPLETED") {
+      this.goTo("map");
       this.openStep("accept");
       this.gate = { id: `accept-${this.stageRun ?? "stage"}`, kind: "accept", engineKind: null };
       this.emit("run.status", { status: "awaiting_review" });
       this.emit("gate.opened", { gate: this.acceptGate(this.gate.id) }, "pi");
     } else if (status === "ACCEPTED") {
       const selection = ((this.decision?.selection ?? {}) as { hypothesis_ids?: string[] }).hypothesis_ids;
-      const set = this.set();
+      const set = this.final();
       const taken = selection ?? set;
       const dropped = set.filter((id) => !taken.includes(id));
       if (this.gate?.kind === "accept") {
@@ -788,34 +1272,79 @@ export class PipelineAdapter {
       this.closeStep();
       if (this.screen) this.emit("stage.completed", { summary: this.summary(this.screen.key) });
       this.emit("run.completed", {});
-    } else if (status === "FAILED") this.fail("The engine could not finish this run.");
+    } else if (status === "FAILED") this.fail("The stage stopped before it finished.");
     else if (status === "STOPPED")
       this.fail(
         reason === "project_budget_exceeded"
           ? "The run stopped because the project reached its monthly model budget. A Project Manager can raise the limit in Settings → Spending."
           : "The run was stopped.",
+        reason !== "project_budget_exceeded",
       );
   }
 
-  private fail(reason: string) {
+  private fail(reason: string, stopped = false) {
     if (this.failed) return;
     this.failed = true;
     this.gate = null;
-    this.emit("run.status", { status: "failed", reason });
+    this.emit("run.status", { status: "failed", reason, ...(stopped ? { stopped } : {}) });
+  }
+
+  /** A stage that failed or was stopped starts again (a rerun, by hand or by itself): the run goes on. */
+  private recover() {
+    if (!this.failed) return;
+    this.failed = false;
+    this.emit("run.status", { status: "running" });
+  }
+
+  /** The hypotheses written in this round, by id, with their short statement. */
+  private drafts() {
+    const drafts = new Map<string, string>();
+    for (const { hypothesis: h } of this.items<{ hypothesis: { id: string; short?: string; statement?: string } }>(
+      "hypothesis.drafted",
+    ))
+      drafts.set(h.id, [h.short, h.statement].find(Boolean) ?? h.id);
+    return drafts;
   }
 
   /** The hypotheses in the set, in the order they were picked. */
   private set() {
-    const { selected, drafts } = this.counts;
-    return selected.length ? selected : [...drafts.keys()];
+    const selected = this.items<{ hypothesis_id: string }>("hypothesis.selected").map((p) => p.hypothesis_id);
+    return selected.length ? selected : [...this.drafts().keys()];
+  }
+
+  /** The set to accept: as the stage published it, or as it was picked when no publication was read. */
+  private final() {
+    return this.published ?? this.set();
+  }
+
+  private kept() {
+    return this.items<{ paper: { id: string } }>("screen.kept").map((p) => p.paper.id);
+  }
+
+  private excluded() {
+    const out: Record<string, number> = {};
+    for (const { paper } of this.items<{ paper: { decision?: string } }>("screen.rejected")) {
+      const decision = paper.decision ?? "rejected";
+      out[decision] = (out[decision] ?? 0) + 1;
+    }
+    return out;
+  }
+
+  private findings() {
+    const out: Record<string, number> = {};
+    for (const f of this.review.raw) out[String(f.severity)] = (out[String(f.severity)] ?? 0) + 1;
+    return out;
   }
 
   private stop(kind: GateKind) {
     return { stop_index: STOPS.indexOf(kind) + 1, stop_total: STOPS.length };
   }
 
-  private screenGate(id: string): Gate {
-    const { kept, excluded, collected, candidates } = this.counts;
+  private screenGate(id: string, valid?: string[]): Gate {
+    const kept = valid?.length ? valid : this.kept();
+    const excluded = this.excluded();
+    const collected = this.items<{ unique: number }>("literature.collected")[0];
+    const candidates = this.items<{ candidates?: number }>("screen.criteria")[0]?.candidates;
     const below = excluded.below_cutoff ?? 0;
     const unscored = (excluded.unscored ?? 0) + (excluded.prefiltered ?? 0);
     return {
@@ -859,17 +1388,21 @@ export class PipelineAdapter {
 
   private hypothesesGate(id: string): Gate {
     const set = this.set();
-    const f = this.counts.findings;
+    const drafts = this.drafts();
+    const f = this.findings();
     const total = (f.blocking ?? 0) + (f.major ?? 0) + (f.minor ?? 0);
     const parts = (["blocking", "major", "minor"] as const).filter((s) => f[s]).map((s) => `${f[s]} ${s}`);
-    const revised = this.round > 1;
+    const yours = this.roundKinds.includes("revise");
+    const reviewer = this.roundKinds.filter((k) => k === "review").length;
     return {
       id,
       kind: "hypotheses",
-      title: revised ? `Approve the revised hypotheses` : "Approve the hypotheses",
-      why: revised
+      title: yours || reviewer ? `Approve the revised hypotheses` : "Approve the hypotheses",
+      why: yours
         ? "The hypotheses were rewritten to answer your comments, and the reviewer has read them again. Approve them, or send them back once more."
-        : "An independent reviewer has read the set. Approve it, or send it back to be revised with the findings you pick.",
+        : reviewer
+          ? `The independent reviewer sent the set back ${reviewer === 1 ? "once" : `${reviewer} times`} before you saw it; this is the rewrite, with the reviewer's last findings. Approve it, or send it back with the findings you pick.`
+          : "An independent reviewer has read the set and the argument map is drawn. Approve it, or send it back to be revised with the findings you pick.",
       summary: [
         `${plural(set.length, "hypothesis", "hypotheses")} in the set, each built from debate candidates that survived the challenges`,
         total
@@ -882,9 +1415,16 @@ export class PipelineAdapter {
           id: "approve",
           label: "Approve the set",
           description: "Keep the hypotheses as written and the findings on record.",
-          leads_to: "The argument map and research canvas are drawn from them",
+          leads_to: "The hypotheses are published with their evidence and argument map",
           confirm_label: "Approve the hypotheses",
           recommended: true,
+        },
+        {
+          id: "drop",
+          label: "Remove some first",
+          description: "Drop hypotheses you don't want, or keep an idea the debate set aside.",
+          leads_to: "The set is published with your changes",
+          confirm_label: "Choose what to change",
         },
         {
           id: "revise",
@@ -895,15 +1435,18 @@ export class PipelineAdapter {
         },
       ],
       ...this.stop("hypotheses"),
+      droppable: [...set],
+      keepable: this.items<{ idea_id: string }>("idea.set_aside").map((p) => p.idea_id),
       review: {
         findings: this.review.raw.map(toFinding),
-        hypotheses: set.map((h) => ({ id: h, label: this.counts.drafts.get(h) ?? h })),
+        hypotheses: set.map((h) => ({ id: h, label: drafts.get(h) ?? h })),
       },
     };
   }
 
   private acceptGate(id: string): Gate {
-    const set = this.set();
+    const set = this.final();
+    const drafts = this.drafts();
     return {
       id,
       kind: "accept",
@@ -924,12 +1467,13 @@ export class PipelineAdapter {
         },
       ],
       ...this.stop("accept"),
-      selection: set.map((h) => ({ id: h, label: this.counts.drafts.get(h) ?? h })),
+      ...(this.advice.stage_outcome ? { advice: this.advice.stage_outcome } : {}),
+      selection: set.map((h) => ({ id: h, label: drafts.get(h) ?? h })),
     };
   }
 
   /** The one-line record of an answer, as a Popper run words it. */
-  private answered(kind: GateKind, option: string, dropped: string[], comments: number) {
+  private answered(kind: GateKind, option: string, dropped: string[], comments: number, kept = 0) {
     if (option === "reject")
       return kind === "screen" ? "Asked for a new search." : "Asked for a new set of hypotheses.";
     if (option === "comment") return `Sent the hypotheses back for revision with ${plural(comments, "comment")}.`;
@@ -937,43 +1481,112 @@ export class PipelineAdapter {
     const without = dropped.length
       ? ` without ${plural(dropped.length, kind === "screen" ? "paper" : "hypothesis", kind === "screen" ? "papers" : "hypotheses")}`
       : "";
-    return `Approved the ${noun}${without}.`;
+    const keeping = kept ? ` and kept ${plural(kept, "set-aside idea")}` : "";
+    return `Approved the ${noun}${without}${keeping}.`;
+  }
+
+  /** What a step produced, said when it closes (it goes to the activity feed), or null. */
+  private note(step: string): string | null {
+    const count = (kind: string) => this.items(kind).length;
+    switch (step) {
+      case "goal": {
+        const title = this.items<{ field: string; value: string }>("scope.goal").find((g) => g.field === "title");
+        return title ? `Research goal set: “${title.value}”.` : count("scope.goal") ? "Research goal set." : null;
+      }
+      case "decompose":
+        return count("problem.subquestion")
+          ? `${plural(count("problem.subquestion"), "sub-question")}, ranked by priority.`
+          : null;
+      case "evaluate": {
+        const score = this.items<{ overall: number }>("topic.evaluated")[0];
+        return score ? `Topic scored ${score.overall} of 10 before any search.` : null;
+      }
+      case "strategy":
+        return count("search.query")
+          ? `${plural(count("search.strategy"), "strategy", "strategies")}, ${plural(count("search.query"), "query", "queries")}.`
+          : null;
+      case "collect": {
+        const c = this.items<{ raw: number; unique: number; duplicates: number }>("literature.collected")[0];
+        return c ? `${c.raw} hits, ${c.unique} unique papers, ${c.duplicates} duplicates merged.` : null;
+      }
+      case "score": {
+        const scored = this.items<{ points: unknown[] }>("screen.scored").reduce((a, p) => a + p.points.length, 0);
+        return scored ? `${plural(scored, "paper")} scored for relevance and quality.` : null;
+      }
+      case "shortlist":
+        return count("screen.kept") ? `${plural(count("screen.kept"), "paper")} kept, each with a reason.` : null;
+      case "extract":
+        return count("card.extracted") ? `${plural(count("card.extracted"), "knowledge card")} written.` : null;
+      case "cluster":
+        return count("synthesis.cluster") ? `${plural(count("synthesis.cluster"), "school")} of thought.` : null;
+      case "tension":
+        return count("synthesis.tension") ? `${plural(count("synthesis.tension"), "tension")} between them.` : null;
+      case "gaps":
+        return count("synthesis.gap") ? `${plural(count("synthesis.gap"), "gap")}, each traced to its cards.` : null;
+      case "debate":
+        return count("debate.turn") ? `${plural(count("debate.turn"), "turn")} in the debate.` : null;
+      case "write":
+        return count("hypothesis.drafted")
+          ? `${plural(count("hypothesis.drafted"), "hypothesis", "hypotheses")} written, each with a way to be wrong.`
+          : null;
+      case "review": {
+        const total = this.review.raw.length;
+        return total ? `The reviewer reported ${plural(total, "finding")}.` : "The reviewer found nothing to change.";
+      }
+      case "check":
+        return count("hypothesis.checked")
+          ? `${plural(count("hypothesis.checked"), "prediction")} checked against the literature.`
+          : null;
+      case "canvas": {
+        const pieces = this.items<{ piece: { status?: string } }>("canvas.piece");
+        const filled = pieces.filter((p) => p.piece.status === "filled").length;
+        return pieces.length ? `${filled} of ${pieces.length} canvas pieces filled.` : null;
+      }
+      default:
+        return null;
+    }
   }
 
   private summary(key: string) {
-    const c = this.counts;
+    const count = (kind: string) => this.items(kind).length;
     switch (key) {
-      case "scope":
+      case "scope": {
+        const overall = this.items<{ overall: number }>("topic.evaluated")[0]?.overall;
         return [
           "Goal set",
-          `${plural(c.subQuestions, "sub-question")}, ranked`,
-          ...(c.overall !== undefined && Number.isFinite(c.overall) ? [`topic scored ${c.overall} of 10`] : []),
+          `${plural(count("problem.subquestion"), "sub-question")}, ranked`,
+          ...(overall !== undefined && Number.isFinite(overall) ? [`topic scored ${overall} of 10`] : []),
         ].join(" • ");
-      case "search":
-        return c.collected
-          ? `${c.collected.raw} hits • ${c.collected.unique} unique papers • ${c.collected.duplicates} duplicates merged`
-          : "Search finished";
+      }
+      case "search": {
+        const c = this.items<{ raw: number; unique: number; duplicates: number }>("literature.collected")[0];
+        return c ? `${c.raw} hits • ${c.unique} unique papers • ${c.duplicates} duplicates merged` : "Search finished";
+      }
       case "screen": {
-        const excluded = Object.values(c.excluded).reduce((a, b) => a + b, 0);
-        const candidates = c.candidates ?? c.kept.length + excluded;
-        return `${candidates} candidates • ${c.kept.length} kept • ${candidates - c.kept.length} excluded`;
+        const kept = this.kept().length;
+        const excluded = Object.values(this.excluded()).reduce((a, b) => a + b, 0);
+        const candidates = this.items<{ candidates?: number }>("screen.criteria")[0]?.candidates ?? kept + excluded;
+        return `${candidates} candidates • ${kept} kept • ${candidates - kept} excluded`;
       }
       case "read":
-        return plural(c.cards, "knowledge card");
+        return plural(count("card.extracted"), "knowledge card");
       case "synthesize":
-        return `${plural(c.clusters, "group")} • ${plural(c.tensions, "tension")} • ${plural(c.gaps, "gap")}`;
-
-      case "map":
-        return `${plural(c.nodes, "entity", "entities")} • ${plural(c.edges, "relation")} • ${c.filled} of ${c.pieces} canvas pieces filled; findings wait for the experiment`;
+        return `${plural(count("synthesis.cluster"), "group")} • ${plural(count("synthesis.tension"), "tension")} • ${plural(count("synthesis.gap"), "gap")}`;
+      case "map": {
+        const pieces = this.items<{ piece: { status?: string } }>("canvas.piece");
+        const filled = pieces.filter((p) => p.piece.status === "filled").length;
+        return `${plural(count("map.node"), "entity", "entities")} • ${plural(count("map.edge"), "relation")} • ${filled} of ${pieces.length} canvas pieces filled; findings wait for the experiment`;
+      }
       default: {
-        // A round of hypotheses, `r2-hypothesize`: summed up with its own counts, before the next round starts.
+        // A round of hypotheses, `r2-hypothesize`: summed up with its own content, before the next round starts.
         const round = /^r(\d+)-hypothesize$/.exec(key)?.[1];
         if (!round) return "";
         const set = plural(this.set().length, "hypothesis", "hypotheses");
         const back = this.sentBack[Number(round)];
-        return back === undefined
-          ? `${set} to test, each with a way to be wrong`
-          : `${set} sent back for revision with ${plural(back, "comment")}`;
+        if (!back) return `${set} to test, each with a way to be wrong`;
+        return back.by === "reviewer"
+          ? `${set} sent back by the reviewer with ${plural(back.count, "blocking finding")}`
+          : `${set} sent back for revision with ${plural(back.count, "comment")}`;
       }
     }
   }

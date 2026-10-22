@@ -23,7 +23,7 @@ export function revisionFindings(
       finding_id: `you-${f.hypothesis}-${i + 1}`,
       anchor: {
         artifact_id: artifactId ?? null,
-        locator: f.field ? `hypothesis:${f.hypothesis}/${f.field}` : `hypothesis:${f.hypothesis}`,
+        locator: f.field ? `item:${f.hypothesis}/${f.field}` : `item:${f.hypothesis}`,
       },
       severity: f.severity,
       kind: f.kind,
@@ -52,6 +52,8 @@ export class ApiRun implements RunCommands {
   private readonly adapter: PipelineAdapter | null;
   /** Set by the first live event: from then on, what arrives is happening now rather than history. */
   private following = false;
+  /** The last stored event read, so the stream can be picked up again after it. */
+  private lastSeq = 0;
 
   constructor(
     private readonly projectId: string,
@@ -72,12 +74,23 @@ export class ApiRun implements RunCommands {
 
   /** `live` follows the stream; a finished run is only read. */
   start(live: boolean) {
+    this.subscribe(0, live);
+  }
+
+  /** Follows the live stream again from the last event read: a run that ended goes on after a rerun or a raise. */
+  follow() {
+    this.stop?.();
+    this.subscribe(this.lastSeq, true);
+  }
+
+  private subscribe(after: number, live: boolean) {
     this.stop = subscribeRunEvents(
       this.projectId,
       this.runId,
-      { after: 0, live },
+      { after, live },
       {
         onEvents: (events, origin) => {
+          this.lastSeq = events[events.length - 1]?.seq ?? this.lastSeq;
           if (origin === "history") {
             this.pacer.now(this.adapt(events));
             return;
@@ -115,6 +128,13 @@ export class ApiRun implements RunCommands {
     const route = adapter.route(gateId);
     if (!route) throw new Error("This review stop is no longer open.");
     const note = answer.note?.trim();
+    if (route.to === "charter") {
+      if (answer.option_id === "retry")
+        await fetchRuns.retryConsultation(this.projectId, this.runId, route.consultationId);
+      else if (answer.charter) await fetchRuns.putCharter(this.projectId, this.runId, answer.charter, note);
+      else await fetchRuns.endorseConsultation(this.projectId, this.runId, route.consultationId, note);
+      return;
+    }
     if (route.to === "accept") {
       const dropped = answer.dropped ?? [];
       await fetchRuns.acceptStage(this.projectId, this.runId, route.stageRunId, {

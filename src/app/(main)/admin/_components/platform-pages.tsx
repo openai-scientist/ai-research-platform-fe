@@ -1,10 +1,7 @@
-import { useId } from "react";
-
 import {
   ArrowRight,
   CheckCircle2,
   Clock3,
-  KeyRound,
   type LucideIcon,
   Plus,
   RefreshCw,
@@ -16,8 +13,6 @@ import {
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 import { type AnalyticsKpiItem, AnalyticsKpiStrip } from "../../dashboard/analytics/_components/analytics-kpi-strip";
@@ -30,6 +25,7 @@ import {
 } from "../../dashboard/default/_components/performance-overview";
 import { providerModels } from "./admin-data";
 import { AdminPageHeader, InlineProgress, SectionCard, StatusBadge } from "./admin-primitives";
+import { IntegrationSettings, RunModelsSettings } from "./run-models";
 
 const providers = [
   {
@@ -150,58 +146,6 @@ const providerLoadTabs: TrafficSourceTab[] = [
   },
 ];
 
-function ProviderConfigurationCards() {
-  const apiKeyId = useId();
-  const timeoutId = useId();
-  const retryLimitId = useId();
-
-  return (
-    <div className="grid gap-4 lg:grid-cols-2">
-      <Card>
-        <CardHeader>
-          <CardTitle>Runtime configuration</CardTitle>
-          <CardDescription>Defaults applied to every model invocation.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <label htmlFor={apiKeyId} className="flex flex-col gap-1.5 text-sm">
-            <span className="font-medium">Provider API key</span>
-            <div className="relative">
-              <KeyRound className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input id={apiKeyId} className="pl-9" value="sk-••••••••••••••1234" readOnly />
-            </div>
-          </label>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label htmlFor={timeoutId} className="flex flex-col gap-1.5 text-sm">
-              <span className="font-medium">Timeout</span>
-              <Input id={timeoutId} value="30 seconds" readOnly />
-            </label>
-            <label htmlFor={retryLimitId} className="flex flex-col gap-1.5 text-sm">
-              <span className="font-medium">Retry limit</span>
-              <Input id={retryLimitId} value="3 retries" readOnly />
-            </label>
-          </div>
-          <Button size="sm">Save configuration</Button>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Runtime limits</CardTitle>
-          <CardDescription>Guardrails applied to every model invocation.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-5">
-          <InlineProgress label="Default model capacity" value={68} />
-          <InlineProgress label="Monthly token budget" value={54} />
-          <InlineProgress label="Request rate limit" value={42} />
-          <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-muted-foreground text-xs">
-            Sensitive keys are masked. Provider configuration changes are audit logged.
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
 export function AdminProviders({ embedded = false }: { readonly embedded?: boolean } = {}) {
   return (
     <div className="flex flex-col gap-6">
@@ -227,7 +171,8 @@ export function AdminProviders({ embedded = false }: { readonly embedded?: boole
 
       <div className="flex flex-col gap-4">
         <AnalyticsKpiStrip items={providerKpis} />
-        <ProviderConfigurationCards />
+        <RunModelsSettings />
+        <IntegrationSettings />
 
         <div className="grid grid-cols-1 items-stretch gap-4 xl:grid-cols-12">
           <div className="xl:col-span-7">

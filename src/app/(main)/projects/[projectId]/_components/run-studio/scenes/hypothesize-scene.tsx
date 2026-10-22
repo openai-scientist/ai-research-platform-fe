@@ -31,6 +31,7 @@ import type {
 } from "@/lib/run-stream/contract";
 import type { DraftState, FeedItem, HypothesizeContent } from "@/lib/run-stream/run-state";
 
+import { CitedText } from "../cite";
 import { FalsifyLine } from "../falsify-line";
 import { AgentAvatar, AgentCursor, PulseDot, WorkOrb } from "../run-bits";
 import { AGENTS } from "../run-meta";
@@ -39,7 +40,7 @@ import { DebateBoard, FLAW, SEVERITY, STANCE, STANCE_ORDER } from "./debate-boar
 import { threadsOf, VERDICT_THREAD } from "./debate-positions";
 import { bySeverity, FINDING_SEVERITY, findingTarget } from "./findings";
 import { RevisionPanel } from "./revision-panel";
-import { Bone, Pane, Placeholder, SceneNote, Strike, TypeText } from "./scene-ui";
+import { Bone, Pane, Placeholder, SceneNote, Strike } from "./scene-ui";
 
 const LANES: { agent: AgentRole; asks: string }[] = [
   { agent: "theorist", asks: "Proposes claims from the gaps" },
@@ -295,7 +296,8 @@ function Thread({
         >
           {id}
         </b>
-        <Outcome id={id} data={data} threadIds={threadIds} debating={debating} />
+        {/* The PI's verdict closes the debate; it is not an idea that is still argued. */}
+        {id !== VERDICT_THREAD && <Outcome id={id} data={data} threadIds={threadIds} debating={debating} />}
         <span className="text-[11px] text-muted-foreground">
           {turns.length} turn{turns.length === 1 ? "" : "s"}
         </span>
@@ -339,7 +341,7 @@ function Thread({
                   )}
                 </span>
                 <p className="mt-0.5 max-w-[78ch] whitespace-pre-line text-sm leading-snug">
-                  <TypeText text={turn.text} live={isNewest} speed={150} />
+                  <CitedText text={turn.text} live={isNewest} speed={150} />
                 </p>
                 {turn.note && (
                   <motion.p
@@ -349,7 +351,7 @@ function Thread({
                     className="mt-1 max-w-[78ch] text-muted-foreground text-xs leading-snug"
                   >
                     <b className="font-medium text-foreground/80">Why: </b>
-                    {turn.note}
+                    <CitedText text={turn.note} />
                   </motion.p>
                 )}
                 <Reactions replies={replies.get(turn.id) ?? []} live={live} />
@@ -494,7 +496,7 @@ function ObjectionLine({ o }: { o: StandingObjection }) {
       <AgentAvatar agent={o.by} size="sm" />
       <span className="leading-snug">
         {o.flaw && <b className="mr-1 font-medium">{FLAW[o.flaw]}.</b>}
-        {o.text}
+        <CitedText text={o.text} />
         <span className="ml-1 text-muted-foreground">({o.about})</span>
       </span>
     </li>
@@ -634,8 +636,18 @@ function SettlesBadge({ tension: t, delay }: { tension: Tension; delay: number |
   );
 }
 
-/** What the independent reviewer found in one hypothesis, worst first. */
-function Findings({ findings, fresh }: { findings: ReviewFinding[]; fresh: boolean }) {
+/** Characters a second the newest finding is typed at. */
+const FINDING_SPEED = 220;
+
+/**
+ * What the independent reviewer found in one hypothesis, worst first. While live, the finding that just came in is
+ * typed out and its suggestion follows.
+ */
+function Findings({ findings, newest }: { findings: ReviewFinding[]; newest?: string }) {
+  const typed = useRef<HTMLLIElement>(null);
+  const live = Boolean(newest && findings.some((f) => f.finding_id === newest));
+  // The finding being typed is brought into view, as the cursor goes to it.
+  useReveal(typed, newest, live);
   return (
     <div className="flex flex-col gap-2 border-t pt-2.5 text-xs">
       <span className="flex items-center gap-2">
@@ -646,15 +658,19 @@ function Findings({ findings, fresh }: { findings: ReviewFinding[]; fresh: boole
         </span>
       </span>
       <ul className="flex flex-col gap-2">
-        {[...findings].sort(bySeverity).map((f, i) => {
+        {[...findings].sort(bySeverity).map((f) => {
           const tone = FINDING_SEVERITY[f.severity] ?? FINDING_SEVERITY.minor;
           const { field } = findingTarget(f.locator);
+          const typing = f.finding_id === newest;
           return (
             <motion.li
               key={f.finding_id}
-              initial={fresh ? { opacity: 0, x: -6 } : false}
+              ref={typing ? typed : undefined}
+              data-cursor={`finding:${f.finding_id}`}
+              layout="position"
+              initial={typing ? { opacity: 0, x: -6 } : false}
               animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: fresh ? i * 0.12 : 0, duration: 0.3 }}
+              transition={{ duration: 0.3 }}
               className={cn("flex flex-col gap-0.5 border-l-2 pl-2.5", tone.bar)}
             >
               <span className="flex flex-wrap items-baseline gap-x-1.5 text-[11px]">
@@ -665,12 +681,19 @@ function Findings({ findings, fresh }: { findings: ReviewFinding[]; fresh: boole
                   {f.kind === "needs_evidence" ? " · needs a source" : ""}
                 </span>
               </span>
-              <p className="leading-snug">{f.issue}</p>
+              <p className="leading-snug">
+                <CitedText text={f.issue} live={typing} speed={FINDING_SPEED} />
+              </p>
               {f.suggestion && (
-                <p className="flex gap-1.5 text-muted-foreground leading-snug">
+                <motion.p
+                  initial={typing ? { opacity: 0 } : false}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: typing ? f.issue.length / FINDING_SPEED : 0, duration: 0.3 }}
+                  className="flex gap-1.5 text-muted-foreground leading-snug"
+                >
                   <ArrowRight className="mt-0.5 size-3 shrink-0" />
-                  {f.suggestion}
-                </p>
+                  <CitedText text={f.suggestion} />
+                </motion.p>
               )}
             </motion.li>
           );
@@ -683,6 +706,7 @@ function Findings({ findings, fresh }: { findings: ReviewFinding[]; fresh: boole
 function HypothesisCard({
   draft,
   findings,
+  newestFinding,
   tensions,
   fresh,
   live,
@@ -693,6 +717,8 @@ function HypothesisCard({
   draft: DraftState;
   /** What the independent reviewer reported on it. */
   findings: ReviewFinding[];
+  /** The finding that just came in, typed out while live. */
+  newestFinding?: string;
   /** The tensions it settles. */
   tensions: Tension[];
   /** The card was just written, so its parts animate in. */
@@ -717,7 +743,15 @@ function HypothesisCard({
   }, [checked, live]);
 
   const parts = [
-    { n: 1, label: "Claim", body: <p className="font-medium leading-snug">{h.statement}</p> },
+    {
+      n: 1,
+      label: "Claim",
+      body: (
+        <p className="font-medium leading-snug">
+          <CitedText text={h.statement} />
+        </p>
+      ),
+    },
     {
       n: 2,
       label: "Why it's new",
@@ -727,22 +761,34 @@ function HypothesisCard({
             <Lightbulb className="size-2.5" />
             {h.gap}
           </b>
-          {h.novelty}
+          <CitedText text={h.novelty} />
         </p>
       ),
     },
-    { n: 3, label: "Why it should hold", body: <p className="leading-snug">{h.rationale}</p> },
+    {
+      n: 3,
+      label: "Why it should hold",
+      body: (
+        <p className="leading-snug">
+          <CitedText text={h.rationale} />
+        </p>
+      ),
+    },
     {
       n: 4,
       label: "Wrong if",
       body: (
         <div className="flex flex-col gap-1">
-          <p className="leading-snug">{h.falsify.text}</p>
+          <p className="leading-snug">
+            <CitedText text={h.falsify.text} />
+          </p>
           <div className="mt-1 rounded-lg bg-muted/40 px-2 pt-1.5 pb-0.5">
             <FalsifyLine falsify={h.falsify} delay={fresh ? 4 * PART_STEP : 0} className="max-w-[380px]" />
             <span className="block pb-1 text-[10.5px] text-muted-foreground">
-              {(h.falsify as any)?.unit ? `${(h.falsify as any).unit}. ` : "Standardized effect size. "}The result's 95%
-              range must stay out of the red.
+              {(h.falsify as any)?.unit
+                ? `${String((h.falsify as any).unit).replace(/[.\s]+$/, "")}. `
+                : "Standardized effect size. "}
+              The result's 95% range must stay out of the red.
             </span>
           </div>
         </div>
@@ -761,12 +807,12 @@ function HypothesisCard({
       role={editing ? "button" : undefined}
       tabIndex={editing ? 0 : undefined}
       aria-pressed={editing ? dropped : undefined}
-      // Nine rows of the set's grid (header, provenance, the four parts, what still stands, the novelty check, the
-      // review), shared
-      // with the card beside it so each part starts at the same height in both. A part a card lacks keeps its row,
-      // empty; each row carries its own top space so an empty one adds none.
+      // Eight rows of the set's grid (header, provenance, the four parts, what still stands, then the novelty check
+      // with the review), shared with the card beside it so each part starts at the same height in both. A part a
+      // card lacks keeps its row, empty; each row carries its own top space so an empty one adds none. The check and
+      // the review share the last row, so the review follows the card's own text with no gap.
       className={cn(
-        "relative row-span-9 grid min-w-0 grid-rows-subgrid gap-y-0 overflow-hidden rounded-xl bg-card px-4 py-3.5 text-sm ring-1 transition-shadow duration-500",
+        "relative row-span-8 grid min-w-0 grid-rows-subgrid gap-y-0 overflow-hidden rounded-xl bg-card px-4 py-3.5 text-sm ring-1 transition-shadow duration-500",
         draft.selected && !dropped ? "shadow-sm ring-foreground/30" : "ring-foreground/10",
         editing && "cursor-pointer hover:ring-foreground",
       )}
@@ -843,56 +889,60 @@ function HypothesisCard({
       <div className="min-w-0 pt-3 empty:pt-0">
         <Standing h={h} fresh={fresh} />
       </div>
-      {/* The novelty check can come alone: the engine does not judge feasibility, and none is made up here. */}
-      {novelty && (
-        <motion.div
-          data-cursor={`check:${h.id}`}
-          initial={live ? { opacity: 0, height: 0 } : false}
-          animate={{ opacity: 1, height: "auto" }}
-          transition={{ delay: live ? 0.9 : 0, duration: 0.35 }}
-          className="mt-3 flex flex-col gap-1.5 self-end overflow-hidden border-t pt-2.5 text-xs"
-        >
-          <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <ScanSearch className="size-3.5 text-cyan-600" />
-            {/* A check against the papers this run retrieved: it can find a prior test, never prove that nothing like
+      <div className="flex min-w-0 flex-col">
+        {/* The novelty check can come alone: the engine does not judge feasibility, and none is made up here. */}
+        {novelty && (
+          <motion.div
+            data-cursor={`check:${h.id}`}
+            initial={live ? { opacity: 0, height: 0 } : false}
+            animate={{ opacity: 1, height: "auto" }}
+            transition={{ delay: live ? 0.9 : 0, duration: 0.35 }}
+            className="mt-3 flex flex-col gap-1.5 overflow-hidden border-t pt-2.5 text-xs"
+          >
+            <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <ScanSearch className="size-3.5 text-cyan-600" />
+              {/* A check against the papers this run retrieved: it can find a prior test, never prove that nothing like
                 the hypothesis was published. */}
-            <b
-              title={
-                novelty.verdict
-                  ? "The model's reading of the closest papers this run retrieved; not proof of novelty"
-                  : "Word overlap with the papers this run retrieved; a heuristic, not proof of novelty"
-              }
-              className={cn("font-semibold", noveltyVerdict(novelty).tone)}
-            >
-              {noveltyVerdict(novelty).label}
-            </b>
-            <span className="text-muted-foreground">closest: {novelty.closest}</span>
-            <span className="ml-auto flex items-center gap-1.5">
-              <span className="relative h-1.5 w-16 rounded-full bg-muted">
-                <motion.i
-                  className="absolute inset-y-0 left-0 rounded-full bg-cyan-600"
-                  initial={{ width: 0 }}
-                  animate={{ width: `${novelty.similarity * 100}%` }}
-                  transition={{ delay: live ? 1 : 0, duration: 0.6 }}
-                />
+              <b
+                title={
+                  novelty.verdict
+                    ? "The model's reading of the closest papers this run retrieved; not proof of novelty"
+                    : "Word overlap with the papers this run retrieved; a heuristic, not proof of novelty"
+                }
+                className={cn("font-semibold", noveltyVerdict(novelty).tone)}
+              >
+                {noveltyVerdict(novelty).label}
+              </b>
+              <span className="text-muted-foreground">closest: {novelty.closest}</span>
+              <span className="ml-auto flex items-center gap-1.5">
+                <span className="relative h-1.5 w-16 rounded-full bg-muted">
+                  <motion.i
+                    className="absolute inset-y-0 left-0 rounded-full bg-cyan-600"
+                    initial={{ width: 0 }}
+                    animate={{ width: `${novelty.similarity * 100}%` }}
+                    transition={{ delay: live ? 1 : 0, duration: 0.6 }}
+                  />
+                </span>
+                <span className="font-mono tabular-nums">{Math.round(novelty.similarity * 100)}% word overlap</span>
               </span>
-              <span className="font-mono tabular-nums">{Math.round(novelty.similarity * 100)}% word overlap</span>
             </span>
-          </span>
-          {novelty.reason && <span className="text-muted-foreground">{novelty.reason}</span>}
-          <span className="text-[11px] text-muted-foreground">{noveltyFootnote(novelty)}</span>
-          {feasibility && (
-            <span className="flex items-start gap-2">
-              <CircleCheck
-                className={cn("mt-px size-3.5 shrink-0", feasibility.ok ? "text-emerald-600" : "text-rose-600")}
-              />
-              <span className="text-muted-foreground">{feasibility.note}</span>
-            </span>
-          )}
-        </motion.div>
-      )}
-      <div className="min-w-0 pt-3 empty:pt-0">
-        {findings.length > 0 && <Findings findings={findings} fresh={live} />}
+            {novelty.reason && <span className="text-muted-foreground">{novelty.reason}</span>}
+            <span className="text-[11px] text-muted-foreground">{noveltyFootnote(novelty)}</span>
+            {feasibility && (
+              <span className="flex items-start gap-2">
+                <CircleCheck
+                  className={cn("mt-px size-3.5 shrink-0", feasibility.ok ? "text-emerald-600" : "text-rose-600")}
+                />
+                <span className="text-muted-foreground">{feasibility.note}</span>
+              </span>
+            )}
+          </motion.div>
+        )}
+        {findings.length > 0 && (
+          <div className="min-w-0 pt-3">
+            <Findings findings={findings} newest={newestFinding} />
+          </div>
+        )}
       </div>
       {draft.overrideNote && (
         <p className="grid grid-cols-[auto_1fr] gap-2 rounded-lg bg-muted px-2 py-1.5 text-xs">
@@ -927,7 +977,9 @@ export function HypothesizeScene({
   const draftsRef = useRef<HTMLDivElement>(null);
   const debateEnd = useRef<HTMLDivElement>(null);
   const { dropMode, dropped, toggleDrop, state } = useWorkspace();
-  const editing = dropMode && live;
+  // The set is edited on the latest round, also while the run waits on the map.
+  const latest = state.stageOrder.findLast((k) => state.stages[k]?.content.stage === "hypothesize");
+  const editing = dropMode && (live || (state.gate?.kind === "hypotheses" && stageKey === latest));
   const keepable = editing && state.gate?.kind === "hypotheses" ? (state.gate.keepable ?? []) : [];
   const notes = decisions.filter((d) => d.stageKey === stageKey);
   const drafts = data.order.map((id) => data.drafts[id]);
@@ -974,8 +1026,9 @@ export function HypothesizeScene({
   if (reviewing) {
     agent = "reviewer";
     const last = findings[findings.length - 1];
-    target = last ? `h:${findingTarget(last.locator).id}` : target;
+    target = last ? `finding:${last.finding_id}` : target;
   }
+  const newestFinding = reviewing ? findings[findings.length - 1]?.finding_id : undefined;
   const blocking = findings.filter((f) => f.severity === "blocking").length;
 
   /** The summary points at an idea: bring its thread into view and wash over it. */
@@ -995,6 +1048,7 @@ export function HypothesizeScene({
       {data.sent.length > 0 && (
         <RevisionPanel
           sent={data.sent}
+          by={data.sentBy}
           round={round}
           ready={!live || step === "hypotheses_gate" || findings.length > 0}
         />
@@ -1118,6 +1172,12 @@ export function HypothesizeScene({
                     outcome={(id) => <Outcome id={id} data={data} threadIds={threadIds} debating={false} quiet />}
                     onFocus={focusThread}
                   />
+                  {/* A summary taller than the screen scrolls: its lower edge fades instead of cutting a line in half. */}
+                  <div aria-hidden className="h-6" />
+                  <div
+                    aria-hidden
+                    className="pointer-events-none sticky bottom-0 -mt-6 h-6 bg-gradient-to-t from-card to-transparent"
+                  />
                 </aside>
               </div>
             </div>
@@ -1222,6 +1282,7 @@ export function HypothesizeScene({
               key={draft.hypothesis.id}
               draft={draft}
               findings={findings.filter((f) => findingTarget(f.locator).id === draft.hypothesis.id)}
+              newestFinding={newestFinding}
               tensions={tensions.filter((t) => t.id && draft.hypothesis.tension_ids?.includes(t.id))}
               fresh={live && i >= firstFresh}
               live={live}

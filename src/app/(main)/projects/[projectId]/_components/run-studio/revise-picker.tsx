@@ -15,6 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { FindingSeverity, Gate, OwnFinding, ReviewFinding } from "@/lib/run-stream/contract";
 
+import { CitedText } from "./cite";
 import { bySeverity, FINDING_CATEGORIES, FINDING_SEVERITY, FINDING_TARGETS, findingTarget } from "./scenes/findings";
 
 const SEVERITIES: FindingSeverity[] = ["blocking", "major", "minor"];
@@ -285,7 +286,9 @@ export function RevisePicker({
                 />
                 <span className="flex min-w-0 flex-col gap-0.5 text-xs">
                   <SeverityLine severity={f.severity} field={findingTarget(f.locator).field} category={f.category} />
-                  <span className="line-clamp-2 leading-snug">{f.issue}</span>
+                  <span className="line-clamp-2 leading-snug">
+                    <CitedText text={f.issue} />
+                  </span>
                 </span>
               </label>
             ))}

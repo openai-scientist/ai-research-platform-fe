@@ -3,22 +3,30 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { cn } from "cn";
-import { ArrowDown, ArrowLeft, ArrowRight, PanelRight, Pause, Play } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowRight, PanelRight, Pause, Play, Square } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
 
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
+import { useApiMutation } from "@/hooks/use-api";
+import { useProjectDetailQuery } from "@/hooks/use-projects-query";
 import { useRunsQuery } from "@/hooks/use-runs-query";
+import { projectKeys } from "@/lib/api/query-keys";
+import { fetchRuns } from "@/lib/api/services/fetch-runs";
+import { getProjectAccess } from "@/lib/auth/project-access";
 import type { GateAnswer } from "@/lib/run-stream/contract";
 import { SHOW_REVIEW_MODE } from "@/lib/run-stream/features";
 import { type RunSession, useProjectRun, useRunSession, useRunStudio } from "@/lib/run-stream/run-store";
 import { displayStatus, liveStageKey } from "@/lib/run-stream/selectors";
 
+import { perform } from "../workspace-ui";
 import { DropBar, GateSheet } from "./gate-sheet";
+import { RecoveryBar } from "./recovery-bar";
 import { NowCard, RunAside } from "./run-aside";
 import { FlightLayer, PulseDot, StatusPill } from "./run-bits";
 import { MODES, STAGE_SHORT } from "./run-meta";
@@ -32,6 +40,33 @@ function stageName(session: RunSession, key: string | null) {
   if (key === "done") return "Paper";
   const planned = session.state.plan.find((s) => s.key === key);
   return planned ? `${STAGE_SHORT[planned.stage]}${planned.round ? ` · R${planned.round}` : ""}` : key;
+}
+
+/** Stops the run: the open stage is cancelled on its engine, and can be rerun later. */
+function StopRun({ session }: { session: RunSession }) {
+  const { data } = useProjectDetailQuery(session.projectId);
+  const stop = useApiMutation(
+    () => fetchRuns.stop(session.projectId, session.runId),
+    [projectKeys.run(session.projectId, session.runId)],
+  );
+  const project = data?.data;
+  if (!project || !getProjectAccess(project.my_role, project.status).canWrite) return null;
+  return (
+    <ConfirmDialog
+      title={`Stop ${session.label}?`}
+      description="The stage running now is cancelled. What finished stays, and you can rerun the stage later to go on."
+      confirmLabel="Stop run"
+      destructive
+      disabled={stop.isPending}
+      onConfirm={() => void perform(() => stop.mutateAsync(), `Run ${session.label} stopped.`)}
+      trigger={
+        <Button variant="outline" size="sm" disabled={stop.isPending} title="Stop this run">
+          <Square />
+          {stop.isPending ? "Stopping…" : "Stop"}
+        </Button>
+      }
+    />
+  );
 }
 
 function RunWorkspace({ session }: { session: RunSession }) {
@@ -214,6 +249,7 @@ function RunWorkspace({ session }: { session: RunSession }) {
                 </Button>
               </>
             )}
+            {session.pipeline && !ended && <StopRun session={session} />}
             <Button
               variant="ghost"
               size="icon-sm"
@@ -234,6 +270,9 @@ function RunWorkspace({ session }: { session: RunSession }) {
             setViewKey(key === live || key === followed ? null : key);
           }}
         />
+        <AnimatePresence initial={false}>
+          <RecoveryBar session={session} />
+        </AnimatePresence>
 
         <div className={cn("grid min-h-0 flex-1", asideOpen ? "lg:grid-cols-[minmax(0,1fr)_352px]" : "grid-cols-1")}>
           <div className="relative flex min-h-0 min-w-0 flex-col">
@@ -252,7 +291,7 @@ function RunWorkspace({ session }: { session: RunSession }) {
               {!shown && (
                 <div className="grid min-h-[60vh] place-items-center px-4 text-center">
                   <span className="flex flex-col items-center gap-2">
-                    {status === "failed" ? (
+                    {state.lifecycle === "failed" ? (
                       <b className="font-semibold text-sm">The run stopped before its first stage</b>
                     ) : (
                       <>
@@ -261,7 +300,7 @@ function RunWorkspace({ session }: { session: RunSession }) {
                       </>
                     )}
                     <span className="max-w-[44ch] text-muted-foreground text-xs">
-                      {status === "failed"
+                      {state.lifecycle === "failed"
                         ? (state.failure ?? "Popper could not start this run.")
                         : "The first stage opens here as soon as it begins. You can leave; the run keeps going."}
                     </span>
@@ -363,7 +402,12 @@ function RunWorkspace({ session }: { session: RunSession }) {
                   minimized={minimized}
                   onMinimize={setMinimized}
                   onAnswer={answer}
-                  onStartDrop={() => setDropMode(true)}
+                  onStartDrop={() => {
+                    setDropMode(true);
+                    // The set is picked on its round of hypotheses, not on the map where the run stopped.
+                    const round = state.stageOrder.findLast((k) => state.stages[k]?.content.stage === "hypothesize");
+                    if (state.gate?.kind === "hypotheses" && round && round !== shown) setViewKey(round);
+                  }}
                   pending={answering}
                 />
               )}

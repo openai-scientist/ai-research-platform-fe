@@ -63,4 +63,6 @@ export const adminKeys = {
   users: (params?: UserListParams) => ["admin", "users", params] as const,
   audit: (params?: AuditListParams) => ["admin", "audit", params] as const,
   usage: (params?: TimeRangeParams) => ["admin", "usage", params] as const,
+  models: () => ["admin", "models"] as const,
+  integrations: () => ["admin", "integrations"] as const,
 };

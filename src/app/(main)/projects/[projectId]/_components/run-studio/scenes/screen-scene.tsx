@@ -22,8 +22,6 @@ const py = (v: number) => H - PAD.b - v * (H - PAD.t - PAD.b);
 
 /** Rejected papers shown before "Show all". */
 const REJECTED_SHOWN = 6;
-/** Wrong-field words labelled on the chart; more would cover the points. */
-const MAX_LABELS = 5;
 
 const bars = (data: ScreenContent) => ({
   rMin: data.criteria?.relevanceMin ?? 0.7,
@@ -51,27 +49,32 @@ function wrongField(data: ScreenContent) {
   });
 }
 
-/** Wrong-field papers to label: at most a few, and never two labels on the same line. */
-function labelled(data: ScreenContent) {
-  const out: { paper: RejectedPaper; x: number; y: number }[] = [];
-  for (const paper of wrongField(data)) {
-    if (!paper.false_friend || out.length >= MAX_LABELS) continue;
-    const point = data.points.find((p) => p.id === paper.id);
-    if (!point) continue;
-    const y = py(point.quality);
-    if (out.some((l) => Math.abs(l.y - y) < 12)) continue;
-    out.push({ paper, x: px(point.relevance), y });
-  }
-  return out;
+/** The shared word of the wrong-field paper under the pointer, placed by its dot. Labels kept up all the time cover
+ * the points around them. */
+function labelled(data: ScreenContent, hover: string | null) {
+  const paper = hover ? wrongField(data).find((p) => p.id === hover && p.false_friend) : undefined;
+  const point = paper && data.points.find((p) => p.id === paper.id);
+  return paper && point ? [{ paper, x: px(point.relevance), y: py(point.quality) }] : [];
 }
 
-function Scatter({ data, hover, live }: { data: ScreenContent; hover: string | null; live: boolean }) {
+function Scatter({
+  data,
+  hover,
+  live,
+  removed,
+}: {
+  data: ScreenContent;
+  hover: string | null;
+  live: boolean;
+  /** Papers taken off the shortlist, including those picked while you edit it. */
+  removed: string[];
+}) {
   const kept = new Set(data.kept.map((p) => p.id));
   const rejected = new Set(wrongField(data).map((p) => p.id));
   const rejectedLow = new Set(rejectedPapers(data).map((p) => p.id));
   // Cleared both bars but ranked below the papers kept for reading: in the zone, but not what it is about.
   const cut = new Set(data.rejected.filter((p) => p.decision === "below_cutoff").map((p) => p.id));
-  const dropped = new Set(data.dropped);
+  const dropped = new Set(removed);
   const { rMin, qMin } = bars(data);
   const firstNew = useRef(data.points.length);
   useEffect(() => {
@@ -190,12 +193,12 @@ function Scatter({ data, hover, live }: { data: ScreenContent; hover: string | n
           />
         );
       })}
-      {labelled(data).map(({ paper: p, x, y }) => {
+      {labelled(data, hover).map(({ paper: p, x, y }) => {
         // A label left of a point near the left edge would run off the chart, so it goes on the right.
         const left = x > W / 2;
         const word = p.false_friend.length > 24 ? `${p.false_friend.slice(0, 23)}…` : p.false_friend;
         return (
-          <motion.g key={p.id} initial={live ? { opacity: 0 } : false} animate={{ opacity: 1 }}>
+          <motion.g key={p.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="pointer-events-none">
             <text
               x={left ? x - 7 : x + 7}
               y={y + 3}
@@ -330,12 +333,22 @@ function PendingPaper({ index, active }: { index: number; active: boolean }) {
   );
 }
 
-function RejectedItem({ paper, live }: { paper: RejectedPaper; live: boolean }) {
+function RejectedItem({
+  paper,
+  live,
+  onHover,
+}: {
+  paper: RejectedPaper;
+  live: boolean;
+  onHover(id: string | null): void;
+}) {
   const word = paper.false_friend.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const parts = word ? paper.title.split(new RegExp(`(${word})`, "i")) : [paper.title];
   return (
     <motion.li
       data-cursor={`rejected:${paper.id}`}
+      onMouseEnter={() => onHover(paper.id)}
+      onMouseLeave={() => onHover(null)}
       initial={live ? { opacity: 0, x: -8 } : false}
       animate={{ opacity: 1, x: 0 }}
       className="grid grid-cols-[18px_minmax(0,1fr)] gap-2 rounded-lg bg-rose-500/6 px-2.5 py-2 text-xs"
@@ -423,6 +436,13 @@ export function ScreenScene({
   const wrongFieldOnly = !low.length && wrong.every((p) => p.false_friend);
   const belowCut = data.rejected.filter((p) => p.decision === "below_cutoff").length;
   const shownRejections = allRejected ? rejections : rejections.slice(0, REJECTED_SHOWN);
+  const removed = editing ? dropped : data.dropped;
+  // The same papers carry the same name in the legend and above the list.
+  const wrongLabel = wrong.every((p) => p.false_friend) ? "Wrong field" : "Rejected in the zone";
+  // Scored in the keep zone with no call yet: neither kept, rejected nor ranked below the cut.
+  const placed = new Set([...data.kept, ...data.rejected].map((p) => p.id));
+  const unplaced = data.points.filter((p) => p.relevance >= rMin && p.quality >= qMin && !placed.has(p.id)).length;
+  const toScore = data.planned?.toScreen ?? data.criteria?.candidates ?? data.points.length;
 
   let target: string | null = data.points.length ? "scatter" : null;
   const lastShown = shownRejections[shownRejections.length - 1];
@@ -459,23 +479,29 @@ export function ScreenScene({
             <Pane
               title="Relevance × quality"
               aside={
-                data.points.length || data.criteria?.candidates
-                  ? `${data.points.length} of ${data.criteria?.candidates ?? data.points.length} scored · ${inZone} in the keep zone`
+                data.points.length || toScore
+                  ? `${data.points.length} of ${toScore} scored${data.planned?.setAside ? ` (${data.planned.setAside} set aside first)` : ""} · ${inZone} in the keep zone`
                   : "no paper scored yet"
               }
             >
               <div data-cursor="scatter">
-                <Scatter data={data} hover={hover} live={live} />
+                <Scatter data={data} hover={hover} live={live} removed={removed} />
               </div>
               <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-muted-foreground text-xs">
                 <span className="inline-flex items-center gap-1.5">
                   <i className="size-2 rounded-full bg-emerald-500" />
-                  Kept · {data.kept.length - data.dropped.length}
+                  Kept · {data.kept.length - removed.length}
                 </span>
+                {unplaced > 0 && (
+                  <span className="inline-flex items-center gap-1.5">
+                    <i className="size-2 rounded-full bg-foreground/70" />
+                    In the zone, not yet placed · {unplaced}
+                  </span>
+                )}
                 {wrong.length > 0 && (
                   <span className="inline-flex items-center gap-1.5">
                     <i className="size-2 rounded-full bg-rose-500" />
-                    {wrong.every((p) => p.false_friend) ? "Wrong field" : "Rejected in the zone"} · {wrong.length}
+                    {wrongLabel} · {wrong.length}
                   </span>
                 )}
                 <span className="inline-flex items-center gap-1.5">
@@ -488,10 +514,10 @@ export function ScreenScene({
                     Below the shortlist cut · {belowCut}
                   </span>
                 )}
-                {data.dropped.length > 0 && (
+                {removed.length > 0 && (
                   <span className="inline-flex items-center gap-1.5">
                     <i className="size-2 rounded-full ring-[1.5px] ring-amber-500 ring-inset" />
-                    Removed by you · {data.dropped.length}
+                    Removed by you · {removed.length}
                   </span>
                 )}
               </div>
@@ -505,14 +531,17 @@ export function ScreenScene({
               aside={
                 wrongFieldOnly
                   ? "cross-domain rejection"
-                  : [wrong.length && `${wrong.length} in the keep zone`, low.length && `${low.length} below a bar`]
+                  : [
+                      wrong.length && `${wrong.length} ${wrongLabel.toLowerCase()}`,
+                      low.length && `${low.length} below a bar`,
+                    ]
                       .filter(Boolean)
                       .join(" · ")
               }
             >
               <ul className="flex flex-col gap-1.5">
                 {shownRejections.map((p) => (
-                  <RejectedItem key={p.id} paper={p} live={live} />
+                  <RejectedItem key={p.id} paper={p} live={live} onHover={setHover} />
                 ))}
               </ul>
               {rejections.length > REJECTED_SHOWN && (

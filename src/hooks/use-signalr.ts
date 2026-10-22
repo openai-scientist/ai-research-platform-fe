@@ -14,6 +14,7 @@ import { getNotificationQueryFilters, notificationChangesMembership } from "@/li
 import { type NotificationConnectionStatus, subscribeNotifications } from "@/lib/realtime/signalr";
 import { useAppDispatch, useAppSelector } from "@/lib/redux/hooks";
 import { restoreSession, selectAuth } from "@/lib/redux/slices/auth-slice";
+import { useRunStudio } from "@/lib/run-stream/run-store";
 import { NotificationKind } from "@/types/enums";
 
 import { useMarkNotificationReadMutation } from "./use-notifications-query";
@@ -40,20 +41,27 @@ export function useSignalR() {
     let active = true;
     const seenNotificationIds = new Set<string>();
     const toastIds = new Set<string>();
+    // The run each toast is about, to take it down once that run is opened.
+    const runOfToast = new Map<string, { run: string; finish(): void }>();
     let pendingNotifications: NotificationItem[] = [];
     // Queue bursts so notifications beyond Sonner's three visible slots get shown.
     const showPendingNotifications = () => {
       while (active && toastIds.size < 3 && pendingNotifications.length > 0) {
         const notification = pendingNotifications.shift();
         if (!notification) break;
+        // News about the run on screen is already in front of the person; it stays in the bell. The workspace drops
+        // `?run=` from the address once it opens, so the open run comes from the run studio.
+        if (notification.run_id && useRunStudio.getState().openRunId === notification.run_id) continue;
         const invitation = notification.kind === NotificationKind.ProjectInvited;
         const { text, href } = getNotificationContent(notification);
         const toastId = `notification:${notification.id}`;
         toastIds.add(toastId);
         const finish = () => {
+          runOfToast.delete(toastId);
           if (!toastIds.delete(toastId)) return;
           showPendingNotifications();
         };
+        if (notification.run_id) runOfToast.set(toastId, { run: notification.run_id, finish });
         const title = createElement(
           NotificationToastLink,
           {
@@ -73,7 +81,8 @@ export function useSignalR() {
           notification.kind === NotificationKind.IntegrationFailed || budgetNotice ? toast.warning : toast.info;
         notify(title, {
           id: toastId,
-          ...(budgetNotice ? { position: "bottom-right" as const } : {}),
+          // News that arrives on its own stays out of the way of what the user is doing.
+          position: "bottom-right",
           // Our motion uses wall time instead of a frozen browser animation timeline.
           className: "notification-toast transition-none! select-none",
           classNames: { description: "text-muted-foreground!" },
@@ -135,9 +144,19 @@ export function useSignalR() {
         if (active) toast.error(error.message, { id: "notification-stream" });
       },
     });
+    // A toast about a run that opens afterwards (the page was still loading it) has nothing left to say.
+    const unwatchOpenRun = useRunStudio.subscribe((studio) => {
+      if (!studio.openRunId) return;
+      for (const [id, { run, finish }] of runOfToast)
+        if (run === studio.openRunId) {
+          toast.dismiss(id);
+          finish();
+        }
+    });
     const stop = () => {
       active = false;
       unsubscribe();
+      unwatchOpenRun();
       setState(null);
       toast.dismiss("notification-stream");
       for (const id of toastIds) toast.dismiss(id);

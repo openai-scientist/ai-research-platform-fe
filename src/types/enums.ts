@@ -15,6 +15,7 @@ export enum RunStatus {
   Completed = "completed",
   BudgetExceeded = "budget_exceeded",
   Failed = "failed",
+  Stopped = "stopped",
 }
 
 export enum UserStatus {
@@ -31,19 +32,6 @@ export enum ProjectRole {
 export enum PlatformRole {
   User = "user",
   PlatformAdmin = "platform_admin",
-}
-
-export enum FrameReviewStatus {
-  Pending = "pending",
-  Submitted = "submitted",
-  Closed = "closed",
-}
-
-export enum ReviewSignalKind {
-  Approve = "approve",
-  Edit = "edit",
-  Reject = "reject",
-  Unknown = "unknown",
 }
 
 export enum ArtifactKind {

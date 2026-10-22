@@ -25,7 +25,6 @@ import { usePreferencesStore } from "@/stores/preferences/preferences-provider";
 import {
   DatasetDetailSkeleton,
   OverviewSkeleton,
-  RunDetailSkeleton,
   SectionSkeleton,
 } from "../[projectId]/_components/workspace-skeletons";
 
@@ -43,10 +42,9 @@ const sidebarOpen = () => !document.cookie.split("; ").includes("sidebar_state=f
 
 /** The page being opened, from `/projects/[projectId]/...`. */
 function ProjectPageSkeleton({ path }: { path: string }) {
-  const [, , , section, item, runId] = path.split("/");
+  const [, , , section, item] = path.split("/");
   if (!section) return <OverviewSkeleton />;
   if (section === "datasets" && item) return <DatasetDetailSkeleton />;
-  if (section === "experiments" && item === "runs" && runId) return <RunDetailSkeleton />;
   return <SectionSkeleton section={section} />;
 }
 
