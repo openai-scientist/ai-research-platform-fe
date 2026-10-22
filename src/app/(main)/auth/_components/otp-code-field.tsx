@@ -12,10 +12,13 @@ export function OtpCodeField<T extends FieldValues>({
   control,
   name,
   disabled,
+  onComplete,
 }: {
   control: Control<T>;
   name: Path<T>;
   disabled: boolean;
+  /** Called once all six digits are in, typed or pasted. */
+  onComplete?: () => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
@@ -40,6 +43,7 @@ export function OtpCodeField<T extends FieldValues>({
             pattern={REGEXP_ONLY_DIGITS}
             autoComplete="one-time-code"
             disabled={disabled}
+            onComplete={onComplete}
             aria-invalid={fieldState.invalid}
             containerClassName="justify-center"
           >

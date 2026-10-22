@@ -54,7 +54,7 @@ export function AdminSettings() {
             <SettingsField label="Sign-in code lifetime" value="10 minutes" />
             <ToggleField
               label="Account lock policy"
-              description="Lock the sign-in code after ten wrong attempts."
+              description="A code stops working after five wrong tries; ten failed sign-ins lock the account for an hour."
               enabled
             />
             <ToggleField label="Require MFA for admins" description="Enforce MFA for SYSTEM_ADMIN accounts." enabled />

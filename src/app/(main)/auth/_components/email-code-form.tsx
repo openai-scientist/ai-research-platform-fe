@@ -1,5 +1,7 @@
 "use client";
 
+import { useRef } from "react";
+
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
@@ -27,12 +29,17 @@ export function EmailCodeForm({ pending, onBack }: { pending: VerificationPendin
     defaultValues: { code: "" },
   });
   const busy = challenge.resending || form.formState.isSubmitting;
+  // The last digit submits on its own, so Enter right after must not send the code twice.
+  const submitting = useRef(false);
   async function onSubmit(data: z.infer<typeof verificationSchema>) {
-    if (busy || challenge.submitRemaining > 0) return;
+    if (busy || submitting.current || challenge.submitRemaining > 0) return;
+    submitting.current = true;
     try {
       await signInWithCode({ email: pending.email, code: data.code });
       toast.success("Signed in successfully.");
     } catch (error) {
+      // Signed in, the page moves on; only a refused code lets the user try again.
+      submitting.current = false;
       if (error instanceof ApiError && error.code === "OTP_INVALID") {
         form.setValue("code", "");
         form.setError("code", { type: "server" });
@@ -41,6 +48,7 @@ export function EmailCodeForm({ pending, onBack }: { pending: VerificationPendin
       challenge.handleError(error);
     }
   }
+  const submit = form.handleSubmit(onSubmit, notifyValidationError);
   async function resendCode() {
     if (busy) return;
     await challenge.resendCode(
@@ -58,14 +66,9 @@ export function EmailCodeForm({ pending, onBack }: { pending: VerificationPendin
         title="Check your email"
         description={`Enter the 6-digit code sent to ${pending.email}, or open the sign-in link in that email.`}
       />
-      <form
-        noValidate
-        onSubmit={form.handleSubmit(onSubmit, notifyValidationError)}
-        className="flex flex-col gap-4"
-        aria-busy={busy}
-      >
+      <form noValidate onSubmit={submit} className="flex flex-col gap-4" aria-busy={busy}>
         <FieldGroup>
-          <OtpCodeField control={form.control} name="code" disabled={busy} />
+          <OtpCodeField control={form.control} name="code" disabled={busy} onComplete={() => void submit()} />
         </FieldGroup>
         <p className="text-muted-foreground text-sm">
           The code and the link work for {Math.ceil(challenge.expires / 60)} minutes.

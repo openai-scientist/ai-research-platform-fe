@@ -1,6 +1,6 @@
 import { cache } from "react";
 
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { getServerApiBaseUrl } from "@/lib/api/server-config";
@@ -8,6 +8,7 @@ import {
   AUTH_COOKIE_NAME,
   type AuthUser,
   ONBOARDING_PATH,
+  REQUEST_PATH_HEADER,
   SESSION_INVALID_CODES,
   toAuthUser,
 } from "@/lib/auth/auth-config";
@@ -41,6 +42,10 @@ export const getCurrentSession = cache(async (): Promise<CurrentUser | null> => 
 
 export async function getAuthenticatedUser(projectId?: string): Promise<AuthUser | null> {
   const current = await getCurrentSession();
-  if (current && !current.user.onboarded) redirect(ONBOARDING_PATH);
+  if (current && !current.user.onboarded) {
+    // Back to the page they opened once they have a name; `destination()` checks it is one of ours.
+    const next = (await headers()).get(REQUEST_PATH_HEADER);
+    redirect(next ? `${ONBOARDING_PATH}?${new URLSearchParams({ next })}` : ONBOARDING_PATH);
+  }
   return current ? toAuthUser(current, projectId) : null;
 }
