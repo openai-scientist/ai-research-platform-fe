@@ -10,7 +10,7 @@ export const SAMPLE_TOPIC =
 export const DOMAINS = ["Sleep science", "Educational psychology", "Survey statistics"];
 
 /** The hypotheses each round tests: the first set, and the one tried after a pivot. */
-export const ROUND_SETS: Record<Exclude<RoundKind, "refine" | "revise">, string[]> = {
+export const ROUND_SETS: Record<Exclude<RoundKind, "refine" | "revise" | "review">, string[]> = {
   first: ["H1", "H2", "H3", "H4"],
   pivot: ["H5", "H6"],
 };

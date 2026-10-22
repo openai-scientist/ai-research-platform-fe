@@ -47,12 +47,6 @@ export function useCreateRunMutation(projectId: string) {
     [projectKeys.detail(projectId), projectKeys.lists(), adminKeys.all],
   );
 }
-export function useSyncRunMutation(projectId: string, runId: string) {
-  return useApiMutation(
-    () => fetchRuns.sync(projectId, runId),
-    [projectKeys.detail(projectId), projectKeys.lists(), adminKeys.all],
-  );
-}
 export function useAbandonRunMutation(projectId: string, runId: string) {
   return useApiMutation(
     () => fetchRuns.abandon(projectId, runId),

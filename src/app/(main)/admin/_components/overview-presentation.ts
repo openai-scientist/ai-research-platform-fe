@@ -39,7 +39,7 @@ const kpis: Record<OverviewSection, readonly [string, string][]> = {
 export function overviewKpis(section: OverviewSection, data: AdminOverviewData | undefined): AnalyticsKpiItem[] {
   return kpis[section].map<AnalyticsKpiItem>(([key, label]) => {
     const metric = data?.metrics[key];
-    const money = data?.money_metrics[key];
+    const money = data?.money_metrics?.[key];
     const available = metric?.available && metric.value !== null;
     const change = metric?.change;
     return {

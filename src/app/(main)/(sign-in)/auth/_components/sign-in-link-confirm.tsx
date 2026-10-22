@@ -12,10 +12,21 @@ import { useAuth } from "@/hooks/use-auth";
 import { fetchAuth } from "@/lib/api/services/fetch-auth";
 import { LOGIN_PATH } from "@/lib/auth/auth-config";
 import { notifyAuthError } from "@/lib/auth/form-errors";
+import { ApiError } from "@/types/api";
 
 import { AuthStepHeading } from "./auth-step-heading";
 
-type LinkState = { step: "checking" } | { step: "ready"; email: string } | { step: "unusable" };
+type LinkState =
+  | { step: "checking" }
+  | { step: "ready"; email: string }
+  | { step: "unusable" }
+  // The server could not be reached or failed: the link may still be good.
+  | { step: "failed" };
+
+/** A refused link (expired, used, unknown) is final; a network or server failure is worth another try. */
+function refused(error: unknown) {
+  return error instanceof ApiError && error.status < 500 && error.code !== "RATE_LIMITED";
+}
 
 /** Reads the token from the fragment once, then removes it so it stays out of history and referrers. */
 function takeToken(): string | null {
@@ -31,7 +42,9 @@ export function SignInLinkConfirm() {
   const token = useRef<string | null | undefined>(undefined);
   const [state, setState] = useState<LinkState>({ step: "checking" });
   const [signingIn, setSigningIn] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `attempt` is the retry trigger
   useEffect(() => {
     // Kept in a ref: the fragment is gone after the first read, and effects may run twice in development.
     token.current ??= takeToken();
@@ -41,6 +54,7 @@ export function SignInLinkConfirm() {
       return;
     }
     let cancelled = false;
+    setState({ step: "checking" });
     // Only looks: the link stays usable, so a mail scanner opening it signs nobody in.
     fetchAuth.linkInfo(current).then(
       (info) => {
@@ -49,13 +63,13 @@ export function SignInLinkConfirm() {
       (error: unknown) => {
         if (cancelled) return;
         notifyAuthError(error);
-        setState({ step: "unusable" });
+        setState({ step: refused(error) ? "unusable" : "failed" });
       },
     );
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [attempt]);
 
   async function confirm() {
     if (!token.current || signingIn) return;
@@ -65,13 +79,28 @@ export function SignInLinkConfirm() {
       toast.success("Signed in successfully.");
     } catch (error) {
       notifyAuthError(error);
-      setState({ step: "unusable" });
+      // Still on the confirm screen after a failure that isn't the link's fault, so Sign in can be pressed again.
+      if (refused(error)) setState({ step: "unusable" });
       setSigningIn(false);
     }
   }
 
   if (state.step === "checking") {
     return <Skeleton className="h-40 w-full" aria-label="Checking the sign-in link" />;
+  }
+  if (state.step === "failed") {
+    return (
+      <div className="flex flex-col gap-6">
+        <AuthStepHeading
+          title="Couldn't check this link"
+          description="Check your connection and try again. The link still works until it expires."
+        />
+        <Button onClick={() => setAttempt((value) => value + 1)}>Try again</Button>
+        <Button asChild variant="link">
+          <Link href={LOGIN_PATH}>Back to sign in</Link>
+        </Button>
+      </div>
+    );
   }
   if (state.step === "unusable") {
     return (

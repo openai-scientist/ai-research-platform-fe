@@ -22,6 +22,7 @@ import {
   ReactFlowProvider,
   useInternalNode,
   useReactFlow,
+  useStore,
 } from "@xyflow/react";
 import { cn } from "cn";
 import {
@@ -665,13 +666,21 @@ function EgoEdge({ source, target, data }: EdgeProps<RelationFlowEdge>) {
 const nodeTypes = { entity: EntityNode, band: LayerBand, row: RowLabel };
 const edgeTypes = { relation: LayeredEdge, ego: EgoEdge };
 
+/** Below this zoom the nodes cannot be read: a drawing that would need it is shown from its start instead. */
+const MIN_READABLE_ZOOM = 0.4;
+
 /**
  * Keeps the drawing in view whenever `key` changes. While the run draws, the camera follows the node being drawn at a
- * zoom where it can be read, unless the viewer took over; otherwise the whole drawing is fitted.
+ * zoom where it can be read, unless the viewer took over; otherwise the whole drawing is fitted. A drawing much wider
+ * than its frame would shrink to dots: it is shown from its left edge at a zoom that fits its height, to be panned.
  */
 function useFit(key: string, visible: boolean, live: boolean, focus?: { x: number; y: number } | null) {
-  const { follow } = useWorkspace();
+  const { follow, state } = useWorkspace();
   const flow = useReactFlow();
+  const width = useStore((s) => s.width);
+  const height = useStore((s) => s.height);
+  // Only a stage the engine is drawing right now has a newest node to follow.
+  const drawing = live && state.lifecycle === "running" && !state.gate;
   const fx = focus?.x;
   const fy = focus?.y;
   useEffect(() => {
@@ -679,11 +688,24 @@ function useFit(key: string, visible: boolean, live: boolean, focus?: { x: numbe
     if (!visible || (live && !follow)) return;
     // A tab that was hidden needs a moment to be measured before it can be fitted.
     const timer = window.setTimeout(() => {
-      if (live && fx !== undefined && fy !== undefined) void flow.setCenter(fx, fy, { zoom: 0.8, duration: 450 });
-      else void flow.fitView({ padding: 0.06, maxZoom: 1, duration: live ? 500 : 0 });
+      const duration = live ? 500 : 0;
+      if (drawing && fx !== undefined && fy !== undefined) {
+        void flow.setCenter(fx, fy, { zoom: 0.8, duration: 450 });
+        return;
+      }
+      const bounds = flow.getNodesBounds(flow.getNodes());
+      const pad = 1.12;
+      const whole = Math.min(width / (bounds.width * pad), height / (bounds.height * pad), 1);
+      if (!width || !height || !bounds.width || whole >= MIN_READABLE_ZOOM) {
+        void flow.fitView({ padding: 0.06, maxZoom: 1, duration });
+        return;
+      }
+      const zoom = Math.min(0.8, Math.max(MIN_READABLE_ZOOM, height / (bounds.height * pad)));
+      const y = Math.max(16, (height - bounds.height * zoom) / 2);
+      void flow.setViewport({ x: 16 - bounds.x * zoom, y: y - bounds.y * zoom, zoom }, { duration });
     }, 250);
     return () => window.clearTimeout(timer);
-  }, [key, visible, live, follow, flow, fx, fy]);
+  }, [key, visible, live, follow, drawing, flow, fx, fy, width, height]);
 }
 
 const flowProps = {

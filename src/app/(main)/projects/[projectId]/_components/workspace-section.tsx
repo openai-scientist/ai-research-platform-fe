@@ -9,7 +9,6 @@ import { useProjectAccess } from "@/hooks/use-project-access";
 import { useProjectDetailQuery } from "@/hooks/use-projects-query";
 import type { ProjectItem } from "@/lib/api/services/fetch-project";
 import { getProjectAccess } from "@/lib/auth/project-access";
-import type { RunSection } from "@/lib/research-workspace";
 
 import { ConnectionsSection } from "./data-connections/connections-section";
 import { DatasetDetails } from "./dataset-details";
@@ -17,7 +16,6 @@ import { DatasetsSection } from "./datasets-section";
 import { ExperimentsSection } from "./experiments-section";
 import { MemberDirectory } from "./member-directory";
 import { ProjectFilesSection } from "./project-files-section";
-import { RunDetails } from "./run-details";
 import { SettingsSection } from "./settings-section";
 import type { WorkspaceProps } from "./workspace-ui";
 
@@ -33,9 +31,7 @@ export function WorkspaceSection({
   project: initial,
   section,
   userId,
-  runId,
   datasetId,
-  experimentSection,
   membersHeader,
   connectionsHeader,
   filesHeader,
@@ -43,9 +39,7 @@ export function WorkspaceSection({
   project: ProjectItem;
   section: string;
   userId: string;
-  runId?: string;
   datasetId?: string;
-  experimentSection?: RunSection;
   membersHeader?: ReactNode;
   connectionsHeader?: ReactNode;
   filesHeader?: ReactNode;
@@ -84,8 +78,6 @@ export function WorkspaceSection({
   };
   if (section === "dataset-detail" && datasetId)
     return <DatasetDetails key={datasetId} {...props} datasetId={datasetId} />;
-  if (section === "run" && runId)
-    return <RunDetails key={runId} {...props} runId={runId} section={experimentSection} />;
   if (section === "members")
     return <MemberDirectory key={`${project.id}:${userId}`} {...props} header={membersHeader} />;
   if (section === "connections") return <ConnectionsSection {...props} header={connectionsHeader} />;

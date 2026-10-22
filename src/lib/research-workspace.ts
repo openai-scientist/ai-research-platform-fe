@@ -13,14 +13,7 @@ export function blocksNewRun(status: ProjectStatus) {
   ].includes(status);
 }
 
-export function researchRunUrl(projectId: string, runId: string, section?: "comments" | "frame-review" | "artifacts") {
-  const base = `/projects/${encodeURIComponent(projectId)}/experiments/runs/${encodeURIComponent(runId)}`;
-  return section ? `${base}/${section}` : base;
+/** A run opens in its workspace in the research flow. */
+export function researchRunUrl(projectId: string, runId: string) {
+  return `/projects/${encodeURIComponent(projectId)}/experiments?run=${encodeURIComponent(runId)}`;
 }
-
-export const runSections = [
-  { value: "artifacts", label: "Artifacts" },
-  { value: "frame-review", label: "Frame reviews" },
-  { value: "comments", label: "Comments" },
-] as const;
-export type RunSection = (typeof runSections)[number]["value"];

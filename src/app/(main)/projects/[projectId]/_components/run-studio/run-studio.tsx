@@ -2,8 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import Link from "next/link";
-
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "cn";
 import { ArrowRight, ChevronRight, CircleCheck, CircleX, Database, Flag, Lock, Play, Plus, Upload } from "lucide-react";
@@ -12,19 +10,30 @@ import { motion } from "motion/react";
 import { ManagementStatusBadge } from "@/components/management-status-badge";
 import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldTitle } from "@/components/ui/field";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useInfiniteRuns } from "@/hooks/use-runs-query";
 import { projectKeys } from "@/lib/api/query-keys";
 import type { RunItem } from "@/lib/api/services/fetch-runs";
-import { researchRunUrl } from "@/lib/research-workspace";
 import type { ReviewMode, RunInput } from "@/lib/run-stream/contract";
 import { SHOW_DATA_STAGE, SHOW_REVIEW_MODE } from "@/lib/run-stream/features";
 import { DATASET } from "@/lib/run-stream/mock/scenario";
 import { type RunSession, useProjectRun, useRunStudio } from "@/lib/run-stream/run-store";
-import { displayStatus, finalResults, GATE_TITLE, nextStop, signed } from "@/lib/run-stream/selectors";
+import { displayStatus, finalResults, GATE_TITLE, inSentence, nextStop, signed } from "@/lib/run-stream/selectors";
 
 import { ListState, LoadMore } from "../workspace-ui";
 import { AgentAvatar, StatusPill } from "./run-bits";
-import { AGENTS, LOCKED_HINT, LOCKED_PIPELINE, MODES, PIPELINE, STAGE_SHORT, STOP_INFO, stopsFor } from "./run-meta";
+import {
+  AGENTS,
+  LOCKED_HINT,
+  LOCKED_PIPELINE,
+  MODES,
+  PIPELINE,
+  RUN_MODES,
+  STAGE_SHORT,
+  STOP_INFO,
+  stopsFor,
+} from "./run-meta";
+import { compactNumber, RunStats } from "./run-stats";
 import { FieldsInput, StartRunDialog, TopicInput, useTopicDraft } from "./start-run-dialog";
 
 function SectionTitle({ title, aside }: { title: string; aside?: string }) {
@@ -77,10 +86,12 @@ function DataField() {
 /** The next run, started right here: type the topic, keep its fields, start. */
 function TopicComposer({
   mode,
+  onModeChange,
   canWrite,
   onStart,
 }: {
   mode: ReviewMode;
+  onModeChange(mode: ReviewMode): void;
   canWrite: boolean;
   /** Settles once the run has started or was refused. */
   onStart(mode: ReviewMode, input: RunInput, from: HTMLElement | null): Promise<void>;
@@ -125,20 +136,40 @@ function TopicComposer({
           <span className="flex min-w-0 max-w-[60ch] items-start gap-2 text-muted-foreground text-xs">
             <Flag className="mt-px size-3.5 shrink-0" />
             {nouns.length
-              ? `It stops ${stops.length === 1 ? "once" : `${stops.length} times`}, so you can approve ${approves}. A live workspace opens, and you can leave any time.`
+              ? `It stops ${nouns.length === 1 ? "once" : `${nouns.length} times`}, for ${approves}. A live workspace opens, and you can leave any time.`
               : "It never stops; the PI makes every call. A live workspace opens, and you can leave any time."}
           </span>
-          <Button ref={button} size="lg" disabled={!canWrite || !draft.ready || starting} onClick={start}>
-            <Play />
-            {starting ? "Starting…" : "Start research run"}
-          </Button>
+          <span className="flex flex-wrap items-center gap-2.5 max-sm:w-full max-sm:justify-between">
+            <ToggleGroup
+              type="single"
+              variant="outline"
+              spacing={0}
+              value={mode}
+              onValueChange={(value) => {
+                if (RUN_MODES.includes(value as ReviewMode)) onModeChange(value as ReviewMode);
+              }}
+              aria-label="How often the run stops for you"
+            >
+              {RUN_MODES.map((key) => (
+                <ToggleGroupItem key={key} value={key} title={MODES[key].line} className="px-3.5">
+                  {MODES[key].label}
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
+            <Button ref={button} size="lg" disabled={!canWrite || !draft.ready || starting} onClick={start}>
+              <Play />
+              {starting ? "Starting…" : "Start research run"}
+            </Button>
+          </span>
         </div>
       </div>
       <div className="flex flex-col gap-3.5 border-t bg-muted/45 px-5 py-4.5 md:px-6">
         <span className="font-medium text-muted-foreground text-xs uppercase tracking-wide">What happens next</span>
         <ol className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
           {PIPELINE.map((p, i) => {
-            const stop = stops.find((k) => STOP_INFO[k].stage === p.stage);
+            // The charter is endorsed before Scope starts; any other stop comes after its stage.
+            const charter = p.stage === "scope" && stops.includes("charter");
+            const stop = stops.find((k) => k !== "charter" && STOP_INFO[k].stage === p.stage);
             return (
               <motion.li
                 key={p.stage}
@@ -153,6 +184,15 @@ function TopicComposer({
                 <span className="min-w-0">
                   <b className="flex flex-wrap items-center gap-x-2 gap-y-1 font-semibold text-sm">
                     {p.title}
+                    {charter && (
+                      <span
+                        title={STOP_INFO.charter.what}
+                        className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 py-px pr-2 pl-1.5 font-medium text-[11px] text-amber-800 dark:text-amber-300"
+                      >
+                        <Flag className="size-2.5" />
+                        once you endorse the plan
+                      </span>
+                    )}
                     {stop && (
                       <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 py-px pr-2 pl-1.5 font-medium text-[11px] text-amber-800 dark:text-amber-300">
                         <Flag className="size-2.5" />
@@ -352,7 +392,7 @@ export function LiveRunCard({ session, onOpen }: { session: RunSession; onOpen(f
         <div className="grid grid-cols-[auto_1fr] items-center gap-3 rounded-lg bg-amber-500/10 px-3.5 py-3 text-sm">
           <Flag className="size-4 text-amber-700 dark:text-amber-300" />
           <span>
-            <b className="block font-semibold">Waiting for you: {state.gate.title.toLowerCase()}</b>
+            <b className="block font-semibold">Waiting for you: {inSentence(state.gate.title)}</b>
             <span className="text-muted-foreground text-xs">Nothing runs until you answer.</span>
           </span>
         </div>
@@ -368,7 +408,7 @@ export function LiveRunCard({ session, onOpen }: { session: RunSession; onOpen(f
               {state.lifecycle === "paused"
                 ? "Paused by you."
                 : next
-                  ? `Next stop for you: ${GATE_TITLE[next.gate].toLowerCase()}.`
+                  ? `Next stop for you: ${inSentence(GATE_TITLE[next.gate])}.`
                   : state.mode === "auto"
                     ? "Auto mode: it won't stop for you."
                     : "No more stops for you."}
@@ -393,9 +433,9 @@ function PastRunRow({ run }: { run: RunItem }) {
       <span className="min-w-0 max-md:col-span-3 max-md:row-start-2">
         <b className="block truncate font-medium">{run.topic ?? run.label ?? `Run ${run.id.slice(0, 8)}`}</b>
         <span className="text-muted-foreground text-xs">
-          {/* Pipeline runs report no cost yet: a $0 spent would read as free. */}
+          {/* Pipeline runs count tokens, not dollars. */}
           {run.pipeline_key
-            ? `$${run.budget_usd} budget · cost not tracked yet`
+            ? `${compactNumber(run.tokens_used ?? 0)} of ${compactNumber(run.token_budget ?? 0)} tokens`
             : `$${run.cost_usd} of $${run.budget_usd}`}{" "}
           ·{" "}
           {run.topic
@@ -439,22 +479,16 @@ function PastRuns({ projectId, hide }: { projectId: string; hide?: string }) {
         <ul className="overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10">
           {list.map((run) => (
             <li key={run.id} className="border-b last:border-0">
-              {run.topic ? (
-                <button
-                  type="button"
-                  className={ROW}
-                  onClick={(event) => {
-                    attachRun(projectId, run, false);
-                    openWorkspace(run.id, event.currentTarget);
-                  }}
-                >
-                  <PastRunRow run={run} />
-                </button>
-              ) : (
-                <Link prefetch={false} href={researchRunUrl(projectId, run.id)} className={ROW}>
-                  <PastRunRow run={run} />
-                </Link>
-              )}
+              <button
+                type="button"
+                className={ROW}
+                onClick={(event) => {
+                  attachRun(projectId, run, false);
+                  openWorkspace(run.id, event.currentTarget);
+                }}
+              >
+                <PastRunRow run={run} />
+              </button>
             </li>
           ))}
         </ul>
@@ -471,7 +505,7 @@ export function RunStudio({ projectId, canWrite }: { projectId: string; canWrite
   const openWorkspace = useRunStudio((s) => s.openWorkspace);
   const queryClient = useQueryClient();
   const [dialog, setDialog] = useState(false);
-  const [mode] = useState<ReviewMode>("copilot");
+  const [mode, setMode] = useState<ReviewMode>("light");
   const from = useRef<HTMLElement | null>(null);
   const finished = Boolean(session && (session.state.completed || session.state.lifecycle === "failed"));
   const canStart = canWrite && (!session || finished);
@@ -514,10 +548,12 @@ export function RunStudio({ projectId, canWrite }: { projectId: string; canWrite
           <div data-live-run>
             <LiveRunCard session={session} onOpen={(el) => openWorkspace(session.runId, el)} />
           </div>
+          <RunStats session={session} />
         </>
       ) : (
         <TopicComposer
           mode={mode}
+          onModeChange={setMode}
           canWrite={canWrite}
           onStart={async (chosen, input, el) => {
             from.current = el;

@@ -3,8 +3,8 @@
 /** The data check and clean stage, and the dataset step when starting a run. */
 export const SHOW_DATA_STAGE = false;
 
-/** Asking how often to stop when starting a run. When hidden, runs use Copilot. */
-export const SHOW_REVIEW_MODE = false;
+/** Asking how often to stop when starting a run: Light or Auto. When hidden, runs use Light. */
+export const SHOW_REVIEW_MODE = true;
 
 /**
  * Where a run ends. `hypotheses` ends it once the first set of hypotheses is picked (pipeline stage 8);

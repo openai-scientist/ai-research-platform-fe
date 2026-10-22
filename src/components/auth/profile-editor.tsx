@@ -78,7 +78,7 @@ export function ProfileEditor({
             control={form.control}
             name="display_name"
             id="profile-name"
-            label="Display Name"
+            label="Display name"
             autoComplete="name"
             disabled={busy}
           />

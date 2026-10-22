@@ -11,7 +11,7 @@ describe("API URL configuration", () => {
   });
 
   it.each([
-    [undefined, undefined, "http://localhost:8000/api/v1"],
+    [undefined, undefined, "http://localhost:8080/api/v1"],
     [undefined, "http://localhost:6789/", "http://localhost:6789/api/v1"],
     [undefined, "https://api.example.com/api/v1///", "https://api.example.com/api/v1"],
     ["http://backend:8000/api/v1/", "https://api.example.com", "http://backend:8000/api/v1"],

@@ -14,6 +14,7 @@ interface AuthTextFieldProps<T extends FieldValues> {
   autoComplete: string;
   placeholder?: string;
   disabled?: boolean;
+  maxLength?: number;
 }
 export function AuthTextField<T extends FieldValues>({
   control,
@@ -24,6 +25,7 @@ export function AuthTextField<T extends FieldValues>({
   autoComplete,
   placeholder,
   disabled,
+  maxLength,
 }: AuthTextFieldProps<T>) {
   return (
     <Controller
@@ -40,6 +42,7 @@ export function AuthTextField<T extends FieldValues>({
             placeholder={placeholder}
             autoComplete={autoComplete}
             disabled={disabled}
+            maxLength={maxLength}
             aria-invalid={fieldState.invalid}
           />
         </Field>

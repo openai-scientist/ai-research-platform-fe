@@ -22,13 +22,15 @@ const envelopeSchema = z.object({
   stage_run_id: z.string().nullish(),
   step_key: z.string().nullish(),
   phase: z.string().nullish(),
+  // A line the backend wrote about the event, such as the PI's reasoning for a decision.
+  summary: z.string().nullish(),
 });
 
 /** Reads one stored event. Returns null when it is not a run event. */
 export function parseRunEvent(value: unknown): RunEvent | null {
   const parsed = envelopeSchema.safeParse(value);
   if (!parsed.success) return null;
-  const { stage_key, actor, stage_run_id, step_key, phase, ...rest } = parsed.data;
+  const { stage_key, actor, stage_run_id, step_key, phase, summary, ...rest } = parsed.data;
   return {
     ...rest,
     ...(stage_key ? { stage_key } : {}),
@@ -36,6 +38,7 @@ export function parseRunEvent(value: unknown): RunEvent | null {
     ...(stage_run_id ? { stage_run_id } : {}),
     ...(step_key ? { step_key } : {}),
     ...(phase ? { phase } : {}),
+    ...(summary ? { summary } : {}),
   } as RunEvent;
 }
 

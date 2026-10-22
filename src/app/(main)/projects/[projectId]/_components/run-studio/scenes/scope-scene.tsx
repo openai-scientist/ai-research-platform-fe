@@ -22,6 +22,9 @@ const FIELDS: { field: GoalField; label: string }[] = [
   { field: "success", label: "Success criteria" },
 ];
 
+/** The engine joins a list with "; " even when each item ends its own sentence: "…fails.; Each…" reads "…fails. Each…". */
+const readable = (value: string) => value.replace(/([.!?]);\s+/g, "$1 ");
+
 const RISK_TONE: Record<Risk, string> = {
   low: "bg-muted text-muted-foreground",
   medium: "bg-amber-500/12 text-amber-800 dark:text-amber-300",
@@ -275,7 +278,7 @@ export function ScopeScene({
                         </div>
                       ) : (
                         <TypeText
-                          text={g.value}
+                          text={readable(g.value)}
                           live={live}
                           className={cn(
                             "block",
@@ -420,10 +423,12 @@ export function ScopeScene({
                             {sq.priority === 1 ? "Answered first" : `Priority ${sq.priority}`}
                           </span>
                         </span>
-                        <p className="font-medium leading-snug">{sq.text}</p>
+                        <p className="font-medium leading-snug">
+                          <TypeText text={sq.text} live={live} speed={140} />
+                        </p>
                         <p className="text-muted-foreground text-xs leading-snug">
                           <span className="font-medium text-foreground/70">How: </span>
-                          {sq.tests}
+                          <TypeText text={sq.tests} live={live} speed={220} />
                         </p>
                         <span className="mt-auto flex flex-wrap gap-1.5 pt-1">
                           {risks.map((risk) => (

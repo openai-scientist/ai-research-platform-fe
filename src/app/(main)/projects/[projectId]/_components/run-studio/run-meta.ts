@@ -106,8 +106,16 @@ export const TEAM: AgentRole[] = [
 ];
 
 export const MODES: Record<ReviewMode, { label: string; line: string; stops: GateKind[] }> = {
-  auto: { label: "Auto", line: "Never stops. The PI makes every call, and every call is logged.", stops: [] },
-  light: { label: "Light", line: "Stops once, before the paper is published.", stops: ["publish"] },
+  auto: {
+    label: "Auto",
+    line: "Never stops. The PI endorses its own plan and picks the hypotheses, and every call is logged.",
+    stops: [],
+  },
+  light: {
+    label: "Light",
+    line: "You endorse the PI's plan, approve the reading list and the hypotheses, and accept the final set.",
+    stops: ["charter", "screen", "hypotheses", "accept"],
+  },
   copilot: {
     label: "Copilot",
     line: "You approve the reading list, the hypotheses, each round's next step, and the paper.",
@@ -120,10 +128,21 @@ export const MODES: Record<ReviewMode, { label: string; line: string; stops: Gat
   },
 };
 
+/** The modes a run can start in. */
+export const RUN_MODES: ReviewMode[] = ["light", "auto"];
+
 export const STOP_INFO: Record<
   GateKind,
   { title: string; where: string; what: string; verb: string; noun: string; stage: RunStage }
 > = {
+  charter: {
+    title: "Endorse the PI's plan",
+    where: "Before Scope",
+    what: "The PI drafts the question, scope and criteria. Nothing runs until you endorse or edit it.",
+    verb: "you endorse the plan",
+    noun: "the PI's plan",
+    stage: "scope",
+  },
   scope: {
     title: "Check the scope",
     where: "After Scope",
@@ -177,7 +196,7 @@ export const STOP_INFO: Record<
     where: "After Map",
     what: "Pick the hypotheses the run ends with.",
     verb: "you accept",
-    noun: "the hypotheses",
+    noun: "the final set",
     stage: "map",
   },
 };
@@ -241,7 +260,13 @@ export const LOCKED_HINT = `Coming soon. For now a run ends once the hypotheses 
  * stops to have them approved. */
 export function stopsFor(mode: ReviewMode): GateKind[] {
   return MODES[mode].stops.filter(
-    (k) => RUN_ENDS_AT === "paper" || k === "scope" || k === "screen" || k === "hypotheses",
+    (k) =>
+      RUN_ENDS_AT === "paper" ||
+      k === "charter" ||
+      k === "scope" ||
+      k === "screen" ||
+      k === "hypotheses" ||
+      k === "accept",
   );
 }
 
@@ -283,6 +308,7 @@ export const STATUS_TONE = {
     className: "bg-emerald-500/12 text-emerald-700 dark:text-emerald-300",
     dot: "bg-emerald-500",
   },
+  stopped: { label: "Stopped", className: "bg-muted text-muted-foreground", dot: "bg-muted-foreground" },
   failed: { label: "Failed", className: "bg-destructive/10 text-destructive", dot: "bg-destructive" },
 } as const;
 

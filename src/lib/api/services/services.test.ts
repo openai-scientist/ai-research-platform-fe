@@ -10,7 +10,6 @@ import { fetchArtifacts } from "./fetch-artifacts";
 import { fetchAuth } from "./fetch-auth";
 import { fetchComments } from "./fetch-comments";
 import { fetchDatasets } from "./fetch-datasets";
-import { fetchFrameReviews } from "./fetch-frame-reviews";
 import { fetchInvitations } from "./fetch-invitations";
 import { fetchMembers } from "./fetch-members";
 import { fetchNotifications } from "./fetch-notifications";
@@ -195,27 +194,6 @@ const contracts: Contract[] = [
     url: `${run}/${action}`,
     call: () => fetchRuns[action](p, "run/1"),
   })),
-  {
-    name: "frame review",
-    method: "get",
-    url: `${run}/frame-review`,
-    call: () => fetchFrameReviews.getCurrent(p, "run/1", signal),
-    signal,
-  },
-  {
-    name: "submit frame review",
-    method: "post",
-    url: `${run}/frame-review`,
-    call: () => fetchFrameReviews.submit(p, "run/1", { approve_all: true }),
-    body: { approve_all: true },
-  },
-  {
-    name: "frame review history",
-    method: "get",
-    url: `${run}/frame-reviews`,
-    call: () => fetchFrameReviews.getHistory(p, "run/1", signal),
-    signal,
-  },
   {
     name: "artifact list",
     method: "get",

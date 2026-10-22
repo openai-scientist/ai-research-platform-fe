@@ -77,6 +77,49 @@ export type UserDetailResponse = ApiResult<UserAdminItem>;
 export type AuditListResponse = ApiResult<AuditItem[]>;
 export type ProjectUsageListResponse = ApiResult<ProjectUsageItem[]>;
 
+/** The model a run uses for one role. The API key never comes back; `has_api_key` says whether one is saved. */
+export interface ModelProfile {
+  provider: string;
+  base_url: string | null;
+  model: string;
+  extra: Record<string, unknown>;
+  has_api_key: boolean;
+  updated_at: string;
+}
+
+export type ModelRole = "stage" | "review";
+
+/** `null` for a role that has no model yet. */
+export type ModelProfiles = Record<ModelRole, ModelProfile | null>;
+
+export interface SaveModelRequest {
+  provider: "openai_compatible";
+  base_url: string | null;
+  model: string;
+  /** Left out to keep the saved key. */
+  api_key?: string;
+}
+
+/** What a connection test sends: the form's values; a field left out is taken from the saved profile. */
+export interface TestModelRequest {
+  base_url?: string;
+  model?: string;
+  api_key?: string;
+}
+
+export interface ModelTestResult {
+  ok: boolean;
+  latency_ms: number | null;
+  message: string;
+}
+
+/** A key an engine uses (a literature source, a decision provider). Its value never comes back. */
+export interface IntegrationItem {
+  name: string;
+  configured: boolean;
+  updated_at: string | null;
+}
+
 export const fetchAdmin = {
   createUser: async (data: CreateUserRequest): Promise<ApiResult<UserCreated>> => {
     const response = await apiService.post<ApiResult<UserCreated>>("/users", data);
@@ -117,6 +160,37 @@ export const fetchAdmin = {
   },
   getAudit: async (params?: AuditListParams, signal?: AbortSignal): Promise<AuditListResponse> => {
     const response = await apiService.get<AuditListResponse>("/audit", params, { signal });
+    return response.data;
+  },
+  getModels: async (signal?: AbortSignal): Promise<ApiResult<ModelProfiles>> => {
+    const response = await apiService.get<ApiResult<ModelProfiles>>("/admin/models", undefined, { signal });
+    return response.data;
+  },
+  saveModel: async (role: ModelRole, data: SaveModelRequest): Promise<ApiResult<ModelProfile>> => {
+    const response = await apiService.put<ApiResult<ModelProfile>>(`/admin/models/${role}`, data);
+    return response.data;
+  },
+  testModel: async (role: ModelRole, data: TestModelRequest): Promise<ApiResult<ModelTestResult>> => {
+    const response = await apiService.post<ApiResult<ModelTestResult>>(`/admin/models/${role}/test`, data);
+    return response.data;
+  },
+  getIntegrations: async (signal?: AbortSignal): Promise<ApiResult<IntegrationItem[]>> => {
+    const response = await apiService.get<ApiResult<IntegrationItem[]>>("/admin/integrations", undefined, { signal });
+    return response.data;
+  },
+  saveIntegration: async (name: string, value: string): Promise<ApiResult<IntegrationItem>> => {
+    const response = await apiService.put<ApiResult<IntegrationItem>>(
+      `/admin/integrations/${encodeURIComponent(name)}`,
+      {
+        value,
+      },
+    );
+    return response.data;
+  },
+  deleteIntegration: async (name: string): Promise<ApiResult<IntegrationItem>> => {
+    const response = await apiService.delete<ApiResult<IntegrationItem>>(
+      `/admin/integrations/${encodeURIComponent(name)}`,
+    );
     return response.data;
   },
   getProjectUsage: async (params?: TimeRangeParams, signal?: AbortSignal): Promise<ProjectUsageListResponse> => {

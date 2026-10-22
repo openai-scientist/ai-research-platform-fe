@@ -4,19 +4,18 @@ import { Suspense, useState } from "react";
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
-import { toast } from "sonner";
 import type { z } from "zod";
 
 import { AuthTextField } from "@/components/auth/auth-text-field";
 import { Button } from "@/components/ui/button";
 import { FieldGroup } from "@/components/ui/field";
-import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/hooks/use-auth";
 import { useAuthCooldown } from "@/hooks/use-auth-cooldown";
 import type { VerificationPending } from "@/lib/api/services/fetch-auth";
 import { notifyAuthError, notifyValidationError } from "@/lib/auth/form-errors";
 import { emailSchema } from "@/lib/auth/schemas";
 
+import { GoogleOptionSkeleton } from "./auth-skeletons";
 import { AuthStepHeading } from "./auth-step-heading";
 import { EmailCodeForm } from "./email-code-form";
 import { GoogleSignInOption } from "./social-auth/google-button";
@@ -33,8 +32,8 @@ export function EmailSignInForm({ googleSignInAvailable }: { googleSignInAvailab
   async function onSubmit(data: z.infer<typeof emailSchema>) {
     if (remaining > 0) return;
     try {
+      // The next screen says where the code went; no toast repeats it.
       setPending(await startEmailSignIn(data.email));
-      toast.success("Check your email", { description: data.email });
     } catch (error) {
       const cooldown = notifyAuthError(error);
       if (cooldown !== null) setRemaining(cooldown);
@@ -49,7 +48,7 @@ export function EmailSignInForm({ googleSignInAvailable }: { googleSignInAvailab
         title="Sign in or create an account"
         description="Enter your email and we will send you a code."
       />
-      <Suspense fallback={<Skeleton className="h-10 w-full" aria-label="Loading sign-in options" />}>
+      <Suspense fallback={<GoogleOptionSkeleton label="Loading sign-in options" />}>
         <GoogleSignInOption availability={googleSignInAvailable} disabled={busy} />
       </Suspense>
       <form
@@ -63,7 +62,7 @@ export function EmailSignInForm({ googleSignInAvailable }: { googleSignInAvailab
             control={form.control}
             name="email"
             id="sign-in-email"
-            label="Email Address"
+            label="Email address"
             type="email"
             autoComplete="email"
             placeholder="you@example.com"

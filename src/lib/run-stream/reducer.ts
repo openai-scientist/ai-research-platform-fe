@@ -43,6 +43,7 @@ export function applyRunEvent(previous: RunState, event: RunEvent): RunState {
   if (event.seq <= previous.lastSeq) return previous;
   return produce(previous, (state) => {
     state.lastSeq = event.seq;
+    if (event.type !== "run.stalled") delete state.stalled;
     switch (event.type) {
       case "run.started":
         state.mode = event.payload.mode;
@@ -57,7 +58,19 @@ export function applyRunEvent(previous: RunState, event: RunEvent): RunState {
         break;
       case "run.status":
         state.lifecycle = event.payload.status;
-        if (event.payload.status === "failed") state.failure = event.payload.reason;
+        if (event.payload.status === "failed") {
+          state.failure = event.payload.reason;
+          if (event.payload.stopped) state.stopped = true;
+          else delete state.stopped;
+          // A run that ended has nothing left to answer.
+          state.gate = null;
+        } else {
+          delete state.failure;
+          delete state.stopped;
+        }
+        break;
+      case "run.stalled":
+        state.stalled = event.payload.minutes;
         break;
       case "run.completed":
         state.completed = true;
@@ -76,6 +89,7 @@ export function applyRunEvent(previous: RunState, event: RunEvent): RunState {
           doneStepIds: [],
           skills: [],
           content: emptyContent(plan),
+          startedAt: event.ts,
         };
         state.currentStageKey = plan.key;
         break;
@@ -274,6 +288,11 @@ export function applyRunEvent(previous: RunState, event: RunEvent): RunState {
       }
 
       // ---------- screen ----------
+      case "screen.planned": {
+        const c = content(state, event, "screen");
+        if (c) c.planned = { toScreen: event.payload.to_screen, setAside: event.payload.set_aside };
+        break;
+      }
       case "screen.criteria": {
         const c = content(state, event, "screen");
         if (!c) break;
@@ -375,8 +394,10 @@ export function applyRunEvent(previous: RunState, event: RunEvent): RunState {
         const h = content(state, event, "hypothesize");
         if (!h) break;
         const { hypothesis } = event.payload;
-        if (!h.drafts[hypothesis.id]) h.order.push(hypothesis.id);
-        h.drafts[hypothesis.id] = { hypothesis, selected: false };
+        const known = h.drafts[hypothesis.id];
+        if (!known) h.order.push(hypothesis.id);
+        // A hypothesis sent again (relabelled) keeps whether it was picked and its novelty check.
+        h.drafts[hypothesis.id] = { ...known, hypothesis, selected: known?.selected ?? false };
         break;
       }
       case "hypothesis.checked": {
@@ -404,13 +425,15 @@ export function applyRunEvent(previous: RunState, event: RunEvent): RunState {
       }
       case "review.sent": {
         const h = content(state, event, "hypothesize");
-        if (h) h.sent = event.payload.findings;
+        if (!h) break;
+        h.sent = event.payload.findings;
+        h.sentBy = event.payload.by ?? "you";
         break;
       }
       case "idea.set_aside": {
         const h = content(state, event, "hypothesize");
         if (h)
-          h.asides.push({
+          upsert(h.asides, {
             id: event.payload.idea_id,
             kind: event.payload.kind,
             statement: event.payload.statement,
@@ -711,6 +734,7 @@ export function applyRunEvent(previous: RunState, event: RunEvent): RunState {
           keepable?: string[];
           selection?: Gate["selection"];
           review?: Gate["review"];
+          advice?: Gate["advice"];
         };
         const raw = payload.gate ?? (payload.gate_id ? payload : null);
         if (raw) {
@@ -748,6 +772,7 @@ export function applyRunEvent(previous: RunState, event: RunEvent): RunState {
             keepable: Array.isArray(raw.keepable) ? raw.keepable : [],
             ...(Array.isArray(raw.selection) ? { selection: raw.selection } : {}),
             ...(raw.review ? { review: raw.review } : {}),
+            ...(raw.advice ? { advice: raw.advice } : {}),
           };
         }
         break;
@@ -784,6 +809,8 @@ export function applyRunEvent(previous: RunState, event: RunEvent): RunState {
           stageKey: event.stage_key,
           note: answerNote,
           gateId,
+          gateKind: kind,
+          option: payload.answer?.option_id ?? payload.option_id,
         };
         state.decisions.push(item);
         state.feed.push(item);
@@ -800,6 +827,9 @@ export function applyRunEvent(previous: RunState, event: RunEvent): RunState {
         break;
       }
     }
+    // Time spent in a stage ends with its last piece of work, not with the person's answer at its stop.
+    const own = event.stage_key ? state.stages[event.stage_key] : undefined;
+    if (own && !event.type.startsWith("gate.") && event.type !== "stage.completed") own.workedUntil = event.ts;
   });
 }
 

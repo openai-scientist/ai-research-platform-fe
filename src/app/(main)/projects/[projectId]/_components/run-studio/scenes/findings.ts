@@ -22,7 +22,7 @@ export const FINDING_FIELD: Record<string, string> = {
 
 /** `hypothesis:H1/falsification_criteria` → H1 and its field. */
 export function findingTarget(locator: string) {
-  const [id = "", field = ""] = locator.replace(/^hypothesis:/, "").split("/");
+  const [id = "", field = ""] = locator.replace(/^(hypothesis|item):/, "").split("/");
   const words = field.replaceAll("_", " ");
   return { id, field: FINDING_FIELD[field] ?? (words ? words[0].toUpperCase() + words.slice(1) : "") };
 }

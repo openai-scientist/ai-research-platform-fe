@@ -13,6 +13,7 @@ export const STAGE_GATE: Partial<Record<RunStage, GateKind>> = {
 };
 
 export const GATE_TITLE: Record<GateKind, string> = {
+  charter: "Endorse the PI's plan",
   scope: "Check the scope",
   screen: "Approve the shortlist",
   hypotheses: "Approve the hypotheses",
@@ -21,6 +22,11 @@ export const GATE_TITLE: Record<GateKind, string> = {
   publish: "Approve the paper",
   accept: "Accept the hypotheses",
 };
+
+/** A title inside a sentence: only its first letter is lowered, so names like "PI" stay as they are. */
+export function inSentence(title: string) {
+  return title.charAt(0).toLowerCase() + title.slice(1);
+}
 
 /** Key of the stage the run is on now; `done` once the paper is published. */
 export function liveStageKey(state: RunState) {
@@ -32,11 +38,11 @@ export function plannedIndex(state: RunState, key: string | null) {
   return state.plan.findIndex((s) => s.key === key);
 }
 
-export type RunDisplayStatus = "running" | "waiting" | "paused" | "completed" | "failed";
+export type RunDisplayStatus = "running" | "waiting" | "paused" | "completed" | "stopped" | "failed";
 
 export function displayStatus(state: RunState): RunDisplayStatus {
   if (state.completed) return "completed";
-  if (state.lifecycle === "failed") return "failed";
+  if (state.lifecycle === "failed") return state.stopped ? "stopped" : "failed";
   if (state.gate) return "waiting";
   if (state.lifecycle === "paused") return "paused";
   return "running";
@@ -60,7 +66,7 @@ export function nextStop(state: RunState): { stage: PlannedStage; gate: GateKind
   }
   const from = plannedIndex(state, state.currentStageKey);
   for (const stage of state.plan.slice(from + 1)) {
-    const gate = STAGE_GATE[stage.stage];
+    const gate = stage.gate ?? STAGE_GATE[stage.stage];
     if (stage.has_gate && gate) return { stage, gate, stepsAway: null };
   }
   return null;

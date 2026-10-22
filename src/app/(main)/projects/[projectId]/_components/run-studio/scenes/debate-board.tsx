@@ -21,6 +21,7 @@ import { AnimatePresence, LayoutGroup, motion } from "motion/react";
 import type { AgentRole, DebateStance, DebateTurn, ObjectionFlaw, ObjectionSeverity } from "@/lib/run-stream/contract";
 
 import { AnimatedNumber } from "../animated-number";
+import { CitedText, citeLabels, useCards } from "../cite";
 import { AgentAvatar, PulseDot } from "../run-bits";
 import { AGENTS } from "../run-meta";
 import {
@@ -200,6 +201,7 @@ function positionMeta(position: AgentPosition) {
 }
 
 function PositionChip({ position, live, text }: { position: AgentPosition; live: boolean; text?: string }) {
+  const cards = useCards();
   const meta = positionMeta(position);
   const Icon = meta.icon;
   return (
@@ -208,7 +210,7 @@ function PositionChip({ position, live, text }: { position: AgentPosition; live:
       initial={live ? { opacity: 0, scale: 0.8 } : false}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ type: "spring", stiffness: 380, damping: 26 }}
-      title={text}
+      title={text && citeLabels(text, cards)}
       className="inline-flex h-6 items-center gap-1.5 rounded-full bg-muted/60 py-0.5 pr-2 pl-0.5 text-[11px]"
     >
       <span className="relative">
@@ -304,14 +306,14 @@ function Rewrite({ summary, live }: { summary: ThreadSummary; live: boolean }) {
               <span className="mr-1 font-medium text-[10.5px] text-sky-700 uppercase tracking-wide dark:text-sky-300">
                 After
               </span>
-              {after}
+              <CitedText text={after} plain />
             </span>
           </span>
         )}
         {note && (
           <span className="mt-1.5 block text-[11px] text-muted-foreground leading-snug">
             <b className="font-medium text-foreground/80">Why: </b>
-            {note}
+            <CitedText text={note} plain />
           </span>
         )}
       </span>
@@ -379,7 +381,9 @@ function ThreadCard({
         {summary.revision && summary.proposal ? (
           <Rewrite summary={summary} live={live} />
         ) : (
-          <span className="line-clamp-3 text-[13px] leading-snug">{claim}</span>
+          <span className="line-clamp-3 text-[13px] leading-snug">
+            <CitedText text={claim} plain />
+          </span>
         )}
         <span className="flex flex-wrap gap-1.5">
           {summary.positions.map((p) => (
@@ -485,7 +489,11 @@ function RankingCard({ rows, live }: { rows: Ranking[]; live: boolean }) {
                   </span>
                 )}
               </span>
-              {row.reason && <span className="text-muted-foreground leading-snug">{row.reason}</span>}
+              {row.reason && (
+                <span className="text-muted-foreground leading-snug">
+                  <CitedText text={row.reason} />
+                </span>
+              )}
             </span>
           </motion.li>
         ))}

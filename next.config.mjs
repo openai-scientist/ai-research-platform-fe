@@ -1,6 +1,6 @@
 // The backend the browser's /api/v1 requests are passed on to. Read on the server only: the browser
 // sees this app's origin and never the backend's address.
-const backend = (process.env.API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000")
+const backend = (process.env.API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080")
   .replace(/\/+$/, "")
   .replace(/\/api\/v1$/, "");
 

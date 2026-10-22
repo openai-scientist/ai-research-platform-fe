@@ -11,25 +11,29 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { AgentRole } from "@/lib/run-stream/contract";
 import type { RunState } from "@/lib/run-stream/run-state";
-import { GATE_TITLE, nextStop } from "@/lib/run-stream/selectors";
+import { GATE_TITLE, inSentence, nextStop } from "@/lib/run-stream/selectors";
 
 import { AgentAvatar, Caret, TypedLine, WorkOrb } from "./run-bits";
 import { AGENTS, RULE_IDS, RULES, TEAM } from "./run-meta";
 
 function Team({ active }: { active: AgentRole | null }) {
   return (
-    <div className="flex flex-wrap gap-px border-b px-3 py-3">
+    // One row: the speaker's name gives way before the row wraps and the card below jumps.
+    <div className="flex gap-px overflow-hidden border-b px-3 py-3">
       {TEAM.map((role) => {
         const on = role === active;
         const agent = AGENTS[role];
+        // The avatar already reads "PI"; a name that repeats it is left out.
+        const named = on && agent.name !== agent.initials;
         return (
           <motion.span
             key={role}
             layout
             transition={{ type: "spring", stiffness: 400, damping: 32 }}
             className={cn(
-              "inline-flex items-center rounded-full p-0.5",
-              on && cn("gap-1.5 pr-2", agent.soft.split(" ")[0]),
+              "inline-flex shrink-0 items-center rounded-full p-0.5",
+              on && agent.soft.split(" ")[0],
+              named && "min-w-0 shrink gap-1.5 pr-2",
             )}
           >
             <span className="relative">
@@ -48,12 +52,12 @@ function Team({ active }: { active: AgentRole | null }) {
               )}
             </span>
             <AnimatePresence>
-              {on && (
+              {named && (
                 <motion.span
                   initial={{ width: 0, opacity: 0 }}
                   animate={{ width: "auto", opacity: 1 }}
                   exit={{ width: 0, opacity: 0 }}
-                  className={cn("overflow-hidden whitespace-nowrap font-semibold text-xs", agent.text)}
+                  className={cn("min-w-0 truncate font-semibold text-xs", agent.text)}
                 >
                   {agent.name}
                 </motion.span>
@@ -155,26 +159,31 @@ export function NowCard({
           {stage?.plan.title ?? "Starting"}
           {stage?.plan.round ? ` · Round ${stage.plan.round}` : ""}
         </b>
-        <span>{step ? `Step ${index + 1} of ${steps.length}` : stage ? `${steps.length} steps` : ""}</span>
+        <span>
+          {step
+            ? `Step ${index + 1} of ${steps.length}`
+            : stage
+              ? `${steps.length} ${steps.length === 1 ? "step" : "steps"}`
+              : ""}
+        </span>
       </div>
       {/* One block: the orb works the way the step does, the narration streams under the step, and a quiet line says
           who is speaking (the team row shows it too, but not on narrow screens). */}
       <div className={cn("grid items-start gap-x-3", moving && "grid-cols-[auto_minmax(0,1fr)]")}>
         {moving && <WorkOrb step={step?.id} waiting={Boolean(state.gate)} size={32} className="mt-0.5" />}
         <div className="min-w-0">
-          <AnimatePresence mode="wait" initial={false}>
-            <motion.h3
-              key={step?.id ?? stage?.plan.key ?? "start"}
-              title={step?.explain ?? stage?.plan.purpose}
-              initial={{ opacity: 0, y: 4 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -3 }}
-              transition={{ duration: 0.22 }}
-              className="font-semibold text-[15px] tracking-tight"
-            >
-              {step?.title ?? stage?.plan.title ?? "Getting the team ready"}
-            </motion.h3>
-          </AnimatePresence>
+          {/* A new title fades in over the old one; waiting for the old one to leave can strand it when steps change
+              in quick succession. */}
+          <motion.h3
+            key={step?.id ?? stage?.plan.key ?? "start"}
+            title={step?.explain ?? stage?.plan.purpose}
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.22 }}
+            className="font-semibold text-[15px] tracking-tight"
+          >
+            {step?.title ?? stage?.plan.title ?? "Getting the team ready"}
+          </motion.h3>
           <p className="mt-1 min-h-5 text-sm leading-relaxed">
             {message ? (
               <>
@@ -234,7 +243,9 @@ function Steps({ state }: { state: RunState }) {
       <ol className="flex flex-col">
         {stage.plan.steps.map((step, i) => {
           const done = stage.doneStepIds.includes(step.id);
-          const now = stage.currentStepId === step.id;
+          // A run that ended works on nothing; a stop waits for you only once its question is open.
+          const now = stage.currentStepId === step.id && state.lifecycle !== "failed";
+          const asking = now && Boolean(step.gate && state.gate);
           return (
             <li
               key={step.id}
@@ -251,14 +262,14 @@ function Steps({ state }: { state: RunState }) {
                 className={cn(
                   "mt-0.5 grid size-[18px] place-items-center rounded-full border bg-card transition-colors",
                   done && "border-foreground bg-foreground text-background",
-                  now && !step.gate && "border-2 border-sky-500",
-                  step.gate && !done && "border-amber-500 text-amber-600",
-                  step.gate && now && "bg-amber-500 text-white",
+                  now && !asking && "border-2 border-sky-500",
+                  step.gate && !done && !now && "border-amber-500 text-amber-600",
+                  asking && "border-amber-500 bg-amber-500 text-white",
                 )}
               >
                 {done && <Check className="size-2.5" strokeWidth={3.5} />}
-                {!done && step.gate && <Flag className="size-2.5" />}
-                {now && !step.gate && (
+                {!done && step.gate && (!now || asking) && <Flag className="size-2.5" />}
+                {now && !asking && (
                   <motion.span
                     className="size-1.5 rounded-full bg-sky-500"
                     animate={{ scale: [1, 0.6, 1] }}
@@ -323,7 +334,7 @@ function NextStop({ state }: { state: RunState }) {
       <span>
         <b className="block font-semibold text-[13px]">
           {next
-            ? `Next stop for you: ${GATE_TITLE[next.gate].toLowerCase()}`
+            ? `Next stop for you: ${inSentence(GATE_TITLE[next.gate])}`
             : state.mode === "auto"
               ? "Popper won't stop for you"
               : "No more stops"}

@@ -1,4 +1,4 @@
-import type { GateAnswer, ReviewMode } from "@/lib/run-stream/contract";
+import type { Charter, GateAnswer, ReviewMode } from "@/lib/run-stream/contract";
 import type { ApiResult } from "@/types/api";
 import type { RunStatus } from "@/types/enums";
 
@@ -41,6 +41,31 @@ export interface RunItem {
   /** Set when the run is a pipeline of stages on engines; null for a Popper run. */
   pipeline_key?: string | null;
   interaction_mode?: string | null;
+  /** Pipeline runs count tokens rather than dollars. */
+  tokens_used?: number;
+  token_budget?: number;
+  /** A pipeline run's open stage. */
+  current_stage?: { stage_run_id: string; stage_key: string; status: string; phase?: string | null } | null;
+  /** Whether the Platform repairs the run by itself, or needs someone to act. */
+  recovery?: RunRecovery | null;
+}
+
+export interface RunRecovery {
+  state: "healing" | "needs_you" | "none";
+  reason: string;
+  attempt?: number | null;
+  max_attempts?: number | null;
+  next_try_at?: string | null;
+  action?:
+    | "wait"
+    | "rerun"
+    | "raise_budget"
+    | "accept"
+    | "answer_gate"
+    | "redo"
+    | "endorse_charter"
+    | "answer_pi"
+    | null;
 }
 
 /** An answer to a gate a pipeline stage opened. */
@@ -65,6 +90,18 @@ export type RunDetailResponse = ApiResult<RunItem>;
 export type RunEventsResponse = ApiResult<unknown[]>;
 export type GateAnswerResponse = ApiResult<{ gate_id: string; resolved_seq: number }>;
 
+/** One question the run put to the PI, with its answer once it has one. */
+export interface PiConsultation {
+  id: string;
+  kind: "charter" | "stage_review" | "stage_outcome" | "failure" | "close";
+  authority: "pi" | "researcher";
+  status: string;
+  result: { decision?: { charter?: Charter | null; note?: string | null } | null } | null;
+  failure: { code?: string; message?: string } | null;
+  created_at: string;
+  decided_at: string | null;
+}
+
 export const fetchRuns = {
   getList: async (projectId: string, params?: ListParams, signal?: AbortSignal): Promise<RunListResponse> => {
     const response = await apiService.get<RunListResponse>(`${projectPath(projectId)}/runs`, params, { signal });
@@ -78,8 +115,29 @@ export const fetchRuns = {
     const response = await apiService.post<RunDetailResponse>(`${projectPath(projectId)}/runs`, data);
     return response.data;
   },
+  /** Asks the engine of the open stage where it is: for a run that looks stuck. */
   sync: async (projectId: string, runId: string): Promise<RunDetailResponse> => {
     const response = await apiService.post<RunDetailResponse>(`${runPath(projectId, runId)}/sync`);
+    return response.data;
+  },
+  /** Cancels the open stage; the run ends as stopped and its stage can be rerun. */
+  stop: async (projectId: string, runId: string): Promise<RunDetailResponse> => {
+    const response = await apiService.post<RunDetailResponse>(`${runPath(projectId, runId)}/stop`, {});
+    return response.data;
+  },
+  /** A new total token budget; a run that stopped on its budget goes on. */
+  raiseBudget: async (projectId: string, runId: string, tokenBudget: number): Promise<RunDetailResponse> => {
+    const response = await apiService.post<RunDetailResponse>(`${runPath(projectId, runId)}/budget`, {
+      token_budget: tokenBudget,
+    });
+    return response.data;
+  },
+  /** Starts a failed or stopped stage again; `fresh` starts it from its first step. */
+  rerunStage: async (projectId: string, runId: string, stageRunId: string, fresh = false) => {
+    const response = await apiService.post<ApiResult<unknown>>(
+      `${runPath(projectId, runId)}/stages/${encodeURIComponent(stageRunId)}/rerun`,
+      { fresh },
+    );
     return response.data;
   },
   abandon: async (projectId: string, runId: string): Promise<RunDetailResponse> => {
@@ -129,6 +187,43 @@ export const fetchRuns = {
     const response = await apiService.post<ApiResult<unknown>>(
       `${runPath(projectId, runId)}/stages/${encodeURIComponent(stageRunId)}/accept`,
       body,
+    );
+    return response.data;
+  },
+  getConsultations: async (
+    projectId: string,
+    runId: string,
+    signal?: AbortSignal,
+  ): Promise<ApiResult<PiConsultation[]>> => {
+    const response = await apiService.get<ApiResult<PiConsultation[]>>(
+      `${runPath(projectId, runId)}/pi/consultations`,
+      undefined,
+      { signal },
+    );
+    return response.data;
+  },
+  /** Takes the PI's recommendation as your own decision. */
+  endorseConsultation: async (projectId: string, runId: string, consultationId: string, reason?: string) => {
+    const response = await apiService.post<ApiResult<{ consultation_id: string; status: string }>>(
+      `${runPath(projectId, runId)}/pi/consultations/${encodeURIComponent(consultationId)}/endorse`,
+      reason ? { reason } : {},
+    );
+    return response.data;
+  },
+  retryConsultation: async (projectId: string, runId: string, consultationId: string) => {
+    const response = await apiService.post<ApiResult<{ consultation_id: string; status: string }>>(
+      `${runPath(projectId, runId)}/pi/consultations/${encodeURIComponent(consultationId)}/retry`,
+    );
+    return response.data;
+  },
+  /** Writes the charter yourself; it replaces the PI's draft. */
+  putCharter: async (projectId: string, runId: string, charter: Charter, reason?: string) => {
+    const response = await apiService.put<ApiResult<{ charter_status: string }>>(
+      `${runPath(projectId, runId)}/pi/charter`,
+      {
+        charter,
+        ...(reason ? { reason } : {}),
+      },
     );
     return response.data;
   },

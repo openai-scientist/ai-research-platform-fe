@@ -25,7 +25,7 @@ import type { GateKind, ReviewMode, RunInput } from "@/lib/run-stream/contract";
 import { SHOW_DATA_STAGE, SHOW_REVIEW_MODE } from "@/lib/run-stream/features";
 import { DATASET } from "@/lib/run-stream/mock/scenario";
 
-import { MODES, PIPELINE, STAGE_SHORT, STOP_INFO } from "./run-meta";
+import { MODES, PIPELINE, RUN_MODES, STAGE_SHORT, STOP_INFO, stopsFor } from "./run-meta";
 
 const STEPS = ["Topic", ...(SHOW_DATA_STAGE ? ["Data"] : []), ...(SHOW_REVIEW_MODE ? ["Your involvement"] : [])];
 
@@ -55,46 +55,62 @@ const DERIVED = [
   ["Sub-questions", "that don't overlap and together cover the topic, ranked"],
   ["Topic score", "for novelty, specificity and feasibility, out of 10"],
 ] as const;
-const ORDER: GateKind[] = ["scope", "screen", "hypotheses", "decision", "report", "publish"];
+const ORDER: GateKind[] = ["charter", "scope", "screen", "hypotheses", "accept", "decision", "report", "publish"];
+
+/** Stops a run in this mode makes: the charter, then the stage stops. */
+export function stopCount(mode: ReviewMode) {
+  return stopsFor(mode).length;
+}
 
 export function StopsPreview({ mode }: { mode: ReviewMode }) {
-  const stops = [...MODES[mode].stops].sort((a, b) => ORDER.indexOf(a) - ORDER.indexOf(b));
+  const stops = [...stopsFor(mode)].sort((a, b) => ORDER.indexOf(a) - ORDER.indexOf(b));
+  const rows = [
+    ...stops.map((k) => ({ key: k, title: STOP_INFO[k].title, text: `${STOP_INFO[k].where}. ${STOP_INFO[k].what}` })),
+  ];
   const perRound = stops.filter((k) => k === "hypotheses" || k === "decision").length;
   return (
     <div className="flex flex-col gap-3 rounded-xl border p-4">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <b className="font-semibold text-sm">Where this run stops for you</b>
         <span className="text-muted-foreground text-xs">
-          {stops.length
-            ? `${stops.length} stop${stops.length > 1 ? "s" : ""}${perRound ? `, plus ${perRound} more per extra round` : ""}`
+          {rows.length
+            ? `${rows.length} stop${rows.length > 1 ? "s" : ""}${perRound ? `, plus ${perRound} more per extra round` : ""}`
             : "No stops"}
         </span>
       </div>
       <ol className="flex gap-1 pt-4">
         {PIPELINE.map((p) => {
-          const on = stops.some((k) => STOP_INFO[k].stage === p.stage);
+          // The charter stop comes before its stage starts; the others close their stage.
+          const before = stops.some((k) => k === "charter" && STOP_INFO[k].stage === p.stage);
+          const after = stops.some((k) => k !== "charter" && STOP_INFO[k].stage === p.stage);
           return (
             <li key={p.stage} className="relative flex min-w-0 flex-1 flex-col gap-1.5">
-              <motion.span
-                className="absolute -top-4 -right-2 text-amber-500"
-                initial={false}
-                animate={{ scale: on ? 1 : 0, opacity: on ? 1 : 0 }}
-                transition={{ type: "spring", stiffness: 500, damping: 22 }}
-              >
-                <Flag className="size-3.5 fill-amber-500/25" />
-              </motion.span>
+              {[
+                { on: before, side: "-left-1" },
+                { on: after, side: "-right-2" },
+              ].map(({ on, side }) => (
+                <motion.span
+                  key={side}
+                  className={cn("absolute -top-4 text-amber-500", side)}
+                  initial={false}
+                  animate={{ scale: on ? 1 : 0, opacity: on ? 1 : 0 }}
+                  transition={{ type: "spring", stiffness: 500, damping: 22 }}
+                >
+                  <Flag className="size-3.5 fill-amber-500/25" />
+                </motion.span>
+              ))}
               <i className="h-1 rounded-full bg-muted" />
               <span className="truncate text-[11px] text-muted-foreground">{STAGE_SHORT[p.stage]}</span>
             </li>
           );
         })}
       </ol>
-      {stops.length ? (
+      {rows.length ? (
         <ul className="flex flex-col gap-2">
           <AnimatePresence initial={false} mode="popLayout">
-            {stops.map((k, i) => (
+            {rows.map((row, i) => (
               <motion.li
-                key={k}
+                key={row.key}
                 layout
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -105,10 +121,8 @@ export function StopsPreview({ mode }: { mode: ReviewMode }) {
                   {i + 1}
                 </span>
                 <span>
-                  <b className="font-medium">{STOP_INFO[k].title}</b>
-                  <span className="block text-muted-foreground text-xs">
-                    {STOP_INFO[k].where}. {STOP_INFO[k].what}
-                  </span>
+                  <b className="font-medium">{row.title}</b>
+                  <span className="block text-muted-foreground text-xs">{row.text}</span>
                 </span>
               </motion.li>
             ))}
@@ -442,7 +456,7 @@ export function StartRunDialog({
                       onValueChange={(v) => setMode(v as ReviewMode)}
                       className="grid gap-2 sm:grid-cols-2"
                     >
-                      {(Object.keys(MODES) as ReviewMode[]).map((key) => (
+                      {RUN_MODES.map((key) => (
                         <label
                           key={key}
                           htmlFor={`mode-${key}`}
@@ -454,15 +468,13 @@ export function StartRunDialog({
                           <RadioGroupItem id={`mode-${key}`} value={key} className="row-span-2 mt-0.5" />
                           <span className="flex items-center gap-2 font-semibold text-sm">
                             {MODES[key].label}
-                            {key === "copilot" && (
+                            {key === "light" && (
                               <span className="rounded-full bg-muted px-1.5 py-px font-medium text-[11px] text-muted-foreground">
                                 Recommended
                               </span>
                             )}
                             <span className="ml-auto font-mono font-normal text-[11px] text-muted-foreground">
-                              {MODES[key].stops.length
-                                ? `${MODES[key].stops.length} stop${MODES[key].stops.length > 1 ? "s" : ""}+`
-                                : "0 stops"}
+                              {stopCount(key) ? `${stopCount(key)} stops+` : "0 stops"}
                             </span>
                           </span>
                           <span className="text-muted-foreground text-xs leading-snug">{MODES[key].line}</span>

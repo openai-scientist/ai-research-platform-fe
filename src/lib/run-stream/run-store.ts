@@ -41,12 +41,15 @@ interface RunStudioState {
   answerGate(runId: string, gateId: string, answer: GateAnswer): Promise<boolean>;
   pause(runId: string): void;
   resume(runId: string): void;
+  /** Follows a run's live events again, after it was started again from an end (a rerun, a budget raise). */
+  follow(runId: string): void;
   openWorkspace(runId: string, from?: Element | null): void;
   closeWorkspace(): void;
 }
 
-interface Stream extends RunCommands {
+export interface Stream extends RunCommands {
   dispose(): void;
+  follow?(): void;
 }
 
 const labelOf = (runId: string) => `RUN-${runId.slice(0, 4).toUpperCase()}`;
@@ -120,7 +123,8 @@ export const useRunStudio = create<RunStudioState>()((set, get) => {
         const { data: run } = await fetchRuns.create(projectId, {
           topic: input.topic,
           domains: input.domains,
-          review_mode: mode,
+          // The Platform stops at its gates in `light` and at none in `auto`.
+          review_mode: mode === "auto" ? "auto" : "light",
         });
         get().attachRun(projectId, run, true);
         return run.id;
@@ -143,8 +147,8 @@ export const useRunStudio = create<RunStudioState>()((set, get) => {
         if (active) set((store) => ({ activeRun: { ...store.activeRun, [projectId]: run.id } }));
         return;
       }
-      const failed = run.status === RunStatus.Failed || run.status === RunStatus.BudgetExceeded;
-      const mode = run.review_mode ?? "copilot";
+      const failed = [RunStatus.Failed, RunStatus.BudgetExceeded, RunStatus.Stopped].includes(run.status);
+      const mode = run.review_mode ?? "light";
       const pipeline = Boolean(run.pipeline_key);
       const stream = new ApiRun(
         projectId,
@@ -168,7 +172,13 @@ export const useRunStudio = create<RunStudioState>()((set, get) => {
             domains: run.domains ?? [],
             mode,
             ...(run.status === RunStatus.Completed ? { completed: true, lifecycle: "completed" as const } : {}),
-            ...(failed ? { lifecycle: "failed" as const, failure: run.failure_message ?? undefined } : {}),
+            ...(failed
+              ? {
+                  lifecycle: "failed" as const,
+                  failure: run.failure_message ?? undefined,
+                  ...(run.status === RunStatus.Stopped ? { stopped: true } : {}),
+                }
+              : {}),
           },
         },
         stream,
@@ -186,6 +196,9 @@ export const useRunStudio = create<RunStudioState>()((set, get) => {
     },
     resume(runId) {
       streams.get(runId)?.resume();
+    },
+    follow(runId) {
+      streams.get(runId)?.follow?.();
     },
     openWorkspace(runId, from) {
       set({ openRunId: runId, openFrom: from ? from.getBoundingClientRect() : null });

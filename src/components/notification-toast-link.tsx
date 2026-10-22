@@ -31,7 +31,9 @@ export function NotificationToastLink({
       const update = () => {
         const progress = Math.min(1, (Date.now() - startedAt) / duration);
         const eased = 1 - (1 - progress) ** 4;
-        const offset = exiting ? -eased * 6 : -(1 - eased) * 8;
+        // Toasts at the bottom rise into place and sink away; those at the top do the reverse.
+        const away = element.dataset.yPosition === "bottom" ? -1 : 1;
+        const offset = away * (exiting ? -eased * 6 : -(1 - eased) * 8);
         const opacity = exiting ? 1 - eased : 0.8 + eased * 0.2;
         element.style.setProperty("--notification-toast-offset", `${offset}px`);
         element.style.setProperty("--notification-toast-opacity", `${opacity}`);

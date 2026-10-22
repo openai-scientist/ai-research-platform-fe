@@ -28,7 +28,8 @@ export function useProjectAccess(projectId: string) {
   const query = useApiQuery(
     [...projectAccessKey(projectId), userId],
     (signal) => fetchProjectAccess(projectId, signal),
-    { enabled: Boolean(projectId && userId), staleTime: 0, refetchInterval: 10_000 },
+    // A role change arrives as a notification, which refreshes this at once; the poll only backs that up.
+    { enabled: Boolean(projectId && userId), staleTime: 10_000, refetchInterval: 60_000 },
   );
   const denied = query.isError || query.data?.data.permissions.can_read_raw_datasets === false;
   useEffect(() => {

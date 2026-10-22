@@ -44,7 +44,21 @@ export type AgentRole =
 export type ReviewMode = "auto" | "light" | "copilot" | "full";
 
 /** `accept` closes a finished stage with the items the person takes forward. */
-export type GateKind = "scope" | "screen" | "hypotheses" | "decision" | "report" | "publish" | "accept";
+export type GateKind = "charter" | "scope" | "screen" | "hypotheses" | "decision" | "report" | "publish" | "accept";
+
+/** The PI's charter: what the run sets out to answer and how it judges success, fixed before any result. */
+export interface Charter {
+  question: string;
+  motivation: string;
+  objectives: string[];
+  scope_in: string[];
+  scope_out: string[];
+  success_criteria: string[];
+  kill_criteria: string[];
+  constraints: string[];
+  risk_posture: "exploratory" | "confirmatory";
+  profile?: { domain?: string | null; research_type?: string | null };
+}
 
 export type RunLifecycle = "running" | "paused" | "awaiting_review" | "completed" | "failed";
 
@@ -52,7 +66,8 @@ export type RunLifecycle = "running" | "paused" | "awaiting_review" | "completed
  * Why a round exists: the first one, a new direction after a pivot, a deeper rerun of the same set, or a revision
  * of the hypotheses you sent back with comments.
  */
-export type RoundKind = "first" | "pivot" | "refine" | "revise";
+/** `review` is a revision the independent reviewer asked for, before you see the set. */
+export type RoundKind = "first" | "pivot" | "refine" | "revise" | "review";
 
 export type Verdict = "supported" | "not_supported" | "insufficient";
 
@@ -101,6 +116,8 @@ export interface PlannedStage {
   round_kind?: RoundKind;
   title: string;
   has_gate: boolean;
+  /** The first stop of this stage, when a stage holds more than one (the map: the hypotheses, then accepting). */
+  gate?: GateKind;
   /** Popper pipeline stages this screen covers. */
   pipeline?: number[];
 }
@@ -278,6 +295,8 @@ export interface KnowledgeCard {
   id: string;
   paper_id: string;
   citation: string;
+  /** The paper's title; sent by the engine, missing on the scripted run. */
+  title?: string;
   problem: string;
   method: string;
   data: string;
@@ -628,8 +647,21 @@ export interface Gate {
   keepable?: string[];
   /** Items the person picks from before confirming (`accept` gates). All start picked; unpicked ones are `dropped`. */
   selection?: { id: string; label: string }[];
+  /** What the PI advises at this stop, when it was asked: `charter` and `accept` gates. */
+  advice?: PiAdvice;
   /** What the independent reviewer found, which the person may send back to be fixed (`hypotheses` gates). */
   review?: { findings: ReviewFinding[]; hypotheses: { id: string; label: string }[] };
+}
+
+/** The PI's advice at a stop: what it would do, how sure it is, and why. */
+export interface PiAdvice {
+  /** The consultation it answered, to read its full result. */
+  consultationId: string;
+  /** Such as `charter`, `accept`, `refine` or `pivot`. */
+  action: string;
+  /** 0 to 1. */
+  confidence?: number;
+  text: string;
 }
 
 export interface GateAnswer {
@@ -639,6 +671,8 @@ export interface GateAnswer {
   dropped?: string[];
   /** Held-back ideas the person keeps. Only for `hypotheses` gates. */
   kept?: string[];
+  /** The charter as the person wrote it. Only for `charter` gates answered with `edit` or `write`. */
+  charter?: Charter;
   /** Review findings sent back to be fixed, by id. Only for `hypotheses` gates with a review. */
   findings?: string[];
   /** Findings the person wrote, sent back with the reviewer's. */
@@ -760,7 +794,12 @@ export type RunEvent =
    */
   | EventBase<"run.started", { mode: ReviewMode; topic: string; domains: string[]; dataset?: DatasetRef }>
   | EventBase<"run.plan", { stages: PlannedStage[] }>
-  | EventBase<"run.status", { status: RunLifecycle; reason?: string }>
+  | EventBase<
+      "run.status",
+      { status: RunLifecycle; reason?: string /** Stopped by a person, not failed. */; stopped?: boolean }
+    >
+  /** Nothing has come from the engine of the open stage for a while. */
+  | EventBase<"run.stalled", { minutes: number }>
   /** `paper_title` is absent when the run ends before the paper, such as right after hypotheses (stage 8). */
   | EventBase<"run.completed", { paper_title?: string }>
   | EventBase<"stage.started", { plan: StagePlan }>
@@ -831,6 +870,8 @@ export type RunEvent =
         files: { name: string; detail: string }[];
         /** ISO 8601 UTC. */
         collected_at: string;
+        /** What each source returned, keyed by source id. */
+        per_source?: Record<string, { requests: number; papers: number; errors?: string[] }>;
       }
     >
   // screen: stage 5
@@ -838,6 +879,8 @@ export type RunEvent =
       "screen.criteria",
       { rules: string[]; relevance_min: number; quality_min: number /** Papers to screen. */; candidates?: number }
     >
+  /** How many candidates the scoring takes on, after those set aside before it. */
+  | EventBase<"screen.planned", { to_screen: number; set_aside: number }>
   | EventBase<"screen.scored", { points: ScreenPoint[] }>
   | EventBase<"screen.rejected", { paper: RejectedPaper }>
   | EventBase<"screen.kept", { paper: ShortlistPaper }>
@@ -859,7 +902,7 @@ export type RunEvent =
   | EventBase<"hypothesis.selected", { hypothesis_id: string; override_note?: string }>
   | EventBase<"review.finding", { finding: ReviewFinding }>
   /** The comments this round of hypotheses answers: findings sent back from the round before. */
-  | EventBase<"review.sent", { findings: ReviewFinding[] }>
+  | EventBase<"review.sent", { findings: ReviewFinding[]; by?: "you" | "reviewer" }>
   | EventBase<
       "idea.set_aside",
       {

@@ -74,7 +74,7 @@ function ProjectReviews({ membership, from, to }: { membership: MembershipSummar
                   <Button asChild variant="link" className="px-0">
                     <Link
                       prefetch={false}
-                      href={researchRunUrl(membership.project_id, run.id, "artifacts")}
+                      href={researchRunUrl(membership.project_id, run.id)}
                       title={run.id}
                       aria-label={`Open results for run ${run.id.slice(0, 8)}`}
                     >
@@ -99,7 +99,7 @@ function ProjectReviews({ membership, from, to }: { membership: MembershipSummar
                 label: "Actions",
                 cell: (run) => (
                   <Button asChild variant="outline">
-                    <Link prefetch={false} href={researchRunUrl(membership.project_id, run.id, "artifacts")}>
+                    <Link prefetch={false} href={researchRunUrl(membership.project_id, run.id)}>
                       Open results
                     </Link>
                   </Button>

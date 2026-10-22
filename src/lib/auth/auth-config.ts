@@ -5,6 +5,8 @@ import type { CurrentUser } from "./types";
 export const AUTH_COOKIE_NAME = "platform_session";
 export const LOGIN_PATH = "/auth/login";
 export const ONBOARDING_PATH = "/onboarding";
+/** Set by the proxy on protected pages: the path and query the browser asked for. */
+export const REQUEST_PATH_HEADER = "x-request-path";
 export const PUBLIC_AUTH_PATHS = [
   "/auth/email/start",
   "/auth/email/verify",
