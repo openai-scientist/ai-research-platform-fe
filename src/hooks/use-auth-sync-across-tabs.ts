@@ -65,6 +65,10 @@ export function useAuthSyncAcrossTabs() {
       void queryClient.cancelQueries();
       if (window.location.pathname.startsWith("/auth/")) {
         queryClient.clear();
+      } else if (window.location.pathname === ONBOARDING_PATH) {
+        // Onboarding shows no one's data and shares the sign-in shell: stay in the app so the shell doesn't reload.
+        queryClient.clear();
+        router.replace(LOGIN_PATH);
       } else {
         window.location.replace(LOGIN_PATH);
       }

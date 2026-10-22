@@ -1,11 +1,14 @@
 import { SkeletonStatus } from "@/app/(main)/_components/content-skeletons";
 import { Skeleton } from "@/components/ui/skeleton";
 
-/** The centred title and line under it, as `AuthStepHeading` lays them out. */
+/** The centred title and line under it, as `AuthStepHeading` lays them out: the titles take two lines here. */
 export function AuthHeadingSkeleton() {
   return (
     <div className="flex flex-col items-center gap-2">
-      <Skeleton className="h-9 w-64 max-w-full" />
+      <div className="flex w-full flex-col items-center gap-1.5 py-0.5">
+        <Skeleton className="h-8 w-60 max-w-full" />
+        <Skeleton className="h-8 w-44 max-w-full" />
+      </div>
       <Skeleton className="h-4 w-56 max-w-full" />
     </div>
   );
