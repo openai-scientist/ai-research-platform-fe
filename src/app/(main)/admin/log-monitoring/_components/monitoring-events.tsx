@@ -30,7 +30,7 @@ export function MonitoringEventDialog({ id, enabled, onClose }: { id: string; en
               <p className="whitespace-pre-wrap break-words">{event.message}</p>
               <dl className="grid gap-3 sm:grid-cols-2">
                 {Object.entries(event)
-                  .filter(([key]) => key !== "payload" && key !== "message")
+                  .filter(([key]) => key !== "payload" && key !== "message" && key !== "attributes")
                   .map(([key, value]) => (
                     <div key={key} className="min-w-0">
                       <dt className="text-muted-foreground text-xs">{readableKey(key)}</dt>
@@ -40,16 +40,33 @@ export function MonitoringEventDialog({ id, enabled, onClose }: { id: string; en
                     </div>
                   ))}
               </dl>
-              <div>
-                <h3 className="mb-2 font-medium">Payload</h3>
-                {Object.keys(event.payload).length ? (
-                  <pre className="max-h-64 overflow-auto rounded-lg bg-muted p-3 text-xs">
-                    {JSON.stringify(event.payload, null, 2)}
-                  </pre>
+              <section>
+                <h3 className="mb-2 font-medium">Attributes</h3>
+                {Object.keys(event.attributes ?? {}).length ? (
+                  <dl className="grid gap-3 sm:grid-cols-2">
+                    {Object.entries(event.attributes ?? {}).map(([key, value]) => (
+                      <div key={key} className="min-w-0">
+                        <dt className="text-muted-foreground text-xs">{readableKey(key)}</dt>
+                        <dd className="mt-1 break-all text-sm">{String(value)}</dd>
+                      </div>
+                    ))}
+                  </dl>
                 ) : (
-                  <p className="text-muted-foreground text-sm">No additional payload is available.</p>
+                  <p className="text-muted-foreground text-sm">No additional attributes are available.</p>
                 )}
-              </div>
+              </section>
+              {!event.attributes && (
+                <div>
+                  <h3 className="mb-2 font-medium">Payload</h3>
+                  {Object.keys(event.payload).length ? (
+                    <pre className="max-h-64 overflow-auto rounded-lg bg-muted p-3 text-xs">
+                      {JSON.stringify(event.payload, null, 2)}
+                    </pre>
+                  ) : (
+                    <p className="text-muted-foreground text-sm">No additional payload is available.</p>
+                  )}
+                </div>
+              )}
             </div>
           )
         )}

@@ -1,0 +1,23 @@
+// Suggestions only: the backend may add event types without a frontend release.
+export const monitoringEventTypes = [
+  "http.request.completed",
+  "api.exception",
+  "api.validation_failed",
+  "auth.session_rejected",
+  "auth.access_denied",
+  "auth.csrf_rejected",
+  "auth.origin_rejected",
+  "engine.request.completed",
+  "engine.request.failed",
+  "engine.contract_mismatch",
+  "engine.callback_failed",
+  "service.started",
+  "service.ready",
+  "service.stopped",
+  "integration.worker.started",
+  "integration.worker.stopped",
+  "integration.delivery.completed",
+  "integration.delivery.retry_scheduled",
+  "integration.delivery.failed",
+  "provider.request.failed",
+] as const;

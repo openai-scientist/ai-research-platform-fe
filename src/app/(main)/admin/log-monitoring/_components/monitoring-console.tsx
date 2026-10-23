@@ -133,7 +133,6 @@ export function MonitoringConsole(props: Props) {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
     toast.success(`${events.length} events exported.`);
   }
-  const selectedEvents = service ? events.filter((event) => event.service_id === service.id) : events;
   return (
     <div
       className="flex min-h-[calc(100svh-var(--dashboard-header-height))] min-w-0 flex-col"
@@ -274,7 +273,7 @@ export function MonitoringConsole(props: Props) {
             {(
               [
                 ["real-time", events],
-                ["events", selectedEvents],
+                ["events", events],
               ] as const
             ).map(([tab, rows]) => (
               <TabsContent key={tab} value={tab} className="m-0 flex min-h-44 flex-1 flex-col overflow-hidden">
@@ -286,7 +285,7 @@ export function MonitoringConsole(props: Props) {
                         props.status === "live" ? "animate-pulse bg-emerald-500" : "bg-muted-foreground",
                       )}
                     />
-                    {tab === "real-time" ? `Stream ${props.status}` : `${service?.name ?? "Service"} events`}
+                    {tab === "real-time" ? `Stream ${props.status}` : "Events matching current filters"}
                   </div>
                   <Button size="sm" variant="outline" disabled={!props.enabled} onClick={props.onPause}>
                     {props.paused ? <Play data-icon="inline-start" /> : <Pause data-icon="inline-start" />}
@@ -323,7 +322,14 @@ export function MonitoringConsole(props: Props) {
                         >
                           {event.level}
                         </span>
-                        <span className="truncate">{event.message}</span>
+                        <span className="flex min-w-0 flex-col gap-1">
+                          <span className="truncate">{event.message}</span>
+                          <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-muted-foreground text-xs">
+                            <span className="break-all">{event.service}</span>
+                            {event.source && <Badge variant="outline">{event.source}</Badge>}
+                            {event.event_type && <span className="break-all">{event.event_type}</span>}
+                          </span>
+                        </span>
                       </button>
                       <Separator />
                     </Fragment>

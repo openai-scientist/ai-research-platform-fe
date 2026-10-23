@@ -27,7 +27,13 @@ export const signalDefinitions = [
     kind: "respiration",
     color: "text-amber-500 dark:text-amber-400",
   },
-  { key: "queue_depth", label: "Queue depth", unit: "jobs", kind: "arterial", color: "text-red-500 dark:text-red-400" },
+  {
+    key: "queue_depth",
+    label: "Writer queue",
+    unit: "items",
+    kind: "arterial",
+    color: "text-red-500 dark:text-red-400",
+  },
   { key: "cpu_percent", label: "CPU load", unit: "%", kind: "ecg", color: "text-lime-500 dark:text-lime-400" },
   {
     key: "memory_percent",
@@ -38,11 +44,15 @@ export const signalDefinitions = [
   },
 ] as const;
 
+function isWorkerAverage(key: Exclude<keyof MonitoringMetricsPoint, "timestamp">) {
+  return key === "cpu_percent" || key === "memory_percent" || key === "queue_depth";
+}
+
 const numericDefinitions = [
   signalDefinitions[0],
   { ...signalDefinitions[2], color: "text-cyan-500 dark:text-cyan-400" },
   { ...signalDefinitions[1], color: "text-amber-500 dark:text-amber-400" },
-  { ...signalDefinitions[3], label: "Queue", color: "text-foreground" },
+  { ...signalDefinitions[3], color: "text-foreground" },
   { ...signalDefinitions[4], label: "CPU", color: "text-red-500 dark:text-red-400" },
   { ...signalDefinitions[5], color: "text-foreground" },
 ] as const;
@@ -58,7 +68,10 @@ export function MonitorSignal({
   kind: WaveformKind;
   compact?: boolean;
 }) {
-  const data = metrics?.available ? metrics.points.map((point) => ({ value: point[metricKey] })) : [];
+  const availability = metrics?.metric_availability?.[metricKey];
+  const available = Boolean(metrics?.available && availability?.available !== false);
+  const reason = metrics?.available ? availability?.reason_code : metrics?.reason_code;
+  const data = available && metrics ? metrics.points.map((point) => ({ value: point[metricKey] })) : [];
   const values = data.flatMap((point) => (point.value === null ? [] : [point.value]));
   const maximum = Math.max(1, ...values);
   return (
@@ -75,9 +88,9 @@ export function MonitorSignal({
         <span className="absolute inset-0 flex items-center justify-center px-3 text-center text-[10px] text-muted-foreground">
           {compact
             ? "No telemetry"
-            : metrics?.available && metricKey === "latency_ms"
+            : available && metricKey === "latency_ms" && !reason
               ? "At least 20 latency samples are required per interval."
-              : availabilityReason(metrics?.reason_code)}
+              : availabilityReason(reason)}
         </span>
       )}
     </div>
@@ -95,10 +108,16 @@ export function MonitoringSignals({
     <div className="grid min-w-0 xl:grid-cols-[minmax(0,1fr)_15.5rem]">
       <div className="min-w-0 border-border xl:border-r">
         {signalDefinitions.map((signal) => (
-          <div key={signal.key} className="grid min-h-16 grid-cols-[6.5rem_minmax(0,1fr)] border-b border-border">
+          <div key={signal.key} className="grid min-h-16 grid-cols-[8rem_minmax(0,1fr)] border-b border-border">
             <div className="flex flex-col gap-0.5 px-3 py-2">
               <span className={cn("font-medium text-sm", signal.color)}>{signal.label}</span>
               <span className="text-[10px] text-muted-foreground">{signal.unit}</span>
+              {isWorkerAverage(signal.key) && (
+                <span className="text-[10px] text-muted-foreground">Per-worker average</span>
+              )}
+              {signal.key === "queue_depth" && (
+                <span className="text-[10px] text-muted-foreground">Monitoring writer backlog</span>
+              )}
             </div>
             <MonitorSignal metrics={metrics} metricKey={signal.key} kind={signal.kind} />
           </div>
@@ -106,7 +125,15 @@ export function MonitoringSignals({
       </div>
       <dl className="grid grid-cols-2 xl:grid-cols-1">
         {numericDefinitions.map((signal) => {
-          const value = service.metrics.available ? service.metrics[signal.key] : null;
+          const workerAverage = isWorkerAverage(signal.key);
+          const availability = metrics?.metric_availability?.[signal.key];
+          const value = workerAverage
+            ? metrics?.available && availability?.available !== false
+              ? (metrics.points.at(-1)?.[signal.key] ?? null)
+              : null
+            : service.metrics.available
+              ? service.metrics[signal.key]
+              : null;
           return (
             <div
               key={signal.key}
@@ -115,7 +142,11 @@ export function MonitoringSignals({
               <div>
                 <dt className={cn("font-medium text-sm", signal.color)}>{signal.label}</dt>
                 <p className="text-[10px] text-muted-foreground">
-                  {value === null ? "Unavailable" : `${service.metrics_window_seconds / 60}-minute window`}
+                  {value === null
+                    ? "Unavailable"
+                    : workerAverage
+                      ? "Latest interval · per-worker average"
+                      : `${service.metrics_window_seconds / 60}-minute window`}
                 </p>
               </div>
               <dd
