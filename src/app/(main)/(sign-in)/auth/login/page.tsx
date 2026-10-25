@@ -12,6 +12,7 @@ import { GoogleSignInFeedback } from "../_components/social-auth/google-sign-in-
 export const metadata: Metadata = {
   title: "Sign in · OpenAI Scientist",
   description: "Sign in to OpenAI Scientist.",
+  alternates: { canonical: "/auth/login" },
 };
 
 export default async function LoginPage() {

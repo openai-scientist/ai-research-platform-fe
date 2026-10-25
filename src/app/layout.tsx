@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import type { Metadata, Viewport } from "next";
 
 import Providers from "@/app/providers";
+import { StructuredData } from "@/components/structured-data";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { APP_CONFIG } from "@/config/app-config";
@@ -58,6 +59,7 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
       <body className={`${fontVars} min-h-screen antialiased`} suppressHydrationWarning>
         {/* Applies theme and layout preferences on load to avoid flicker and unnecessary server rerenders. */}
         <ThemeBootScript />
+        <StructuredData />
         <Providers>
           <TooltipProvider>
             <PreferencesStoreProvider initialValues={PREFERENCE_DEFAULTS}>
