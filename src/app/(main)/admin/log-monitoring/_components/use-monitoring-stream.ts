@@ -78,7 +78,11 @@ export function useMonitoringStream({
               return;
             }
             // These events invalidate REST, including the wrapped alert-updated payload.
-            if (["service-snapshot", "log-event", "alert-updated", "refresh-required"].includes(message.event))
+            if (
+              ["service-snapshot", "metrics-snapshot", "log-event", "alert-updated", "refresh-required"].includes(
+                message.event,
+              )
+            )
               refresh();
           },
           () => {

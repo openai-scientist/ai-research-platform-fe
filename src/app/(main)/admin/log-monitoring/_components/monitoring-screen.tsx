@@ -36,10 +36,7 @@ export function MonitoringScreen() {
   const services = enabled && !servicesQuery.isError ? (servicesQuery.data?.data ?? []) : [];
   const preferredId = selectedId || filters.service_id;
   const service = services.find((item) => item.id === preferredId) ?? services[0];
-  const eventsQuery = useMonitoringEvents(
-    { ...filters, service_id: tab === "events" ? service?.id : filters.service_id, limit: 20, offset },
-    enabled,
-  );
+  const eventsQuery = useMonitoringEvents({ ...filters, limit: 20, offset }, enabled);
   const metricsQuery = useMonitoringMetrics(
     service?.id ?? "",
     { interval_seconds: 60 },
@@ -97,7 +94,7 @@ export function MonitoringScreen() {
           <DialogHeader>
             <DialogTitle>Filter technical events</DialogTitle>
             <DialogDescription>
-              Search logs by environment, service, time, or correlation IDs. The default window is 90 minutes.
+              Search logs by source, event type, service, or correlation IDs. The default window is 90 minutes.
             </DialogDescription>
           </DialogHeader>
           <MonitoringFilters

@@ -84,6 +84,9 @@ export interface MonitoringEvent {
   service: string;
   environment: string;
   level: LogLevel;
+  event_type?: string;
+  source?: string;
+  attributes?: Record<string, string | number | boolean>;
   message: string;
   created_at: string;
   duration_ms: number | null;
@@ -128,6 +131,8 @@ export interface MonitoringServicesParams extends ListParams {
   environment?: string;
 }
 export interface MonitoringEventsParams extends TimeRangeParams {
+  event_type?: string;
+  source?: string;
   service_id?: string;
   environment?: string;
   level?: LogLevel;
@@ -149,6 +154,12 @@ export interface MonitoringMetricsData {
   points: MonitoringMetricsPoint[];
   available: boolean;
   reason_code: string | null;
+  metric_availability?: Partial<
+    Record<
+      Exclude<keyof MonitoringMetricsPoint, "timestamp">,
+      { available: boolean; reason_code: string | null; source: string | null }
+    >
+  >;
 }
 export interface MonitoringPipeline {
   telemetry_connected: "healthy" | "degraded" | "unknown";
