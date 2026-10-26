@@ -82,7 +82,8 @@ describe("run event subscription", () => {
     vi.spyOn(fetchRuns, "getEvents").mockResolvedValueOnce(page([event(1)]));
     const listener = handlers();
     subscribeRunEvents("p", "run-1", { after: 0, live: false }, listener);
-    await vi.waitFor(() => expect(listener.onEvents).toHaveBeenCalledOnce());
+    await vi.waitFor(() => expect(listener.onEnded).toHaveBeenCalledOnce());
+    expect(listener.onEvents).toHaveBeenCalledOnce();
     expect(FakeSource.instances).toHaveLength(0);
   });
 

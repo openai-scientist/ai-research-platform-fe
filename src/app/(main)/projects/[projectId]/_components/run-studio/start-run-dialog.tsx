@@ -1,13 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 
 import { cn } from "cn";
-import { ArrowRight, Check, Flag, Info, Play, Plus, Sparkles, X } from "lucide-react";
+import { ArrowRight, Check, ChevronRight, Flag, Info, Play, Plus, Sparkles, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   Dialog,
   DialogContent,
@@ -21,13 +22,17 @@ import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import type { GateKind, ReviewMode, RunInput } from "@/lib/run-stream/contract";
+import type { GateKind, IntentKind, ReviewMode, RunInput } from "@/lib/run-stream/contract";
 import { SHOW_DATA_STAGE, SHOW_REVIEW_MODE } from "@/lib/run-stream/features";
 import { DATASET } from "@/lib/run-stream/mock/scenario";
 
 import { MODES, PIPELINE, RUN_MODES, STAGE_SHORT, STOP_INFO, stopsFor } from "./run-meta";
 
-const STEPS = ["Topic", ...(SHOW_DATA_STAGE ? ["Data"] : []), ...(SHOW_REVIEW_MODE ? ["Your involvement"] : [])];
+const STEPS = [
+  "Your question",
+  ...(SHOW_DATA_STAGE ? ["Data"] : []),
+  ...(SHOW_REVIEW_MODE ? ["Your involvement"] : []),
+];
 
 /** Fields suggested from the words of the topic. The person keeps, removes or adds to them. */
 const FIELD_HINTS: [RegExp, string][] = [
@@ -44,10 +49,28 @@ function suggestFields(topic: string) {
   return FIELD_HINTS.filter(([re]) => re.test(topic)).map(([, field]) => field);
 }
 
-// The backend's limits for a topic run.
+// The backend's limits for a research case.
 const MIN_TOPIC = 12;
-const MAX_TOPIC = 1000;
+const MAX_TOPIC = 2000;
 const MAX_FIELDS = 6;
+const MIN_INTENT = 12;
+const MAX_CONTEXT = 4000;
+const MAX_ITEM = 500;
+const MAX_CONSTRAINTS = 20;
+const MAX_REFERENCES = 30;
+
+/** What the researcher means to do. Exploring a dataset needs a dataset, which this form does not pick yet. */
+export const INTENTS: { kind: Exclude<IntentKind, "explore_dataset">; label: string; line: string }[] = [
+  { kind: "test", label: "Test a claim", line: "Check a claim you already hold." },
+  { kind: "compare", label: "Compare", line: "Compare methods, conditions or groups." },
+  { kind: "explain", label: "Explain", line: "Find what explains an outcome." },
+];
+
+const lines = (text: string) =>
+  text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
 
 /** What Popper derives from the topic on its own, in the Scope stage. */
 const DERIVED = [
@@ -141,12 +164,53 @@ export function StopsPreview({ mode }: { mode: ReviewMode }) {
   );
 }
 
-/** The topic and fields a run starts from, within the backend's limits. Shared by the composer and the dialog. */
-export function useTopicDraft() {
+/** The parts a run cannot start without, and how the form names them when one is missing. */
+type Need = "topic" | "kind" | "intent";
+const NEEDS: Record<Need, string> = {
+  topic: "your question",
+  kind: "what the run should do",
+  intent: "what you will do with the result",
+};
+
+const listed = (items: string[]) =>
+  items.length > 1 ? `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}` : (items[0] ?? "");
+
+/** How far a text is from its minimum length, as the field shows it while you type. */
+function lengthHint(text: string, min: number) {
+  const short = min - text.trim().length;
+  if (short <= 0) return null;
+  return short === min ? `At least ${min} characters` : `${short} more character${short === 1 ? "" : "s"}`;
+}
+
+/**
+ * The research case a run starts from, within the backend's limits. Shared by the composer and the dialog; `prefix`
+ * keeps the ids of the two forms apart.
+ */
+export function useTopicDraft(prefix: string) {
   const [topic, setTopic] = useState("");
+  const [kind, setKind] = useState<IntentKind | null>(null);
+  const [intent, setIntent] = useState("");
+  const [context, setContext] = useState("");
+  const [constraints, setConstraints] = useState("");
+  const [references, setReferences] = useState("");
   const [removed, setRemoved] = useState<string[]>([]);
   const [added, setAdded] = useState<string[]>([]);
   const [newField, setNewField] = useState("");
+  // Set by a start that was refused: from then on, what is missing is marked.
+  const [checked, setChecked] = useState(false);
+  const ids = {
+    topic: `${prefix}-topic`,
+    kind: `${prefix}-kind`,
+    intent: `${prefix}-intent`,
+    field: `${prefix}-field`,
+    case: `${prefix}-case`,
+  };
+  const short: Record<Need, boolean> = {
+    topic: topic.trim().length < MIN_TOPIC,
+    kind: kind === null,
+    intent: intent.trim().length < MIN_INTENT,
+  };
+  const missing = (Object.keys(short) as Need[]).filter((need) => short[need]);
   const fields = [...new Set([...suggestFields(topic).filter((f) => !removed.includes(f)), ...added])];
   const addField = () => {
     const field = newField.trim();
@@ -167,9 +231,33 @@ export function useTopicDraft() {
     setRemoved((list) => list.filter((f) => f !== field));
     setNewField("");
   };
+  /** True when the run can start. Otherwise marks what is missing, says so and moves to the first gap. */
+  const check = () => {
+    if (!missing.length) return true;
+    setChecked(true);
+    toast.error(`Still needed: ${listed(missing.map((need) => NEEDS[need]))}.`);
+    const first = missing[0];
+    const target =
+      first === "kind"
+        ? document.querySelector<HTMLElement>(`#${ids.kind} [role="radio"]`)
+        : document.getElementById(ids[first]);
+    target?.focus();
+    return false;
+  };
   return {
+    ids,
     topic,
     setTopic,
+    kind,
+    setKind,
+    intent,
+    setIntent,
+    context,
+    setContext,
+    constraints,
+    setConstraints,
+    references,
+    setReferences,
     fields,
     newField,
     setNewField,
@@ -178,65 +266,226 @@ export function useTopicDraft() {
       setRemoved((list) => [...list, field]);
       setAdded((list) => list.filter((f) => f !== field));
     },
-    ready: topic.trim().length >= MIN_TOPIC,
+    /** Marked once a start was refused, and only while it is still missing. */
+    invalid: (need: Need) => checked && short[need],
+    check,
     words: topic.trim() ? topic.trim().split(/\s+/).length : 0,
     reset: () => {
       setTopic("");
+      setKind(null);
+      setIntent("");
+      setContext("");
+      setConstraints("");
+      setReferences("");
       setRemoved([]);
       setAdded([]);
       setNewField("");
+      setChecked(false);
     },
     /** What the run starts from, or null after saying why it can't start yet. */
     input: (): RunInput | null => {
+      if (!check() || !kind) return null;
       if (fields.length > MAX_FIELDS) {
         toast.error(`Keep at most ${MAX_FIELDS} fields.`);
         return null;
       }
-      return { topic: topic.trim(), domains: fields };
+      const limits = lines(constraints);
+      const refs = lines(references);
+      if (limits.length > MAX_CONSTRAINTS) {
+        toast.error(`Keep at most ${MAX_CONSTRAINTS} constraints.`);
+        return null;
+      }
+      if (limits.some((line) => line.length > MAX_ITEM)) {
+        toast.error(`Each constraint can be at most ${MAX_ITEM} characters.`);
+        return null;
+      }
+      if (refs.length > MAX_REFERENCES) {
+        toast.error(`Keep at most ${MAX_REFERENCES} references.`);
+        return null;
+      }
+      if (refs.some((line) => line.length < 3 || line.length > MAX_ITEM)) {
+        toast.error(`Each reference needs 3 to ${MAX_ITEM} characters.`);
+        return null;
+      }
+      return {
+        problem: topic.trim(),
+        intent: { kind, text: intent.trim() },
+        context: context.trim(),
+        constraints: limits,
+        references: refs.map((citation) => ({ citation })),
+        domains: fields,
+      };
     },
   };
 }
 
 type TopicDraft = ReturnType<typeof useTopicDraft>;
 
+/** A field's help line, with what it still needs on the right while you type. */
+function Hint({ children, need }: { children: ReactNode; need: string | null }) {
+  return (
+    <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+      <FieldDescription className="min-w-0 flex-1 basis-60">{children}</FieldDescription>
+      {need && <span className="font-mono text-[11px] text-muted-foreground tabular-nums">{need}</span>}
+    </div>
+  );
+}
+
 export function TopicInput({
   draft,
-  id,
-  label,
   className,
   autoFocus,
 }: {
   draft: TopicDraft;
-  id: string;
-  label: string;
   className?: string;
   autoFocus?: boolean;
 }) {
+  const invalid = draft.invalid("topic");
   return (
-    <Field>
-      <FieldLabel htmlFor={id} className={className}>
-        {label}
+    <Field data-invalid={invalid}>
+      <FieldLabel htmlFor={draft.ids.topic} className={className}>
+        What do you want to find out?
       </FieldLabel>
       <Textarea
-        id={id}
+        id={draft.ids.topic}
         value={draft.topic}
         onChange={(e) => draft.setTopic(e.target.value)}
         maxLength={MAX_TOPIC}
+        aria-invalid={invalid}
         placeholder="One question you want answered, such as: does more sleep go with higher exam scores in our undergraduates?"
-        className="font-(family-name:--font-lora) min-h-24 text-[17px] leading-snug md:text-[17px]"
+        className="font-(family-name:--font-lora) min-h-24 text-[17px] text-foreground leading-snug md:text-[17px]"
         autoFocus={autoFocus}
       />
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-        <FieldDescription className="min-w-0 basis-full sm:basis-0 sm:flex-1">
-          Write it as one question. You don't list sub-questions; Popper derives them.
-        </FieldDescription>
-        <span className="font-mono text-[11px] text-muted-foreground tabular-nums">{draft.words} words</span>
-      </div>
+      <Hint need={lengthHint(draft.topic, MIN_TOPIC) ?? `${draft.words} words`}>
+        {invalid
+          ? `Write the question the run should answer, in at least ${MIN_TOPIC} characters.`
+          : "Write it as one question. You don't list sub-questions; Popper derives them."}
+      </Hint>
     </Field>
   );
 }
 
-export function FieldsInput({ draft, id }: { draft: TopicDraft; id: string }) {
+/** What the run is for: the kind of answer, and what you will do with it. Both are part of the case. */
+export function IntentInput({ draft }: { draft: TopicDraft }) {
+  const { ids } = draft;
+  const kindInvalid = draft.invalid("kind");
+  const intentInvalid = draft.invalid("intent");
+  return (
+    <>
+      <Field data-invalid={kindInvalid}>
+        <FieldLabel id={`${ids.kind}-label`}>What should the run do?</FieldLabel>
+        <RadioGroup
+          id={ids.kind}
+          value={draft.kind ?? ""}
+          onValueChange={(value) => draft.setKind(value as IntentKind)}
+          aria-labelledby={`${ids.kind}-label`}
+          className="grid gap-2 sm:grid-cols-3"
+        >
+          {INTENTS.map((it) => (
+            <label
+              key={it.kind}
+              htmlFor={`${ids.kind}-${it.kind}`}
+              className={cn(
+                "grid cursor-pointer grid-cols-[auto_1fr] gap-x-2.5 gap-y-0.5 rounded-xl border px-3.5 py-3 transition-[background-color,box-shadow,border-color] hover:bg-muted/60",
+                draft.kind === it.kind && "border-foreground ring-1 ring-foreground",
+                kindInvalid && "border-destructive/50",
+              )}
+            >
+              <RadioGroupItem
+                id={`${ids.kind}-${it.kind}`}
+                value={it.kind}
+                aria-invalid={kindInvalid}
+                className="row-span-2 mt-0.5"
+              />
+              <span className="font-semibold text-foreground text-sm">{it.label}</span>
+              <span className="text-muted-foreground text-xs leading-snug">{it.line}</span>
+            </label>
+          ))}
+        </RadioGroup>
+        {kindInvalid && <FieldDescription>Pick the kind of answer you need.</FieldDescription>}
+      </Field>
+      <Field data-invalid={intentInvalid}>
+        <FieldLabel htmlFor={ids.intent}>What will you do with the result?</FieldLabel>
+        <Input
+          id={ids.intent}
+          value={draft.intent}
+          onChange={(e) => draft.setIntent(e.target.value)}
+          maxLength={MAX_TOPIC}
+          aria-invalid={intentInvalid}
+          placeholder="Decide what sleep advice to give first-year students"
+          className="text-foreground"
+        />
+        <Hint need={lengthHint(draft.intent, MIN_INTENT)}>
+          {intentInvalid
+            ? `Say in one sentence what the answer is for, in at least ${MIN_INTENT} characters.`
+            : "One sentence. It tells the PI what a useful answer looks like."}
+        </Hint>
+      </Field>
+    </>
+  );
+}
+
+/** The optional parts of the case, kept apart from what a run needs. None blocks the run. */
+export function CaseDetailsInput({ draft }: { draft: TopicDraft }) {
+  const id = draft.ids.case;
+  const filled = [draft.context, draft.constraints, draft.references].filter((v) => v.trim()).length;
+  const [open, setOpen] = useState(false);
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <CollapsibleTrigger asChild>
+        <button
+          type="button"
+          className="-mx-1.5 flex items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-sm outline-none hover:bg-muted/60 focus-visible:ring-3 focus-visible:ring-ring/50"
+        >
+          <ChevronRight className={cn("size-4 text-muted-foreground transition-transform", open && "rotate-90")} />
+          <span className="font-medium">Context, constraints and references</span>
+          <span className="text-muted-foreground text-xs">{filled ? `${filled} of 3 added` : "Optional"}</span>
+        </button>
+      </CollapsibleTrigger>
+      <CollapsibleContent className="mt-3 flex flex-col gap-4 rounded-xl bg-muted/50 p-4">
+        <p className="text-muted-foreground text-xs">
+          Every stage reads these. Left empty, the PI fills the gaps with its own assumptions.
+        </p>
+        <Field>
+          <FieldLabel htmlFor={`${id}-context`}>Context</FieldLabel>
+          <Textarea
+            id={`${id}-context`}
+            value={draft.context}
+            onChange={(e) => draft.setContext(e.target.value)}
+            maxLength={MAX_CONTEXT}
+            placeholder="Background the agents should know: your setting, what you have tried, who the result is for."
+            className="min-h-20 bg-background"
+          />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor={`${id}-constraints`}>Constraints</FieldLabel>
+          <Textarea
+            id={`${id}-constraints`}
+            value={draft.constraints}
+            onChange={(e) => draft.setConstraints(e.target.value)}
+            placeholder={"One per line, for example:\nOnly public datasets\nNo studies before 2015"}
+            className="min-h-20 bg-background"
+          />
+          <FieldDescription>Limits every stage must respect. One per line.</FieldDescription>
+        </Field>
+        <Field>
+          <FieldLabel htmlFor={`${id}-references`}>Papers you already know</FieldLabel>
+          <Textarea
+            id={`${id}-references`}
+            value={draft.references}
+            onChange={(e) => draft.setReferences(e.target.value)}
+            placeholder={"One per line: a DOI, a URL or a title, for example:\n10.1093/sleep/zsy171"}
+            className="min-h-20 bg-background"
+          />
+          <FieldDescription>The literature search starts from them. One per line.</FieldDescription>
+        </Field>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
+export function FieldsInput({ draft }: { draft: TopicDraft }) {
+  const id = draft.ids.field;
   const { fields, newField, setNewField, addField, removeField } = draft;
   return (
     <Field>
@@ -311,7 +560,7 @@ export function StartRunDialog({
   const [step, setStep] = useState(0);
   const [dir, setDir] = useState(1);
   const [mode, setMode] = useState<ReviewMode>(defaultMode);
-  const draft = useTopicDraft();
+  const draft = useTopicDraft("run");
   const [starting, setStarting] = useState(false);
   const start = async () => {
     const input = draft.input();
@@ -390,8 +639,10 @@ export function StartRunDialog({
             >
               {step === 0 && (
                 <>
-                  <TopicInput draft={draft} id="run-topic" label="Research topic" autoFocus />
-                  <FieldsInput draft={draft} id="run-field" />
+                  <TopicInput draft={draft} autoFocus />
+                  <IntentInput draft={draft} />
+                  <FieldsInput draft={draft} />
+                  <CaseDetailsInput draft={draft} />
                   <div className="flex flex-col gap-2 rounded-xl bg-muted/60 px-4 py-3.5">
                     <span className="flex items-center gap-1.5 font-medium text-sm">
                       <Sparkles className="size-3.5 text-muted-foreground" />
@@ -496,12 +747,12 @@ export function StartRunDialog({
             {STEPS.length > 1 && `Step ${step + 1} of ${STEPS.length}`}
           </span>
           {step < STEPS.length - 1 ? (
-            <Button onClick={() => move(step + 1)} disabled={step === 0 && !draft.ready}>
+            <Button onClick={() => (step > 0 || draft.check()) && move(step + 1)}>
               Next: {STEPS[step + 1]}
               <ArrowRight />
             </Button>
           ) : (
-            <Button onClick={start} disabled={!draft.ready || starting}>
+            <Button onClick={start} disabled={starting}>
               <Play />
               {starting ? "Starting…" : "Start research run"}
             </Button>

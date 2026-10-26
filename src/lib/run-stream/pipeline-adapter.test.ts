@@ -266,6 +266,18 @@ describe("PipelineAdapter", () => {
       expect(state.gate?.advice).toMatchObject({ consultationId: consultation, action: "charter", confidence: 0.86 });
     });
 
+    it("ends a run abandoned while the plan waits, though no event said so", () => {
+      const adapter = new PipelineAdapter(info);
+      const events = convert(envelopes.slice(0, until("pi.consultation_requested")), adapter);
+      const ended = adapter.end("failed", "Abandoned by a project manager");
+      const state = replayRunEvents("run-1", [...events, ...ended]);
+      expect(state.lifecycle).toBe("failed");
+      expect(state.failure).toBe("Abandoned by a project manager");
+      expect(state.gate).toBeNull();
+      expect(adapter.end("failed", "Again")).toEqual([]);
+      expect(new PipelineAdapter(info).end("completed")).toEqual([]);
+    });
+
     it("goes on without stopping when the PI settles it (Auto)", () => {
       const list = [
         { ...asked, payload: { ...asked.payload, authority: "pi" } },

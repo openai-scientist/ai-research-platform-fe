@@ -998,9 +998,25 @@ export type WritingEvent =
 export type WritingEventType = WritingEvent["type"];
 export type WritingEventOf<T extends WritingEventType> = Extract<WritingEvent, { type: T }>;
 
-/** What the person gives when starting a run. In the real API this is the body of `POST …/runs`. */
+/** What the researcher means to do with the result. `explore_dataset` needs a dataset and no problem. */
+export type IntentKind = "test" | "compare" | "explain" | "explore_dataset";
+
+/** A paper the researcher already knows: a DOI, a URL or a title. */
+export interface CaseReference {
+  citation: string;
+  note?: string;
+}
+
+/**
+ * What the person gives when starting a run: the research case. In the real API this is the body of `POST …/runs`.
+ * `problem` is the question the run answers; context, constraints and references are optional.
+ */
 export interface RunInput {
-  topic: string;
+  problem: string;
+  intent: { kind: IntentKind; text: string };
+  context?: string;
+  constraints?: string[];
+  references?: CaseReference[];
   domains: string[];
 }
 

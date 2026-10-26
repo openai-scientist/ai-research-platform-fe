@@ -2,10 +2,19 @@ import { toast } from "sonner";
 
 import { fetchRuns } from "@/lib/api/services/fetch-runs";
 import { subscribeRunEvents } from "@/lib/realtime/run-events";
+import { RunStatus } from "@/types/enums";
 
 import type { GateAnswer, RunCommands, RunEvent } from "./contract";
 import { RunPacer } from "./pacer";
 import { PipelineAdapter, type PipelineEnvelope, type PipelineRunInfo } from "./pipeline-adapter";
+
+/** How a finished run ended, by its status. */
+const ENDED = new Map<RunStatus, "completed" | "failed" | "stopped">([
+  [RunStatus.Completed, "completed"],
+  [RunStatus.Failed, "failed"],
+  [RunStatus.BudgetExceeded, "failed"],
+  [RunStatus.Stopped, "stopped"],
+]);
 
 /**
  * What a hypotheses gate sends back to be revised: the reviewer's findings the person picked, as the engine sent them,
@@ -98,13 +107,26 @@ export class ApiRun implements RunCommands {
           this.following = true;
           this.pacer.push(this.adapt(events));
         },
-        onEnded: () => {
-          // Nothing to do: the last events have already marked the run as finished.
-        },
+        onEnded: () => void this.settle(),
         onSessionEnded: () => window.dispatchEvent(new Event("auth:expired")),
         onError: showError,
       },
     );
+  }
+
+  /** Every event has been read. A Popper run's last events say how it ended; a pipeline run's may not, so it is asked. */
+  private async settle() {
+    const { adapter } = this;
+    if (!adapter) return;
+    try {
+      const run = (await fetchRuns.getById(this.projectId, this.runId)).data;
+      const ended = ENDED.get(run.status);
+      if (!ended) return;
+      // Behind any live events still being shown.
+      this.pacer.push(adapter.end(ended, run.failure_message));
+    } catch {
+      // The run keeps what its events said; opening it again asks again.
+    }
   }
 
   dispose() {

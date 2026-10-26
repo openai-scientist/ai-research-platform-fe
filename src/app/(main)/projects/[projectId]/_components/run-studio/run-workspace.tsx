@@ -17,7 +17,7 @@ import { useApiMutation } from "@/hooks/use-api";
 import { useProjectDetailQuery } from "@/hooks/use-projects-query";
 import { useRunsQuery } from "@/hooks/use-runs-query";
 import { projectKeys } from "@/lib/api/query-keys";
-import { fetchRuns } from "@/lib/api/services/fetch-runs";
+import { fetchRuns, runProblem } from "@/lib/api/services/fetch-runs";
 import { getProjectAccess } from "@/lib/auth/project-access";
 import type { GateAnswer } from "@/lib/run-stream/contract";
 import { SHOW_REVIEW_MODE } from "@/lib/run-stream/features";
@@ -511,8 +511,8 @@ function useLatestRun(projectId: string, session: RunSession | undefined) {
   const shown = session?.runId;
   const shownAt = session?.createdAt;
   useEffect(() => {
-    // Runs started from a dataset have no topic and keep their own page.
-    if (!run?.topic || run.id === shown) return;
+    // A run that explores a dataset has no problem of its own and keeps its own page.
+    if (!run || !runProblem(run) || run.id === shown) return;
     // Only a newer run: a cached answer from before may still name an older one.
     if (shownAt && Date.parse(run.created_at) <= Date.parse(shownAt)) return;
     // Not while the ended run is open: switching would close the workspace under you.

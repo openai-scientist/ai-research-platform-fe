@@ -1,7 +1,7 @@
 import { toast } from "sonner";
 import { create } from "zustand";
 
-import { fetchRuns, type RunItem } from "@/lib/api/services/fetch-runs";
+import { fetchRuns, type RunItem, runProblem, runTitle } from "@/lib/api/services/fetch-runs";
 import { isActiveRun } from "@/lib/research-workspace";
 import { ApiError } from "@/types/api";
 import { RunStatus } from "@/types/enums";
@@ -121,7 +121,11 @@ export const useRunStudio = create<RunStudioState>()((set, get) => {
     async startRun(projectId, mode, input) {
       try {
         const { data: run } = await fetchRuns.create(projectId, {
-          topic: input.topic,
+          problem: input.problem,
+          intent: input.intent,
+          context: input.context,
+          constraints: input.constraints,
+          references: input.references,
           domains: input.domains,
           // The Platform stops at its gates in `light` and at none in `auto`.
           review_mode: mode === "auto" ? "auto" : "light",
@@ -134,7 +138,7 @@ export const useRunStudio = create<RunStudioState>()((set, get) => {
         // The project already has a run going: show that one instead.
         try {
           const running = (await fetchRuns.getList(projectId, { limit: 1 })).data[0];
-          if (!running?.topic) return null;
+          if (!running || !runProblem(running)) return null;
           get().attachRun(projectId, running, true);
           return running.id;
         } catch {
@@ -156,7 +160,7 @@ export const useRunStudio = create<RunStudioState>()((set, get) => {
         (events, live) => {
           for (const event of events) receive(event, live);
         },
-        pipeline ? { topic: run.topic ?? "", domains: run.domains ?? [], mode } : undefined,
+        pipeline ? { topic: runTitle(run) ?? "", domains: run.domains ?? [], mode } : undefined,
       );
       track(
         {
@@ -168,7 +172,7 @@ export const useRunStudio = create<RunStudioState>()((set, get) => {
           // What the run already says about itself, until its events arrive.
           state: {
             ...initialRunState(run.id),
-            topic: run.topic ?? "",
+            topic: runTitle(run) ?? "",
             domains: run.domains ?? [],
             mode,
             ...(run.status === RunStatus.Completed ? { completed: true, lifecycle: "completed" as const } : {}),

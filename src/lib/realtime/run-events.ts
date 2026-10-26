@@ -109,7 +109,12 @@ export function subscribeRunEvents(
     syncing = true;
     try {
       await catchUp();
-      if (!disposed && options.live) connect();
+      if (disposed) return;
+      if (options.live) connect();
+      else {
+        stop();
+        handlers.onEnded();
+      }
     } catch (error) {
       if (disposed) return;
       if (error instanceof ApiError && SESSION_INVALID_CODES.includes(error.code)) {

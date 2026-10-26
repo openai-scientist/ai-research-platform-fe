@@ -651,6 +651,7 @@ export class PipelineAdapter {
   private gate: { id: string; kind: GateKind; engineKind: "question" | "artifact_review" | null } | null = null;
   private decision: Record<string, unknown> | null = null;
   private failed = false;
+  private completed = false;
   /** Who settles the charter: you (Light), or the PI on its own (Auto). */
   private charterBy: "you" | "pi" = "pi";
   /** The set the stage published: without the hypotheses dropped at the last stop, with any idea kept there. */
@@ -683,6 +684,22 @@ export class PipelineAdapter {
   private at: PipelineEnvelope | null = null;
 
   constructor(private readonly run: PipelineRunInfo) {}
+
+  /**
+   * A run can end with no event saying so, such as one abandoned before its first stage opened. Given how the run
+   * ended, returns the events that close it; none when its events already did, or when none were shown.
+   */
+  end(status: "completed" | "failed" | "stopped", reason?: string | null): RunEvent[] {
+    this.out = [];
+    if (!this.started) return this.out;
+    if (status !== "completed") this.fail(reason ?? "The run ended before it finished.", status === "stopped");
+    else if (!this.completed) {
+      this.completed = true;
+      this.gate = null;
+      this.emit("run.completed", {});
+    }
+    return this.out;
+  }
 
   /** Where an answer to this gate goes, or null when the gate is not open. */
   route(gateId: string): GateRoute | null {
@@ -1271,6 +1288,7 @@ export class PipelineAdapter {
       this.decision = null;
       this.closeStep();
       if (this.screen) this.emit("stage.completed", { summary: this.summary(this.screen.key) });
+      this.completed = true;
       this.emit("run.completed", {});
     } else if (status === "FAILED") this.fail("The stage stopped before it finished.");
     else if (status === "STOPPED")

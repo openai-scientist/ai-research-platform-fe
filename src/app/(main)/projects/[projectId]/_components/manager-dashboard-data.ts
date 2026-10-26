@@ -1,5 +1,6 @@
 import type { ManagerResearchData } from "@/lib/api/services/fetch-manager";
 import type { ProjectItem } from "@/lib/api/services/fetch-project";
+import { runTitle } from "@/lib/api/services/fetch-runs";
 import { RunStatus } from "@/types/enums";
 
 import type { ProjectDashboard } from "./project-dashboard-data";
@@ -33,7 +34,7 @@ export function toManagerDashboard(
           ? `${dataset.name} v${latest.dataset_version_number}`
           : dataset.name
         : "No dataset selected",
-    researchQuestion: latest?.topic ?? "No research topic yet.",
+    researchQuestion: (latest && runTitle(latest)) ?? "No research problem yet.",
     sampleInsights: Boolean(preview),
     activeHypothesis: preview?.activeHypothesis ?? {
       id: "",

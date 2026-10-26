@@ -96,7 +96,8 @@ function describe(item: AuditItem, person: People): { verb: string; object?: str
     case "project_file.deleted":
       return { verb: "deleted a document", object: text(details.filename) };
     case "run.created":
-      return { verb: "started a research run on", object: text(details.topic) };
+      // Runs started before the research case log a topic; later ones a title.
+      return { verb: "started a research run on", object: text(details.title ?? details.topic) };
     case "run.paused":
       return { verb: "paused a research run" };
     case "run.resumed":

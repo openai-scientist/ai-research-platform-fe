@@ -176,16 +176,16 @@ const contracts: Contract[] = [
     url: `${project}/runs`,
     call: () =>
       fetchRuns.create(p, {
-        topic: "How does study time affect exam scores?",
+        problem: "How does study time affect exam scores?",
+        intent: { kind: "explain", text: "Decide how much study time to advise." },
         domains: ["education"],
         review_mode: "copilot",
-        budget_usd: "10",
       }),
     body: {
-      topic: "How does study time affect exam scores?",
+      problem: "How does study time affect exam scores?",
+      intent: { kind: "explain", text: "Decide how much study time to advise." },
       domains: ["education"],
       review_mode: "copilot",
-      budget_usd: "10",
     },
   },
   ...(["sync", "abandon"] as const).map((action) => ({
