@@ -4,7 +4,19 @@ import { useEffect, useRef, useState } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "cn";
-import { ArrowRight, ChevronRight, CircleCheck, CircleX, Database, Flag, Lock, Play, Plus, Upload } from "lucide-react";
+import {
+  ArrowRight,
+  ChevronRight,
+  CircleCheck,
+  CircleX,
+  Database,
+  Flag,
+  Lock,
+  PenLine,
+  Play,
+  Plus,
+  Upload,
+} from "lucide-react";
 import { motion } from "motion/react";
 
 import { ManagementStatusBadge } from "@/components/management-status-badge";
@@ -15,7 +27,7 @@ import { useInfiniteRuns } from "@/hooks/use-runs-query";
 import { projectKeys } from "@/lib/api/query-keys";
 import type { RunItem } from "@/lib/api/services/fetch-runs";
 import type { ReviewMode, RunInput } from "@/lib/run-stream/contract";
-import { SHOW_DATA_STAGE, SHOW_REVIEW_MODE } from "@/lib/run-stream/features";
+import { SHOW_DATA_STAGE, SHOW_REVIEW_MODE, SHOW_WRITING_PREVIEW } from "@/lib/run-stream/features";
 import { DATASET } from "@/lib/run-stream/mock/scenario";
 import { type RunSession, useProjectRun, useRunStudio } from "@/lib/run-stream/run-store";
 import { displayStatus, finalResults, GATE_TITLE, inSentence, nextStop, signed } from "@/lib/run-stream/selectors";
@@ -35,6 +47,7 @@ import {
 } from "./run-meta";
 import { compactNumber, RunStats } from "./run-stats";
 import { FieldsInput, StartRunDialog, TopicInput, useTopicDraft } from "./start-run-dialog";
+import { openWritingPreview, useWritingPreviewState } from "./writing/engine";
 
 function SectionTitle({ title, aside }: { title: string; aside?: string }) {
   return (
@@ -457,6 +470,47 @@ function PastRunRow({ run }: { run: RunItem }) {
   );
 }
 
+const PREVIEW_STATE = {
+  idle: null,
+  live: { label: "In progress", dot: "bg-sky-500", c: "bg-sky-500/12 text-sky-700 dark:text-sky-300" },
+  waiting: { label: "Waiting for you", dot: "bg-amber-500", c: "bg-amber-500/15 text-amber-800 dark:text-amber-300" },
+  done: { label: "Signed", dot: "bg-emerald-500", c: "bg-emerald-500/12 text-emerald-700 dark:text-emerald-300" },
+};
+
+/** The writing stage on its own: it plays on an example record, so it can be tried without a research run. */
+function WritingPreviewRow() {
+  const state = useWritingPreviewState();
+  const chip = PREVIEW_STATE[state];
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-2.5 rounded-xl bg-card px-4 py-3 ring-1 ring-foreground/10">
+      <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground">
+        <PenLine className="size-4" />
+      </span>
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="flex flex-wrap items-center gap-2">
+          <b className="font-medium text-sm">Writing stage</b>
+          <span className="rounded bg-muted px-1.5 font-medium text-[10.5px] text-muted-foreground">Preview</span>
+          {chip && (
+            <span
+              className={cn("inline-flex h-5 items-center gap-1.5 rounded-full px-2 font-medium text-[11px]", chip.c)}
+            >
+              <span className={cn("size-1.5 rounded-full", chip.dot)} />
+              {chip.label}
+            </span>
+          )}
+        </span>
+        <span className="text-pretty text-muted-foreground text-xs">
+          Plays the writing stage on an example research record, without running the research flow first.
+        </span>
+      </div>
+      <Button variant="outline" size="sm" className="max-sm:w-full" onClick={openWritingPreview}>
+        <Play />
+        {state === "idle" ? "Run the writing stage" : "Open the writing stage"}
+      </Button>
+    </div>
+  );
+}
+
 /** Earlier runs. A run started from a topic opens in the workspace; older runs open their own page. */
 function PastRuns({ projectId, hide }: { projectId: string; hide?: string }) {
   const runs = useInfiniteRuns(projectId, { refetchInterval: (query) => (query.state.error ? false : 15_000) });
@@ -561,6 +615,7 @@ export function RunStudio({ projectId, canWrite }: { projectId: string; canWrite
           }}
         />
       )}
+      {SHOW_WRITING_PREVIEW && <WritingPreviewRow />}
       <PastRuns projectId={projectId} hide={session?.runId} />
       <StartRunDialog open={dialog} onOpenChange={setDialog} defaultMode={mode} onStart={start} />
     </div>

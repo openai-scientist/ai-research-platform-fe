@@ -971,6 +971,33 @@ export type RunEvent =
 export type RunEventType = RunEvent["type"];
 export type RunEventOf<T extends RunEventType> = Extract<RunEvent, { type: T }>;
 
+// ---------- writing: the Write stage's own pipeline ----------
+
+/**
+ * The Write stage runs its own pipeline (ASW, stages S00–S16) with its own agents, who go by short codes (`js` the
+ * Journal Specialist, `or` the Orchestrator). Its events have the same envelope and reuse the run-wide events above;
+ * only `writing.item` is its own.
+ */
+type WritingEventBase<T extends string, P> = Omit<EventBase<T, P>, "actor"> & { actor?: string };
+
+export type WritingEvent =
+  | WritingEventBase<"stage.started", { round: number }>
+  | WritingEventBase<"stage.completed", RunEventOf<"stage.completed">["payload"]>
+  | WritingEventBase<"step.started", RunEventOf<"step.started">["payload"]>
+  | WritingEventBase<"step.completed", RunEventOf<"step.completed">["payload"]>
+  /** Streamed narration, as in a research run: deltas with the same `message_id` append; `done` closes it. */
+  | WritingEventBase<"agent.message", RunEventOf<"agent.message">["payload"]>
+  /**
+   * An agent filled the next item of a list in a writing scene: a field of the data report, a turn of the debate, a
+   * line of the journal contract. `list` names the list, `index` counts from 0 and `item_id` names the item. `text` is
+   * what the agent wrote into it: the screen types it out as it arrives, as a research run types a debate turn, and the
+   * next item waits until it is typed. `value` is what the item sets when it is not text, such as an ASPIC+ label.
+   */
+  | WritingEventBase<"writing.item", { list: string; index: number; item_id: string; text: string; value?: string }>;
+
+export type WritingEventType = WritingEvent["type"];
+export type WritingEventOf<T extends WritingEventType> = Extract<WritingEvent, { type: T }>;
+
 /** What the person gives when starting a run. In the real API this is the body of `POST …/runs`. */
 export interface RunInput {
   topic: string;

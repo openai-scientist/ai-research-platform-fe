@@ -57,14 +57,12 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
       suppressHydrationWarning
     >
       <body className={`${fontVars} min-h-screen antialiased`} suppressHydrationWarning>
-        {/* Applies theme and layout preferences on load to avoid flicker and unnecessary server rerenders. */}
         <ThemeBootScript />
         <StructuredData />
         <Providers>
           <TooltipProvider>
             <PreferencesStoreProvider initialValues={PREFERENCE_DEFAULTS}>
               {children}
-              {/* Top centre stays clear of bars pinned to the bottom, such as the settings save bar. */}
               <Toaster position="top-center" closeButton />
             </PreferencesStoreProvider>
           </TooltipProvider>
