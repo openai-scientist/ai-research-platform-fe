@@ -10,8 +10,8 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 
 import { Caret } from "../run-bits";
-import { ALLOC, COMMENTS, DATA_AV, DISCLOSURE, PLANX, REVIEWERS } from "./data/core";
-import { PARAS, type Para, REFS } from "./data/paper";
+import { ALLOC, COMMENTS, DATA_AV, DISCLOSURE, EDITS, PLANX, REVIEWERS } from "./data/core";
+import { PAPER_TITLE, PARAS, type Para, REFS } from "./data/paper";
 import {
   briefIds,
   movedOut,
@@ -157,11 +157,11 @@ export function ParaText({ p, typed, caret, writer }: { p: Para; typed: number; 
     left -= len;
     if (t.k === "t") {
       const text = part != null ? t.t.slice(0, part) : t.t;
-      if (p.id === "RES-2" && !sigDone && S.pp.sig && text.startsWith("The gain grew")) {
+      if (SIG && p.id === SIG.p && !sigDone && S.pp.sig && text.startsWith(SIG.from)) {
         sigDone = true;
         out.push(
           <span key={t.key}>
-            The gain grew
+            {SIG.from}
             <span data-sig data-cursor="sig">
               {S.pp.sig === "ins" ? (
                 <M
@@ -181,7 +181,7 @@ export function ParaText({ p, typed, caret, writer }: { p: Para; typed: number; 
                 </>
               )}
             </span>
-            {text.slice(13)}
+            {text.slice(SIG.from.length)}
           </span>,
         );
       } else out.push(<span key={t.key}>{text}</span>);
@@ -235,7 +235,7 @@ export function Brief({ p, idx }: { p: Para; idx: number }) {
         <span>
           <b className="font-medium">{paraLabel(p)} needs evidence.</b>{" "}
           <span className="text-muted-foreground">
-            {p.job} No timing log exists, so nothing is written here and no number is guessed.
+            {p.job} The record has no entry year, so nothing is written here and no number is guessed.
           </span>
         </span>
       </M>
@@ -260,23 +260,26 @@ export function Brief({ p, idx }: { p: Para; idx: number }) {
   );
 }
 
+/* the style edit that changes meaning: shown in the text, then reverted */
+const SIG = EDITS.find((e): e is typeof e & { from: string } => Boolean(e.from));
+
 export function Table1() {
   const rows: [string, string, string][] = [
-    ["BM25", "0.612", "—"],
-    ["Dense (E5-base)", "0.641", "0.029"],
-    ["Fusion (RRF)", "0.688", "0.076"],
+    ["LR-E · enrolment data", "0.392", "0.783"],
+    ["GB-E · enrolment data", "0.396", "0.788"],
+    ["GB-ES1 · plus first semester", "0.507", "0.923"],
   ];
   const shown = S.pp.table;
   return (
     <M as="figure" in="up6" data-para="TAB1" className="relative my-4 font-sans">
       <figcaption className="mb-1.5 text-muted-foreground text-xs">
-        <b className="text-foreground">Table 1.</b> Recall at 10 on 1,169 eligible QASPER test questions, mean of five
-        seeds.
+        <b className="text-foreground">Table 1.</b> Recall at 20% flagged and AUROC on 726 test students per split, mean
+        of five splits (rows 1–15). The highest possible recall is 0.511.
       </figcaption>
       <table className="w-full border-foreground border-y-[1.5px] text-sm">
         <thead>
           <tr className="border-foreground border-b">
-            {["System", "Recall@10", "Gain over BM25"].map((x) => (
+            {["Model", "Recall at 20%", "AUROC"].map((x) => (
               <th key={x} className="px-2 py-1.5 text-left font-semibold">
                 {x}
               </th>
@@ -315,11 +318,11 @@ export function Table1() {
 export function Table2() {
   const f3 = S.stm.f3 === "limitation";
   const rows = [
-    ["H1", "Fusion beats BM25 on recall at 10", "A1", "Supported", "ok"],
-    ["H2", "The gain is larger when evidence is spread", "A2", "Supported", "ok"],
+    ["H1", "First-semester results raise recall by at least 0.05", "A1", "Supported", "ok"],
+    ["H2", "The gain is larger below the median admission grade", "A2", "Not supported · no clear difference", "warn"],
     [
       "H4",
-      "The gain holds at the same budget",
+      "Boosting beats logistic regression on enrolment data",
       "A3",
       f3 ? "Not supported · see 5.2" : "Not supported · inconclusive",
       "warn",
@@ -363,8 +366,8 @@ export function Table2() {
 }
 export function Figure2() {
   const bars: [string, number, string][] = [
-    ["Evidence in one paragraph", 0.051, "0.051"],
-    ["Evidence spread out", 0.094, "0.094"],
+    ["Admitted below the median", 0.098, "0.098"],
+    ["Admitted above the median", 0.129, "0.129"],
   ];
   return (
     <M as="figure" in="up6" data-para="FIG2" className="my-5 font-sans">
@@ -382,7 +385,7 @@ export function Figure2() {
                   in="grow"
                   delay={i * 0.15}
                   className={cn("block h-full origin-left rounded-full", i ? "bg-blue-600" : "bg-blue-500/45")}
-                  style={{ width: `${(v / 0.1) * 100}%` }}
+                  style={{ width: `${(v / 0.15) * 100}%` }}
                 />
               )}
             </i>
@@ -391,8 +394,8 @@ export function Figure2() {
         ))}
       </div>
       <figcaption className="mt-1.5 text-muted-foreground text-xs">
-        <b className="text-foreground">Figure 2.</b> Gain in recall at 10 over BM25, by how spread out the marked
-        evidence is.
+        <b className="text-foreground">Figure 2.</b> Gain in recall at 20% flagged from first-semester results (GB-ES1
+        over GB-E), by admission grade (rows 39–40).
       </figcaption>
     </M>
   );
@@ -434,7 +437,7 @@ export function PaperPage({ comments = false }: { comments?: boolean }) {
     >
       <header className="mb-6 border-b pb-5 font-sans">
         <p className="flex flex-wrap items-center justify-between gap-2 text-muted-foreground text-xs">
-          <span>IR Journal (example) · Research article</span>
+          <span>Education Data Journal (example) · Research article</span>
           {S.so.signed ? (
             <Badge
               variant="outline"
@@ -448,7 +451,7 @@ export function PaperPage({ comments = false }: { comments?: boolean }) {
           )}
         </p>
         <h2 className="mt-3 text-balance font-semibold font-serif text-[23px] leading-snug tracking-tight">
-          Fusing lexical and dense retrieval finds more evidence in long scientific papers
+          {PAPER_TITLE}
         </h2>
         <p className="mt-2 text-muted-foreground text-xs">A. Researcher (example) · B. Co-author (example)</p>
       </header>
@@ -488,9 +491,8 @@ export function paraBlock(p: Para, writingOf: Record<string, string>, comments: 
     ) : (
       skeletonFigure(p, "Table 2 · the hypotheses and their outcomes")
     );
-  if (p.kind === "table")
-    return S.pp.table > 0 ? <Table1 key={p.id} /> : skeletonFigure(p, "Table 1 · from rows 12–13");
-  if (p.kind === "figure") return S.pp.fig ? <Figure2 key={p.id} /> : skeletonFigure(p, "Figure 2 · from rows 18–21");
+  if (p.kind === "table") return S.pp.table > 0 ? <Table1 key={p.id} /> : skeletonFigure(p, "Table 1 · from rows 1–15");
+  if (p.kind === "figure") return S.pp.fig ? <Figure2 key={p.id} /> : skeletonFigure(p, "Figure 2 · from rows 39–40");
   if (p.kind === "excluded")
     return S.bp.placed > 0 ? (
       <M

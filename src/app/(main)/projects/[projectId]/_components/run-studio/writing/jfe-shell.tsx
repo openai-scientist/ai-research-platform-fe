@@ -34,6 +34,7 @@ import {
 } from "./data/jfe";
 import type { ScreenDef } from "./data/meta";
 import { AGENTS } from "./data/meta";
+import { PAPER_TITLE } from "./data/paper";
 import { emit, J, jsettle, playScenario, S, scrollTop, setTrack, TRACK, UI } from "./engine";
 import { CorpusScene, ParseScene } from "./jfe-corpus";
 import { AnalyzeScene, AnnotateScene, ProfileView, PublishScene } from "./jfe-measure";
@@ -77,7 +78,7 @@ export function runTone(t: "asw" | "jfe"): Tone {
 export function RunSwitch() {
   const tabs: ["asw" | "jfe", string, string, string][] = [
     ["asw", "ASW-0412", "Manuscript", "Paper"],
-    ["jfe", "JFE-IRJ-v2", "Journal profile", "Profile"],
+    ["jfe", "JFE-EDJ-v2", "Journal profile", "Profile"],
   ];
   return (
     <>
@@ -114,8 +115,8 @@ export function RunSwitch() {
       </Tabs>
       <span className="min-w-0 flex-1 truncate text-muted-foreground text-sm max-xl:hidden">
         {TRACK === "jfe"
-          ? "How IR Journal's research articles are written, 2021–2026 · built when ASW-0412 reaches S08"
-          : "Fusing lexical and dense retrieval finds more evidence in long scientific papers"}
+          ? "How Education Data Journal's research articles are written, 2021–2026 · built when ASW-0412 reaches S08"
+          : PAPER_TITLE}
       </span>
     </>
   );
@@ -404,7 +405,7 @@ export function JNowCard({ compact }: { compact?: boolean }) {
     return (
       <div className="flex flex-col gap-2 rounded-xl bg-card p-3.5 ring-1 ring-foreground/10">
         <span className="text-muted-foreground text-xs">Finished</span>
-        <h3 className="font-semibold text-[15px]">JFE-IRJ-v2 is published</h3>
+        <h3 className="font-semibold text-[15px]">JFE-EDJ-v2 is published</h3>
         {!compact && (
           <>
             <p className="text-muted-foreground text-sm">
@@ -810,7 +811,7 @@ export function JGateSheet({ id }: { id: string }) {
               Your turn
             </Badge>
             <span className="text-muted-foreground text-xs">
-              {gate ? `Stop ${JSTOP_NO[id]} of 2` : "Quick check"} · JFE-IRJ-v2
+              {gate ? `Stop ${JSTOP_NO[id]} of 2` : "Quick check"} · JFE-EDJ-v2
             </span>
             <Button
               type="button"
@@ -910,7 +911,7 @@ function JNotStarted() {
   return (
     <div className="flex max-w-3xl flex-col gap-4">
       <header className="flex flex-col gap-1 border-b pb-3.5">
-        <h2 className="text-balance font-semibold text-lg tracking-tight">JFE-IRJ-v2 is built when it is needed</h2>
+        <h2 className="text-balance font-semibold text-lg tracking-tight">JFE-EDJ-v2 is built when it is needed</h2>
         <p className="max-w-[68ch] text-muted-foreground text-sm">
           The manuscript run reads the journal’s profile at its journal step, S08. When ASW-0412 gets there, this run
           starts, the view moves here to follow it, and goes back to the journal step once the profile is published.

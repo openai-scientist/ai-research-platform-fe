@@ -155,7 +155,7 @@ export function RecoveryBar() {
         orb
         tone="sky"
         title="Waiting for the journal profile"
-        text="S08 needs JFE-IRJ-v2, so the profile run is building it now. The claims are already frozen; the journal step goes on once it is published."
+        text="S08 needs JFE-EDJ-v2, so the profile run is building it now. The claims are already frozen; the journal step goes on once it is published."
         meta={`Profile run at ${J.stage} · ${JSTAGE[J.stage].name}`}
       >
         <Button
@@ -721,7 +721,7 @@ export function AgentsSheet() {
           ))}
           <section className="flex flex-col gap-2.5">
             <h3 className="flex items-center gap-2 font-mono text-[11px] text-muted-foreground uppercase tracking-wider">
-              In parallel · JFE-IRJ-v2
+              In parallel · JFE-EDJ-v2
               <i className="h-px flex-1 bg-border" />
             </h3>
             <div className="flex flex-wrap gap-2">
@@ -840,7 +840,7 @@ const GROUND_WHAT: Record<string, string> = {
   cq: "A critical question of the claim’s scheme (Walton et al., 2008)",
   led: "A number or quote in the evidence ledger, with its file and line",
   rep: "A field of the standard data report",
-  std: "An item of AsPredicted, the NeurIPS or ACL checklists, CONSORT or PRISMA",
+  std: "An item of REFORMS, the pre-registration template for existing data, the NeurIPS checklist, Datasheets, CONSORT or PRISMA",
   src: "A paper or file in the package; nothing from outside",
 };
 

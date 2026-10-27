@@ -1,31 +1,20 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "cn";
-import {
-  ArrowRight,
-  ChevronRight,
-  CircleCheck,
-  CircleX,
-  Database,
-  Flag,
-  Lock,
-  PenLine,
-  Play,
-  Upload,
-} from "lucide-react";
+import { ArrowRight, ChevronRight, CircleCheck, CircleX, Flag, Lock, PenLine, Play } from "lucide-react";
 import { motion } from "motion/react";
 
 import { ManagementStatusBadge } from "@/components/management-status-badge";
 import { Button } from "@/components/ui/button";
-import { Field, FieldDescription, FieldTitle } from "@/components/ui/field";
+import { Field, FieldTitle } from "@/components/ui/field";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useInfiniteRuns } from "@/hooks/use-runs-query";
 import { projectKeys } from "@/lib/api/query-keys";
 import { type RunItem, runTitle } from "@/lib/api/services/fetch-runs";
-import type { IntentKind, ReviewMode, RunInput } from "@/lib/run-stream/contract";
+import type { GateKind, IntentKind, ReviewMode, RunInput } from "@/lib/run-stream/contract";
 import { SHOW_DATA_STAGE, SHOW_REVIEW_MODE, SHOW_WRITING_PREVIEW } from "@/lib/run-stream/features";
 import { DATASET } from "@/lib/run-stream/mock/scenario";
 import { type RunSession, useProjectRun, useRunStudio } from "@/lib/run-stream/run-store";
@@ -45,14 +34,7 @@ import {
   stopsFor,
 } from "./run-meta";
 import { compactNumber, RunStats } from "./run-stats";
-import {
-  CaseDetailsInput,
-  FieldsInput,
-  IntentInput,
-  StartRunDialog,
-  TopicInput,
-  useTopicDraft,
-} from "./start-run-dialog";
+import { CaseDetailsInput, IntentInput, StartRunDialog, TopicInput, useTopicDraft } from "./start-run-dialog";
 import { openWritingPreview, useWritingPreviewState } from "./writing/engine";
 
 function SectionTitle({ title, aside }: { title: string; aside?: string }) {
@@ -64,40 +46,16 @@ function SectionTitle({ title, aside }: { title: string; aside?: string }) {
   );
 }
 
-/** Your own data. A run starts from the topic alone for now, so choosing data stays locked. */
+/** Your own data, once runs can take it. Until then a run starts from the question alone and nothing is shown. */
 function DataField() {
-  if (SHOW_DATA_STAGE)
-    return (
-      <Field>
-        <FieldTitle>Data</FieldTitle>
-        <p className="text-sm">
-          {DATASET.name} · v1{" "}
-          <span className="text-muted-foreground text-xs">· 1,240 rows, checked by the Steward first</span>
-        </p>
-      </Field>
-    );
+  if (!SHOW_DATA_STAGE) return null;
   return (
     <Field>
-      <FieldTitle>
-        Data
-        <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-px font-medium text-[11px] text-muted-foreground">
-          <Lock className="size-2.5" />
-          Coming soon
-        </span>
-      </FieldTitle>
-      <div className="flex flex-wrap gap-2" title="Coming soon. For now a run starts from your topic alone.">
-        <Button variant="outline" size="sm" disabled>
-          <Upload />
-          Upload a dataset
-        </Button>
-        <Button variant="outline" size="sm" disabled>
-          <Database />
-          Choose existing
-        </Button>
-      </div>
-      <FieldDescription>
-        For now a run starts from your topic alone. Your own data comes in with experiments.
-      </FieldDescription>
+      <FieldTitle>Data</FieldTitle>
+      <p className="text-sm">
+        {DATASET.name} · v1{" "}
+        <span className="text-muted-foreground text-xs">· 1,240 rows, checked by the Steward first</span>
+      </p>
     </Field>
   );
 }
@@ -119,8 +77,6 @@ function TopicComposer({
   const button = useRef<HTMLButtonElement>(null);
   const [starting, setStarting] = useState(false);
   const stops = stopsFor(mode);
-  const nouns = stops.map((k) => STOP_INFO[k].noun);
-  const approves = nouns.length > 1 ? `${nouns.slice(0, -1).join(", ")} and ${nouns[nouns.length - 1]}` : nouns[0];
   const start = async () => {
     const input = draft.input();
     if (!input) return;
@@ -131,124 +87,104 @@ function TopicComposer({
       setStarting(false);
     }
   };
-  return (
-    <motion.section
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10"
+  const count = stops.length;
+  const modes = (
+    <ToggleGroup
+      type="single"
+      variant="outline"
+      spacing={0}
+      value={mode}
+      onValueChange={(value) => {
+        if (RUN_MODES.includes(value as ReviewMode)) onModeChange(value as ReviewMode);
+      }}
+      aria-label="How often the run stops for you"
+      className="bg-background"
     >
-      <div className="flex flex-col gap-5 p-5 md:p-6">
-        <span className="flex items-center gap-2 font-medium text-muted-foreground text-xs uppercase tracking-wide">
-          Next research run
-        </span>
-        <TopicInput draft={draft} className="font-(family-name:--font-lora) font-normal text-[22px] leading-snug" />
-        <IntentInput draft={draft} />
-        <div className="grid gap-5 md:grid-cols-2">
-          <FieldsInput draft={draft} />
+      {RUN_MODES.map((key) => (
+        <ToggleGroupItem
+          key={key}
+          value={key}
+          title={MODES[key].line}
+          className="px-3.5 data-[state=on]:bg-foreground data-[state=on]:text-background"
+        >
+          {MODES[key].label}
+        </ToggleGroupItem>
+      ))}
+    </ToggleGroup>
+  );
+  return (
+    <section className="overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10">
+      <div className="grid xl:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="flex min-w-0 flex-col gap-5 p-5 md:p-6">
+          <TopicInput
+            draft={draft}
+            labelClassName="font-(family-name:--font-lora) font-normal text-[22px] leading-snug"
+          />
+          <IntentInput draft={draft} />
           <DataField />
+          <CaseDetailsInput draft={draft} />
         </div>
-        <CaseDetailsInput draft={draft} />
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
-          <span className="flex min-w-0 max-w-[60ch] items-start gap-2 text-muted-foreground text-xs">
-            <Flag className="mt-px size-3.5 shrink-0" />
-            {nouns.length
-              ? `It stops ${nouns.length === 1 ? "once" : `${nouns.length} times`}, for ${approves}. A live workspace opens, and you can leave any time.`
-              : "It never stops; the PI makes every call. A live workspace opens, and you can leave any time."}
-          </span>
-          <span className="flex flex-wrap items-center gap-2.5 max-sm:w-full max-sm:justify-between">
-            <ToggleGroup
-              type="single"
-              variant="outline"
-              spacing={0}
-              value={mode}
-              onValueChange={(value) => {
-                if (RUN_MODES.includes(value as ReviewMode)) onModeChange(value as ReviewMode);
-              }}
-              aria-label="How often the run stops for you"
-            >
-              {RUN_MODES.map((key) => (
-                <ToggleGroupItem key={key} value={key} title={MODES[key].line} className="px-3.5">
-                  {MODES[key].label}
-                </ToggleGroupItem>
-              ))}
-            </ToggleGroup>
-            <Button ref={button} size="lg" disabled={!canWrite || starting} onClick={start}>
-              <Play />
-              {starting ? "Starting…" : "Start research run"}
-            </Button>
-          </span>
-        </div>
+        <RunPath stops={stops} className="max-xl:hidden">
+          {modes}
+          <p className="text-muted-foreground text-xs leading-relaxed">{MODES[mode].line}</p>
+        </RunPath>
       </div>
-      <div className="flex flex-col gap-3.5 border-t bg-muted/45 px-5 py-4.5 md:px-6">
-        <span className="font-medium text-muted-foreground text-xs uppercase tracking-wide">What happens next</span>
-        <ol className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t bg-muted/40 px-5 py-3.5 md:px-6">
+        <span className="flex items-center gap-2 text-muted-foreground text-sm">
+          <Flag className="size-3.5 fill-amber-500/30 text-amber-600 dark:text-amber-400" />
+          {count ? `Stops ${count === 1 ? "once" : `${count} times`} for your approval` : "Runs without stopping"}
+        </span>
+        <span className="flex flex-wrap items-center gap-2.5 max-sm:w-full max-sm:justify-between">
+          <span className="xl:hidden">{modes}</span>
+          <Button ref={button} disabled={!canWrite || starting} onClick={start}>
+            <Play />
+            {starting ? "Starting…" : "Start research run"}
+          </Button>
+        </span>
+      </div>
+    </section>
+  );
+}
+
+/** How involved you are, and what the run does once it starts: one line per stage, flagged where it waits for you. */
+function RunPath({ stops, className, children }: { stops: GateKind[]; className?: string; children: ReactNode }) {
+  return (
+    <aside className={cn("flex flex-col gap-5 border-l bg-muted/30 p-5", className)}>
+      <div className="flex flex-col gap-2">
+        <h3 className="font-semibold text-sm">How involved are you?</h3>
+        {children}
+      </div>
+      <div className="flex flex-col gap-2">
+        <h3 className="font-semibold text-sm">How the run goes</h3>
+        <ol className="flex flex-col">
           {PIPELINE.map((p, i) => {
-            // The charter is endorsed before Scope starts; any other stop comes after its stage.
             const charter = p.stage === "scope" && stops.includes("charter");
             const stop = stops.find((k) => k !== "charter" && STOP_INFO[k].stage === p.stage);
             return (
-              <motion.li
+              <li
                 key={p.stage}
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.05 }}
-                className="grid grid-cols-[22px_minmax(0,1fr)] gap-2.5"
+                title={p.text}
+                className="relative flex items-center gap-2.5 py-1.5 text-sm before:absolute before:top-0 before:bottom-0 before:left-[9.5px] before:w-px before:bg-border first:before:top-1/2 last:before:bottom-1/2"
               >
-                <span className="grid size-[22px] place-items-center rounded-full border bg-card font-mono font-semibold text-[10.5px] text-muted-foreground">
+                <span className="relative grid size-5 shrink-0 place-items-center rounded-full border bg-card font-medium text-[10.5px] text-muted-foreground tabular-nums">
                   {i + 1}
                 </span>
-                <span className="min-w-0">
-                  <b className="flex flex-wrap items-center gap-x-2 gap-y-1 font-semibold text-sm">
-                    {p.title}
-                    {charter && (
-                      <span
-                        title={STOP_INFO.charter.what}
-                        className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 py-px pr-2 pl-1.5 font-medium text-[11px] text-amber-800 dark:text-amber-300"
-                      >
-                        <Flag className="size-2.5" />
-                        once you endorse the plan
-                      </span>
-                    )}
-                    {stop && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 py-px pr-2 pl-1.5 font-medium text-[11px] text-amber-800 dark:text-amber-300">
-                        <Flag className="size-2.5" />
-                        then {STOP_INFO[stop].verb}
-                      </span>
-                    )}
-                  </b>
-                  <span className="mt-0.5 block text-muted-foreground text-xs">{p.text}</span>
-                </span>
-              </motion.li>
+                <span className="min-w-0 flex-1 truncate">{p.title}</span>
+                {(charter || stop) && (
+                  <span className="flex shrink-0 items-center gap-1 font-medium text-amber-700 text-xs dark:text-amber-400">
+                    <Flag className="size-3 fill-amber-500/30" />
+                    {charter ? "you endorse" : "you approve"}
+                  </span>
+                )}
+              </li>
             );
           })}
         </ol>
-        {PIPELINE.some((p) => p.stage === "interpret") ? (
-          <p className="text-muted-foreground text-xs">
-            Steps {PIPELINE.findIndex((p) => p.stage === "hypothesize") + 1} to{" "}
-            {PIPELINE.findIndex((p) => p.stage === "interpret") + 1} can repeat if the PI decides another round is worth
-            it.
-          </p>
-        ) : (
-          LOCKED_PIPELINE.length > 0 && (
-            <div className="flex flex-wrap items-center gap-1.5 border-t pt-3.5">
-              <span className="mr-1 text-muted-foreground text-xs">
-                Runs end at the hypotheses for now. Coming later:
-              </span>
-              {LOCKED_PIPELINE.map((p) => (
-                <span
-                  key={p.stage}
-                  title={`${p.title}: ${p.text}`}
-                  className="inline-flex h-6 items-center gap-1.5 rounded-full border border-dashed px-2.5 text-muted-foreground text-xs"
-                >
-                  <Lock className="size-3" />
-                  {STAGE_SHORT[p.stage]}
-                </span>
-              ))}
-            </div>
-          )
+        {LOCKED_PIPELINE.length > 0 && !PIPELINE.some((p) => p.stage === "interpret") && (
+          <p className="text-muted-foreground text-xs leading-relaxed">{LOCKED_HINT}</p>
         )}
       </div>
-    </motion.section>
+    </aside>
   );
 }
 
@@ -625,6 +561,7 @@ export function RunStudio({ projectId, canWrite }: { projectId: string; canWrite
           }}
         />
       )}
+      {!session && <RunStats />}
       {SHOW_WRITING_PREVIEW && <WritingPreviewRow />}
       <PastRuns projectId={projectId} hide={session?.runId} />
       <StartRunDialog open={dialog} onOpenChange={setDialog} defaultMode={mode} onStart={start} />

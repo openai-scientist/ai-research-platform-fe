@@ -1,9 +1,22 @@
 "use client";
 
-import { type ReactNode, useState } from "react";
+import { useState } from "react";
 
 import { cn } from "cn";
-import { ArrowRight, Check, ChevronRight, Flag, Info, Play, Plus, Sparkles, X } from "lucide-react";
+import {
+  ArrowRight,
+  Check,
+  ChevronRight,
+  Flag,
+  FlaskConical,
+  Info,
+  Lightbulb,
+  type LucideIcon,
+  Play,
+  Plus,
+  Scale,
+  X,
+} from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { toast } from "sonner";
 
@@ -72,12 +85,6 @@ const lines = (text: string) =>
     .map((line) => line.trim())
     .filter(Boolean);
 
-/** What Popper derives from the topic on its own, in the Scope stage. */
-const DERIVED = [
-  ["Goal", "in five parts: title, problem, objective, scope, success"],
-  ["Sub-questions", "that don't overlap and together cover the topic, ranked"],
-  ["Topic score", "for novelty, specificity and feasibility, out of 10"],
-] as const;
 const ORDER: GateKind[] = ["charter", "scope", "screen", "hypotheses", "accept", "decision", "report", "publish"];
 
 /** Stops a run in this mode makes: the charter, then the stage stops. */
@@ -175,13 +182,6 @@ const NEEDS: Record<Need, string> = {
 const listed = (items: string[]) =>
   items.length > 1 ? `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}` : (items[0] ?? "");
 
-/** How far a text is from its minimum length, as the field shows it while you type. */
-function lengthHint(text: string, min: number) {
-  const short = min - text.trim().length;
-  if (short <= 0) return null;
-  return short === min ? `At least ${min} characters` : `${short} more character${short === 1 ? "" : "s"}`;
-}
-
 /**
  * The research case a run starts from, within the backend's limits. Shared by the composer and the dialog; `prefix`
  * keeps the ids of the two forms apart.
@@ -269,7 +269,6 @@ export function useTopicDraft(prefix: string) {
     /** Marked once a start was refused, and only while it is still missing. */
     invalid: (need: Need) => checked && short[need],
     check,
-    words: topic.trim() ? topic.trim().split(/\s+/).length : 0,
     reset: () => {
       setTopic("");
       setKind(null);
@@ -321,29 +320,19 @@ export function useTopicDraft(prefix: string) {
 
 type TopicDraft = ReturnType<typeof useTopicDraft>;
 
-/** A field's help line, with what it still needs on the right while you type. */
-function Hint({ children, need }: { children: ReactNode; need: string | null }) {
-  return (
-    <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-      <FieldDescription className="min-w-0 flex-1 basis-60">{children}</FieldDescription>
-      {need && <span className="font-mono text-[11px] text-muted-foreground tabular-nums">{need}</span>}
-    </div>
-  );
-}
-
 export function TopicInput({
   draft,
-  className,
   autoFocus,
+  labelClassName,
 }: {
   draft: TopicDraft;
-  className?: string;
   autoFocus?: boolean;
+  labelClassName?: string;
 }) {
   const invalid = draft.invalid("topic");
   return (
     <Field data-invalid={invalid}>
-      <FieldLabel htmlFor={draft.ids.topic} className={className}>
+      <FieldLabel htmlFor={draft.ids.topic} className={labelClassName}>
         What do you want to find out?
       </FieldLabel>
       <Textarea
@@ -352,18 +341,33 @@ export function TopicInput({
         onChange={(e) => draft.setTopic(e.target.value)}
         maxLength={MAX_TOPIC}
         aria-invalid={invalid}
-        placeholder="One question you want answered, such as: does more sleep go with higher exam scores in our undergraduates?"
-        className="font-(family-name:--font-lora) min-h-24 text-[17px] text-foreground leading-snug md:text-[17px]"
+        placeholder="e.g. Does more sleep go with higher exam scores among our undergraduates?"
+        className="font-(family-name:--font-lora) min-h-24 text-[17px] text-foreground leading-snug placeholder:text-muted-foreground/70 md:text-[17px]"
         autoFocus={autoFocus}
       />
-      <Hint need={lengthHint(draft.topic, MIN_TOPIC) ?? `${draft.words} words`}>
-        {invalid
-          ? `Write the question the run should answer, in at least ${MIN_TOPIC} characters.`
-          : "Write it as one question. You don't list sub-questions; Popper derives them."}
-      </Hint>
+      <FieldDescription>One question. Popper splits it into sub-questions itself.</FieldDescription>
     </Field>
   );
 }
+
+/** How each kind of run looks: an icon, and a hue that shows only once it is chosen. */
+const INTENT_LOOK: Record<string, { icon: LucideIcon; tile: string; on: string }> = {
+  test: {
+    icon: FlaskConical,
+    tile: "bg-sky-500/10 text-sky-600 dark:text-sky-400",
+    on: "border-sky-500 bg-sky-500/5 ring-1 ring-sky-500",
+  },
+  compare: {
+    icon: Scale,
+    tile: "bg-violet-500/10 text-violet-600 dark:text-violet-400",
+    on: "border-violet-500 bg-violet-500/5 ring-1 ring-violet-500",
+  },
+  explain: {
+    icon: Lightbulb,
+    tile: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+    on: "border-emerald-500 bg-emerald-500/5 ring-1 ring-emerald-500",
+  },
+};
 
 /** What the run is for: the kind of answer, and what you will do with it. Both are part of the case. */
 export function IntentInput({ draft }: { draft: TopicDraft }) {
@@ -379,30 +383,41 @@ export function IntentInput({ draft }: { draft: TopicDraft }) {
           value={draft.kind ?? ""}
           onValueChange={(value) => draft.setKind(value as IntentKind)}
           aria-labelledby={`${ids.kind}-label`}
-          className="grid gap-2 sm:grid-cols-3"
+          className="grid gap-2.5 sm:grid-cols-3"
         >
-          {INTENTS.map((it) => (
-            <label
-              key={it.kind}
-              htmlFor={`${ids.kind}-${it.kind}`}
-              className={cn(
-                "grid cursor-pointer grid-cols-[auto_1fr] gap-x-2.5 gap-y-0.5 rounded-xl border px-3.5 py-3 transition-[background-color,box-shadow,border-color] hover:bg-muted/60",
-                draft.kind === it.kind && "border-foreground ring-1 ring-foreground",
-                kindInvalid && "border-destructive/50",
-              )}
-            >
-              <RadioGroupItem
-                id={`${ids.kind}-${it.kind}`}
-                value={it.kind}
-                aria-invalid={kindInvalid}
-                className="row-span-2 mt-0.5"
-              />
-              <span className="font-semibold text-foreground text-sm">{it.label}</span>
-              <span className="text-muted-foreground text-xs leading-snug">{it.line}</span>
-            </label>
-          ))}
+          {INTENTS.map((it) => {
+            const look = INTENT_LOOK[it.kind];
+            const Icon = look.icon;
+            const on = draft.kind === it.kind;
+            return (
+              <label
+                key={it.kind}
+                htmlFor={`${ids.kind}-${it.kind}`}
+                className={cn(
+                  "relative flex cursor-pointer items-start gap-3 rounded-lg border bg-background p-3 transition-[background-color,box-shadow,border-color] hover:border-foreground/25 has-focus-visible:ring-3 has-focus-visible:ring-ring/50",
+                  on && look.on,
+                  kindInvalid && "border-destructive/50",
+                )}
+              >
+                <span className="sr-only">
+                  <RadioGroupItem id={`${ids.kind}-${it.kind}`} value={it.kind} aria-invalid={kindInvalid} />
+                </span>
+                <span
+                  className={cn(
+                    "grid size-8 shrink-0 place-items-center rounded-md transition-colors",
+                    on ? look.tile : "bg-muted text-muted-foreground",
+                  )}
+                >
+                  <Icon className="size-4" />
+                </span>
+                <span className="flex min-w-0 flex-col gap-0.5">
+                  <span className="font-medium text-foreground text-sm">{it.label}</span>
+                  <span className="text-muted-foreground text-xs leading-snug">{it.line}</span>
+                </span>
+              </label>
+            );
+          })}
         </RadioGroup>
-        {kindInvalid && <FieldDescription>Pick the kind of answer you need.</FieldDescription>}
       </Field>
       <Field data-invalid={intentInvalid}>
         <FieldLabel htmlFor={ids.intent}>What will you do with the result?</FieldLabel>
@@ -412,14 +427,10 @@ export function IntentInput({ draft }: { draft: TopicDraft }) {
           onChange={(e) => draft.setIntent(e.target.value)}
           maxLength={MAX_TOPIC}
           aria-invalid={intentInvalid}
-          placeholder="Decide what sleep advice to give first-year students"
-          className="text-foreground"
+          placeholder="e.g. Decide what sleep advice to give first-year students"
+          className="text-foreground placeholder:text-muted-foreground/70"
         />
-        <Hint need={lengthHint(draft.intent, MIN_INTENT)}>
-          {intentInvalid
-            ? `Say in one sentence what the answer is for, in at least ${MIN_INTENT} characters.`
-            : "One sentence. It tells the PI what a useful answer looks like."}
-        </Hint>
+        <FieldDescription>One sentence. It tells the PI what a useful answer looks like.</FieldDescription>
       </Field>
     </>
   );
@@ -428,8 +439,14 @@ export function IntentInput({ draft }: { draft: TopicDraft }) {
 /** The optional parts of the case, kept apart from what a run needs. None blocks the run. */
 export function CaseDetailsInput({ draft }: { draft: TopicDraft }) {
   const id = draft.ids.case;
-  const filled = [draft.context, draft.constraints, draft.references].filter((v) => v.trim()).length;
+  const added = [draft.context, draft.constraints, draft.references].filter((v) => v.trim()).length;
   const [open, setOpen] = useState(false);
+  const status = [
+    draft.fields.length ? `${draft.fields.length} field${draft.fields.length > 1 ? "s" : ""}` : "",
+    added ? `${added} of 3 details` : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
       <CollapsibleTrigger asChild>
@@ -438,14 +455,12 @@ export function CaseDetailsInput({ draft }: { draft: TopicDraft }) {
           className="-mx-1.5 flex items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-sm outline-none hover:bg-muted/60 focus-visible:ring-3 focus-visible:ring-ring/50"
         >
           <ChevronRight className={cn("size-4 text-muted-foreground transition-transform", open && "rotate-90")} />
-          <span className="font-medium">Context, constraints and references</span>
-          <span className="text-muted-foreground text-xs">{filled ? `${filled} of 3 added` : "Optional"}</span>
+          <span className="font-medium">More details</span>
+          <span className="text-muted-foreground text-xs">{status || "Optional"}</span>
         </button>
       </CollapsibleTrigger>
-      <CollapsibleContent className="mt-3 flex flex-col gap-4 rounded-xl bg-muted/50 p-4">
-        <p className="text-muted-foreground text-xs">
-          Every stage reads these. Left empty, the PI fills the gaps with its own assumptions.
-        </p>
+      <CollapsibleContent className="flex flex-col gap-5 pt-4 pl-6">
+        <FieldsInput draft={draft} />
         <Field>
           <FieldLabel htmlFor={`${id}-context`}>Context</FieldLabel>
           <Textarea
@@ -453,67 +468,61 @@ export function CaseDetailsInput({ draft }: { draft: TopicDraft }) {
             value={draft.context}
             onChange={(e) => draft.setContext(e.target.value)}
             maxLength={MAX_CONTEXT}
-            placeholder="Background the agents should know: your setting, what you have tried, who the result is for."
-            className="min-h-20 bg-background"
+            placeholder="Your setting, what you have tried, who the result is for"
+            className="min-h-16"
           />
         </Field>
-        <Field>
-          <FieldLabel htmlFor={`${id}-constraints`}>Constraints</FieldLabel>
-          <Textarea
-            id={`${id}-constraints`}
-            value={draft.constraints}
-            onChange={(e) => draft.setConstraints(e.target.value)}
-            placeholder={"One per line, for example:\nOnly public datasets\nNo studies before 2015"}
-            className="min-h-20 bg-background"
-          />
-          <FieldDescription>Limits every stage must respect. One per line.</FieldDescription>
-        </Field>
-        <Field>
-          <FieldLabel htmlFor={`${id}-references`}>Papers you already know</FieldLabel>
-          <Textarea
-            id={`${id}-references`}
-            value={draft.references}
-            onChange={(e) => draft.setReferences(e.target.value)}
-            placeholder={"One per line: a DOI, a URL or a title, for example:\n10.1093/sleep/zsy171"}
-            className="min-h-20 bg-background"
-          />
-          <FieldDescription>The literature search starts from them. One per line.</FieldDescription>
-        </Field>
+        <div className="grid gap-5 md:grid-cols-2">
+          <Field>
+            <FieldLabel htmlFor={`${id}-constraints`}>Constraints</FieldLabel>
+            <Textarea
+              id={`${id}-constraints`}
+              value={draft.constraints}
+              onChange={(e) => draft.setConstraints(e.target.value)}
+              placeholder={"One per line, for example:\nNo studies before 2015"}
+              className="min-h-16"
+            />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor={`${id}-references`}>Papers you already know</FieldLabel>
+            <Textarea
+              id={`${id}-references`}
+              value={draft.references}
+              onChange={(e) => draft.setReferences(e.target.value)}
+              placeholder={"One per line: a DOI, a URL or a title"}
+              className="min-h-16"
+            />
+          </Field>
+        </div>
+        <FieldDescription>Every stage reads these. Left empty, the PI makes its own assumptions.</FieldDescription>
       </CollapsibleContent>
     </Collapsible>
   );
 }
 
-export function FieldsInput({ draft }: { draft: TopicDraft }) {
+function FieldsInput({ draft }: { draft: TopicDraft }) {
   const id = draft.ids.field;
   const { fields, newField, setNewField, addField, removeField } = draft;
   return (
     <Field>
       <FieldLabel htmlFor={id}>Fields</FieldLabel>
       <div className="flex flex-wrap items-center gap-1.5">
-        <AnimatePresence initial={false} mode="popLayout">
-          {fields.map((field) => (
-            <motion.span
-              key={field}
-              layout
-              initial={{ opacity: 0, scale: 0.85 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.85 }}
-              transition={{ type: "spring", stiffness: 420, damping: 26 }}
-              className="inline-flex h-7 items-center gap-1 rounded-md bg-pink-500/10 pr-1 pl-2 font-medium text-pink-700 text-xs ring-1 ring-pink-500/25 dark:text-pink-300"
+        {fields.map((field) => (
+          <span
+            key={field}
+            className="inline-flex h-7 items-center gap-1 rounded-md bg-muted pr-1 pl-2 font-medium text-foreground text-xs"
+          >
+            {field}
+            <button
+              type="button"
+              onClick={() => removeField(field)}
+              aria-label={`Remove ${field}`}
+              className="grid size-5 place-items-center rounded text-muted-foreground hover:bg-foreground/10 hover:text-foreground"
             >
-              {field}
-              <button
-                type="button"
-                onClick={() => removeField(field)}
-                aria-label={`Remove ${field}`}
-                className="grid size-5 place-items-center rounded hover:bg-pink-500/15"
-              >
-                <X className="size-3" />
-              </button>
-            </motion.span>
-          ))}
-        </AnimatePresence>
+              <X className="size-3" />
+            </button>
+          </span>
+        ))}
         <span className="flex items-center gap-1">
           <Input
             id={id}
@@ -537,9 +546,7 @@ export function FieldsInput({ draft }: { draft: TopicDraft }) {
         </span>
       </div>
       <FieldDescription>
-        {fields.length
-          ? "Suggested from your topic. They decide which skills and sources the agents use."
-          : "Fields appear as you type. You can also add your own."}
+        Suggested from your question. They decide which sources and skills the agents use.
       </FieldDescription>
     </Field>
   );
@@ -641,24 +648,7 @@ export function StartRunDialog({
                 <>
                   <TopicInput draft={draft} autoFocus />
                   <IntentInput draft={draft} />
-                  <FieldsInput draft={draft} />
                   <CaseDetailsInput draft={draft} />
-                  <div className="flex flex-col gap-2 rounded-xl bg-muted/60 px-4 py-3.5">
-                    <span className="flex items-center gap-1.5 font-medium text-sm">
-                      <Sparkles className="size-3.5 text-muted-foreground" />
-                      What Popper writes from it, before any search
-                    </span>
-                    <ol className="flex flex-col gap-1">
-                      {DERIVED.map(([what, how], i) => (
-                        <li key={what} className="grid grid-cols-[18px_1fr] gap-2 text-sm">
-                          <span className="font-mono text-muted-foreground text-xs leading-5">{i + 1}</span>
-                          <span>
-                            <b className="font-medium">{what}</b> <span className="text-muted-foreground">{how}</span>
-                          </span>
-                        </li>
-                      ))}
-                    </ol>
-                  </div>
                 </>
               )}
               {STEPS[step] === "Data" && (

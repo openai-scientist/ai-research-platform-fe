@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 
 import { cn } from "cn";
+import { ChartColumn } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
 
 import { Badge } from "@/components/ui/badge";
@@ -216,6 +217,26 @@ function KpiStrip({ session }: { session: RunSession }) {
   );
 }
 
+/** A chart before any data: its empty frame, and what will fill it. */
+function EmptyChart({ text }: { text: string }) {
+  return (
+    <div className="relative grid h-56 place-items-center">
+      <div aria-hidden="true" className="absolute inset-0 flex flex-col justify-between py-2">
+        {[0, 1, 2, 3, 4].map((i) => (
+          <span key={i} className={cn("border-t", i < 4 && "border-dashed")} />
+        ))}
+      </div>
+      <div className="relative flex max-w-xs flex-col items-center gap-2 bg-card px-4 py-3 text-center">
+        <span className="grid size-9 place-items-center rounded-lg bg-muted text-muted-foreground">
+          <ChartColumn className="size-4.5" />
+        </span>
+        <span className="font-medium text-sm">No data yet</span>
+        <span className="text-muted-foreground text-xs leading-relaxed">{text}</span>
+      </div>
+    </div>
+  );
+}
+
 const findingsConfig = {
   blocking: { label: "Blocking", color: "var(--color-red-500)" },
   major: { label: "Major", color: "var(--color-amber-500)" },
@@ -223,14 +244,14 @@ const findingsConfig = {
 } satisfies ChartConfig;
 
 /** What the independent reviewer found in each round of hypotheses. */
-function FindingsChart({ state }: { state: RunState }) {
-  const data = state.stageOrder.flatMap((key, i) => {
-    const c = state.stages[key]?.content;
+function FindingsChart({ state }: { state?: RunState }) {
+  const data = (state?.stageOrder ?? []).flatMap((key, i) => {
+    const c = state?.stages[key]?.content;
     if (c?.stage !== "hypothesize") return [];
     const count = (s: string) => c.findings.filter((f) => f.severity === s).length;
     return [
       {
-        round: `R${plannedOf(state, key)?.round ?? i + 1}`,
+        round: `R${(state && plannedOf(state, key)?.round) ?? i + 1}`,
         blocking: count("blocking"),
         major: count("major"),
         minor: count("minor"),
@@ -264,9 +285,7 @@ function FindingsChart({ state }: { state: RunState }) {
             </BarChart>
           </ChartContainer>
         ) : (
-          <p className="grid h-56 place-items-center text-muted-foreground text-sm">
-            The reviewer reads each round of hypotheses.
-          </p>
+          <EmptyChart text="The reviewer reads each round of hypotheses and counts what it finds." />
         )}
       </CardContent>
     </Card>
@@ -276,10 +295,10 @@ function FindingsChart({ state }: { state: RunState }) {
 const timeConfig = { minutes: { label: "Minutes", color: "var(--color-sky-500)" } } satisfies ChartConfig;
 
 /** How long each stage worked, without the time it waited for you. */
-function TimeChart({ state }: { state: RunState }) {
-  const data = state.stageOrder.flatMap((key) => {
-    const s = state.stages[key];
-    if (!s?.startedAt || !s.workedUntil) return [];
+function TimeChart({ state }: { state?: RunState }) {
+  const data = (state?.stageOrder ?? []).flatMap((key) => {
+    const s = state?.stages[key];
+    if (!state || !s?.startedAt || !s.workedUntil) return [];
     const p = plannedOf(state, key);
     const short = STAGE_SHORT[p?.stage ?? "scope"];
     const ms = Date.parse(s.workedUntil) - Date.parse(s.startedAt);
@@ -301,44 +320,79 @@ function TimeChart({ state }: { state: RunState }) {
         {total > 0 && <CardAction className="text-muted-foreground text-xs tabular-nums">{duration(total)}</CardAction>}
       </CardHeader>
       <CardContent>
-        <ChartContainer config={timeConfig} className="aspect-auto h-56 w-full">
-          <BarChart data={data} margin={{ left: 0, right: 4, top: 8 }}>
-            <CartesianGrid vertical={false} />
-            <XAxis dataKey="stage" tickLine={false} axisLine={false} tickMargin={8} minTickGap={4} fontSize={11} />
-            <YAxis
-              tickLine={false}
-              axisLine={false}
-              width={40}
-              allowDecimals={false}
-              tickFormatter={(v: number) => `${v}m`}
-            />
-            <ChartTooltip
-              cursor={false}
-              content={
-                <ChartTooltipContent
-                  labelFormatter={(_, items) => String(items[0]?.payload?.name ?? "")}
-                  formatter={(_, __, item) => duration(Number(item.payload.ms))}
-                />
-              }
-            />
-            <Bar dataKey="minutes" fill="var(--color-minutes)" radius={[4, 4, 0, 0]} maxBarSize={40} />
-          </BarChart>
-        </ChartContainer>
+        {data.length === 0 ? (
+          <EmptyChart text="Each stage's working time shows here as it finishes." />
+        ) : (
+          <ChartContainer config={timeConfig} className="aspect-auto h-56 w-full">
+            <BarChart data={data} margin={{ left: 0, right: 4, top: 8 }}>
+              <CartesianGrid vertical={false} />
+              <XAxis dataKey="stage" tickLine={false} axisLine={false} tickMargin={8} minTickGap={4} fontSize={11} />
+              <YAxis
+                tickLine={false}
+                axisLine={false}
+                width={40}
+                allowDecimals={false}
+                tickFormatter={(v: number) => `${v}m`}
+              />
+              <ChartTooltip
+                cursor={false}
+                content={
+                  <ChartTooltipContent
+                    labelFormatter={(_, items) => String(items[0]?.payload?.name ?? "")}
+                    formatter={(_, __, item) => duration(Number(item.payload.ms))}
+                  />
+                }
+              />
+              <Bar dataKey="minutes" fill="var(--color-minutes)" radius={[4, 4, 0, 0]} maxBarSize={40} />
+            </BarChart>
+          </ChartContainer>
+        )}
       </CardContent>
     </Card>
   );
 }
 
-/** The live run in numbers, under its card. */
-export function RunStats({ session }: { session: RunSession }) {
-  const { state } = session;
-  if (!state.stageOrder.length) return null;
+/** The numbers before any run: the same cards, empty, saying what fills them. */
+function EmptyKpis() {
+  return (
+    <div className="overflow-hidden rounded-xl bg-card shadow-xs ring-1 ring-foreground/10">
+      <div className="grid divide-y *:data-[slot=card]:rounded-none *:data-[slot=card]:ring-0 md:grid-cols-2 md:divide-x md:divide-y-0 xl:grid-cols-4">
+        <Kpi label="Papers found" value={null}>
+          <div className="flex flex-col gap-2">
+            <Meter value={0} max={0} />
+            <p className="text-muted-foreground text-xs">Counted per source during the search</p>
+          </div>
+        </Kpi>
+        <Kpi label="Shortlisted" value={null}>
+          <div className="flex flex-col gap-2">
+            <Meter value={0} max={0} />
+            <p className="text-muted-foreground text-xs">Scored for relevance and quality</p>
+          </div>
+        </Kpi>
+        <Kpi label="Hypotheses" value={null}>
+          <p className="text-muted-foreground text-xs">Written after the gaps are found</p>
+        </Kpi>
+        <Kpi label="Tokens" value={null}>
+          <div className="flex flex-col gap-2">
+            <Meter value={0} max={0} />
+            <p className="text-muted-foreground text-xs">Measured against the project's budget</p>
+          </div>
+        </Kpi>
+      </div>
+    </div>
+  );
+}
+
+/** The run in numbers, under its card. Before a run, or before its first stage, the cards wait empty. */
+export function RunStats({ session }: { session?: RunSession }) {
+  const state = session?.state;
+  const started = session && state?.stageOrder.length ? session : null;
   return (
     <div className="flex min-w-0 flex-col gap-4">
-      <KpiStrip session={session} />
+      {started ? <KpiStrip session={started} /> : <EmptyKpis />}
       <div className="grid min-w-0 gap-4 lg:grid-cols-2">
-        <FindingsChart state={state} />
-        <TimeChart state={state} />
+        <FindingsChart state={started ? state : undefined} />
+        <TimeChart state={started ? state : undefined} />
       </div>
     </div>
   );

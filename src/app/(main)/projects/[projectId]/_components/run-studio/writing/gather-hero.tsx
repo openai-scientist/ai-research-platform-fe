@@ -326,11 +326,11 @@ export function RecheckBand({ live }: { live: boolean }) {
       tone: "bg-emerald-500/12 text-emerald-700 dark:text-emerald-300",
     };
   let note = "Numbers are recomputed from the traces once they are indexed.";
-  if (drift) note = "Row 13 differs from what the traces give. Blocked until you choose.";
+  if (drift) note = "Row 21 differs from what the traces give. Blocked until you choose.";
   else if (all && e.mis === "fixed")
-    note = "Every number recomputed from the traces; row 13 superseded by the trace value.";
+    note = "Every number recomputed from the traces; row 21 superseded by the trace value.";
   else if (all) note = "Every number recomputed from the traces; none drifted.";
-  else if (n) note = "Recomputing each number from the 15 traces, not from the run’s summary.";
+  else if (n) note = "Recomputing each number from the 20 traces, not from the run’s summary.";
   return (
     <div
       data-recheck
@@ -370,7 +370,7 @@ export function RecheckBand({ live }: { live: boolean }) {
           >
             <span className="block text-[10.5px] text-muted-foreground">
               Reported by the run · {r.id}
-              {drift ? " · results.csv row 13" : ""}
+              {drift ? " · results.csv row 21" : ""}
             </span>
             <span
               className={cn(

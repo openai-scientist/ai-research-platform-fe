@@ -19,7 +19,7 @@ export interface JDecDef {
   cta?: string;
 }
 
-/* ===== JFE: the journal-profile run that builds JFE-IRJ-v2, the profile ASW-0412 reads at S08 ===== */
+/* ===== JFE: the journal-profile run that builds JFE-EDJ-v2, the profile ASW-0412 reads at S08 ===== */
 /* Every number here is chosen to agree with what the manuscript run shows: 212 papers, the habits at S08, the bands at S13. */
 
 Object.assign(AGENTS, {
@@ -75,13 +75,13 @@ export const JSTAGES: JStageDef[] = [
     mods: "JFE-01.1 Corpus Manager",
     name: "Corpus and sampling",
     title: "Choose the papers the profile is built from",
-    lead: "A profile is only as good as its sample. The Corpus Manager takes IR Journal's research articles, draws a sample by year, matches it with papers from three comparable journals, and logs every exclusion with its reason.",
+    lead: "A profile is only as good as its sample. The Corpus Manager takes Education Data Journal's research articles, draws a sample by year, matches it with papers from three comparable journals, and logs every exclusion with its reason.",
     steps: [
       {
         id: "p1",
         a: "cm",
         t: "Find the journal and its papers",
-        x: "IR Journal (example): ISSN and OpenAlex source checked. 1,146 works published 2021–2026.",
+        x: "Education Data Journal (example): ISSN and OpenAlex source checked. 1,146 works published 2021–2026.",
       },
       {
         id: "p2",
@@ -99,7 +99,7 @@ export const JSTAGES: JStageDef[] = [
         id: "p4",
         a: "cm",
         t: "Match a control set",
-        x: "110 research articles from three journals in the same field, matched by year and subfield. Without them nothing can be called typical of IR Journal.",
+        x: "110 research articles from three journals in the same field, matched by year and subfield. Without them nothing can be called typical of Education Data Journal.",
       },
       {
         id: "p5",
@@ -111,7 +111,7 @@ export const JSTAGES: JStageDef[] = [
         id: "p6",
         a: "cm",
         t: "Hold out a test set",
-        x: "45 IR Journal papers and 20 controls are set aside. Nobody reads them until the profile is checked in J4.",
+        x: "45 Education Data Journal papers and 20 controls are set aside. Nobody reads them until the profile is checked in J4.",
       },
       { id: "JG1", gate: true, t: "Build the profile from this corpus?" },
     ],
@@ -206,7 +206,7 @@ export const JSTAGES: JStageDef[] = [
     mods: "JFE-01.6 Statistical Miner",
     name: "Statistics",
     title: "Find what is typical, and what is this journal's own",
-    lead: "Each paper counts once. The Statistician summarises every feature, places the moves, compares IR Journal with the controls, and tests every difference against the obvious other causes before calling it distinctive.",
+    lead: "Each paper counts once. The Statistician summarises every feature, places the moves, compares Education Data Journal with the controls, and tests every difference against the obvious other causes before calling it distinctive.",
     steps: [
       {
         id: "s1",
@@ -278,12 +278,12 @@ export const JSTAGES: JStageDef[] = [
         t: "Compare with v1",
         x: "v1 covered the Introductions of 150 papers. v2 adds 8 section types, 23 features and a control set.",
       },
-      { id: "JG2", gate: true, t: "Publish JFE-IRJ-v2?" },
+      { id: "JG2", gate: true, t: "Publish JFE-EDJ-v2?" },
       {
         id: "t5",
         a: "pb",
         t: "Freeze the release",
-        x: "JFE-IRJ-v2 is frozen and hashed. v1 stays readable for runs pinned to it.",
+        x: "JFE-EDJ-v2 is frozen and hashed. v1 stays readable for runs pinned to it.",
       },
     ],
   },
@@ -323,7 +323,7 @@ export const JLINEAGE: Record<string, { reads: string[]; writes: [string, string
     reads: ["Pattern statistics", "Author guidelines"],
     writes: [
       ["Profile draft", "t2"],
-      ["JFE-IRJ-v2, frozen", "t5"],
+      ["JFE-EDJ-v2, frozen", "t5"],
     ],
   },
 };
@@ -370,7 +370,7 @@ export const JDEC: Record<string, JDecDef> = {
       "Every year has 40 papers, the controls match by year and subfield, and every exclusion has a logged reason.",
     ],
     sum: [
-      ["ok", "223 IR Journal research articles, 2021–2026"],
+      ["ok", "223 Education Data Journal research articles, 2021–2026"],
       ["ok", "102 matched papers from three journals in the same field"],
       ["warn", "25 papers dropped: no text-mining right"],
       ["ok", "45 + 20 papers held out until J4"],
@@ -418,7 +418,7 @@ export const JDEC: Record<string, JDecDef> = {
     ],
   },
   JG2: {
-    title: "Publish JFE-IRJ-v2?",
+    title: "Publish JFE-EDJ-v2?",
     why: "Publishing freezes the profile. Writing runs pin this exact version; any later change becomes v3.",
     rec: [
       "The Orchestrator recommends publishing",
@@ -433,7 +433,7 @@ export const JDEC: Record<string, JDecDef> = {
       ["pub", "Publish and freeze", "v2 becomes readable by writing runs. v1 stays readable.", 1],
       ["hold", "Do not publish yet", "The draft stays editable, and no writing run can use it.", 0],
     ],
-    cta: "Publish JFE-IRJ-v2",
+    cta: "Publish JFE-EDJ-v2",
   },
 };
 export const JDONE_TEXT: Record<string, string> = {
@@ -443,7 +443,7 @@ export const JDONE_TEXT: Record<string, string> = {
   "JK3:prov": "Kept “Compare with prior work” as provisional.",
   "JK4:flag": "Kept one-paragraph abstracts as a habit, superseded by the rule.",
   "JK4:drop": "Dropped the abstract habit from v2.",
-  "JG2:pub": "Published JFE-IRJ-v2.",
+  "JG2:pub": "Published JFE-EDJ-v2.",
   "JG2:hold": "Held the profile as a draft.",
 };
 export const JRULES: [string, string][] = [
@@ -473,8 +473,8 @@ export const JCTRL: { k: string; n: string; elig: number; s: number }[] = [
 ];
 export const JCTRL_YEAR: number[] = [18, 18, 18, 19, 18, 19];
 export const JSAMPLING: [string, string][] = [
-  ["Query", "source = IR Journal · type = research article · 2021–2026"],
-  ["Strata", "year × subfield: retrieval, recommendation, evaluation"],
+  ["Query", "source = Education Data Journal · type = research article · 2021–2026"],
+  ["Strata", "year × subfield: retention, assessment, learning analytics"],
   ["Seed", "20260918"],
   ["Drawn", "18 Sep 2026, 10:42"],
   ["Controls", "Journals B, C and D · matched on year and subfield"],
@@ -489,7 +489,7 @@ export const JRIGHTS: [string, string, string][] = [
 /* ---------- J2 · parsing ---------- */
 /* the sample page, as blocks in reading order: [id, kind, x, y, w, h (% of page), tag, lines, maps to] */
 export const JPAGE: [string, string, number, number, number, number, string, number, string][] = [
-  ["rh", "tpl", 6, 3.2, 88, 2.2, "running head", 0, "IR Journal (example) · Vol. 18 · 2024"],
+  ["rh", "tpl", 6, 3.2, 88, 2.2, "running head", 0, "Education Data Journal (example) · Vol. 18 · 2024"],
   ["ti", "meta", 6, 7.5, 88, 5.5, "title", 2, "TITLE"],
   ["au", "meta", 6, 14, 60, 2.4, "authors", 1, "AUTHORS"],
   ["ab", "prose", 6, 18.5, 88, 13, "abstract", 5, "ABSTRACT"],
@@ -500,7 +500,7 @@ export const JPAGE: [string, string, number, number, number, number, string, num
   ["p3", "prose", 52, 38, 42, 15, "p", 6, "RELATED_WORK · paragraph 1"],
   ["fg", "fig", 52, 54.5, 42, 18, "figure", 0, "Figure 1"],
   ["p4", "prose", 52, 74, 42, 9, "p", 4, "RELATED_WORK · paragraph 2"],
-  ["fn", "tpl", 6, 86, 88, 5, "copyright · CRediT", 2, "© 2024 IR Journal (example). CRediT statement"],
+  ["fn", "tpl", 6, 86, 88, 5, "copyright · CRediT", 2, "© 2024 Education Data Journal (example). CRediT statement"],
   ["pn", "tpl", 42, 93.5, 16, 3, "page no.", 0, "3"],
 ];
 export const JPAGE_KIND: Record<string, { label: string; tone: string }> = {
@@ -512,7 +512,7 @@ export const JPAGE_KIND: Record<string, { label: string; tone: string }> = {
 };
 /* the canonical document of that paper, node by node */
 export const JTREE: [number, string, string, string][] = [
-  [0, "P-0137", "IR Journal · 2024 · PDF → TEI", "doc"],
+  [0, "P-0137", "Education Data Journal · 2024 · PDF → TEI", "doc"],
   [1, "ABSTRACT", "1 paragraph · 6 sentences · chars 0–1,042", "sec"],
   [1, "INTRODUCTION", "5 paragraphs · 27 sentences", "sec"],
   [2, "Paragraph 1", "4 sentences · chars 1,043–1,655", "p"],
@@ -590,34 +590,34 @@ export const JMOVE: Record<string, { n: string; hl: string; chip: string; bar: s
 /* P-0137, Introduction, paragraphs 1–2: the text, the first label, its function and confidence, and the blind second label */
 export const JINTRO: [string, string, string, number, string][] = [
   [
-    "Scientific search engines now answer millions of queries a day, and most of them blend several ranking signals [3].",
+    "Most universities now keep years of student records, and many use them to flag students at risk [3].",
     "M1",
     "context",
     0.97,
     "M1",
   ],
   [
-    "Lexical and neural rankers are known to fail on different queries [4, 11], which is why their scores are often combined [7].",
+    "Grades and engagement data are known to predict different students [4, 11], which is why they are often combined [7].",
     "M1",
     "prior work",
     0.91,
     "M1",
   ],
   [
-    "These studies, however, use short web pages, where the relevant passage is easy to find.",
+    "These studies, however, use single courses, where the outcome is known within weeks.",
     "M2",
     "limitation",
     0.88,
     "M2",
   ],
   [
-    "Full-text articles spread that passage across sections, and no study has measured what this does to fused rankers.",
+    "Whole degrees spread that outcome across years, and no study has measured what this does to combined models.",
     "M2",
     "gap statement",
     0.93,
     "M2",
   ],
-  ["We compare three rankers on 1,400 full-text articles under one fixed protocol.", "M3", "objective", 0.95, "M3"],
+  ["We compare three models on 1,400 student records under one fixed protocol.", "M3", "objective", 0.95, "M3"],
   ["Section 2 reviews related work, and Section 3 describes the protocol.", "M3", "organisation", 0.9, "M3"],
 ];
 export const JALPHA: [string, string, number, number?][] = [
@@ -631,17 +631,17 @@ export const JALPHA: [string, string, number, number?][] = [
 ];
 export const JDISPUTE: [string, string, string][] = [
   [
-    "Unlike Lee et al. [9], we find the gain shrinks on long articles, which suggests position matters more than length.",
+    "Unlike Lee et al. [9], we find the gain shrinks in later years, which suggests timing matters more than volume.",
     "Compare",
     "Interpret",
   ],
   [
-    "This matches the pattern reported for news retrieval [12], though our margins are smaller.",
+    "This matches the pattern reported for secondary schools [12], though our margins are smaller.",
     "Compare",
     "Interpret",
   ],
   [
-    "Our result therefore complements, rather than contradicts, earlier work on short documents.",
+    "Our result therefore complements, rather than contradicts, earlier work on single courses.",
     "Interpret",
     "Compare",
   ],
@@ -892,7 +892,7 @@ export const JVERDICT: Record<string, { label: string; chip: string; dot: string
 export const JCONFOUND: { f: string; why: string; t: number[]; c: number[]; unit: string }[] = [
   {
     f: "Passive voice",
-    why: "Falls with year in both sets. IR Journal's sample has more recent papers.",
+    why: "Falls with year in both sets. Education Data Journal's sample has more recent papers.",
     t: [29, 27, 24, 21, 19, 17],
     c: [35, 34, 32, 30, 28, 27],
     unit: "%",
@@ -1051,10 +1051,10 @@ export const JPROHIBIT: [string, string][] = [
   ["Quoting more than 40 words of any corpus paper", "Rights flags"],
 ];
 export const JRECIPES: [string, string, string, string][] = [
-  ["R-IRJ-01", "Gap paragraph", "A2", "Introduction"],
-  ["R-IRJ-02", "Aims and contributions", "A3", "Introduction"],
-  ["R-IRJ-03", "Result with its interval", "A4", "Results"],
-  ["R-IRJ-04", "Interpret, then compare", "A5", "Discussion"],
+  ["R-EDJ-01", "Gap paragraph", "A2", "Introduction"],
+  ["R-EDJ-02", "Aims and contributions", "A3", "Introduction"],
+  ["R-EDJ-03", "Result with its interval", "A4", "Results"],
+  ["R-EDJ-04", "Interpret, then compare", "A5", "Discussion"],
 ];
 export const JDIFF: [string, string, string][] = [
   ["Sections", "Introduction only", "9 section types"],

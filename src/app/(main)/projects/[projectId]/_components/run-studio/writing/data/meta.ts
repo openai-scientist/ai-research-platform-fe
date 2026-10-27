@@ -393,7 +393,7 @@ export const ROSTER: { block: string; agents: [string, string, string, string, s
       [
         "ds",
         "Lays the research record into the standard data report and checks it is complete and consistent.",
-        "The research record package (rrp/v1)",
+        "The research record package (rrp/v2)",
         "DataReport.json, claim ceiling",
         "Guess a missing value or judge the method",
       ],
@@ -440,14 +440,14 @@ export const ROSTER: { block: string; agents: [string, string, string, string, s
       [
         "qs",
         "Asks whether the numbers mean what they claim: independence, power, intervals, multiple tests.",
-        "Ledger, B.7, B.9",
+        "Ledger, B.9, B.11",
         "Challenges with grounds",
         "Challenge without a ground",
       ],
       [
         "qx",
         "Asks how far a claim reaches: sample, population, field, language.",
-        "C.1, H.1, the claims",
+        "C.1, J.1, the claims",
         "Challenges with grounds",
         "Challenge without a ground",
       ],

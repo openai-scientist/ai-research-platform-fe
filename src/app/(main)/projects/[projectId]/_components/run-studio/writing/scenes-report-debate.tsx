@@ -37,6 +37,8 @@ import {
   PLAN_VS_RUN,
   REPORT,
   REPORT_FIELDS,
+  REPORT_LATE_STATUS,
+  RESULTS_ONLY,
   STANDARDS,
   TIMELINE,
   TIMELINE_LATE,
@@ -53,7 +55,7 @@ import { Card, ColHead, Slot, STATE_TEXT, STATE_TILE, StateMark, StatusBadge, TA
    read: they are on screen from the start, and the record is laid into them in place. Nothing grows or moves. */
 const LEVEL_TEXT: Record<string, string> = { must: "Must", should: "Should", may: "May" };
 const FIELD_LABEL: Record<string, string> = { ok: "Present", warn: "Partial", bad: "Missing", na: "Not applicable" };
-const STD_ORDER = ["AP", "NI", "ACL", "CON", "PR", "RRP"];
+const STD_ORDER = ["RF", "SD", "NI", "DS", "PR", "CON", "RRP"];
 const becomes = (to: string) =>
   to
     .split(" · ")
@@ -61,11 +63,19 @@ const becomes = (to: string) =>
     .join(" · ");
 type Field = (typeof REPORT_FIELDS)[number];
 /** A field's status, with the late lock turning the plan's own fields partial. */
-const fieldTone = (f: Field) => (S.ceil.expl && (f.id === "B.4" || f.id === "E.1") ? "warn" : f.s);
+const fieldTone = (f: Field) => (S.ceil.expl ? REPORT_LATE_STATUS[f.id] : f.s);
 
-/** Text laid into its place: until then it keeps its room, hidden under a placeholder bar. */
 function LevelBadge({ lv }: { lv: string }) {
   return <Badge className={LEVEL_TONE[lv]}>{LEVEL_TEXT[lv]}</Badge>;
+}
+/** The field's level, and whether it applies only to a paper that reports results. */
+function FieldLevel({ f }: { f: Field }) {
+  return (
+    <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1">
+      <LevelBadge lv={f.level} />
+      {RESULTS_ONLY.has(f.id) && <span className="text-[11px] text-muted-foreground">With results</span>}
+    </span>
+  );
 }
 
 export function chainRows() {
@@ -76,10 +86,10 @@ export function chainRows() {
       return {
         ...c,
         pri: "primary",
-        a: "A5",
+        a: "A6",
         kind: "confirmatory",
-        rows: "rows 22–24",
-        tr: "t01–t15",
+        rows: "results-h3.csv rows 1–3",
+        tr: "t06–t15",
         s: "ok",
         why: "Arrived after the hold",
       };
@@ -97,11 +107,11 @@ export function planRunRows() {
       if (rp.dev === "rerunning") return [k, plan, "rerunning…", "run"];
       return [k, plan, "1,000 resamples · not declared", "bad"];
     }
-    if (S.scn === "tune" && k === "Fusion constant") {
-      if (rp.tune === "retuned") return [k, plan, "k = 60, chosen on dev", "ok"];
-      if (rp.tune === "declared") return [k, plan, "k = 60 · test selection declared, D2", "dev"];
-      if (rp.tune === "retuning") return [k, plan, "retuning on dev…", "run"];
-      return [k, plan, "k = 60, chosen on test", "bad"];
+    if (S.scn === "tune" && k === "Tuning") {
+      if (rp.tune === "retuned") return [k, plan, "fixed grid, CV on the training part · rerun", "ok"];
+      if (rp.tune === "declared") return [k, plan, "chosen on the test split · declared, D2", "dev"];
+      if (rp.tune === "retuning") return [k, plan, "retuning on the training part…", "run"];
+      return [k, plan, "grid point chosen on the test split", "bad"];
     }
     return [k, plan, run, s];
   });
@@ -394,16 +404,16 @@ export function ReportFrame({ live }: { live: boolean }) {
                         <span className="flex min-w-0 flex-col gap-1">
                           <span className="font-medium leading-5">{f.label}</span>
                           <span className="font-mono text-muted-foreground text-xs">
-                            {f.std.length ? f.std.join(" · ") : "rrp/v1"}
+                            {f.std.length ? f.std.join(" · ") : "rrp/v2"}
                           </span>
                           <span className="@3xl:hidden">
-                            <LevelBadge lv={f.level} />
+                            <FieldLevel f={f} />
                           </span>
                         </span>
                       </span>
                     </TableCell>
                     <TableCell className={cn(TABLE_PAD, "@max-3xl:hidden")}>
-                      <LevelBadge lv={f.level} />
+                      <FieldLevel f={f} />
                     </TableCell>
                     <TableCell className={TABLE_PAD}>
                       <Slot on={on} w={n % 3 ? "w-2/3" : "w-5/6"}>
@@ -449,6 +459,10 @@ export function ReportFrame({ live }: { live: boolean }) {
             <dd>{STANDARDS[k].n}</dd>
           </div>
         ))}
+        <div className="flex gap-1.5">
+          <dt className="text-foreground">With results</dt>
+          <dd>Not asked of a study proposal</dd>
+        </div>
       </dl>
     </Card>
   );
@@ -475,10 +489,10 @@ export function Timeline() {
           rp.tlDone ? (
             <span className={cn("inline-flex items-center gap-1.5 text-[12.5px]", STATE_TEXT[late ? "bad" : "ok"])}>
               <StateMark k={late ? "bad" : "ok"} />
-              {late ? "No · locked 12 h after the first trace" : "Yes · locked 22 h before the first trace"}
+              {late ? "No · locked 12 h after the first trace" : "Yes · locked a minute before the first trace"}
             </span>
           ) : (
-            <span className="whitespace-nowrap">AsPredicted 1</span>
+            <span className="whitespace-nowrap">Pre-registration</span>
           )
         }
       />
@@ -675,7 +689,7 @@ export function PlanRun() {
                       )}
                     >
                       <Typed
-                        text={run + (s === "dev" && k === "Dense model" ? " · D1, declared 16 Sep" : "")}
+                        text={run + (s === "dev" && k === "Encoding" ? " · D1, declared 27 Oct" : "")}
                         on={typing("rp.plan", k)}
                       />
                     </M>
@@ -873,7 +887,9 @@ function claimNow(th: string, ts: ThreadState) {
   if (th !== "C") return def.claim;
   if (S.c.restated) return CLAIMS[3].t3 ?? def.claim;
   if (S.db.k04 && ts.mine.some((t) => t.id === "T38"))
-    return S.db.k04 === "r" ? "Fusion is the better default for papers like those in QASPER." : CLAIMS[3].t2;
+    return S.db.k04 === "r"
+      ? "In this record, first-semester results are the better basis for dropout early warning."
+      : CLAIMS[3].t2;
   return def.claim;
 }
 /** Where each speaker stands on one claim. */

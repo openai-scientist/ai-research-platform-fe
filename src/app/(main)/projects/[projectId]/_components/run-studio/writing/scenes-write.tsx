@@ -169,7 +169,7 @@ export function BlueprintScene({ live }: { live: boolean }) {
           )}
         </div>
       </RailSection>
-      <RailSection fold title="Move patterns" aside={S.jr.rulesOnly ? "CARS, default" : "CARS, from JFE-IRJ-v2"}>
+      <RailSection fold title="Move patterns" aside={S.jr.rulesOnly ? "CARS, default" : "CARS, from JFE-EDJ-v2"}>
         <div data-cursor="moves">
           {!b.moves ? (
             <Pending>Picked after the sections have their statements.</Pending>
@@ -501,7 +501,7 @@ export function ReviewBoard() {
                     )}
                     {orig && (
                       <M as="span" in="fade" className="mt-1.5 block">
-                        <StatusBadge k="ok">Holds in all 18 papers</StatusBadge>
+                        <StatusBadge k="ok">Holds in all 12 papers read</StatusBadge>
                       </M>
                     )}
                   </TableCell>
@@ -524,7 +524,10 @@ export function ReviewBoard() {
           <Icon n="corner" className="mt-0.5 size-3.5" />
           <span>
             Both reports stay as written. The backlog follows your choice:{" "}
-            {r.choice === "m" ? "rerun within length bins (comment 1)" : "keep the line in Limits (comment 3)"}.
+            {r.choice === "m"
+              ? "rerun A1 without students who sat no evaluation (comment 1)"
+              : "keep the line in Limits (comment 3)"}
+            .
           </span>
         </M>
       )}
@@ -581,7 +584,7 @@ export function ReviewScene({ live }: { live: boolean }) {
             <Pending>
               {S.jr.rulesOnly
                 ? "Checked against the publisher's rules; no profile was built."
-                : "Measured against IR Journal's own papers (JFE-IRJ-v2, 212 papers)."}
+                : "Measured against Education Data Journal's own papers (JFE-EDJ-v2, 212 papers)."}
             </Pending>
           )}
           {f.rows > 0 && S.jr.rulesOnly && (
@@ -641,7 +644,7 @@ export function ReviewScene({ live }: { live: boolean }) {
           <>
             {J.an?.prov && (
               <Note>
-                “Compare with prior work” is provisional in JFE-IRJ-v2, so its absence is reported, not advised.
+                “Compare with prior work” is provisional in JFE-EDJ-v2, so its absence is reported, not advised.
               </Note>
             )}
             <RailTable head={[["Section", "w-24"], ["In the draft"]]}>
@@ -764,7 +767,11 @@ export function RunEnd() {
       <JStats
         items={[
           ["Intake checks", String(INTAKE_CHECKS.length), `${INTAKE.length} parts of RUN-25CD`],
-          ["Report fields", String(REPORT_FIELDS.length), "24 required, all present"],
+          [
+            "Report fields",
+            String(REPORT_FIELDS.length),
+            `${REPORT_FIELDS.filter((f) => f.level === "must").length} must, all present`,
+          ],
           [
             "Debate turns",
             String(turnsShown().length),
@@ -960,14 +967,14 @@ export function SignoffScene({ live }: { live: boolean }) {
 /* ---------- the paper, once signed ---------- */
 export function FinalPaper() {
   const claims: [string, string, string][] = [
-    ["F1", "Fusion finds more evidence than BM25", "+0.076"],
-    ["F2", "The gain is largest when evidence is spread out", "+0.094"],
-    ["F3", "No clear gain at the same budget", "+0.031"],
+    ["F1", "First-semester results find more of the students who drop out", "+0.111"],
+    ["F2", "The gain appears in both admission groups", "+0.098 · +0.129"],
+    ["F3", "No clear gain from boosting over logistic regression", "+0.004"],
     [
       "C",
       S.c.restated
-        ? "Beats BM25; against dense retrieval the evidence is mixed"
-        : "The better default for papers like those in QASPER",
+        ? "Better overall at this polytechnic; course by course, mixed"
+        : "The better basis for early warning at this polytechnic",
       "—",
     ],
   ];

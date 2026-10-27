@@ -29,7 +29,7 @@ import {
   TOUMAP,
 } from "./data/core";
 import { CLOSED_BY_RECORD, RULING, TURNS, TURNS_COUT, TURNS_K04, type Turn } from "./data/debate";
-import { BAD_REF, CONTRACT, COVER_COLS, JOURNAL_DIFF, LEDGER, NUM_ROWS } from "./data/gather";
+import { BAD_REF, CONTRACT, COVER_COLS, JOURNAL_DIFF, LEDGER, NUM_ROWS, REFS_TOTAL } from "./data/gather";
 import { INC } from "./data/incidents";
 import { INTAKE, INTAKE_LIMITS } from "./data/intake";
 import {
@@ -670,26 +670,26 @@ export function land() {
 /* ---------- stops ---------- */
 export const DONE_TEXT: Record<string, string> = {
   "G0:go": "Started from this record.",
-  "G0:hold": "Held the run until the timing log is added.",
+  "G0:hold": "Held the run until the entry year is added.",
   "G1:lock": "Locked the claims and froze graph v1.",
   "G1:back": "Sent claims back to be argued again.",
   "G2:use": "Chose the wording of the findings.",
   "G2:back": "Sent Results back for re-analysis.",
   "G3:sign": "Signed the manuscript.",
   "G3:hold": "Held the signature.",
-  "K01:x": "Kept A4 as an exploratory analysis.",
-  "K01:drop": "Left A4 out of the paper.",
+  "K01:x": "Kept A5 as an exploratory analysis.",
+  "K01:drop": "Left A5 out of the paper.",
   "K03:f": "Kept Finding 3 as a finding with an inconclusive result.",
   "K03:l": "Moved Finding 3 to the limitations.",
-  "K04:q": "Narrowed the Conclusion to English NLP papers like those in QASPER.",
+  "K04:q": "Narrowed the Conclusion to entrants to this polytechnic, as in 2008/09–2018/19.",
   "K04:r": "Dropped the reconstructed warrant on the Conclusion.",
-  "K08:ok": "Approved the journal contract for IR Journal.",
+  "K08:ok": "Approved the journal contract for Education Data Journal.",
   "K08:other": "Asked for another journal.",
   "K09:ok": "Approved the storyline.",
   "K09:re": "Asked for a different storyline.",
   "K12:n": "Narrowed 4.1 to the locked claim.",
-  "K12:k": "Kept “either retriever alone” and asked for a new claim.",
-  "K14:m": "Took the method reviewer's advice: rerun within length bins.",
+  "K12:k": "Kept “any model built on enrolment data” and asked for a new claim.",
+  "K14:m": "Took the method reviewer's advice: rerun A1 without students who sat no evaluation.",
   "K14:e": "Took the evidence reviewer's advice: keep the line in Limits.",
 };
 export async function ask(id: string): Promise<Answer> {
@@ -781,12 +781,12 @@ async function checkParts(stepId: "a1" | "a2" | "a3") {
         emit();
         await sleep(500);
         const o = await incident("schema");
-        if (o === "stop") failRun("Stopped at S00: plan.md has no analysis plan (B.7), a must field of rrp/v1.");
+        if (o === "stop") failRun("Stopped at S00: plan.md has no analysis plan (B.9), a must field of rrp/v2.");
         S.up.fixed = true;
         S.up.bad = null;
         await say(
           "code",
-          "plan.md v2 received. §4 Analysis plan is present; the hash chain from 14 Sep holds. The check passes.",
+          "plan.md v2 received. §7 Analyses is present; the hash chain from 27 Oct holds. The check passes.",
         );
         await sleep(400);
       }
@@ -826,10 +826,14 @@ export async function s00() {
       await item("up.named", i, { id: l.sec, text: l.head + l.paper + l.you, wait: 500 });
     }
   });
-  closeStage("S00", "8 parts of the run's output checked; 3 limits named, none filled in.");
+  closeStage(
+    "S00",
+    `${INTAKE.length} parts of the run's output checked; ${INTAKE_LIMITS.length} limits named, none filled in.`,
+  );
 }
 
 /* ---------- S01 · the standard data report ---------- */
+const mustFields = REPORT_FIELDS.filter((f) => f.level === "must").length;
 export async function s01() {
   openStage("S01");
   const rp = S.rp;
@@ -838,7 +842,7 @@ export async function s01() {
       const f = REPORT_FIELDS[i - 1];
       // The view moves once per part, to show the whole part being filled, not once every few fields.
       if (i === 1 || REPORT_FIELDS[i - 2].part !== f.part) reveal(`[data-part="${f.part}"]`);
-      await item("rp.fields", i - 1, { id: f.id, text: f.v, wait: 110 });
+      await item("rp.fields", i - 1, { id: f.id, text: f.v, wait: 70 });
     }
   });
   const late = S.scn === "late";
@@ -860,7 +864,7 @@ export async function s01() {
         emit();
       }
     },
-    late ? { text: "plan.md was locked at 21:10 on 15 Sep. The first trace started at 08:41 that morning." } : {},
+    late ? { text: "plan.md was locked at 22:40 on 27 Oct. The first trace started at 10:51 that morning." } : {},
   );
   await step("S01", "r3", async () => {
     reveal("[data-chain]", "center");
@@ -880,7 +884,7 @@ export async function s01() {
           );
           await say(
             "ds",
-            "Rows 22–24 arrived and link end to end: H3 → A5 → rows 22–24 → traces t01–t15. H3 is reported in the supplement.",
+            "results-h3.csv arrived with 3 rows and links end to end: H3 → A6 → results-h3.csv rows 1–3 → traces t06–t15. H3 is reported in the supplement.",
           );
           rp.h3 = "arrived";
         } else rp.h3 = "named";
@@ -903,13 +907,13 @@ export async function s01() {
         if (o === "rerun") {
           await say(
             "code",
-            "Rerunning the paired bootstrap from the 15 traces with 10,000 resamples. Row 13: 0.059 to 0.093, as the plan expects.",
+            "Rerunning the paired bootstrap from the 20 traces with 10,000 resamples. Row 21: 0.092 to 0.129, as the plan expects.",
           );
           rp.dev = "rerun";
           emit();
         }
       }
-      if (S.scn === "tune" && row === "Fusion constant" && !rp.tune) {
+      if (S.scn === "tune" && row === "Tuning" && !rp.tune) {
         await sleep(400);
         const o = await incident("tune");
         rp.tune = o === "retune" ? "retuning" : "declared";
@@ -917,7 +921,7 @@ export async function s01() {
         if (o === "retune") {
           await say(
             "code",
-            "Sweeping k over 10, 30, 60 and 100 on the 1,402 dev questions. k = 60 is best again (recall at 10: 0.701). Test numbers stand.",
+            "Rerunning the choice by 5-fold cross-validation inside each training part. The same grid point wins again (seed 1: learning rate 0.05, 15 leaves; cross-validated recall at 20% flagged 0.508). Test numbers stand.",
           );
           rp.tune = "retuned";
           emit();
@@ -939,8 +943,8 @@ export async function s01() {
   closeStage(
     "S01",
     late
-      ? "33 fields laid out; every analysis exploratory; claim ceiling set."
-      : "33 fields laid out, 24 of 24 must present; the claim ceiling is set.",
+      ? `${REPORT_FIELDS.length} fields laid out; every analysis exploratory; claim ceiling set.`
+      : `${REPORT_FIELDS.length} fields laid out, ${mustFields} of ${mustFields} must present; the claim ceiling is set.`,
   );
 }
 
@@ -948,7 +952,7 @@ export async function s01() {
 export async function s02() {
   openStage("S02");
   await step("S02", "b1", async () => {
-    for (let i = 1; i <= 31; i++) {
+    for (let i = 1; i <= REFS_TOTAL; i++) {
       S.ev.refs = i;
       emit();
       await sleep(i === BAD_REF + 1 ? 500 : 55);
@@ -973,8 +977,8 @@ export async function s02() {
           S.ev.mis = "held";
           emit();
           await blockedUntilResume(
-            "Held until the owner checks results.csv row 13. Results 4.1 waits.",
-            "The owner confirmed 0.076",
+            "Held until the owner checks results.csv row 21. Results 4.1 waits.",
+            "The owner confirmed 0.111",
           );
         }
         S.ev.mis = "fixed";
@@ -997,12 +1001,12 @@ export async function s02() {
     S.rules[2] = "hit";
     emit();
   });
-  closeStage("S02", "31 references, 91 evidence spans, every number recomputed from the traces.");
+  closeStage("S02", `${REFS_TOTAL} references, 91 evidence spans, every number recomputed from the traces.`);
   for (;;) {
     const a = await ask("G0");
     if (a.opt === "go") break;
     await blockedUntilResume(
-      "Held at stop 1 until the timing log is added. Nothing is argued or written meanwhile.",
+      "Held at stop 1 until the entry year is added. Nothing is argued or written meanwhile.",
       "Open stop 1 again",
     );
   }
@@ -1144,20 +1148,20 @@ export const TURNS_RESTATE: Turn[] = [
     th: "C",
     a: "aa",
     st: "propose",
-    tx: "Fusion finds more evidence than BM25 on QASPER; against dense retrieval the evidence is mixed.",
+    tx: "At this polytechnic, first-semester results improve early warning overall; course by course the evidence is mixed.",
     g: [
       ["led", "F1"],
-      ["src", "Lee et al., 2024 (example)"],
+      ["led", "A4 · rows 28–38"],
     ],
   },
   {
     id: "T46",
     th: "C",
-    a: "ql",
+    a: "qx",
     st: "concede",
     re: "T45",
-    tx: "The counterexample is about dense retrieval, and the claim no longer says anything against it. Satisfied.",
-    g: [["src", "Lee et al., 2024 (example)"]],
+    tx: "The claim no longer speaks of every course, so course 171 does not contradict it. Satisfied.",
+    g: [["led", "A4 · row 28"]],
   },
   {
     id: "T47",
@@ -1265,7 +1269,15 @@ export async function s06(round = 1) {
     }
   });
   await step("S06", "f3", async () => {
-    for (const id of ["CA1", "CA2", "CA3", "PA1", ...(S.scn === "cout" && !S.c.restated ? ["CA4"] : [])]) {
+    for (const id of [
+      "CA1",
+      "CA2",
+      "CA3",
+      "PA1",
+      "CA5",
+      "PA2",
+      ...(S.scn === "cout" && !S.c.restated ? ["CA4"] : []),
+    ]) {
       S.map.s.push(id);
       emit();
       await sleep(360 * fast);
@@ -1281,7 +1293,7 @@ export async function s06(round = 1) {
     emit();
     await sleep(800 * fast);
   });
-  closeStage("S06", "20 statements, 10 schemes; the inference with no premise removed.");
+  closeStage("S06", "20 statements, 11 schemes; the inference with no premise removed.");
 }
 
 /* ---------- S07 · ASPIC+, then stop 2 ---------- */
@@ -1289,12 +1301,12 @@ export async function s06(round = 1) {
 export function aspWhy(id: string, l = S.asp.labels[id]) {
   const after = S.asp.phase >= 3 || S.asp.rerun;
   const W: Record<string, string> = {
-    GAP: "The rebut from Bruch et al. failed at T07.",
+    GAP: "The rebut from Dekker et al. failed at T07.",
     F1:
       l === "OUT"
         ? "The undercut CA1 from T15 stands: the interval is on the wrong unit."
         : after
-          ? "CA1 answered: the interval by paper, 0.054–0.098, still excludes zero."
+          ? "CA1 answered: the interval by course, 0.081–0.146, still excludes zero."
           : "",
     F2: "The rebuttal was conceded at T24; no attack stands.",
     F3: "Qualified as “no clear gain” at T30; no attack stands.",
@@ -1304,7 +1316,7 @@ export function aspWhy(id: string, l = S.asp.labels[id]) {
         : l === "OUT"
           ? "It rests on F1, which is OUT."
           : S.c.restated
-            ? "Restated against BM25 only; CA4 no longer reaches it."
+            ? "Restated for the institution as a whole; CA4 no longer reaches it."
             : "Narrowed at K04; both premises IN.",
     IMP:
       l === "OUT"
@@ -1312,8 +1324,9 @@ export function aspWhy(id: string, l = S.asp.labels[id]) {
         : l === "UND"
           ? "Follows the Conclusion."
           : "Proposed; it rests on the Conclusion.",
+    H2: "Defeated by F2: the gain is not larger below the median, and PA2 prefers the evidence.",
     H4: "Defeated by F3: PA1 prefers the evidence.",
-    ASM: "Undermined: 23% of questions share a paper. No claim rests on it after the rerun.",
+    ASM: "Undermined: students share courses and cohorts. No claim rests on it after the course-level interval.",
   };
   return W[id];
 }
@@ -1341,7 +1354,7 @@ export function firstLabels() {
   const L: Record<string, string> = {
     GAP: "IN",
     H1: "IN",
-    H2: "IN",
+    H2: "OUT",
     H4: "OUT",
     ASM: "OUT",
     E1: "IN",
@@ -1413,7 +1426,7 @@ export async function s07(round = 1, lock = true) {
       ? {
           text: S.c.restated
             ? "The restated Conclusion is IN: CA4 no longer reaches it. F1, F2 and F3 stay IN."
-            : "Every claim is IN; the interval was already recomputed by paper.",
+            : "Every claim is IN; the interval was already recomputed by course.",
         }
       : {},
   );
@@ -1468,7 +1481,7 @@ export async function s07(round = 1, lock = true) {
 export async function restateConclusion() {
   await say(
     "or",
-    "The Conclusion goes back to S03 and is restated against BM25 only. Only its thread is argued again.",
+    "The Conclusion goes back to S03 and is restated for the institution as a whole. Only its thread is argued again.",
   );
   const round = S.st.S03.round + 1;
   for (const id of ["S03", "S04", "S05", "S06", "S07"])
@@ -1557,11 +1570,11 @@ export async function waitForProfile() {
   if (J.done || J.failed) return;
   const g = RUN.gen;
   S.jr.waiting = true;
-  log("js", "IR Journal has no published profile yet. JFE-IRJ-v2 is built now.");
+  log("js", "Education Data Journal has no published profile yet. JFE-EDJ-v2 is built now.");
   emit();
   if (S.fast) await jPublishNow();
   else {
-    await say("js", "IR Journal has no published profile yet. Building JFE-IRJ-v2 from its papers first.");
+    await say("js", "Education Data Journal has no published profile yet. Building JFE-EDJ-v2 from its papers first.");
     if (g !== RUN.gen) throw STOP;
     setTrack("jfe");
     if (!J.started) {
@@ -1602,7 +1615,7 @@ export async function s08(round = 1) {
       await sleep(700);
     },
     J.failed
-      ? { text: "JFE-IRJ-v2 failed at J1: too few research articles. Only the publisher’s rules are available." }
+      ? { text: "JFE-EDJ-v2 failed at J1: too few research articles. Only the publisher’s rules are available." }
       : {},
   );
   const j = S.jr;
@@ -1659,7 +1672,10 @@ export async function s08(round = 1) {
   });
   const a = await ask("K08");
   if (a.opt === "other") {
-    await say("js", "The brief names only IR Journal. Reading its rules again in case a newer version applies.");
+    await say(
+      "js",
+      "The brief names only Education Data Journal. Reading its rules again in case a newer version applies.",
+    );
     Object.assign(S.jr, {
       rules: 0,
       habits: 0,
@@ -1728,7 +1744,7 @@ export async function s09(round = 1) {
     emit();
     await say(
       "rp",
-      "Another order: Finding 2 first, because the spread effect is the more surprising result. The question still leads.",
+      "Another order: Finding 3 first, because the model comparison is what most readers expect. The question still leads.",
     );
     await sleep(600);
     S.bp.alt = false;
@@ -1944,7 +1960,7 @@ export async function s12() {
   const a = await ask("K12");
   if (a.opt === "k") {
     await rebuildArgument(
-      "A new claim about the dense retriever is needed. Arguing it from the statements up, then stop 2 again.",
+      "A new claim about the two models is needed. Arguing it from the statements up, then stop 2 again.",
     );
     await lockClaims();
     openStage("S12");
@@ -2080,13 +2096,13 @@ export async function s15() {
       emit();
       await sleep(1200);
     },
-    rerun ? {} : { actor: "re", text: "No rerun: you chose to keep the line in Limits. Section 4.2 stays as it was." },
+    rerun ? {} : { actor: "re", text: "No rerun: you chose to keep the line in Limits. Section 4.1 stays as it was." },
   );
   if (rerun && S.scn === "cap") {
     for (let r = 1; r <= 3; r++) {
       S.fix.tries = r;
       emit();
-      await say("re", `Round ${r}: patching 4.2. ${CAP_TRIES[r - 1][1]}.`);
+      await say("re", `Round ${r}: patching 4.1. ${CAP_TRIES[r - 1][1]}.`);
       await sleep(600);
     }
     const o = await incident("cap");
@@ -2095,7 +2111,7 @@ export async function s15() {
       S.fix.edited = true;
       await say(
         "rv",
-        "Your sentence for 4.2 is read back once against the frozen graph: it says what F2 says, with the new interval. Pass.",
+        "Your sentence for 4.1 is read back once against the frozen graph: it says what F1 says, with the new interval. Pass.",
       );
     }
     emit();
@@ -2116,8 +2132,8 @@ export async function s15() {
     {
       text:
         ids.length === 5
-          ? "Five patches across 4.2, 5.2, 3.1, 1.1 and the Abstract."
-          : "Three patches across 3.1, 1.1 and the Abstract.",
+          ? "Five patches across 4.1, 5.2, 3.3, 1.1 and the Abstract."
+          : "Three patches across 3.3, 1.1 and the Abstract.",
     },
   );
   await step("S15", "n3", async () => {
@@ -2141,7 +2157,7 @@ export async function s15() {
   closeStage(
     "S15",
     ids.length === 5
-      ? "Five patches; a new analysis answers F2’s caveat; no claim moved."
+      ? "Five patches; a new analysis answers F1’s caveat; no claim moved."
       : "Three patches; no claim moved.",
   );
 }
@@ -2555,7 +2571,7 @@ export async function jfe2() {
     emit();
     await jsleep(1400);
   });
-  jclose("J2", "308 papers read: 212 from IR Journal, 96 controls. 17 dropped, each with its reason.");
+  jclose("J2", "308 papers read: 212 from Education Data Journal, 96 controls. 17 dropped, each with its reason.");
 }
 
 /* ---------- J3 · annotation and measurement ---------- */
@@ -2720,7 +2736,7 @@ export async function jfe5() {
     jreveal("[data-sheet]", "start");
     await jsleep(1500);
   });
-  jclose("J5", "JFE-IRJ-v2 published and frozen.");
+  jclose("J5", "JFE-EDJ-v2 published and frozen.");
   J.lifecycle = "done";
   J.done = true;
   J.msg = null;
@@ -2910,7 +2926,7 @@ export const PARA_BY: Record<string, Para> = Object.fromEntries(PARAS.map((p) =>
 /** A run you are not looking at needs you: news that arrives on its own, so it shows bottom right. */
 export function tellAway(run: "asw" | "jfe", title: string) {
   if (QUIET || (HOST.visible && TRACK === run)) return;
-  toast.warning(`${run === "jfe" ? "JFE-IRJ-v2" : "ASW-0412"} needs you`, {
+  toast.warning(`${run === "jfe" ? "JFE-EDJ-v2" : "ASW-0412"} needs you`, {
     description: title,
     position: "bottom-right",
     duration: 12_000,

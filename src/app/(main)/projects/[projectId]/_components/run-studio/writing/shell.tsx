@@ -1037,7 +1037,7 @@ const LABEL_BADGE: Record<string, string> = {
   OUT: "bg-rose-500/12 text-rose-700 dark:text-rose-300",
   UND: "bg-amber-500/15 text-amber-800 dark:text-amber-300",
 };
-const CONCEDED = "Conceded at T30: the test could miss gains below 0.035";
+const CONCEDED = "Conceded at T30: the test could miss gains below about 0.06";
 const ABOVE_CEILING = "Above the claim ceiling from the data report";
 
 function GateSheet({ id }: { id: string }) {
@@ -1111,9 +1111,9 @@ function GateSheet({ id }: { id: string }) {
         : (d.opts.find((o) => o[0] === choice)?.[1] ?? "Confirm");
   const g3first =
     S.rev.choice === "e"
-      ? "I accept that question length stays a stated limitation in 5.2"
+      ? "I accept that students who stopped attending stay a stated limitation in 5.2"
       : S.fix.reverted
-        ? "I accept that 4.2 is reverted and comment 1 stays open"
+        ? "I accept that 4.1 is reverted and comment 1 stays open"
         : d.checks?.[0];
   return (
     <>

@@ -61,7 +61,7 @@ export function JStats({ items }: { items: [string, string | null, ReactNode][] 
 }
 
 /* ---------- J1 · corpus ---------- */
-/* What happened to IR Journal's papers, year by year, and to each control journal's. */
+/* What happened to Education Data Journal's papers, year by year, and to each control journal's. */
 const ELIGIBLE = [98, 104, 98, 112, 126, 111];
 const NO_RIGHTS = [3, 3, 3, 3, 3, 2];
 const HELD = [8, 7, 8, 7, 8, 7];
@@ -121,7 +121,7 @@ function SampleTable() {
         </TableRow>
       </TableHeader>
       <TableBody>
-        {group("IR Journal (example)", "research articles, 40 drawn per year")}
+        {group("Education Data Journal (example)", "research articles, 40 drawn per year")}
         {JYEARS.map((yr, y) => row(String(yr), yr, [JYEAR_N[y], ELIGIBLE[y], sampled[y], 40 - NO_RIGHTS[y], HELD[y]]))}
         {row(
           "irj",
@@ -158,12 +158,20 @@ export function CorpusScene({ live }: { live: boolean }) {
   return (
     <div ref={host} className="relative flex flex-col gap-4">
       <Card data-wall className="@container">
-        <ColHead icon="layers" title="Corpus" aside={p ? "OpenAlex · IR Journal and three controls" : "Not read yet"} />
+        <ColHead
+          icon="layers"
+          title="Corpus"
+          aside={p ? "OpenAlex · Education Data Journal and three controls" : "Not read yet"}
+        />
         <JStats
           items={[
             ["Works, 2021–2026", p >= 1 ? "1,146" : null, "from the OpenAlex source"],
             ["Eligible", p >= 2 ? "649" : null, p >= 2 ? "488 left out · 9 duplicates" : "research articles only"],
-            ["Sampled", p >= 4 ? "240 + 110" : p >= 3 ? "240" : null, p >= 4 ? "IR Journal + controls" : "40 per year"],
+            [
+              "Sampled",
+              p >= 4 ? "240 + 110" : p >= 3 ? "240" : null,
+              p >= 4 ? "Education Data Journal + controls" : "40 per year",
+            ],
             ["Kept", p >= 5 ? "223 + 102" : null, p >= 6 ? "65 held out until J4" : "after the rights check"],
           ]}
         />
@@ -569,7 +577,7 @@ export function ParseScene({ live }: { live: boolean }) {
           <M in="fade" className="rounded-xl bg-card px-3.5 py-3 text-[12.5px] ring-1 ring-foreground/10">
             <b className="font-semibold">308 papers go on</b>
             <span className="block text-muted-foreground">
-              212 from IR Journal and 96 controls. The 212 are the papers ASW-0412 will be compared with.
+              212 from Education Data Journal and 96 controls. The 212 are the papers ASW-0412 will be compared with.
             </span>
           </M>
         )}

@@ -363,7 +363,7 @@ export function AnnotateScene({ live }: { live: boolean }) {
                 <dl className="grid grid-cols-[3.5rem_minmax(0,1fr)] gap-x-2 gap-y-1.5">
                   {[
                     ["Feature", "INT_10 · gap statement position"],
-                    ["Paper", "P-0137 · IR Journal, 2024"],
+                    ["Paper", "P-0137 · Education Data Journal, 2024"],
                     ["Value", "0.58 of the way through the Introduction"],
                     ["Span", "Paragraph 2, sentence 4 · chars 1,989–2,101"],
                     ["Label", "M2 gap statement · 0.93 · agreed"],
@@ -461,7 +461,7 @@ export function SwarmChart() {
         viewBox="0 0 600 214"
         className="block w-full"
         role="img"
-        aria-label="Median paragraph length per paper: IR Journal median 132 words, interquartile range 110 to 150; controls median 128."
+        aria-label="Median paragraph length per paper: Education Data Journal median 132 words, interquartile range 110 to 150; controls median 128."
       >
         {S2.ticks.map((t) => (
           <g key={t}>
@@ -516,7 +516,7 @@ export function SwarmChart() {
           </>
         )}
         <text x="16" y="20" className="fill-foreground font-semibold text-[11.5px]">
-          IR Journal
+          Education Data Journal
         </text>
         <text x="584" y="20" textAnchor="end" className="fill-muted-foreground font-mono text-[10.5px]">
           {az.violin ? "N 212 · median 132 · IQR 110–150" : "N 212"}
@@ -794,7 +794,7 @@ export function AnalyzeScene({ live }: { live: boolean }) {
         </div>
         <Card data-forest className="@container">
           <ColHead
-            title="IR Journal against the controls"
+            title="Education Data Journal against the controls"
             icon="compare"
             aside={az.forest ? "7 of 64 features shown · 2,000 resamples" : "Whole papers resampled"}
           />
@@ -822,7 +822,7 @@ export function AnalyzeScene({ live }: { live: boolean }) {
                   <span className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground text-xs">
                     <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
                       <i className="h-0.5 w-3 rounded bg-sky-600 dark:bg-sky-400" />
-                      IR Journal
+                      Education Data Journal
                     </span>
                     <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
                       <i className="h-0.5 w-3 rounded bg-amber-500" />
@@ -840,7 +840,8 @@ export function AnalyzeScene({ live }: { live: boolean }) {
           </div>
           {az.conf === 3 && (
             <M as="p" in="fade" className="border-t px-4 py-2.5 text-muted-foreground text-xs">
-              9 differences found, 3 explained. The other 6 are what the profile calls distinctive of IR Journal.
+              9 differences found, 3 explained. The other 6 are what the profile calls distinctive of Education Data
+              Journal.
             </M>
           )}
         </Card>
@@ -881,7 +882,7 @@ export function AnalyzeScene({ live }: { live: boolean }) {
               [
                 ["Differ from the controls", az.forest === 7 ? 9 : null],
                 ["Explained by another cause", az.conf === 3 ? 3 : null],
-                ["Distinctive of IR Journal", az.conf === 3 ? 6 : null],
+                ["Distinctive of Education Data Journal", az.conf === 3 ? 6 : null],
                 ["Drift on held-out papers", az.hold ? 3 : null],
               ] as const
             ).map(([k, v]) => (
@@ -919,16 +920,17 @@ export function AnalyzeScene({ live }: { live: boolean }) {
               </>
             ) : (
               <p className="text-muted-foreground">
-                The 43 IR Journal papers set aside in J1 test whether each feature holds beyond the papers it was found
-                on.
+                The 43 Education Data Journal papers set aside in J1 test whether each feature holds beyond the papers
+                it was found on.
               </p>
             )}
           </div>
         </RailSection>
         <RailSection title="How to read “distinctive”">
           <p className="text-[12.5px] text-muted-foreground leading-relaxed">
-            It means IR Journal's papers differ from comparable papers elsewhere, after year, subfield, length and
-            template are ruled out. It does not mean the editors require it, and it says nothing about quality.
+            It means Education Data Journal's papers differ from comparable papers elsewhere, after year, subfield,
+            length and template are ruled out. It does not mean the editors require it, and it says nothing about
+            quality.
           </p>
         </RailSection>
       </aside>
@@ -990,17 +992,17 @@ export function ProfileSheet() {
     <Card data-sheet data-cursor="sheet" className="@container">
       <header className="flex flex-col gap-3 px-4 pt-4 pb-4 sm:px-5">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-          <h3 className="font-semibold text-xl tracking-tight">JFE-IRJ-v2</h3>
+          <h3 className="font-semibold text-xl tracking-tight">JFE-EDJ-v2</h3>
           {frozen ? <StatusBadge k="ok">Published · frozen</StatusBadge> : <StatusBadge k="now">Draft</StatusBadge>}
         </div>
         <p className="max-w-[68ch] text-muted-foreground text-sm">
-          How research articles in IR Journal (example) were written, 2021–2026. Built from 212 papers and compared with
-          96 from three journals in the same field.
+          How research articles in Education Data Journal (example) were written, 2021–2026. Built from 212 papers and
+          compared with 96 from three journals in the same field.
         </p>
         <dl className="grid gap-x-6 gap-y-2 rounded-lg bg-muted/50 px-4 py-3 text-[13px] sm:grid-cols-3">
           {[
             ["Scope", "English · research articles · 9 section types"],
-            ["Provenance", "Manifest CM-IRJ-0918 · parser 3.2 · taxonomy v1.2 · registry v2.0"],
+            ["Provenance", "Manifest CM-EDJ-0918 · parser 3.2 · taxonomy v1.2 · registry v2.0"],
             ["Coverage", "Parsed 95% · α 0.78–0.88 · 64 features"],
           ].map(([k, v]) => (
             <div key={k} className="flex min-w-0 flex-col gap-0.5">
@@ -1263,7 +1265,7 @@ export function ProfileView() {
     <div className="flex flex-col gap-5">
       <header className="flex flex-wrap items-start gap-3 border-b pb-3.5">
         <div className="min-w-0 flex-1">
-          <h2 className="font-semibold text-lg tracking-tight">JFE-IRJ-v2, as a writer reads it</h2>
+          <h2 className="font-semibold text-lg tracking-tight">JFE-EDJ-v2, as a writer reads it</h2>
           <p className="mt-1 max-w-[68ch] text-muted-foreground text-sm">
             The frozen profile. The charts it was built from stay in Analyze; every number points back to papers and
             spans.

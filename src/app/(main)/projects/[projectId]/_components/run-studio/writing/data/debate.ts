@@ -69,12 +69,32 @@ export const THREADS: { id: string; sch: string; t: string; claim: string }[] = 
     sch: "GAP",
     t: "The gap",
     claim:
-      "No study has tested, under a fixed protocol, whether fusion finds more marked evidence than either signal alone.",
+      "No pre-registered, leakage-checked study has tested whether first-semester results add to enrolment data for dropout warning.",
   },
-  { id: "F1", sch: "F", t: "Finding 1", claim: "Fusion finds more of the marked evidence than BM25." },
-  { id: "F2", sch: "F", t: "Finding 2", claim: "The gain is largest when evidence is spread out." },
-  { id: "F3", sch: "N", t: "Finding 3", claim: "At the same budget there is no clear gain." },
-  { id: "C", sch: "P", t: "Conclusion", claim: "Fusion is the better default for long scientific papers." },
+  {
+    id: "F1",
+    sch: "F",
+    t: "Finding 1",
+    claim: "Adding first-semester results finds more of the students who drop out.",
+  },
+  {
+    id: "F2",
+    sch: "F",
+    t: "Finding 2",
+    claim: "The gain appears in both admission groups and is not larger below the median.",
+  },
+  {
+    id: "F3",
+    sch: "N",
+    t: "Finding 3",
+    claim: "On enrolment data, boosting gives no clear gain over logistic regression.",
+  },
+  {
+    id: "C",
+    sch: "P",
+    t: "Conclusion",
+    claim: "First-semester results are the better basis for dropout early warning.",
+  },
 ];
 
 /* What a challenge or an answer may rest on. Anything else is struck. */
@@ -178,7 +198,7 @@ export const TURNS: Turn[] = [
     th: "GAP",
     a: "aa",
     st: "propose",
-    tx: "No study has tested, under a fixed protocol, whether fusing BM25 with a dense retriever finds more marked evidence than either alone.",
+    tx: "No pre-registered study has tested, with leakage checked, whether first-semester results add to enrolment data in ranking students for dropout outreach.",
     g: [["rep", "B.2"]],
   },
   {
@@ -202,7 +222,7 @@ export const TURNS: Turn[] = [
     a: "aa",
     st: "defend",
     re: "T02",
-    tx: "ACL Anthology and Semantic Scholar, January 2018 to August 2026, four query strings: 214 hits screened, 18 read in full.",
+    tx: "Scopus, ERIC and arXiv, January 2009 to September 2026, three query strings: 168 hits screened, 12 read in full.",
     g: [
       ["rep", "B.2"],
       ["src", "search.json"],
@@ -227,10 +247,10 @@ export const TURNS: Turn[] = [
     tgt: "conclusion",
     sev: "fatal",
     re: "T01",
-    tx: "Bruch et al. (2023) compare fusion functions for hybrid retrieval. Is that not this test?",
+    tx: "Dekker et al. (2009) predicted dropout after the first semester. Is that not this test?",
     g: [
       ["cq", "G3"],
-      ["src", "Bruch et al., 2023"],
+      ["src", "Dekker et al., 2009"],
     ],
   },
   {
@@ -239,10 +259,10 @@ export const TURNS: Turn[] = [
     a: "aa",
     st: "defend",
     re: "T05",
-    tx: "They score ranking quality with NDCG and recall at 1,000 on MS MARCO and BEIR. Nobody marks evidence paragraphs in long papers there.",
+    tx: "They did, for one department, with accuracy as the measure. No plan was fixed before the results, and nothing in the paper checks for leakage.",
     g: [
-      ["led", "EV-10"],
-      ["rep", "I.2 · note 11"],
+      ["src", "Dekker et al., 2009"],
+      ["rep", "K.2 · note 4"],
     ],
   },
   {
@@ -252,7 +272,7 @@ export const TURNS: Turn[] = [
     st: "rule",
     on: "T05",
     r: "answered",
-    tx: "The rebut fails: a different task and different labels. The gap stands as worded, “under a fixed protocol”.",
+    tx: "The rebut fails: the gap is worded as a pre-registered, leakage-checked test, and that is not what they ran. The gap stands as worded.",
     fx: "No CA drawn",
   },
 
@@ -261,7 +281,7 @@ export const TURNS: Turn[] = [
     th: "F1",
     a: "aa",
     st: "propose",
-    tx: "Fusion finds more of the marked evidence than BM25: recall at 10 rises from 0.612 to 0.688, a gain of 0.076 (95% CI 0.059 to 0.093).",
+    tx: "Adding first-semester results finds more of the students who drop out: recall at 20% flagged rises from 0.396 to 0.507, a gain of 0.111 (95% CI 0.092 to 0.129).",
     g: [
       ["led", "EV-02"],
       ["led", "EV-05"],
@@ -276,10 +296,10 @@ export const TURNS: Turn[] = [
     tgt: "inference",
     sev: "caveat",
     re: "T08",
-    tx: "Were all three systems scored on the same questions, cutoff and labels?",
+    tx: "Were both models scored on the same students, splits and flag rate?",
     g: [
       ["cq", "E2"],
-      ["rep", "B.6"],
+      ["rep", "B.8"],
     ],
   },
   {
@@ -288,10 +308,10 @@ export const TURNS: Turn[] = [
     a: "aa",
     st: "defend",
     re: "T09",
-    tx: "Yes. Plan §2 fixes them, and all 15 traces carry the same question-list hash.",
+    tx: "Yes. Plan §5 fixes them, and each seed’s traces carry the same split hash.",
     g: [
-      ["led", "EV-13"],
-      ["rep", "D.1"],
+      ["rep", "D.2"],
+      ["rep", "F.1"],
     ],
   },
   {
@@ -313,12 +333,12 @@ export const TURNS: Turn[] = [
     tgt: "inference",
     sev: "fatal",
     re: "T08",
-    tx: "23% of the questions share a paper, but the bootstrap resamples questions as if each were independent. The interval is too narrow.",
+    tx: "Students share courses and cohorts, but the bootstrap resamples students as if each were independent. The interval may be too narrow.",
     g: [
       ["cq", "E4"],
-      ["rep", "C.1"],
-      ["rep", "B.7"],
-      ["std", "NeurIPS 7"],
+      ["rep", "E.2"],
+      ["rep", "B.9"],
+      ["std", "REFORMS 6b"],
     ],
   },
   {
@@ -327,8 +347,8 @@ export const TURNS: Turn[] = [
     a: "aa",
     st: "defend",
     re: "T12",
-    tx: "The point estimate of 0.076 does not depend on how we resample.",
-    g: [["rep", "B.7"]],
+    tx: "The point estimate of 0.111 does not depend on how we resample.",
+    g: [["rep", "B.9"]],
   },
   {
     id: "T14",
@@ -349,7 +369,7 @@ export const TURNS: Turn[] = [
     st: "rule",
     on: "T12",
     r: "upheld",
-    tx: "Upheld. The inference from E1 to F1 rests on an interval computed on the wrong unit. This is an undercut: F1 cannot stand until the interval is recomputed by paper.",
+    tx: "Upheld. The inference from E1 to F1 rests on an interval computed on students, not on courses. This is an undercut: F1 cannot stand until the interval is read by course.",
     fx: "CA1 · undercut on RA1",
   },
   {
@@ -360,7 +380,7 @@ export const TURNS: Turn[] = [
     tgt: "conclusion",
     sev: "caveat",
     re: "T08",
-    tx: "This may not hold for papers in other languages.",
+    tx: "This may not hold at universities in other countries.",
     g: [["none", "—"]],
   },
   {
@@ -370,7 +390,7 @@ export const TURNS: Turn[] = [
     st: "rule",
     on: "T16",
     r: "struck",
-    tx: "Struck: no ground, and F1 already speaks only of QASPER. The point belongs to the Conclusion, where it is heard.",
+    tx: "Struck: no ground, and F1 already speaks only of this polytechnic. The point belongs to the Conclusion, where it is heard.",
     fx: "Moved to the Conclusion",
   },
 
@@ -379,7 +399,7 @@ export const TURNS: Turn[] = [
     th: "F2",
     a: "aa",
     st: "propose",
-    tx: "The gain is largest when evidence is spread out: 0.094 against 0.051.",
+    tx: "The gain appears in both admission groups: 0.098 below the median grade and 0.129 above, a difference of −0.031 (95% CI −0.109 to 0.027).",
     g: [["led", "EV-07"]],
   },
   {
@@ -391,10 +411,10 @@ export const TURNS: Turn[] = [
     tgt: "inference",
     sev: "caveat",
     re: "T18",
-    tx: "Was “spread” defined before the results were seen?",
+    tx: "Was the median split fixed before the results were seen?",
     g: [
       ["cq", "E5"],
-      ["rep", "B.7"],
+      ["rep", "B.9"],
     ],
   },
   {
@@ -403,9 +423,9 @@ export const TURNS: Turn[] = [
     a: "aa",
     st: "defend",
     re: "T19",
-    tx: "Plan §3 defines spread from the annotations. It was locked on 14 September, a day before the first run.",
+    tx: "Plan §6 names the split, and §7 takes the median from each training part. The plan was locked on 27 October, a minute before the first run.",
     g: [
-      ["rep", "B.7"],
+      ["rep", "B.9"],
       ["rep", "Timeline"],
     ],
   },
@@ -428,11 +448,11 @@ export const TURNS: Turn[] = [
     tgt: "inference",
     sev: "caveat",
     re: "T18",
-    tx: "Spread questions are longer. The gain may follow question length, not spread.",
+    tx: "Admission grades differ by course. The pattern may follow the course a student entered, not the grade.",
     g: [
       ["cq", "E3"],
-      ["led", "A4 · rows 26–27"],
-      ["rep", "E.2"],
+      ["led", "A4 · rows 28–38"],
+      ["rep", "G.2"],
     ],
   },
   {
@@ -441,8 +461,8 @@ export const TURNS: Turn[] = [
     a: "aa",
     st: "concede",
     re: "T22",
-    tx: "The confirmatory analysis does not control for length, and A4 is exploratory only. Conceded.",
-    g: [["rep", "E.2"]],
+    tx: "The confirmatory analysis does not control for course, and A4 is exploratory only. Conceded.",
+    g: [["rep", "G.2"]],
   },
   {
     id: "T24",
@@ -451,7 +471,7 @@ export const TURNS: Turn[] = [
     st: "rule",
     on: "T22",
     r: "conceded",
-    tx: "Conceded. F2 keeps the rebuttal “unless spread simply follows question length” and the qualifier “likely”.",
+    tx: "Conceded. F2 keeps the rebuttal “unless admission grade simply stands in for the course” and the qualifier “likely”.",
     fx: "Rebuttal + qualifier on F2",
   },
 
@@ -460,7 +480,7 @@ export const TURNS: Turn[] = [
     th: "F3",
     a: "aa",
     st: "propose",
-    tx: "At the same budget there is no clear gain: 0.031, 95% CI −0.004 to 0.066.",
+    tx: "On enrolment data, boosting gives no clear gain over logistic regression: 0.004, 95% CI −0.007 to 0.021.",
     g: [["led", "EV-08"]],
   },
   {
@@ -472,10 +492,10 @@ export const TURNS: Turn[] = [
     tgt: "conclusion",
     sev: "fatal",
     re: "T25",
-    tx: "No clear gain is not no gain. Could this test have found a gain of 0.031 at all?",
+    tx: "No clear gain is not no gain. Could this test have found a small gain at all?",
     g: [
       ["cq", "N1"],
-      ["rep", "B.9"],
+      ["rep", "B.11"],
     ],
   },
   {
@@ -494,7 +514,7 @@ export const TURNS: Turn[] = [
     st: "rule",
     on: "T27",
     r: "rejected",
-    tx: "Rejected. No ledger span says 0.02; plan §4 gives a smallest detectable gain of 0.035. Numbers come only from the record. Answer again.",
+    tx: "Rejected. No ledger span says 0.02; plan §7 gives a smallest detectable gain of about 0.06 for one split. Numbers come only from the record. Answer again.",
     fx: "Flagged · rule 2",
   },
   {
@@ -503,8 +523,8 @@ export const TURNS: Turn[] = [
     a: "aa",
     st: "refine",
     re: "T26",
-    tx: "The test can miss gains below 0.035 (plan §4). So F3 says “no clear gain”, never “no gain”.",
-    g: [["rep", "B.9"]],
+    tx: "The test can miss gains below about 0.06 (plan §7). So F3 says “no clear gain”, never “no gain”.",
+    g: [["rep", "B.11"]],
   },
   {
     id: "T30",
@@ -513,7 +533,7 @@ export const TURNS: Turn[] = [
     st: "rule",
     on: "T26",
     r: "conceded",
-    tx: "Conceded. Qualifier “no clear gain”; rebuttal “unless the gain is below 0.035”. As evidence, F3 is preferred over H4.",
+    tx: "Conceded. Qualifier “no clear gain”; rebuttal “unless the gain is below about 0.06”. As evidence, F3 is preferred over H4.",
     fx: "Qualifier + PA1 over H4",
   },
 
@@ -522,7 +542,7 @@ export const TURNS: Turn[] = [
     th: "C",
     a: "aa",
     st: "propose",
-    tx: "Fusion is the better default for long scientific papers.",
+    tx: "First-semester results are the better basis for dropout early warning.",
     g: [
       ["led", "F1"],
       ["led", "F2"],
@@ -537,11 +557,11 @@ export const TURNS: Turn[] = [
     tgt: "inference",
     sev: "fatal",
     re: "T31",
-    tx: "QASPER holds 1,585 English NLP papers. “Long scientific papers” covers every field and every language.",
+    tx: "The record holds 11 cohorts of one Portuguese polytechnic. “Dropout early warning” covers every institution and every year.",
     g: [
       ["cq", "P1"],
-      ["rep", "C.1"],
-      ["rep", "H.1"],
+      ["rep", "C.3"],
+      ["rep", "J.2"],
     ],
   },
   {
@@ -550,7 +570,7 @@ export const TURNS: Turn[] = [
     a: "aa",
     st: "defend",
     re: "T32",
-    tx: "QASPER stands in for long scientific papers.",
+    tx: "Eleven years of one polytechnic’s entrants stand in for students in general.",
     g: [["none", "reconstructed warrant"]],
   },
   {
@@ -571,8 +591,8 @@ export const TURNS: Turn[] = [
     a: "aa",
     st: "defend",
     re: "T34",
-    tx: "Dasigi et al. built QASPER from full research papers.",
-    g: [["src", "Dasigi et al., 2021"]],
+    tx: "Realinho et al. built the dataset for the institution’s own early-warning tool.",
+    g: [["src", "Realinho et al., 2022"]],
   },
   {
     id: "T36",
@@ -583,8 +603,8 @@ export const TURNS: Turn[] = [
     tgt: "inference",
     sev: "fatal",
     re: "T35",
-    tx: "Research papers from one field. The claim is about all fields.",
-    g: [["rep", "C.1"]],
+    tx: "Built for one institution. The claim is about all of them.",
+    g: [["rep", "C.3"]],
   },
   {
     id: "T37",
@@ -606,8 +626,8 @@ export const TURNS_K04: Record<string, Turn[]> = {
       a: "aa",
       st: "refine",
       re: "T32",
-      tx: "Fusion is the better default for English NLP papers like those in QASPER.",
-      g: [["rep", "C.1"]],
+      tx: "First-semester results are the better basis for dropout early warning for entrants to this polytechnic, as in 2008/09–2018/19.",
+      g: [["rep", "C.3"]],
       note: "Narrowed by you at K04",
     },
     {
@@ -617,7 +637,7 @@ export const TURNS_K04: Record<string, Turn[]> = {
       st: "concede",
       re: "T38",
       tx: "Narrowed to what the sample covers. Satisfied.",
-      g: [["rep", "C.1"]],
+      g: [["rep", "C.3"]],
     },
     {
       id: "T40",
@@ -637,8 +657,8 @@ export const TURNS_K04: Record<string, Turn[]> = {
       a: "aa",
       st: "refine",
       re: "T32",
-      tx: "The reconstructed warrant is dropped. Restated at S03: fusion is the better default for papers like those in QASPER.",
-      g: [["rep", "C.1"]],
+      tx: "The reconstructed warrant is dropped. Restated at S03: in this record, first-semester results are the better basis for early warning.",
+      g: [["rep", "C.3"]],
       note: "Warrant dropped by you at K04",
     },
     {
@@ -648,7 +668,7 @@ export const TURNS_K04: Record<string, Turn[]> = {
       st: "concede",
       re: "T38",
       tx: "A claim about the sample only. Satisfied.",
-      g: [["rep", "C.1"]],
+      g: [["rep", "C.3"]],
     },
     {
       id: "T40",
@@ -662,21 +682,21 @@ export const TURNS_K04: Record<string, Turn[]> = {
     },
   ],
 };
-/* scenario U7: a counterexample from the literature, heard after the deadlock is settled */
+/* scenario U8: a counterexample from the record, heard after the deadlock is settled */
 export const TURNS_COUT: Turn[] = [
   {
     id: "T41",
     th: "C",
-    a: "ql",
+    a: "qx",
     st: "challenge",
     cq: "P3",
     tgt: "conclusion",
     sev: "fatal",
     re: "T31",
-    tx: "Lee et al. (2024, example) ran fusion against E5 on ACL papers with long appendices: no gain over the dense retriever.",
+    tx: "In course 171 the ranking flags none of the students who drop out (A4, row 28). The Conclusion speaks of every entrant.",
     g: [
       ["cq", "P3"],
-      ["src", "Lee et al., 2024 (example)"],
+      ["led", "A4 · row 28"],
     ],
   },
   {
@@ -685,22 +705,22 @@ export const TURNS_COUT: Turn[] = [
     a: "aa",
     st: "defend",
     re: "T41",
-    tx: "Their papers carry long appendices; ours are main text only.",
-    g: [["rep", "C.1"]],
+    tx: "Course 171 has about 34 test students per split, and A4 is exploratory: it was never meant to rank courses.",
+    g: [["rep", "G.2"]],
   },
   {
     id: "T43",
     th: "C",
-    a: "ql",
+    a: "qx",
     st: "challenge",
     cq: "P3",
     tgt: "conclusion",
     sev: "fatal",
     re: "T42",
-    tx: "Same field, same language, the same papers the claim now names. The appendix is not excluded by your claim.",
+    tx: "Exploratory or not, it is in the record, and the Conclusion names every entrant, course 171 included.",
     g: [
-      ["src", "Lee et al., 2024 (example)"],
-      ["rep", "C.1"],
+      ["led", "A4 · row 28"],
+      ["rep", "C.3"],
     ],
   },
   {
@@ -716,19 +736,17 @@ export const TURNS_COUT: Turn[] = [
 ];
 /* the critical questions nobody asked are closed from the record by the judge */
 export const CLOSED_BY_RECORD: [string, string, string][] = [
-  ["GAP", "G2", "Both indexes cover the venues where such a study would appear (B.2)."],
-  ["F1", "E1", "Rows 12–13 trace to the 15 traces (D.1)."],
-  ["F1", "E3", "Same questions, same cutoff: no other difference between systems (B.6)."],
-  ["F1", "E5", "A1 is confirmatory, locked before the runs (E.1)."],
-  ["F2", "E1", "Rows 18–21 trace to the traces (D.1)."],
-  ["F2", "E2", "The split uses the same questions for every system (B.6)."],
-  ["F2", "E4", "Recomputed by paper with F1 at S07 (C.1)."],
-  ["F3", "N2", "The same-budget comparison is A3, locked before the runs (E.1)."],
-  ["C", "P2", "1,169 questions; power declared (B.9)."],
-  ["C", "P3", "No counterexample in the package (I.2)."],
+  ["GAP", "G2", "All three indexes cover the venues where such a study would appear (B.2)."],
+  ["F1", "E1", "Row 21 traces to the ten runs behind it (F.1)."],
+  ["F1", "E3", "Same students, splits and flag rate: no other difference between the models (B.8)."],
+  ["F1", "E5", "A1 is confirmatory, locked before the runs (G.1)."],
+  ["F2", "E1", "Rows 39–40 trace to the runs behind them (F.1)."],
+  ["F2", "E2", "The split uses the same students for both models (B.8)."],
+  ["F2", "E4", "Recomputed by course with F1 at S07 (E.2)."],
+  ["F3", "N2", "The comparison is A3, locked before the runs (G.1)."],
+  ["C", "P2", "3,630 students; power declared (B.11)."],
+  ["C", "P3", "No source in the package reports a counterexample (K.2)."],
 ];
-
-/* the protocol, in the words the debate screen uses */
 export const DEBATE_RULES: [string, string][] = [
   [
     "Grounds",

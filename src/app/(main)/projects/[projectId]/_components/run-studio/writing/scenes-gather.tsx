@@ -68,6 +68,8 @@ import {
   MAP_SCH,
   MAP_W,
   NUM_ROWS,
+  REFS_TOTAL,
+  RESULT_ROWS_TOTAL,
   SCHEME_INFO,
   TOU_SRC,
 } from "./data/gather";
@@ -327,8 +329,10 @@ function PlanTimeline() {
 const fmtGain = (v: number) => (v < 0 ? `−${Math.abs(v).toFixed(3)}` : v.toFixed(3));
 /* Each gain with its interval, against 0: concluded only if the interval stays above 0. */
 function GainPlot() {
-  const lo = -0.02;
-  const hi = 0.1;
+  // The axis spans every interval, in steps of 0.05.
+  const lo = Math.floor(Math.min(0, ...GAINS.map((g) => g.lo)) / 0.05) * 0.05;
+  const hi = Math.ceil(Math.max(...GAINS.map((g) => g.hi)) / 0.05) * 0.05;
+  const ticks = Array.from({ length: Math.round((hi - lo) / 0.05) + 1 }, (_, i) => lo + i * 0.05);
   const x = (v: number) => ((v - lo) / (hi - lo)) * 100;
   return (
     <div className="flex flex-col gap-1">
@@ -378,16 +382,17 @@ function GainPlot() {
         })}
         <span />
         <span className="relative h-4 font-mono text-[10.5px] text-muted-foreground">
-          {[0, 0.05, 0.1].map((t) => (
+          {ticks.map((t) => (
             <span key={t} className="absolute -translate-x-1/2" style={{ left: `${x(t)}%` }}>
-              {t === 0 ? "0" : t.toFixed(2)}
+              {Math.abs(t) < 1e-9 ? "0" : fmtGain(t).slice(0, -1)}
             </span>
           ))}
         </span>
         <span />
       </div>
       <p className="text-muted-foreground text-xs">
-        Gain in recall at 10 with its 95% interval. The row 25 interval reaches below 0, so H4 is not shown.
+        Gain in recall at 20% flagged, with its 95% interval. The intervals in rows 22 and 23 reach below 0, so H2 and
+        H4 are not shown.
       </p>
     </div>
   );
@@ -453,7 +458,7 @@ function SectionDetail({ k }: { k: string }) {
         <>
           <div
             role="img"
-            aria-label="15 runs: 3 systems by 5 seeds, each with a trace"
+            aria-label={`${RUN_SYSTEMS.length * RUN_SEEDS.length} runs: ${RUN_SYSTEMS.length} models by ${RUN_SEEDS.length} seeds, each with a trace`}
             className="grid grid-cols-[4.5rem_repeat(5,minmax(0,1fr))] items-center gap-1.5 text-xs"
           >
             <span />
@@ -491,9 +496,6 @@ function SectionDetail({ k }: { k: string }) {
                 {v}
               </Fact>
             ))}
-            <Fact k="Time per question">
-              <span className={STATE_TEXT.bad}>Not recorded</span>
-            </Fact>
           </dl>
         </>
       );
@@ -514,7 +516,9 @@ function SectionDetail({ k }: { k: string }) {
               </Fact>
             ))}
           </dl>
-          <p className="mt-2 text-muted-foreground text-xs">22 more rows: per system, per spread and per length.</p>
+          <p className="mt-2 text-muted-foreground text-xs">
+            30 more rows: the other runs, the course-level bootstrap, A4 by course and the two gains A2 compares.
+          </p>
         </>
       );
     case "analyses":
@@ -537,7 +541,7 @@ function SectionDetail({ k }: { k: string }) {
       return (
         <dl className="divide-y">
           <Fact k={DEVIATION.id}>{DEVIATION.when}</Fact>
-          <Fact k="Dense model">
+          <Fact k="Encoding">
             <span className="text-muted-foreground line-through">{DEVIATION.plan}</span> → {DEVIATION.ran}
           </Fact>
           <Fact k="Why">{DEVIATION.why}</Fact>
@@ -1024,7 +1028,7 @@ export function EvidenceScene({ live }: { live: boolean }) {
             [
               [
                 "References",
-                e.refs ? `${resolved}/31` : "—",
+                e.refs ? `${resolved}/${REFS_TOTAL}` : "—",
                 e.refs > BAD_REF ? "1 quarantined" : "resolving",
                 e.refs > BAD_REF ? "text-rose-700 dark:text-rose-300" : "",
               ],
@@ -1045,7 +1049,7 @@ export function EvidenceScene({ live }: { live: boolean }) {
               ],
               [
                 "Numbers re-checked",
-                `${Math.round((27 * e.recomp) / NUM_ROWS.length)}/27`,
+                `${Math.round((RESULT_ROWS_TOTAL * e.recomp) / NUM_ROWS.length)}/${RESULT_ROWS_TOTAL}`,
                 e.recomp === NUM_ROWS.length ? "0 drift" : "against raw rows",
                 e.recomp === NUM_ROWS.length ? "text-emerald-700 dark:text-emerald-300" : "",
               ],
@@ -1307,7 +1311,7 @@ export function ProfileSource() {
             No profile: the contract comes from the publisher’s rules alone
           </b>
           <p className="mt-0.5 text-[13px] text-muted-foreground">
-            JFE-IRJ-v2 stopped at J1 with too few papers. Every rule binds; there are no habits, no move order and no
+            JFE-EDJ-v2 stopped at J1 with too few papers. Every rule binds; there are no habits, no move order and no
             fit bands.
           </p>
           <button
@@ -1332,7 +1336,7 @@ export function ProfileSource() {
         <Icon n="book" className="size-4" />
       </span>
       <span className="min-w-0 flex-1">
-        <b className="block font-semibold text-sm">JFE-IRJ-v2 · published, frozen</b>
+        <b className="block font-semibold text-sm">JFE-EDJ-v2 · published, frozen</b>
         <span className="text-muted-foreground text-xs">
           212 research articles of 2021–2026: rules, habits, move order, recipes and fit bands
         </span>
@@ -1722,7 +1726,7 @@ function ContractCard() {
     <Card data-contract data-cursor="contract" className="@container">
       <ColHead
         icon="fileCheck"
-        title={`Journal writing contract · ${j.rulesOnly ? "rules only" : "JFE-IRJ-v2"}`}
+        title={`Journal writing contract · ${j.rulesOnly ? "rules only" : "JFE-EDJ-v2"}`}
         aside={<StatusBadge k="ok">Approved at K08</StatusBadge>}
       />
       <Table className="table-fixed">
@@ -2288,7 +2292,7 @@ export function ToulminScene({ live }: { live: boolean }) {
       ? CLAIMS[3].t3
       : k === "C" && t.narrowed
         ? S.db.k04 === "r"
-          ? "Fusion is the better default for papers like those in QASPER"
+          ? "In this record, first-semester results are the better basis for dropout early warning"
           : CLAIMS[3].t2
         : c.claim;
   const has = (n: number) => parts >= n;
@@ -2957,10 +2961,10 @@ export function MapCanvas({
         >
           <WorkOrb state="working" size={20} />
           <span className="flex flex-col">
-            <b className="font-semibold text-[12px]">Code check · bootstrap by paper</b>
-            <span className="text-[11px] text-muted-foreground">10,000 resamples of 416 papers · gain 95% CI</span>
+            <b className="font-semibold text-[12px]">Code check · bootstrap by course</b>
+            <span className="text-[11px] text-muted-foreground">2,000 resamples of the courses · gain 95% CI</span>
           </span>
-          <RollNumber value="0.054–0.098" className="font-semibold text-[15px]" />
+          <RollNumber value="0.081–0.146" className="font-semibold text-[15px]" />
         </M>
       )}
     </Diagram>
