@@ -5,11 +5,8 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Field, FieldContent, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { useApiMutation, useApiQuery } from "@/hooks/use-api";
 import { workspaceKeys } from "@/lib/api/query-keys";
@@ -103,8 +100,6 @@ export function WorkspaceNotifications({
     ) : (
       <WorkspaceSettingsReload pending={query.isFetching} onReload={() => void query.refetch()} />
     );
-  const digestSupported = values.capabilities.digest?.supported ?? false;
-  const quietSupported = values.capabilities.quiet_hours?.supported ?? false;
   return (
     <section className="flex min-w-0 flex-col gap-6">
       <div className="flex flex-col gap-2">
@@ -186,72 +181,6 @@ export function WorkspaceNotifications({
             Email can still arrive when an in-app group is off. Only new events send email; turning a group off cancels
             its pending emails. Invitation emails are unaffected.
           </p>
-          <Card>
-            <CardHeader>
-              <CardTitle>Delivery schedule</CardTitle>
-              <CardDescription>Schedule preferences use {values.digest.timezone}.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <FieldGroup>
-                <Field orientation="responsive">
-                  <FieldContent>
-                    <FieldLabel htmlFor="workspace-digest">
-                      Email summary {!digestSupported && <Badge variant="outline">Unavailable</Badge>}
-                    </FieldLabel>
-                    <FieldDescription>
-                      {digestSupported
-                        ? "Receive a summary of project updates."
-                        : "Email summaries are not available yet."}
-                    </FieldDescription>
-                  </FieldContent>
-                  <Select
-                    disabled={!digestSupported}
-                    value={values.digest.frequency}
-                    onValueChange={(frequency) =>
-                      update((current) => ({
-                        ...current,
-                        digest: {
-                          ...current.digest,
-                          frequency: frequency as NotificationPreferences["digest"]["frequency"],
-                        },
-                      }))
-                    }
-                  >
-                    <SelectTrigger id="workspace-digest" className="w-full sm:w-44">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectGroup>
-                        <SelectItem value="off">Off</SelectItem>
-                        <SelectItem value="daily">Daily</SelectItem>
-                        <SelectItem value="weekly">Weekly</SelectItem>
-                      </SelectGroup>
-                    </SelectContent>
-                  </Select>
-                </Field>
-                <Field orientation="horizontal">
-                  <FieldContent>
-                    <FieldLabel htmlFor="workspace-quiet">
-                      Quiet hours {!quietSupported && <Badge variant="outline">Unavailable</Badge>}
-                    </FieldLabel>
-                    <FieldDescription>
-                      {quietSupported
-                        ? `${values.quiet_hours.start}–${values.quiet_hours.end} · ${values.quiet_hours.timezone}`
-                        : "Quiet hours are not applied yet. In-app updates arrive as events occur."}
-                    </FieldDescription>
-                  </FieldContent>
-                  <Switch
-                    id="workspace-quiet"
-                    disabled={!quietSupported}
-                    checked={quietSupported && values.quiet_hours.enabled}
-                    onCheckedChange={(enabled) =>
-                      update((current) => ({ ...current, quiet_hours: { ...current.quiet_hours, enabled } }))
-                    }
-                  />
-                </Field>
-              </FieldGroup>
-            </CardContent>
-          </Card>
         </fieldset>
       </form>
       <div className="flex flex-wrap items-center justify-end gap-2 border-t pt-4">

@@ -4,7 +4,18 @@ import { useEffect, useRef, useState } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "cn";
-import { ArrowRight, ChevronRight, CircleCheck, CircleX, Database, Flag, Lock, Play, Plus, Upload } from "lucide-react";
+import {
+  ArrowRight,
+  ChevronRight,
+  CircleCheck,
+  CircleX,
+  Database,
+  Flag,
+  Lock,
+  PenLine,
+  Play,
+  Upload,
+} from "lucide-react";
 import { motion } from "motion/react";
 
 import { ManagementStatusBadge } from "@/components/management-status-badge";
@@ -13,9 +24,9 @@ import { Field, FieldDescription, FieldTitle } from "@/components/ui/field";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useInfiniteRuns } from "@/hooks/use-runs-query";
 import { projectKeys } from "@/lib/api/query-keys";
-import type { RunItem } from "@/lib/api/services/fetch-runs";
-import type { ReviewMode, RunInput } from "@/lib/run-stream/contract";
-import { SHOW_DATA_STAGE, SHOW_REVIEW_MODE } from "@/lib/run-stream/features";
+import { type RunItem, runTitle } from "@/lib/api/services/fetch-runs";
+import type { IntentKind, ReviewMode, RunInput } from "@/lib/run-stream/contract";
+import { SHOW_DATA_STAGE, SHOW_REVIEW_MODE, SHOW_WRITING_PREVIEW } from "@/lib/run-stream/features";
 import { DATASET } from "@/lib/run-stream/mock/scenario";
 import { type RunSession, useProjectRun, useRunStudio } from "@/lib/run-stream/run-store";
 import { displayStatus, finalResults, GATE_TITLE, inSentence, nextStop, signed } from "@/lib/run-stream/selectors";
@@ -34,7 +45,15 @@ import {
   stopsFor,
 } from "./run-meta";
 import { compactNumber, RunStats } from "./run-stats";
-import { FieldsInput, StartRunDialog, TopicInput, useTopicDraft } from "./start-run-dialog";
+import {
+  CaseDetailsInput,
+  FieldsInput,
+  IntentInput,
+  StartRunDialog,
+  TopicInput,
+  useTopicDraft,
+} from "./start-run-dialog";
+import { openWritingPreview, useWritingPreviewState } from "./writing/engine";
 
 function SectionTitle({ title, aside }: { title: string; aside?: string }) {
   return (
@@ -96,7 +115,7 @@ function TopicComposer({
   /** Settles once the run has started or was refused. */
   onStart(mode: ReviewMode, input: RunInput, from: HTMLElement | null): Promise<void>;
 }) {
-  const draft = useTopicDraft();
+  const draft = useTopicDraft("composer");
   const button = useRef<HTMLButtonElement>(null);
   const [starting, setStarting] = useState(false);
   const stops = stopsFor(mode);
@@ -122,16 +141,13 @@ function TopicComposer({
         <span className="flex items-center gap-2 font-medium text-muted-foreground text-xs uppercase tracking-wide">
           Next research run
         </span>
-        <TopicInput
-          draft={draft}
-          id="composer-topic"
-          label="What do you want to find out?"
-          className="font-(family-name:--font-lora) font-normal text-[22px] leading-snug"
-        />
+        <TopicInput draft={draft} className="font-(family-name:--font-lora) font-normal text-[22px] leading-snug" />
+        <IntentInput draft={draft} />
         <div className="grid gap-5 md:grid-cols-2">
-          <FieldsInput draft={draft} id="composer-field" />
+          <FieldsInput draft={draft} />
           <DataField />
         </div>
+        <CaseDetailsInput draft={draft} />
         <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
           <span className="flex min-w-0 max-w-[60ch] items-start gap-2 text-muted-foreground text-xs">
             <Flag className="mt-px size-3.5 shrink-0" />
@@ -156,7 +172,7 @@ function TopicComposer({
                 </ToggleGroupItem>
               ))}
             </ToggleGroup>
-            <Button ref={button} size="lg" disabled={!canWrite || !draft.ready || starting} onClick={start}>
+            <Button ref={button} size="lg" disabled={!canWrite || starting} onClick={start}>
               <Play />
               {starting ? "Starting…" : "Start research run"}
             </Button>
@@ -420,26 +436,33 @@ export function LiveRunCard({ session, onOpen }: { session: RunSession; onOpen(f
   );
 }
 
+/** What a run set out to do, in the list of past runs. */
+const INTENT_LINE: Record<IntentKind, string> = {
+  test: "testing a claim",
+  compare: "comparing",
+  explain: "explaining an outcome",
+  explore_dataset: "exploring a dataset",
+};
+
 const ROW =
   "grid w-full grid-cols-[96px_auto_minmax(0,1fr)_auto_16px] items-center gap-4 px-4.5 py-3.5 text-left text-sm outline-none transition-colors hover:bg-muted/50 focus-visible:bg-muted/60 max-md:grid-cols-[auto_auto_1fr]";
 
 function PastRunRow({ run }: { run: RunItem }) {
+  const title = runTitle(run);
   return (
     <>
-      <span className="font-mono font-semibold text-xs">
-        {run.topic ? (run.label ?? run.id.slice(0, 8)) : run.id.slice(0, 8)}
-      </span>
+      <span className="font-mono font-semibold text-xs">{run.label ?? run.id.slice(0, 8)}</span>
       <ManagementStatusBadge status={run.status} />
       <span className="min-w-0 max-md:col-span-3 max-md:row-start-2">
-        <b className="block truncate font-medium">{run.topic ?? run.label ?? `Run ${run.id.slice(0, 8)}`}</b>
+        <b className="block truncate font-medium">{title ?? `Run ${run.id.slice(0, 8)}`}</b>
         <span className="text-muted-foreground text-xs">
           {/* Pipeline runs count tokens, not dollars. */}
           {run.pipeline_key
             ? `${compactNumber(run.tokens_used ?? 0)} of ${compactNumber(run.token_budget ?? 0)} tokens`
             : `$${run.cost_usd} of $${run.budget_usd}`}{" "}
           ·{" "}
-          {run.topic
-            ? "from a topic to hypotheses"
+          {run.pipeline_key
+            ? INTENT_LINE[run.case?.intent.kind ?? "test"]
             : run.auto_review
               ? "frame reviews approved automatically"
               : "you review frames"}
@@ -454,6 +477,47 @@ function PastRunRow({ run }: { run: RunItem }) {
       </span>
       <ChevronRight className="size-4 text-muted-foreground max-md:hidden" />
     </>
+  );
+}
+
+const PREVIEW_STATE = {
+  idle: null,
+  live: { label: "In progress", dot: "bg-sky-500", c: "bg-sky-500/12 text-sky-700 dark:text-sky-300" },
+  waiting: { label: "Waiting for you", dot: "bg-amber-500", c: "bg-amber-500/15 text-amber-800 dark:text-amber-300" },
+  done: { label: "Signed", dot: "bg-emerald-500", c: "bg-emerald-500/12 text-emerald-700 dark:text-emerald-300" },
+};
+
+/** The writing stage on its own: it plays on an example record, so it can be tried without a research run. */
+function WritingPreviewRow() {
+  const state = useWritingPreviewState();
+  const chip = PREVIEW_STATE[state];
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-2.5 rounded-xl bg-card px-4 py-3 ring-1 ring-foreground/10">
+      <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground">
+        <PenLine className="size-4" />
+      </span>
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="flex flex-wrap items-center gap-2">
+          <b className="font-medium text-sm">Writing stage</b>
+          <span className="rounded bg-muted px-1.5 font-medium text-[10.5px] text-muted-foreground">Preview</span>
+          {chip && (
+            <span
+              className={cn("inline-flex h-5 items-center gap-1.5 rounded-full px-2 font-medium text-[11px]", chip.c)}
+            >
+              <span className={cn("size-1.5 rounded-full", chip.dot)} />
+              {chip.label}
+            </span>
+          )}
+        </span>
+        <span className="text-pretty text-muted-foreground text-xs">
+          Plays the writing stage on an example research record, without running the research flow first.
+        </span>
+      </div>
+      <Button variant="outline" size="sm" className="max-sm:w-full" onClick={openWritingPreview}>
+        <Play />
+        {state === "idle" ? "Run the writing stage" : "Open the writing stage"}
+      </Button>
+    </div>
   );
 }
 
@@ -539,9 +603,9 @@ export function RunStudio({ projectId, canWrite }: { projectId: string; canWrite
               aside={finished ? undefined : "One run at a time per project"}
             />
             {finished && canWrite && (
-              <Button variant="outline" size="sm" onClick={() => setDialog(true)}>
-                <Plus />
-                Start a research run
+              <Button onClick={() => setDialog(true)}>
+                <Play />
+                Start research run
               </Button>
             )}
           </div>
@@ -561,6 +625,7 @@ export function RunStudio({ projectId, canWrite }: { projectId: string; canWrite
           }}
         />
       )}
+      {SHOW_WRITING_PREVIEW && <WritingPreviewRow />}
       <PastRuns projectId={projectId} hide={session?.runId} />
       <StartRunDialog open={dialog} onOpenChange={setDialog} defaultMode={mode} onStart={start} />
     </div>

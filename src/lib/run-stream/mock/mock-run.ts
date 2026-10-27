@@ -116,7 +116,11 @@ export class MockRun implements RunCommands {
     readonly runId: string,
     readonly mode: ReviewMode,
     private readonly emit: (event: RunEvent) => void,
-    private readonly input: RunInput = { topic: SAMPLE_TOPIC, domains: DOMAINS },
+    private readonly input: RunInput = {
+      problem: SAMPLE_TOPIC,
+      intent: { kind: "explain", text: "Decide what sleep advice to give first-year students." },
+      domains: DOMAINS,
+    },
     private readonly options: { withData: boolean } = { withData: SHOW_DATA_STAGE },
   ) {}
 
@@ -296,7 +300,7 @@ export class MockRun implements RunCommands {
     try {
       this.send("run.started", {
         mode: this.mode,
-        topic: this.input.topic,
+        topic: this.input.problem,
         domains: this.input.domains,
         ...(this.withData ? { dataset: { ...DATASET } } : {}),
       });

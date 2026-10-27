@@ -1,4 +1,4 @@
-import type { Charter, GateAnswer, ReviewMode } from "@/lib/run-stream/contract";
+import type { CaseReference, Charter, GateAnswer, IntentKind, ReviewMode } from "@/lib/run-stream/contract";
 import type { ApiResult } from "@/types/api";
 import type { RunStatus } from "@/types/enums";
 
@@ -8,11 +8,32 @@ import type { ListParams } from "../types";
 
 export { RunStatus } from "@/types/enums";
 
+/** The body of `POST …/runs`: the research case and how the run stops for you. */
 export interface CreateRunRequest {
-  topic: string;
+  /** Required unless the intent is explore_dataset. */
+  problem?: string | null;
+  intent: { kind: IntentKind; text: string };
+  context?: string;
+  constraints?: string[];
+  references?: CaseReference[];
   domains: string[];
   review_mode: ReviewMode;
-  budget_usd?: string | null;
+}
+
+/** The one source of a run's aim, scope and limits. It is a draft until the PI's charter settles it. */
+export interface ResearchCase {
+  version: number;
+  status: "draft" | "settled";
+  intent: { kind: IntentKind; text: string };
+  /** Null only while an explore_dataset run waits for the dataset stage to propose one. */
+  problem: { text: string; source: "researcher" | "dataset_proposed" } | null;
+  context: string;
+  constraints: string[];
+  references: { citation: string; note: string }[];
+  domains: string[];
+  dataset_version_id: string | null;
+  clarifications?: { question: string; answer: string }[];
+  amendments?: { version: number; fields: string[]; reason: string; at: string }[];
 }
 
 export interface RunItem {
@@ -31,9 +52,12 @@ export interface RunItem {
   started_at: string | null;
   finished_at: string | null;
   updated_at: string;
-  // Runs started from a topic. The backend adds these with the run event stream.
   label?: string;
-  topic?: string | null;
+  /** The research problem, or "Explore dataset <name>". */
+  title?: string;
+  case?: ResearchCase;
+  /** Optional parts of the case left empty: a hint, never a block. */
+  case_gaps?: string[];
   domains?: string[];
   review_mode?: ReviewMode | null;
   /** Highest event `seq` stored for the run. */
@@ -49,6 +73,11 @@ export interface RunItem {
   /** Whether the Platform repairs the run by itself, or needs someone to act. */
   recovery?: RunRecovery | null;
 }
+
+/** The question a run answers, as the researcher wrote it; null for a run that explores a dataset. */
+export const runProblem = (run: RunItem) => run.case?.problem?.text ?? null;
+/** What a run is called: its problem, or the title the server gives a run without one. */
+export const runTitle = (run: RunItem) => runProblem(run) ?? run.title ?? null;
 
 export interface RunRecovery {
   state: "healing" | "needs_you" | "none";

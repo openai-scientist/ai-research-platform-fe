@@ -5,19 +5,22 @@ import { type FormEvent, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { LogLevel, MonitoringEventsParams, MonitoringService } from "@/lib/api/services/admin-monitoring-types";
 
 import { toTimeRange } from "../../_components/admin-api-utils";
 import { AdminTimeFilters } from "../../_components/admin-time-filters";
+import { monitoringEventTypes } from "./monitoring-event-types";
 
 const initial = {
   q: "",
   environment: "",
   service_id: "",
   level: "",
+  source: "",
+  event_type: "",
   from: "",
   to: "",
   request_id: "",
@@ -43,6 +46,8 @@ export function MonitoringFilters({
     environment: filters.environment ?? "",
     service_id: filters.service_id ?? "",
     level: filters.level ?? "",
+    source: filters.source ?? "",
+    event_type: filters.event_type ?? "",
     from: filters.from ?? "",
     to: filters.to ?? "",
     request_id: filters.request_id ?? "",
@@ -65,6 +70,8 @@ export function MonitoringFilters({
         environment: draft.environment.trim() || undefined,
         service_id: draft.service_id || undefined,
         level: (draft.level || undefined) as LogLevel | undefined,
+        source: draft.source || undefined,
+        event_type: draft.event_type.trim() || undefined,
         request_id: draft.request_id.trim() || undefined,
         trace_id: draft.trace_id.trim() || undefined,
         project_id: draft.project_id.trim() || undefined,
@@ -135,6 +142,48 @@ export function MonitoringFilters({
               </SelectGroup>
             </SelectContent>
           </Select>
+        </Field>
+      </FieldGroup>
+      <FieldGroup className="grid gap-3 sm:grid-cols-2">
+        <Field>
+          <FieldLabel htmlFor="monitor-source">Source</FieldLabel>
+          <Select
+            value={draft.source || "all"}
+            onValueChange={(value) => input("source", value === "all" ? "" : value)}
+          >
+            <SelectTrigger id="monitor-source" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                <SelectItem value="all">All sources</SelectItem>
+                {["api", "engine", "worker", "runtime", "provider"].map((source) => (
+                  <SelectItem key={source} value={source}>
+                    {source}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="monitor-event-type">Event type</FieldLabel>
+          <Input
+            id="monitor-event-type"
+            list="monitor-event-types"
+            placeholder="All event types"
+            aria-describedby="monitor-event-type-hint"
+            value={draft.event_type}
+            onChange={(event) => input("event_type", event.target.value)}
+          />
+          <datalist id="monitor-event-types">
+            {monitoringEventTypes.map((eventType) => (
+              <option key={eventType} value={eventType} />
+            ))}
+          </datalist>
+          <FieldDescription id="monitor-event-type-hint">
+            Choose a suggestion or enter an exact event type, including research.run events.
+          </FieldDescription>
         </Field>
       </FieldGroup>
       <details>

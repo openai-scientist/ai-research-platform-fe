@@ -1,0 +1,183 @@
+/* Moving parts of the writing run that utilities don't cover. Scoped to the writing view (.asw). */
+
+.asw .sweep {
+  animation: asw-sweep 1.6s ease-in-out infinite;
+}
+.asw .shimmer {
+  animation: asw-shimmer 1.4s linear infinite;
+}
+.asw .breathe {
+  animation: asw-breathe 1.6s ease-in-out infinite;
+}
+.asw .beat {
+  animation: asw-beat 1.2s ease-in-out infinite;
+}
+.asw .strike-in {
+  animation: asw-strike-in 0.7s ease both;
+}
+.asw .draw {
+  stroke-dasharray: var(--len, 400);
+  stroke-dashoffset: var(--len, 400);
+  animation: asw-draw 0.9s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+.asw .still .draw {
+  animation: none;
+  stroke-dashoffset: 0;
+}
+.asw .scan {
+  animation: asw-scan 2.2s cubic-bezier(0.45, 0, 0.2, 1) infinite;
+}
+.asw .wire-fade {
+  animation: asw-wire-fade 0.6s ease both;
+}
+.asw .still .wire-fade {
+  animation: none;
+}
+.asw .sweep-x {
+  animation: asw-sweep-x 2.6s cubic-bezier(0.45, 0, 0.2, 1) infinite;
+}
+/* JFE charts: a mark that drops into place */
+.asw .jdrop {
+  animation: asw-jdrop 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+  transform-box: fill-box;
+}
+.asw .still .jdrop {
+  animation: none;
+}
+.asw .hatch-rose {
+  background-image: repeating-linear-gradient(
+    135deg,
+    color-mix(in oklab, var(--color-rose-500) 16%, transparent) 0 1.5px,
+    transparent 1.5px 7px
+  );
+}
+/* a wash that fades out: a reply landed here, or the board pointed here */
+.asw .flash {
+  animation: asw-flash 1.6s ease-out forwards;
+}
+/* an incident's evidence line, underlined as it is read */
+.asw .hit-in {
+  animation: asw-hit-in 1.1s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+/* a route drawn from the stage that broke to the stage it goes back to */
+
+@keyframes asw-sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(300%);
+  }
+}
+@keyframes asw-shimmer {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(220%);
+  }
+}
+@keyframes asw-breathe {
+  0%,
+  100% {
+    opacity: 0.15;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+@keyframes asw-beat {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(0.6);
+  }
+}
+@keyframes asw-strike-in {
+  from {
+    text-decoration-color: transparent;
+  }
+}
+@keyframes asw-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes asw-wire-fade {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes asw-sweep-x {
+  0% {
+    left: 0;
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    left: 100%;
+    opacity: 0;
+  }
+}
+@keyframes asw-scan {
+  0% {
+    top: 0;
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    top: 100%;
+    opacity: 0;
+  }
+}
+@keyframes asw-jdrop {
+  from {
+    opacity: 0;
+    transform: translateY(-14px);
+  }
+}
+@keyframes asw-flash {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+@keyframes asw-hit-in {
+  from {
+    background-color: transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .asw .sweep,
+  .asw .shimmer,
+  .asw .breathe,
+  .asw .beat,
+  .asw .scan,
+  .asw .sweep-x,
+  .asw .wire-fade,
+  .asw .jdrop,
+  .asw .hit-in,
+  .asw .draw {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+  .asw .flash {
+    animation: none;
+    opacity: 0;
+  }
+}

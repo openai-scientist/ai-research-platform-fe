@@ -6,7 +6,10 @@ import { APP_CONFIG } from "@/config/app-config";
 
 import { LEGAL_CONTACT_EMAIL, LegalPage } from "../_components/legal-page";
 
-export const metadata: Metadata = { title: `Terms of Service | ${APP_CONFIG.name}` };
+export const metadata: Metadata = {
+  title: `Terms of Service | ${APP_CONFIG.name}`,
+  alternates: { canonical: "/terms" },
+};
 
 export default function TermsPage() {
   return (

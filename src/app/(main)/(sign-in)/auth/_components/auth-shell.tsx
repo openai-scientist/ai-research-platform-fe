@@ -11,10 +11,17 @@ export default function AuthShell({ children }: Readonly<{ children: ReactNode }
   return (
     <main>
       <div className="grid min-h-dvh grid-cols-1 p-2 lg:grid-cols-2">
+        <div className="relative order-1 flex h-full min-w-0">
+          <SquareField className="absolute inset-0 text-foreground/60" />
+          <div data-pixel-clear className="relative flex min-w-0 flex-1">
+            {children}
+          </div>
+        </div>
+        {/* After the form in the document, so the page's one h1 (the step heading) comes before these h2s. */}
         <div className="relative order-2 hidden h-full overflow-hidden rounded-3xl bg-primary lg:flex">
           <div className="absolute top-10 space-y-1 px-10 text-primary-foreground">
             <BrandMark className="size-10" />
-            <h1 className="font-medium text-2xl">{APP_CONFIG.shortName}</h1>
+            <p className="font-medium text-2xl">{APP_CONFIG.shortName}</p>
             <p className="text-primary-foreground/70 text-sm">{APP_CONFIG.tagline}</p>
           </div>
 
@@ -36,12 +43,6 @@ export default function AuthShell({ children }: Readonly<{ children: ReactNode }
                 Runs pause at the steps that matter, so nothing moves on without your approval.
               </p>
             </div>
-          </div>
-        </div>
-        <div className="relative order-1 flex h-full min-w-0">
-          <SquareField className="absolute inset-0 text-foreground/60" />
-          <div data-pixel-clear className="relative flex min-w-0 flex-1">
-            {children}
           </div>
         </div>
       </div>

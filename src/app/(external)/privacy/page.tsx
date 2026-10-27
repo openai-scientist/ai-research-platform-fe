@@ -4,7 +4,10 @@ import { APP_CONFIG } from "@/config/app-config";
 
 import { LEGAL_CONTACT_EMAIL, LegalPage } from "../_components/legal-page";
 
-export const metadata: Metadata = { title: `Privacy Policy | ${APP_CONFIG.name}` };
+export const metadata: Metadata = {
+  title: `Privacy Policy | ${APP_CONFIG.name}`,
+  alternates: { canonical: "/privacy" },
+};
 
 export default function PrivacyPage() {
   return (

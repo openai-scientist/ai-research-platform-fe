@@ -25,7 +25,7 @@ describe("sample insights alongside backend data", () => {
     const sample = createProjectPreview();
     const result = toManagerDashboard(project, { runs: [], dataset: null }, sample);
     expect(result.experimentStats.total).toBe(0);
-    expect(result.researchQuestion).toBe("No research topic yet.");
+    expect(result.researchQuestion).toBe("No research problem yet.");
     expect(result.datasetVersion).toBe("No dataset selected");
     expect(result.budgets.resources.limit).toBe(0);
     expect(result.outcomes).toEqual(sample.outcomes);

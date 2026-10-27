@@ -17,3 +17,9 @@ export const RUN_ENDS_AT: "hypotheses" | "paper" = "hypotheses";
  * graph) and a research canvas.
  */
 export const SHOW_MAP_STAGE = true;
+
+/**
+ * Once a run finishes, its Write stage opens as a preview: the writing pipeline played on an example research record,
+ * until experiments and the report come from the run itself.
+ */
+export const SHOW_WRITING_PREVIEW = true;
