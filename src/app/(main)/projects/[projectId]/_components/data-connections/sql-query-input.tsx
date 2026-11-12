@@ -68,8 +68,8 @@ export function SqlQueryInput({ flow }: { flow: ConnectionFlowState }) {
   const [point, setPoint] = useState({ left: 12, top: 32 });
   const seedSchema = flow.schema || (flow.schemas.includes("public") ? "public" : (flow.schemas[0] ?? ""));
   const context = useMemo(
-    () => (composing || rangeSelected ? null : sqlCompletionContext(flow.sql, caret, seedSchema, forced, flow.kind)),
-    [flow.sql, caret, seedSchema, forced, composing, rangeSelected, flow.kind],
+    () => (composing || rangeSelected ? null : sqlCompletionContext(flow.sql, caret, seedSchema, forced, flow.dialect)),
+    [flow.sql, caret, seedSchema, forced, composing, rangeSelected, flow.dialect],
   );
   const positionKey = `${flow.sql}:${caret}`;
   const enabled = focused && !composing && dismissed !== positionKey;

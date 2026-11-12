@@ -11,10 +11,11 @@ import type { ConnectionKind } from "@/lib/api/services/fetch-data-connections";
 import { CONNECTION_PROVIDERS, ConnectionLogo } from "./connection-display";
 
 const groups: { id: string; label: string; kinds: ConnectionKind[] }[] = [
-  { id: "databases", label: "Databases", kinds: ["postgres", "mysql", "bigquery"] },
+  { id: "databases", label: "Databases", kinds: ["database"] },
   { id: "google", label: "Google", kinds: ["google_sheets", "google_drive"] },
-  { id: "time-series", label: "Time series", kinds: ["prometheus", "influxdb"] },
 ];
+// Tabs and a search box only earn their room once the list is long enough to need them.
+const BROWSABLE_FROM = 5;
 
 function matches(kind: ConnectionKind, term: string) {
   const provider = CONNECTION_PROVIDERS[kind];
@@ -87,8 +88,9 @@ export function ConnectionProviderPicker({
   const [search, setSearch] = useState("");
   const shownGroups = groups.filter((group) => group.id !== "google" || googleAvailable);
   const all = shownGroups.flatMap((group) => group.kinds);
-  const inTab = tab === "all" ? all : (shownGroups.find((group) => group.id === tab)?.kinds ?? all);
-  const term = search.trim().toLowerCase();
+  const browsable = all.length >= BROWSABLE_FROM;
+  const inTab = !browsable || tab === "all" ? all : (shownGroups.find((group) => group.id === tab)?.kinds ?? all);
+  const term = browsable ? search.trim().toLowerCase() : "";
   const kinds = inTab.filter((kind) => !term || matches(kind, term));
   // A search that misses in this tab may still match elsewhere.
   const elsewhere = term && !kinds.length ? all.filter((kind) => matches(kind, term)).length : 0;
@@ -99,29 +101,31 @@ export function ConnectionProviderPicker({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <Tabs value={tab} onValueChange={setTab} className="min-w-0 max-w-full overflow-x-auto overflow-y-hidden">
-          <TabsList aria-label="Provider type">
-            {tabs.map((item) => (
-              <TabsTrigger key={item.id} value={item.id} className="px-2.5">
-                {item.label}
-                <span className="text-muted-foreground text-xs tabular-nums">{item.count}</span>
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </Tabs>
-        <InputGroup className="w-full sm:max-w-64">
-          <InputGroupInput
-            value={search}
-            placeholder="Search providers"
-            aria-label="Search providers"
-            onChange={(event) => setSearch(event.target.value)}
-          />
-          <InputGroupAddon align="inline-start">
-            <Search aria-hidden="true" />
-          </InputGroupAddon>
-        </InputGroup>
-      </div>
+      {browsable && (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <Tabs value={tab} onValueChange={setTab} className="min-w-0 max-w-full overflow-x-auto overflow-y-hidden">
+            <TabsList aria-label="Provider type">
+              {tabs.map((item) => (
+                <TabsTrigger key={item.id} value={item.id} className="px-2.5">
+                  {item.label}
+                  <span className="text-muted-foreground text-xs tabular-nums">{item.count}</span>
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+          <InputGroup className="w-full sm:max-w-64">
+            <InputGroupInput
+              value={search}
+              placeholder="Search providers"
+              aria-label="Search providers"
+              onChange={(event) => setSearch(event.target.value)}
+            />
+            <InputGroupAddon align="inline-start">
+              <Search aria-hidden="true" />
+            </InputGroupAddon>
+          </InputGroup>
+        </div>
+      )}
       {!kinds.length && (
         <div className="flex flex-wrap items-center gap-3 rounded-xl border border-dashed px-4 py-5 text-muted-foreground text-sm">
           <span>

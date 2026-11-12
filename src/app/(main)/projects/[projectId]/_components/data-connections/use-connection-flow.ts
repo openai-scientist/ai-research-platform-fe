@@ -19,9 +19,11 @@ import {
   fetchDataConnections,
   isGoogleConnection,
   isTimeSeriesConnection,
+  type SqlDialect,
   sameConnectionSource,
+  sqlDialect,
 } from "@/lib/api/services/fetch-data-connections";
-import { type DatasetItem, fetchDatasets } from "@/lib/api/services/fetch-datasets";
+import { connectionOrigin, type DatasetItem, fetchDatasets } from "@/lib/api/services/fetch-datasets";
 import { ApiError } from "@/types/api";
 
 import { createConnectionInput, EMPTY_CONNECTION_DRAFT } from "./connection-form";
@@ -47,16 +49,15 @@ export function useConnectionFlow(
   const queryClient = useQueryClient();
   const access = useConnectionAccess(projectId);
   const [step, setStep] = useState<ConnectionStep>(initialConnection ? 2 : 1);
-  const kind = initialConnection?.kind ?? initialKind ?? "postgres";
-  const [storedDraft, setDraft] = useState({
-    ...EMPTY_CONNECTION_DRAFT,
-    ...(initialKind === "mysql" ? { port: "3306" } : {}),
-  });
+  const kind = initialConnection?.kind ?? initialKind ?? "database";
+  const [storedDraft, setDraft] = useState(EMPTY_CONNECTION_DRAFT);
   // Fast Refresh can retain the draft from before time series fields were added.
   const draft =
     typeof storedDraft.url === "string" && typeof storedDraft.token === "string"
       ? storedDraft
       : { ...EMPTY_CONNECTION_DRAFT, ...storedDraft, url: storedDraft.url ?? "", token: storedDraft.token ?? "" };
+  // Before the connection is saved there is nothing to read the engine from but the draft.
+  const unsavedDialect: SqlDialect = kind === "bigquery" ? "bigquery" : draft.engine;
   const [connection, setConnection] = useState(initialConnection);
   const [schemas, setSchemas] = useState<string[]>([]);
   const [catalogLoaded, setCatalogLoaded] = useState(false);
@@ -217,14 +218,16 @@ export function useConnectionFlow(
     const pending = pendingImport.current;
     if (!pending) return;
     const datasets = await collectPages((params) => fetchDatasets.getList(projectId, params));
-    const matches = datasets.filter(
-      (item) =>
+    const matches = datasets.filter((item) => {
+      const origin = connectionOrigin(item.latest_version);
+      return (
         (!pending.previousVersions.has(item.id) || pending.previousVersions.get(item.id) !== item.latest_version?.id) &&
         (item.name.toLowerCase() === pending.name.toLowerCase() ||
           item.name.toLowerCase().startsWith(`${pending.name.toLowerCase()} (`)) &&
-        item.latest_version?.source?.connection_id === pending.connectionId &&
-        sameConnectionSource(item.latest_version.source.source, pending.source),
-    );
+        origin?.connection_id === pending.connectionId &&
+        sameConnectionSource(origin.source, pending.source)
+      );
+    });
     const found = matches.length === 1 ? matches[0] : undefined;
     if (found) {
       setReconcileRequired(false);
@@ -288,6 +291,8 @@ export function useConnectionFlow(
     step,
     setStep,
     kind,
+    /** Identifier quoting follows the engine the member picked, not the kind. */
+    dialect: connection ? sqlDialect(connection) : unsavedDialect,
     isGoogle: isGoogleConnection(kind),
     isTimeSeries: isTimeSeriesConnection(kind),
     timeSeriesDraft,

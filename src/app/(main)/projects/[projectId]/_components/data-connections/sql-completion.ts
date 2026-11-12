@@ -1,4 +1,4 @@
-import type { ConnectionKind } from "@/lib/api/services/fetch-data-connections";
+import type { SqlDialect } from "@/lib/api/services/fetch-data-connections";
 
 interface Token {
   value: string;
@@ -175,7 +175,7 @@ export function sqlCompletionContext(
   caret: number,
   schema: string,
   forced = false,
-  kind: ConnectionKind = "postgres",
+  dialect: SqlDialect = "postgres",
 ): SqlCompletionContext | null {
   const before = tokenize(sql.slice(0, caret));
   if (before.protectedPosition) return null;
@@ -199,7 +199,7 @@ export function sqlCompletionContext(
   const tableContext =
     relationToken && !relationToken.quoted && ["FROM", "JOIN"].includes(relationToken.value.toUpperCase());
   let prefix = active?.value ?? "";
-  const quotedPath = Boolean(tableContext && kind === "bigquery" && active?.quoted && prefix.includes("."));
+  const quotedPath = Boolean(tableContext && dialect === "bigquery" && active?.quoted && prefix.includes("."));
   if (quotedPath) {
     const parts = prefix.split(".");
     prefix = parts.pop() ?? "";
@@ -223,14 +223,14 @@ export function sqlCompletionContext(
   };
 }
 
-export function sqlIdentifier(name: string, kind: ConnectionKind) {
+export function sqlIdentifier(name: string, dialect: SqlDialect) {
   if (/^[a-z_][a-z0-9_$]*$/.test(name) && !sqlKeywords.has(name.toUpperCase())) return name;
-  const quote = kind === "postgres" ? '"' : "`";
+  const quote = dialect === "postgres" ? '"' : "`";
   return quote + name.replaceAll(quote, quote + quote) + quote;
 }
 
-export function sqlTableIdentifier(schema: string, table: string, kind: ConnectionKind) {
-  return kind === "bigquery"
+export function sqlTableIdentifier(schema: string, table: string, dialect: SqlDialect) {
+  return dialect === "bigquery"
     ? "`" + `${schema}.${table}`.replaceAll("`", "\\`") + "`"
-    : `${sqlIdentifier(schema, kind)}.${sqlIdentifier(table, kind)}`;
+    : `${sqlIdentifier(schema, dialect)}.${sqlIdentifier(table, dialect)}`;
 }

@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { type ConnectionItem, isGoogleConnection } from "@/lib/api/services/fetch-data-connections";
+import { type ConnectionItem, connectionProvider, isGoogleConnection } from "@/lib/api/services/fetch-data-connections";
 
 import { CONNECTION_PROVIDERS, ConnectionLogo, connectionStatus, connectionTarget } from "./connection-display";
 import { GoogleReconnectButton } from "./google-reconnect-button";
@@ -70,12 +70,12 @@ export function ConnectionCard({
       )}
       <CardHeader className="flex flex-row items-center gap-3">
         <span className="grid size-10 shrink-0 place-items-center [&_img]:size-9 [&_svg]:size-9">
-          <ConnectionLogo kind={connection.kind} />
+          <ConnectionLogo kind={connectionProvider(connection)} />
         </span>
         <div className="min-w-0 flex-1">
           <CardTitle className="truncate font-medium text-sm">{connection.name}</CardTitle>
           <CardDescription className="truncate" title={target || undefined}>
-            {CONNECTION_PROVIDERS[connection.kind].label}
+            {CONNECTION_PROVIDERS[connectionProvider(connection)].label}
             {target && <> · {target}</>}
           </CardDescription>
         </div>
