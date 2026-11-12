@@ -13,6 +13,7 @@ import {
   CloudDownload,
   Eye,
   FileSpreadsheet,
+  Globe,
   Search,
   SearchX,
   Trash2,
@@ -34,14 +35,22 @@ import { ConnectionLogo } from "./data-connections/connection-display";
 import { formatSize, timeAgo } from "./dataset-format";
 import { saveProjectFile } from "./project-file-download";
 
-/** The provider's logo for data read from a connection; a sheet icon for an uploaded file. */
+/**
+ * The provider's logo for data read from a connection, a globe for a public repository, and a
+ * sheet icon for an uploaded file.
+ */
 function SourceIcon({ dataset }: { dataset: DatasetItem }) {
   const version = dataset.latest_version;
-  if (version?.source) {
+  if (version?.source_type === "connection") {
     return (
       <span title={`Imported from ${version.source.connection_name}`} className="[&_img]:size-5 [&_svg]:size-5">
         <ConnectionLogo kind={version.source.connection_kind} />
       </span>
+    );
+  }
+  if (version?.source_type === "public") {
+    return (
+      <Globe aria-label="Imported from a public repository" className="size-5 text-indigo-600 dark:text-indigo-400" />
     );
   }
   const excel = /\.xlsx?$/i.test(version?.original_filename ?? "");

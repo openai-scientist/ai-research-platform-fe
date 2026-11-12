@@ -23,7 +23,7 @@ import {
   sameConnectionSource,
   sqlDialect,
 } from "@/lib/api/services/fetch-data-connections";
-import { type DatasetItem, fetchDatasets } from "@/lib/api/services/fetch-datasets";
+import { connectionOrigin, type DatasetItem, fetchDatasets } from "@/lib/api/services/fetch-datasets";
 import { ApiError } from "@/types/api";
 
 import { createConnectionInput, EMPTY_CONNECTION_DRAFT } from "./connection-form";
@@ -218,14 +218,16 @@ export function useConnectionFlow(
     const pending = pendingImport.current;
     if (!pending) return;
     const datasets = await collectPages((params) => fetchDatasets.getList(projectId, params));
-    const matches = datasets.filter(
-      (item) =>
+    const matches = datasets.filter((item) => {
+      const origin = connectionOrigin(item.latest_version);
+      return (
         (!pending.previousVersions.has(item.id) || pending.previousVersions.get(item.id) !== item.latest_version?.id) &&
         (item.name.toLowerCase() === pending.name.toLowerCase() ||
           item.name.toLowerCase().startsWith(`${pending.name.toLowerCase()} (`)) &&
-        item.latest_version?.source?.connection_id === pending.connectionId &&
-        sameConnectionSource(item.latest_version.source.source, pending.source),
-    );
+        origin?.connection_id === pending.connectionId &&
+        sameConnectionSource(origin.source, pending.source)
+      );
+    });
     const found = matches.length === 1 ? matches[0] : undefined;
     if (found) {
       setReconcileRequired(false);

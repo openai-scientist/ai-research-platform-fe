@@ -26,6 +26,7 @@ import {
   sameConnectionSource,
 } from "@/lib/api/services/fetch-data-connections";
 import {
+  connectionOrigin,
   type DatasetItem,
   type DatasetVersionItem,
   fetchDatasets,
@@ -224,12 +225,14 @@ export function DatasetConnectionActions({
     if (!previous) return false;
     const current = await fetchDatasets.getById(projectId, dataset.id);
     const versions = await collectPages((params) => fetchDatasets.getVersions(projectId, dataset.id, params));
-    const completed = versions.some(
-      (version) =>
+    const completed = versions.some((version) => {
+      const origin = connectionOrigin(version);
+      return (
         version.version_number > previous.baseline &&
-        version.source?.connection_id === previous.input.connection_id &&
-        sameConnectionSource(version.source.source, previous.input.source),
-    );
+        origin?.connection_id === previous.input.connection_id &&
+        sameConnectionSource(origin.source, previous.input.source)
+      );
+    });
     queryClient.setQueryData(projectKeys.dataset(projectId, dataset.id), current);
     await queryClient.invalidateQueries({ queryKey: projectKeys.dataset(projectId, dataset.id) });
     setNeedsReconciliation(false);
