@@ -44,13 +44,18 @@ vi.mock("@/lib/api/services/fetch-data-connections", async (importOriginal) => (
 vi.mock("sonner", () => ({ toast }));
 
 describe("connecting a source and importing from it", () => {
-  const saved = {
+  const saved: ConnectionItem = {
     id: "connection-id",
+    project_id: "project-id",
     name: "Rfam",
-    kind: "mysql",
-    config: {},
+    kind: "database",
+    config: { engine: "mysql" },
+    last_tested_at: null,
     last_error_code: null,
-  } as ConnectionItem;
+    created_by_user_id: "user-id",
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-01-01T00:00:00Z",
+  };
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -73,7 +78,7 @@ describe("connecting a source and importing from it", () => {
         ),
       );
     });
-    const flow = useConnectionFlow("project-id", undefined, vi.fn(), true, "postgres");
+    const flow = useConnectionFlow("project-id", undefined, vi.fn(), true, "database");
     expect(flow.draft.url.trim()).toBe("");
     expect(flow.draft.token).toBe("");
     expect(flow.draft.name).toBe("My source");
@@ -114,7 +119,7 @@ describe("connecting a source and importing from it", () => {
   });
 
   it("opens a new provider on its details step and a saved connection on its source", () => {
-    useConnectionFlow("project-id", undefined, vi.fn(), true, "mysql");
+    useConnectionFlow("project-id", undefined, vi.fn(), true, "database");
     expect(updates[0].initial).toBe(1);
     const start = updates.length;
     useConnectionFlow("project-id", saved, vi.fn(), true);
@@ -125,37 +130,67 @@ describe("connecting a source and importing from it", () => {
     restoreDraft.mockImplementation((value) => ({
       ...(value as object),
       name: "Rfam",
+      engine: "mysql",
       host: "mysql-rfam-public.ebi.ac.uk",
       port: "4497",
       database: "Rfam",
       username: "rfamro",
     }));
-    const flow = useConnectionFlow("project-id", undefined, vi.fn(), true, "mysql");
+    const flow = useConnectionFlow("project-id", undefined, vi.fn(), true, "database");
     await flow.connect();
     expect(create).toHaveBeenCalledOnce();
+    // One kind carries both engines, and the port travels as the member typed it.
+    expect(create).toHaveBeenCalledWith("project-id", {
+      name: "Rfam",
+      kind: "database",
+      config: {
+        engine: "mysql",
+        host: "mysql-rfam-public.ebi.ac.uk",
+        port: 4497,
+        database: "Rfam",
+        username: "rfamro",
+        ssl: "disable",
+      },
+      secret: { password: "" },
+    });
     expect(updates[0].set).toHaveBeenCalledWith(2);
     expect(toast.success).toHaveBeenCalledWith("Connection saved", { description: "Rfam" });
     expect(getSchemas).toHaveBeenCalledWith("project-id", "connection-id");
     expect(showError).not.toHaveBeenCalled();
   });
 
-  it("goes on with the connection the project already has for the same source", async () => {
+  it("refuses to connect a database without a port", async () => {
     restoreDraft.mockImplementation((value) => ({
       ...(value as object),
-      name: "Rfam copy",
+      name: "Rfam",
       host: "mysql-rfam-public.ebi.ac.uk",
       database: "Rfam",
       username: "rfamro",
     }));
+    await useConnectionFlow("project-id", undefined, vi.fn(), true, "database").connect();
+    expect(create).not.toHaveBeenCalled();
+    expect(showError).toHaveBeenCalled();
+  });
+
+  it("goes on with the connection the project already has for the same source", async () => {
+    restoreDraft.mockImplementation((value) => ({
+      ...(value as object),
+      name: "Rfam copy",
+      engine: "mysql",
+      host: "mysql-rfam-public.ebi.ac.uk",
+      port: "4497",
+      database: "Rfam",
+      username: "rfamro",
+    }));
     create.mockResolvedValue({ data: saved, reused: true });
-    await useConnectionFlow("project-id", undefined, vi.fn(), true, "mysql").connect();
+    await useConnectionFlow("project-id", undefined, vi.fn(), true, "database").connect();
     expect(updates[0].set).toHaveBeenCalledWith(2);
     expect(toast.success).toHaveBeenCalledWith("Already connected", { description: "Rfam" });
   });
 
   it("waits when Retry-After is active", async () => {
     access.mockReturnValue({ configured: true, rateLimited: true, waitSeconds: 30, revokedConnectionIds: new Set() });
-    await useConnectionFlow("project-id", undefined, vi.fn(), true, "mysql").connect();
+    await useConnectionFlow("project-id", undefined, vi.fn(), true, "database").connect();
     expect(create).not.toHaveBeenCalled();
   });
 });

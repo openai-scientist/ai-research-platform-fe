@@ -22,6 +22,7 @@ import {
 import {
   type ConnectionItem,
   type ConnectionKind,
+  connectionProvider,
   isGoogleConnection,
 } from "@/lib/api/services/fetch-data-connections";
 
@@ -38,7 +39,7 @@ import { useGoogleConnectionCallback } from "./use-google-connection-callback";
 function matches(connection: ConnectionItem, term: string) {
   const text = [
     connection.name,
-    CONNECTION_PROVIDERS[connection.kind].label,
+    CONNECTION_PROVIDERS[connectionProvider(connection)].label,
     connectionTarget(connection),
     typeof connection.config.account_email === "string" ? connection.config.account_email : "",
   ]

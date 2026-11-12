@@ -20,6 +20,7 @@ import { collectPages } from "@/lib/api/infinite-pagination";
 import { projectKeys } from "@/lib/api/query-keys";
 import {
   type ConnectionSource,
+  connectionProvider,
   isGoogleConnection,
   isTimeSeriesConnection,
   sameConnectionSource,
@@ -113,7 +114,7 @@ function ReplacementConnection({
                   )
                   .map((connection) => (
                     <SelectItem key={connection.id} value={connection.id}>
-                      {connection.name} · {CONNECTION_PROVIDERS[connection.kind].label}
+                      {connection.name} · {CONNECTION_PROVIDERS[connectionProvider(connection)].label}
                     </SelectItem>
                   ))}
               </SelectGroup>

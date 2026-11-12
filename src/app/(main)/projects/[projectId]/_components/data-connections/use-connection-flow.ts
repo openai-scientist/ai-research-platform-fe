@@ -19,7 +19,9 @@ import {
   fetchDataConnections,
   isGoogleConnection,
   isTimeSeriesConnection,
+  type SqlDialect,
   sameConnectionSource,
+  sqlDialect,
 } from "@/lib/api/services/fetch-data-connections";
 import { type DatasetItem, fetchDatasets } from "@/lib/api/services/fetch-datasets";
 import { ApiError } from "@/types/api";
@@ -47,16 +49,15 @@ export function useConnectionFlow(
   const queryClient = useQueryClient();
   const access = useConnectionAccess(projectId);
   const [step, setStep] = useState<ConnectionStep>(initialConnection ? 2 : 1);
-  const kind = initialConnection?.kind ?? initialKind ?? "postgres";
-  const [storedDraft, setDraft] = useState({
-    ...EMPTY_CONNECTION_DRAFT,
-    ...(initialKind === "mysql" ? { port: "3306" } : {}),
-  });
+  const kind = initialConnection?.kind ?? initialKind ?? "database";
+  const [storedDraft, setDraft] = useState(EMPTY_CONNECTION_DRAFT);
   // Fast Refresh can retain the draft from before time series fields were added.
   const draft =
     typeof storedDraft.url === "string" && typeof storedDraft.token === "string"
       ? storedDraft
       : { ...EMPTY_CONNECTION_DRAFT, ...storedDraft, url: storedDraft.url ?? "", token: storedDraft.token ?? "" };
+  // Before the connection is saved there is nothing to read the engine from but the draft.
+  const unsavedDialect: SqlDialect = kind === "bigquery" ? "bigquery" : draft.engine;
   const [connection, setConnection] = useState(initialConnection);
   const [schemas, setSchemas] = useState<string[]>([]);
   const [catalogLoaded, setCatalogLoaded] = useState(false);
@@ -288,6 +289,8 @@ export function useConnectionFlow(
     step,
     setStep,
     kind,
+    /** Identifier quoting follows the engine the member picked, not the kind. */
+    dialect: connection ? sqlDialect(connection) : unsavedDialect,
     isGoogle: isGoogleConnection(kind),
     isTimeSeries: isTimeSeriesConnection(kind),
     timeSeriesDraft,

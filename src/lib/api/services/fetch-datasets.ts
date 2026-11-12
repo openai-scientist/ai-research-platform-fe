@@ -4,7 +4,7 @@ import { connectionRequest } from "../connection-runtime";
 import apiService from "../core";
 import { downloadUrl, projectPath, requestDownload } from "../request";
 import type { FileDownload, ListParams } from "../types";
-import type { ConnectionKind, ConnectionSource } from "./fetch-data-connections";
+import type { ConnectionProviderId, ConnectionSource } from "./fetch-data-connections";
 
 export interface DatasetVersionItem {
   id: string;
@@ -19,7 +19,7 @@ export interface DatasetVersionItem {
   source: {
     connection_id: string;
     connection_name: string;
-    connection_kind: ConnectionKind;
+    connection_kind: ConnectionProviderId;
     source: ConnectionSource;
     fetched_at: string;
   } | null;

@@ -171,7 +171,7 @@ function FlowContext({ flow, project }: { flow: ConnectionFlowState; project: Pr
         {flow.step === 1 && (
           <>
             <Separator />
-            <ConnectionGuidance kind={flow.kind} ssl={flow.draft.ssl} compact />
+            <ConnectionGuidance kind={flow.kind} engine={flow.draft.engine} ssl={flow.draft.ssl} compact />
           </>
         )}
       </aside>
@@ -424,7 +424,7 @@ export function ConnectionFlow({
                           disabled={flow.disabled}
                         />
                         <div className="lg:hidden">
-                          <ConnectionGuidance kind={flow.kind} ssl={flow.draft.ssl} />
+                          <ConnectionGuidance kind={flow.kind} engine={flow.draft.engine} ssl={flow.draft.ssl} />
                         </div>
                       </section>
                     ) : flow.step === 2 ? (

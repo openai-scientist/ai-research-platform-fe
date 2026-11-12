@@ -27,6 +27,7 @@ import {
 import {
   type ConnectionItem,
   type ConnectionKind,
+  connectionProvider,
   isGoogleConnection,
 } from "@/lib/api/services/fetch-data-connections";
 
@@ -112,7 +113,7 @@ function ConnectionChoice({
       title={connection.name}
       detail={
         <>
-          {CONNECTION_PROVIDERS[connection.kind].label}
+          {CONNECTION_PROVIDERS[connectionProvider(connection)].label}
           {target && <> · {target}</>}
         </>
       }
@@ -183,7 +184,7 @@ export function DatasetConnectionImport({
   const term = search.trim().toLowerCase();
   const shown = term
     ? connections.filter((connection) =>
-        [connection.name, CONNECTION_PROVIDERS[connection.kind].label, connectionTarget(connection)]
+        [connection.name, CONNECTION_PROVIDERS[connectionProvider(connection)].label, connectionTarget(connection)]
           .join(" ")
           .toLowerCase()
           .includes(term),
