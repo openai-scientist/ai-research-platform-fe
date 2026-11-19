@@ -1,8 +1,5 @@
 // What a run covers for now. The run focuses on Popper's pipeline stages 1 to 9: from a topic to hypotheses and their map.
 
-/** The data check and clean stage, and the dataset step when starting a run. */
-export const SHOW_DATA_STAGE = false;
-
 /** Asking how often to stop when starting a run: Light or Auto. When hidden, runs use Light. */
 export const SHOW_REVIEW_MODE = true;
 

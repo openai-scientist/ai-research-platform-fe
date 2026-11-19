@@ -1,7 +1,7 @@
 // The Dataset stage's own run model. Its engine (`logos/stages/dataset`) reports a contract of items that a
 // steward agent repairs and code checks, then an independent review and a hand-off. The Platform relays those events
-// in the envelope Research runs use. This file folds them into what the dataset run screen draws, and nothing in it
-// goes through the Research run store. Event names and item keys are the engine's: `dataset.item`, `dataset.review`,
+// in the envelope Research runs use. Both Dataset views fold those original events into this model.
+// Event names and item keys are the engine's: `dataset.item`, `dataset.review`,
 // `dataset.progress`, `dataset.action`, `dataset.ask_user`, `dataset.decision`, `dataset.inbox_item`,
 // `dataset.assumption`, plus the lifecycle events `run.step_changed`, `run.phase_changed`, `run.gate_opened`,
 // `run.gate_closed`, `artifact.delivered`, `run.published`, `run.failed`, `run.cancelled`.
@@ -11,6 +11,8 @@ import type { PipelineEnvelope } from "@/lib/run-stream/pipeline-adapter";
 export const RELEASE_WAIT = "Waiting for release review on the Local Node.";
 
 export type DatasetAgent = "steward" | "reviewer" | "code" | "you";
+
+export const DATASET_CAST = ["steward", "reviewer", "pi"] as const;
 
 export type ItemState = "unknown" | "red" | "green" | "needs_you" | "not_applicable";
 
@@ -99,6 +101,19 @@ export const RELEASE_DEF: DatasetStepDef = {
   explain: "You approve what leaves the Local Node. Rows never do.",
 };
 
+const STEP_ARTIFACTS: Record<string, string> = {
+  sources: "Source records",
+  dictionary: "Data dictionary",
+  cleaning_recipe: "Cleaning recipe",
+  question_map: "Question map",
+  split: "Partition",
+  data_checks: "Check results",
+  disclosure: "Data card",
+  review: "Dataset brief",
+};
+
+export const datasetStepArtifact = (key: string): string | undefined => STEP_ARTIFACTS[key];
+
 export interface FeedItem {
   seq: number;
   actor: DatasetAgent;
@@ -142,6 +157,8 @@ export interface DatasetRunModel {
   /** Schemas the run delivered, such as `dataset.data_card/v1`. */
   delivered: string[];
   published: boolean;
+  accepted?: boolean;
+  readyToAccept?: boolean;
   /** The question put to you when the stage is complete: accept it or not. `decided` once an answer is recorded. */
   /** The PI's plan for the run: drafted, ready for you to endorse, then settled. Null when the run has none. */
   charter: { consultationId?: string; authority?: string; ready: boolean; settled: boolean } | null;
@@ -262,6 +279,14 @@ export function applyDatasetEvent(previous: DatasetRunModel, event: PipelineEnve
   }
 
   switch (type) {
+    case "stage.status_changed":
+      if (payload.status === "ACCEPTED") {
+        model.accepted = true;
+        model.readyToAccept = false;
+      } else if (!model.accepted) {
+        model.readyToAccept = payload.status === "COMPLETED";
+      }
+      break;
     case "dataset.superseded":
       if (payload.dataset_superseded === true) {
         const by = num(payload.superseded_by_version);
@@ -407,7 +432,7 @@ export const outcomePending = (model: DatasetRunModel) => model.published && mod
 
 function closingState(model: DatasetRunModel, reviewing: boolean, ended: StepOptions["ended"]): StepView["state"] {
   if (ended === "done") return "done";
-  if (outcomePending(model)) return "asking";
+  if (!ended && (model.readyToAccept || outcomePending(model))) return "asking";
   if (model.published) return "done";
   if (model.gate && reviewing) return "asking";
   return reviewing && !ended ? "now" : "todo";

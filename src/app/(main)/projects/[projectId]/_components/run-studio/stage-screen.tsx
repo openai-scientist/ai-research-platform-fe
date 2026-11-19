@@ -3,16 +3,14 @@
 import { type RefObject, useEffect, useState } from "react";
 
 import { cn } from "cn";
-import { ArrowRight, Check, CircleCheck, FileText } from "lucide-react";
+import { ArrowRight, Check, CircleCheck } from "lucide-react";
 import { motion } from "motion/react";
 
 import type { Figure, KnowledgeCard, PlannedStage } from "@/lib/run-stream/contract";
 import type { RunState, StageState } from "@/lib/run-stream/run-state";
-import { liveStageKey, pipelineLabel } from "@/lib/run-stream/selectors";
+import { liveStageKey } from "@/lib/run-stream/selectors";
 
 import { AnimatedNumber } from "./animated-number";
-import { AgentAvatar, PulseDot } from "./run-bits";
-import { DataScene } from "./scenes/data-scene";
 import { ExperimentScene } from "./scenes/experiment-scene";
 import { HypothesizeScene } from "./scenes/hypothesize-scene";
 import { InterpretScene } from "./scenes/interpret-scene";
@@ -26,6 +24,7 @@ import { ScreenScene } from "./scenes/screen-scene";
 import { SearchScene } from "./scenes/search-scene";
 import { SynthesizeScene } from "./scenes/synthesize-scene";
 import { WriteScene } from "./scenes/write-scene";
+import { StageHeading, StageLineage } from "./stage-heading";
 
 const set = (content: Extract<StageState["content"], { stage: "hypothesize" }>) =>
   Object.values(content.drafts).filter((d) => d.selected);
@@ -114,63 +113,6 @@ function RunEnd({ state, count }: { state: RunState; count: number }) {
 }
 
 /** What the stage builds on and what it writes, so the hand-offs between stages stay visible. */
-function Lineage({ stage }: { stage: StageState }) {
-  const reads = stage.plan.reads ?? [];
-  const writes = stage.plan.steps.filter((s) => s.artifact);
-  if (!reads.length && !writes.length) return null;
-  return (
-    <div className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1.5 text-xs">
-      <span className="text-muted-foreground">Builds on</span>
-      {reads.map((r) => (
-        <span key={r} className="inline-flex h-6 items-center rounded-md bg-muted px-2 text-foreground/80">
-          {r}
-        </span>
-      ))}
-      <ArrowRight className="size-3.5 text-muted-foreground" />
-      <span className="text-muted-foreground">Writes</span>
-      {writes.map((step) => {
-        const made = stage.doneStepIds.includes(step.id);
-        const making = stage.currentStepId === step.id;
-        return (
-          <motion.span
-            key={step.id}
-            layout
-            className={cn(
-              "relative inline-flex h-6 items-center gap-1 overflow-hidden rounded-md border px-2 transition-colors duration-500",
-              made
-                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300"
-                : "border-foreground/20 border-dashed text-muted-foreground",
-              making && "border-sky-500/50 border-solid text-foreground",
-            )}
-          >
-            {making && (
-              <motion.span
-                aria-hidden
-                className="absolute inset-y-0 left-0 w-1/2 bg-gradient-to-r from-transparent via-sky-500/15 to-transparent"
-                initial={{ x: "-100%" }}
-                animate={{ x: "220%" }}
-                transition={{ duration: 1.4, repeat: Number.POSITIVE_INFINITY, ease: "linear" }}
-              />
-            )}
-            {made ? (
-              <motion.span
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ type: "spring", stiffness: 500, damping: 20 }}
-              >
-                <Check className="size-3" />
-              </motion.span>
-            ) : (
-              <FileText className="size-3" />
-            )}
-            <span className="relative">{step.artifact}</span>
-          </motion.span>
-        );
-      })}
-    </div>
-  );
-}
-
 function StageHeader({
   stage,
   index,
@@ -195,78 +137,57 @@ function StageHeader({
   };
   const done = stage.status === "done";
   return (
-    <header className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-3.5 gap-y-2 border-b pb-3.5 sm:grid-cols-[auto_minmax(0,1fr)_auto]">
-      <span className="pt-1 font-mono text-muted-foreground text-xs">
-        {String(index + 1).padStart(2, "0")}/{String(total).padStart(2, "0")}
-      </span>
-      <div className="min-w-0">
-        <h2 className="flex flex-wrap items-center gap-2 font-semibold text-lg tracking-tight">
-          {plan.title}
-          {pipelineLabel(plan.pipeline) && (
-            <span
-              title="Popper pipeline stages this screen covers"
-              className="rounded-md px-1.5 py-0.5 font-medium font-mono text-[11.5px] text-muted-foreground ring-1 ring-foreground/10"
-            >
-              {pipelineLabel(plan.pipeline)}
-            </span>
-          )}
-          {showRound && plan.round && (
-            <span className="rounded-md bg-muted px-1.5 py-0.5 font-medium font-mono text-[11.5px] text-muted-foreground">
-              Round {plan.round}
+    <StageHeading
+      index={index}
+      total={total}
+      title={plan.title}
+      pipeline={plan.pipeline}
+      purpose={plan.purpose}
+      cast={plan.cast}
+      status={done ? "done" : ended ? "ended" : "active"}
+      titleExtra={
+        showRound && plan.round ? (
+          <span className="rounded-md bg-muted px-1.5 py-0.5 font-medium font-mono text-[11.5px] text-muted-foreground">
+            Round {plan.round}
+            {
               {
+                pivot: " · new direction",
+                refine: " · rerun",
+                revise: " · revision",
+                review: " · revised for the reviewer",
+                first: "",
+              }[plan.round_kind ?? "first"]
+            }
+          </span>
+        ) : null
+      }
+    >
+      <StageLineage
+        reads={stage.plan.reads ?? []}
+        writes={stage.plan.steps.flatMap((step) =>
+          step.artifact
+            ? [
                 {
-                  pivot: " · new direction",
-                  refine: " · rerun",
-                  revise: " · revision",
-                  review: " · revised for the reviewer",
-                  first: "",
-                }[plan.round_kind ?? "first"]
-              }
-            </span>
-          )}
-        </h2>
-        <p className="mt-1 max-w-[68ch] text-muted-foreground text-sm">{plan.purpose}</p>
-        <Lineage stage={stage} />
-        {done && stage.summary && (
-          <motion.p
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mt-2 flex items-center gap-2 font-medium text-sm"
-          >
-            <CircleCheck className="size-3.5 text-emerald-600" />
-            {stage.summary}
-          </motion.p>
+                  id: step.id,
+                  label: step.artifact,
+                  done: stage.doneStepIds.includes(step.id),
+                  active: stage.currentStepId === step.id,
+                },
+              ]
+            : [],
         )}
-      </div>
-      <div className="col-start-2 flex items-center gap-3 sm:col-start-3 sm:pt-0.5">
-        <div className="flex pl-2">
-          {plan.cast.map((role) => (
-            <span key={role} className="-ml-2 rounded-full bg-background p-0.5">
-              <AgentAvatar agent={role} />
-            </span>
-          ))}
-        </div>
-        {done ? (
-          <motion.span
-            initial={{ scale: 0.7 }}
-            animate={{ scale: 1 }}
-            className="inline-flex h-6 items-center gap-1.5 rounded-full bg-emerald-500/12 px-2.5 font-medium text-emerald-700 text-xs dark:text-emerald-300"
-          >
-            <Check className="size-3" />
-            Done
-          </motion.span>
-        ) : ended ? (
-          <span className="inline-flex h-6 items-center rounded-full bg-muted px-2.5 font-medium text-muted-foreground text-xs">
-            Not finished
-          </span>
-        ) : (
-          <span className="inline-flex h-6 items-center gap-2 rounded-full bg-sky-500/12 px-2.5 font-medium text-sky-700 text-xs dark:text-sky-300">
-            <PulseDot className="bg-sky-500" />
-            In progress
-          </span>
-        )}
-      </div>
-    </header>
+      />
+      {done && stage.summary && (
+        <motion.p
+          initial={{ opacity: 0, y: 4 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mt-2 flex items-center gap-2 font-medium text-sm"
+        >
+          <CircleCheck className="size-3.5 text-emerald-600" />
+          {stage.summary}
+        </motion.p>
+      )}
+    </StageHeading>
   );
 }
 
@@ -333,7 +254,6 @@ export function StageScreen({
   const decisionNotes = notes.map((n) => (
     <SceneNote key={n.seq} actor={n.actor} title="Your decision" text={n.text} note={n.note} />
   ));
-  if (content.stage === "data") scene = <DataScene data={content} live={live} />;
   if (content.stage === "scope") {
     scene = (
       <>

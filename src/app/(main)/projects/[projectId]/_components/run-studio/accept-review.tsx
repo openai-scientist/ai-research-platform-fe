@@ -163,18 +163,68 @@ function HypothesisPick({
   );
 }
 
-/** The last stop of the run: pick the hypotheses it ends with, with the PI's advice beside you. */
-export function AcceptReview({
-  gate,
-  header,
-  pending,
-  onAnswer,
-}: {
+type AcceptReviewProps = {
   gate: Gate;
   header: ReactNode;
   pending: boolean;
   onAnswer(answer: GateAnswer): void;
-}) {
+};
+
+/** A finished stage with a selectable hypothesis set, or a simple accept for a stage with no selection. */
+export function AcceptReview(props: AcceptReviewProps) {
+  return props.gate.selection === undefined ? <StageAcceptReview {...props} /> : <HypothesisAcceptReview {...props} />;
+}
+
+function StageAcceptReview({ gate, header, pending, onAnswer }: AcceptReviewProps) {
+  const [note, setNote] = useState("");
+  const option = gate.options.find((item) => item.id === "accept" && !item.disabled);
+  const subject = gate.title.replace(/^Accept the /i, "");
+  const advice = gate.advice;
+  let headline = "";
+  if (advice) {
+    headline =
+      advice.action === "accept"
+        ? `The PI recommends accepting the ${subject}`
+        : `The PI's recommendation for the ${subject}`;
+  }
+
+  return (
+    <>
+      <div className="flex flex-col gap-4 overflow-y-auto px-5 pt-4.5 pb-5 sm:px-6">
+        {header}
+        <p className="text-muted-foreground text-sm">{gate.why}</p>
+        {gate.summary.length > 0 && (
+          <ul className="flex flex-col gap-1.5 text-sm">
+            {gate.summary.map((line) => (
+              <li key={line} className="flex items-start gap-2">
+                <Check className="mt-1 size-3.5 shrink-0 text-emerald-600" />
+                {line}
+              </li>
+            ))}
+          </ul>
+        )}
+        {advice && <PiAdviceCard advice={advice} headline={headline} />}
+        <NoteField value={note} onChange={setNote} />
+      </div>
+      <footer className="flex flex-wrap items-center justify-end gap-2.5 border-t bg-popover px-5 py-3.5 sm:px-6 max-sm:[&>button]:flex-1">
+        <span className="mr-auto text-muted-foreground text-xs max-sm:hidden">Accept to continue the run.</span>
+        <Button
+          onClick={() => {
+            if (!option) return;
+            onAnswer({ option_id: option.id, ...(note.trim() ? { note: note.trim() } : {}) });
+          }}
+          disabled={pending || !option}
+        >
+          <Check />
+          {pending ? "Accepting…" : (option?.confirm_label ?? "Accept")}
+        </Button>
+      </footer>
+    </>
+  );
+}
+
+/** The last stop of the run: pick the hypotheses it ends with, with the PI's advice beside you. */
+function HypothesisAcceptReview({ gate, header, pending, onAnswer }: AcceptReviewProps) {
   const round = useLatestRound();
   const selection = gate.selection ?? [];
   const [left, setLeft] = useState<string[]>([]);

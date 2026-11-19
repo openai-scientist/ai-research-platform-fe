@@ -14,6 +14,16 @@ const envelopes: PipelineEnvelope[] = readFileSync(new URL("./fixtures/logos-run
   .split("\n")
   .filter(Boolean)
   .map((line) => JSON.parse(line));
+const syntheticDatasetGateEvents: PipelineEnvelope[] = readFileSync(
+  new URL("./fixtures/run-265c-gates.jsonl", import.meta.url),
+  "utf8",
+)
+  .split("\n")
+  .filter(Boolean)
+  .map((line) => {
+    const event = JSON.parse(line) as PipelineEnvelope & { created_at: string };
+    return { ...event, ts: event.created_at };
+  });
 
 const STAGE_RUN = "e0b47365-5008-4996-b97b-88cfce00fdd2";
 
@@ -51,6 +61,35 @@ const appended = (base: PipelineEnvelope, type: string, payload: Record<string, 
 });
 
 describe("PipelineAdapter", () => {
+  it("keeps Dataset review and acceptance in Dataset before Scope opens", () => {
+    const adapter = new PipelineAdapter({ ...info, datasetFirst: true });
+    const first = envelopes[0];
+    const dataset = { ...first, stage_key: "dataset", stage_run_id: "dataset-stage" };
+    const pending = convert(
+      [
+        appended(dataset, "run.step_changed", {}, { step_key: "review" }),
+        appended(dataset, "stage.status_changed", { status: "COMPLETED" }),
+      ],
+      adapter,
+    );
+    const review = replayRunEvents("run-1", pending);
+    expect(review.stageOrder).toEqual([]);
+    expect(review.gate).toMatchObject({ kind: "accept", stageKey: "dataset", title: "Accept the data card" });
+    expect(adapter.route(review.gate?.id ?? "")).toEqual({ to: "accept", stageRunId: "dataset-stage" });
+    const after = convert(
+      [
+        appended(dataset, "stage.status_changed", { status: "ACCEPTED" }),
+        appended(first, "run.step_changed", {}, { step_key: "understand" }),
+      ],
+      adapter,
+    );
+    const next = replayRunEvents("run-1", [...pending, ...after]);
+    expect(next.gate).toBeNull();
+    expect(next.currentStageKey).toBe("scope");
+    expect(next.stages.scope.plan.reads).toContain("Accepted data card");
+    expect(next.completed).toBe(false);
+  });
+
   it("maps dataset.superseded at startup and during an active run", () => {
     for (const history of [[], envelopes.slice(0, 10)]) {
       const adapter = new PipelineAdapter(info);
@@ -368,6 +407,232 @@ describe("PipelineAdapter", () => {
     expect(state.gate?.options.map((o) => o.id)).toEqual(["approve", "drop", "reject"]);
     expect(adapter.route("shortlist-1")).toEqual({ to: "gate", stageRunId: STAGE_RUN, kind: "question" });
     expect(adapter.route("another")).toBeNull();
+  });
+
+  it("renders an engine question gate with its own choices instead of the literature shortlist", () => {
+    const gate = appended(
+      envelopes[0],
+      "run.gate_opened",
+      {
+        gate_id: "ask_user-2",
+        kind: "question",
+        step_key: "work",
+        header: "Key column",
+        prompt:
+          "Do you agree that student_id uniquely identifies each student? ...\n\nWhy you are asked: this decision is yours, so the run does not take it for you.",
+        options: [
+          { option_id: "approve", label: "Approve (recommended)", description: "Confirm this meaning and keep it." },
+          {
+            option_id: "reject",
+            label: "Reject",
+            description: "Save or run nothing; say what should change so the agent can revise its suggestion.",
+          },
+          {
+            option_id: "other",
+            label: "None of these: type the answer",
+            description: "Write your own answer in your own words.",
+          },
+        ],
+        default_option_id: "approve",
+        artifact_ids: [],
+        selection: null,
+        opened_at: "2026-11-18T17:20:37.763927Z",
+      },
+      { stage_key: "dataset", stage_run_id: "dataset-stage", step_key: "work", phase: "awaiting_researcher" },
+    );
+    const answer = appended(gate, "decision.recorded", {
+      action: "answer",
+      gate_id: "ask_user-2",
+      option_id: "other",
+      text: "Use student_id as the key.",
+    });
+    const closed = appended(gate, "run.gate_closed", { gate_id: "ask_user-2", action: "answer" });
+    const adapter = new PipelineAdapter(info);
+    const openedEvents = convert([gate], adapter);
+    const state = replayRunEvents("run-1", openedEvents);
+    const events = [...openedEvents, ...convert([answer, closed], adapter)];
+
+    expect(state.gate).toMatchObject({
+      id: "ask_user-2",
+      kind: "decision",
+      title: "Key column",
+      why: "Do you agree that student_id uniquely identifies each student? ...\n\nWhy you are asked: this decision is yours, so the run does not take it for you.",
+      options: [
+        { id: "approve", label: "Approve (recommended)", recommended: true },
+        { id: "reject", label: "Reject", recommended: false },
+        { id: "other", label: "None of these: type the answer", recommended: false },
+      ],
+    });
+    expect(JSON.stringify(state.gate)).not.toContain("Approve the shortlist");
+    expect(events.filter((event) => event.type === "step.started").map((event) => event.payload.step_id)).not.toContain(
+      "screen_gate",
+    );
+    expect(events.find((event) => event.type === "gate.resolved")).toMatchObject({
+      payload: { answer: { option_id: "other", note: "Use student_id as the key." } },
+    });
+  });
+
+  it("resolves a dataset question before showing the next question gate", () => {
+    const gateA = appended(
+      envelopes[0],
+      "run.gate_opened",
+      {
+        gate_id: "ask_user-2",
+        kind: "question",
+        step_key: "work",
+        header: "Key column",
+        prompt: "Decision: Confirm the key column.",
+        options: [{ option_id: "approve", label: "Approve" }],
+        default_option_id: "approve",
+        selection: null,
+      },
+      { stage_key: "dataset", stage_run_id: "dataset-stage", step_key: "work", phase: "awaiting_researcher" },
+    );
+    const answer = appended(
+      gateA,
+      "decision.recorded",
+      { action: "answer_gate", gate_id: "ask_user-2", option_id: "approve" },
+      { stage_key: "dataset", stage_run_id: "dataset-stage", step_key: "work", phase: "awaiting_researcher" },
+    );
+    const closed = appended(
+      answer,
+      "run.gate_closed",
+      { gate_id: "ask_user-2", action: "answer", actor: "user" },
+      { stage_key: "dataset", stage_run_id: "dataset-stage", step_key: "work", phase: "awaiting_researcher" },
+    );
+    const askUser = appended(
+      closed,
+      "dataset.ask_user",
+      { question: "Decision: Choose the outcome column.", options: [{ id: "approve" }] },
+      { stage_key: "dataset", stage_run_id: "dataset-stage", step_key: "work", phase: "drafting" },
+    );
+    const phaseChanged = appended(
+      askUser,
+      "run.phase_changed",
+      { from: "drafting" },
+      { stage_key: "dataset", stage_run_id: "dataset-stage", step_key: "work", phase: "awaiting_researcher" },
+    );
+    const gateB = appended(
+      phaseChanged,
+      "run.gate_opened",
+      {
+        gate_id: "ask_user-3",
+        kind: "question",
+        step_key: "work",
+        header: "Outcome",
+        prompt: "Decision: Choose the outcome column.",
+        options: [{ option_id: "approve", label: "Approve" }],
+        default_option_id: "approve",
+        selection: null,
+      },
+      { stage_key: "dataset", stage_run_id: "dataset-stage", step_key: "work", phase: "awaiting_researcher" },
+    );
+
+    const events = convert([gateA, answer, closed, askUser, phaseChanged, gateB]);
+    const state = replayRunEvents("run-1", events);
+
+    expect(events.find((event) => event.type === "gate.resolved")).toMatchObject({
+      payload: { gate_id: "ask_user-2", answer: { option_id: "approve" } },
+    });
+    expect(state.decisions).toContainEqual(expect.objectContaining({ gateId: "ask_user-2", option: "approve" }));
+    expect(state.gate).toMatchObject({ id: "ask_user-3", title: "Outcome" });
+  });
+
+  it("replays a dataset question close before opening the next question gate", () => {
+    expect(syntheticDatasetGateEvents.map((envelope) => envelope.seq)).toEqual(
+      Array.from({ length: 40 }, (_, index) => index + 1),
+    );
+    const adapter = new PipelineAdapter(info);
+    const events = convert(syntheticDatasetGateEvents, adapter);
+    const resolved = events.find(
+      (event) => event.type === "gate.resolved" && event.payload.gate_id === "question-record-key",
+    );
+    const state = replayRunEvents("run-1", events);
+    const resolvedIndex = events.findIndex(
+      (event) => event.type === "gate.resolved" && event.payload.gate_id === "question-record-key",
+    );
+    const openedIndex = events.findIndex(
+      (event) => event.type === "gate.opened" && event.payload.gate.id === "question-result-column",
+    );
+
+    expect(resolved).toMatchObject({ payload: { answer: { option_id: "approve" } } });
+    expect(resolvedIndex).toBeGreaterThanOrEqual(0);
+    expect(openedIndex).toBeGreaterThan(resolvedIndex);
+    expect(state.decisions).toContainEqual(
+      expect.objectContaining({ gateId: "question-record-key", option: "approve" }),
+    );
+    expect(state.gate).toMatchObject({ id: "question-result-column", title: "Result column" });
+  });
+
+  it("offers a dataset-stage accept gate without opening the map", () => {
+    const adapter = new PipelineAdapter(info);
+    const base = syntheticDatasetGateEvents.at(-1);
+    if (!base) throw new Error("The synthetic dataset gate fixture is empty.");
+    const answered = appended(
+      base,
+      "decision.recorded",
+      { action: "answer_gate", gate_id: "question-result-column", option_id: "approve" },
+      { stage_key: "dataset", stage_run_id: "stage-synthetic-dataset" },
+    );
+    const closed = appended(
+      answered,
+      "run.gate_closed",
+      { gate_id: "question-result-column", action: "answer", actor: "user" },
+      { stage_key: "dataset", stage_run_id: "stage-synthetic-dataset" },
+    );
+    const completed = appended(
+      closed,
+      "stage.status_changed",
+      { status: "COMPLETED" },
+      { stage_key: "dataset", stage_run_id: "stage-synthetic-dataset", phase: "published" },
+    );
+    const recommendation = appended(
+      completed,
+      "pi.decision",
+      { consultation_id: "consultation-synthetic-1", kind: "stage_outcome", action: "accept", confidence: 0.9 },
+      {
+        stage_key: "dataset",
+        stage_run_id: "stage-synthetic-dataset",
+        summary: "I recommend accepting the data card.",
+      },
+    );
+
+    const events = convert([...syntheticDatasetGateEvents, answered, closed, completed, recommendation], adapter);
+    const state = replayRunEvents("run-1", events);
+    const gate = state.gate;
+
+    expect(gate).toMatchObject({
+      kind: "accept",
+      title: "Accept the data card",
+      options: [{ id: "accept", label: "Accept the data card", confirm_label: "Accept", recommended: true }],
+      advice: { action: "accept", text: "I recommend accepting the data card." },
+    });
+    expect(gate?.selection).toBeUndefined();
+    expect(gate?.options[0].disabled).toBe(false);
+    expect(events.filter((event) => event.type === "stage.started")).toHaveLength(0);
+    expect(events.filter((event) => event.type === "step.started").map((event) => event.payload.step_id)).not.toContain(
+      "accept",
+    );
+    if (!gate) throw new Error("Expected the dataset acceptance gate to be open.");
+    expect(adapter.route(gate.id)).toEqual({ to: "accept", stageRunId: "stage-synthetic-dataset" });
+
+    const acceptedDecision = appended(
+      recommendation,
+      "decision.recorded",
+      { action: "accept", selection: {} },
+      { stage_key: "dataset", stage_run_id: "stage-synthetic-dataset" },
+    );
+    const accepted = appended(
+      acceptedDecision,
+      "stage.status_changed",
+      { status: "ACCEPTED" },
+      { stage_key: "dataset", stage_run_id: "stage-synthetic-dataset" },
+    );
+    const acceptedEvents = [...adapter.convert(acceptedDecision), ...adapter.convert(accepted)];
+    expect(acceptedEvents.find((event) => event.type === "gate.resolved")).toMatchObject({
+      payload: { summary: "Accepted the data card." },
+    });
+    expect(acceptedEvents.some((event) => event.type === "run.completed")).toBe(false);
   });
 
   it("stops for the hypotheses on the map, after the review passed", () => {

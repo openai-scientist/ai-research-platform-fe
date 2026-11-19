@@ -168,7 +168,7 @@ export function PendingLines({ lines = 2, className }: { lines?: number; classNa
       {Array.from({ length: lines }, (_, i) => (
         <span
           key={i}
-          className={cn("h-2.5 animate-pulse rounded-full bg-muted", i === lines - 1 ? "w-2/5" : "w-full")}
+          className={cn("h-2.5 rounded-full bg-muted motion-safe:animate-pulse", i === lines - 1 ? "w-2/5" : "w-full")}
         />
       ))}
     </span>

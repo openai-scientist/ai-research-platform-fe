@@ -26,7 +26,6 @@ import type {
   StagePlan,
   StagePlanStep,
 } from "../contract";
-import { SHOW_DATA_STAGE } from "../features";
 import { buildPaper, COMMENTS, type FinalResult, REVISIONS, TYPED_NUMBER } from "./paper-script";
 import {
   CODE,
@@ -121,7 +120,7 @@ export class MockRun implements RunCommands {
       intent: { kind: "explain", text: "Decide what sleep advice to give first-year students." },
       domains: DOMAINS,
     },
-    private readonly options: { withData: boolean } = { withData: SHOW_DATA_STAGE },
+    private readonly options: { withData: boolean } = { withData: false },
   ) {}
 
   private get withData() {

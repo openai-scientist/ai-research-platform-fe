@@ -3,73 +3,18 @@
 import { useEffect, useRef, useState } from "react";
 
 import { cn } from "cn";
-import { Check, ChevronRight, FileText, Flag, Play } from "lucide-react";
+import { Flag, Play } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 
 import { Button } from "@/components/ui/button";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { AgentRole } from "@/lib/run-stream/contract";
 import type { RunState } from "@/lib/run-stream/run-state";
 import { GATE_TITLE, inSentence, nextStop } from "@/lib/run-stream/selectors";
 
+import { AgentStrip, RunAsidePanel, StageRules, StageSteps, WaitingForYou } from "./aside-ui";
 import { ReleaseReviewIcon, RunFailureMessage } from "./local-node-status";
 import { AgentAvatar, Caret, TypedLine, WorkOrb } from "./run-bits";
 import { AGENTS, RULE_IDS, RULES, TEAM } from "./run-meta";
-
-function Team({ active }: { active: AgentRole | null }) {
-  return (
-    // One row: the speaker's name gives way before the row wraps and the card below jumps.
-    <div className="flex gap-px overflow-hidden border-b px-3 py-3">
-      {TEAM.map((role) => {
-        const on = role === active;
-        const agent = AGENTS[role];
-        // The avatar already reads "PI"; a name that repeats it is left out.
-        const named = on && agent.name !== agent.initials;
-        return (
-          <motion.span
-            key={role}
-            layout
-            transition={{ type: "spring", stiffness: 400, damping: 32 }}
-            className={cn(
-              "inline-flex shrink-0 items-center rounded-full p-0.5",
-              on && agent.soft.split(" ")[0],
-              named && "min-w-0 shrink gap-1.5 pr-2",
-            )}
-          >
-            <span className="relative">
-              <AgentAvatar
-                agent={role}
-                size="sm"
-                className={cn("size-6 transition-[opacity,filter] duration-300", !on && "opacity-50 saturate-[.3]")}
-              />
-              {on && (
-                <span
-                  className={cn(
-                    "absolute -inset-[3px] animate-ping rounded-full opacity-40 ring-[1.5px] ring-current",
-                    agent.text,
-                  )}
-                />
-              )}
-            </span>
-            <AnimatePresence>
-              {named && (
-                <motion.span
-                  initial={{ width: 0, opacity: 0 }}
-                  animate={{ width: "auto", opacity: 1 }}
-                  exit={{ width: 0, opacity: 0 }}
-                  className={cn("min-w-0 truncate font-semibold text-xs", agent.text)}
-                >
-                  {agent.name}
-                </motion.span>
-              )}
-            </AnimatePresence>
-          </motion.span>
-        );
-      })}
-    </div>
-  );
-}
 
 /** Without news for this long, the card says the step is still going. */
 const QUIET_MS = 3000;
@@ -236,94 +181,30 @@ export function NowCard({
 function Steps({ state }: { state: RunState }) {
   const stage = state.currentStageKey ? state.stages[state.currentStageKey] : undefined;
   if (!stage || state.completed) return null;
+  const index = state.plan.findIndex((item) => item.key === stage.plan.key) + 1;
   return (
-    <div className="flex flex-col gap-2">
-      <p className="flex justify-between font-medium text-muted-foreground text-xs">
-        <span>Steps in this stage</span>
-        <span>
-          Stage {state.plan.findIndex((s) => s.key === stage.plan.key) + 1} of {state.plan.length}
-        </span>
-      </p>
-      <ol className="flex flex-col">
-        {stage.plan.steps.map((step, i) => {
-          const done = stage.doneStepIds.includes(step.id);
-          // A run that ended works on nothing; a stop waits for you only once its question is open.
-          const now = stage.currentStepId === step.id && state.lifecycle !== "failed";
-          const asking = now && Boolean(step.gate && state.gate);
-          return (
-            <li
-              key={step.id}
-              className={cn(
-                "relative grid grid-cols-[18px_1fr] gap-2.5 rounded-lg px-1 pb-3 last:pb-0",
-                i < stage.plan.steps.length - 1 &&
-                  cn(
-                    "before:absolute before:top-[22px] before:bottom-1 before:left-[13px] before:w-px",
-                    done ? "before:bg-foreground" : "before:bg-border",
-                  ),
-              )}
-            >
-              <span
-                className={cn(
-                  "mt-0.5 grid size-[18px] place-items-center rounded-full border bg-card transition-colors",
-                  done && "border-foreground bg-foreground text-background",
-                  now && !asking && "border-2 border-sky-500",
-                  step.gate && !done && !now && "border-amber-500 text-amber-600",
-                  asking && "border-amber-500 bg-amber-500 text-white",
-                )}
-              >
-                {done && <Check className="size-2.5" strokeWidth={3.5} />}
-                {!done && step.gate && (!now || asking) && <Flag className="size-2.5" />}
-                {now && !asking && (
-                  <motion.span
-                    className="size-1.5 rounded-full bg-sky-500"
-                    animate={{ scale: [1, 0.6, 1] }}
-                    transition={{ duration: 1.2, repeat: Number.POSITIVE_INFINITY }}
-                  />
-                )}
-              </span>
-              <span className="min-w-0">
-                <b
-                  className={cn("block font-medium text-[13px]", !done && !now && "font-normal text-muted-foreground")}
-                >
-                  {step.title}
-                </b>
-                <small
-                  className={cn(
-                    "text-[11.5px]",
-                    step.gate ? "text-amber-700 dark:text-amber-300" : "text-muted-foreground",
-                  )}
-                >
-                  {step.gate ? "You decide · Popper waits" : AGENTS[step.actor].name}
-                  {step.artifact && !step.gate && (
-                    <span className="ml-1.5 inline-flex items-center gap-1 text-[11px] text-muted-foreground/80">
-                      <FileText className="size-3" />
-                      {step.artifact}
-                    </span>
-                  )}
-                </small>
-              </span>
-            </li>
-          );
-        })}
-      </ol>
-    </div>
+    <StageSteps
+      count={"Stage " + index + " of " + state.plan.length}
+      steps={stage.plan.steps.map((step) => {
+        const now = stage.currentStepId === step.id && state.lifecycle !== "failed";
+        return {
+          id: step.id,
+          title: step.title,
+          gate: Boolean(step.gate),
+          actor: step.gate ? "You decide · Popper waits" : AGENTS[step.actor].name,
+          artifact: step.gate ? undefined : step.artifact,
+          done: stage.doneStepIds.includes(step.id),
+          now,
+          asking: now && Boolean(step.gate && state.gate),
+        };
+      })}
+    />
   );
 }
 
 function NextStop({ state }: { state: RunState }) {
   if (state.completed || state.lifecycle === "failed") return null;
-  if (state.gate)
-    return (
-      <div className="grid grid-cols-[auto_1fr] gap-2.5 rounded-xl border border-amber-500/50 bg-amber-500/10 p-3 text-xs">
-        <span className="grid size-7 place-items-center rounded-lg bg-amber-500/20 text-amber-800 dark:text-amber-300">
-          <Flag className="size-3.5" />
-        </span>
-        <span>
-          <b className="block font-semibold text-[13px]">Waiting for you now</b>
-          <span className="text-muted-foreground">{state.gate.title}. Nothing runs until you answer.</span>
-        </span>
-      </div>
-    );
+  if (state.gate) return <WaitingForYou>{state.gate.title}. Nothing runs until you answer.</WaitingForYou>;
   const next = nextStop(state);
   return (
     <div className="grid grid-cols-[auto_1fr] gap-2.5 rounded-xl border border-dashed p-3 text-xs">
@@ -352,48 +233,6 @@ function NextStop({ state }: { state: RunState }) {
         </span>
       </span>
     </div>
-  );
-}
-
-function Rules({ state }: { state: RunState }) {
-  const checked = Object.keys(state.rules).length;
-  return (
-    <Collapsible className="rounded-xl bg-card ring-1 ring-foreground/10">
-      <CollapsibleTrigger className="group flex w-full items-center gap-2 px-3 py-2.5 text-left font-medium text-xs outline-none">
-        <ChevronRight className="size-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-90" />
-        Rules Popper never bends
-        <span className="ml-auto font-mono text-[11px] text-muted-foreground">
-          {checked} of {RULE_IDS.length} checked
-        </span>
-      </CollapsibleTrigger>
-      <CollapsibleContent>
-        <ul className="flex flex-col gap-1.5 px-3 pb-3 text-xs">
-          {RULE_IDS.map((rule) => {
-            const s = state.rules[rule];
-            return (
-              <li
-                key={rule}
-                className={cn(
-                  "grid grid-cols-[14px_1fr] gap-2 rounded px-1 transition-colors duration-500",
-                  s ? "text-foreground" : "text-muted-foreground",
-                  s === "hit" && "bg-amber-500/12",
-                )}
-              >
-                <span
-                  className={cn(
-                    "mt-1 size-2 rounded-full border-[1.5px]",
-                    s === "pass" && "border-emerald-500 bg-emerald-500",
-                    s === "hit" && "border-amber-500 bg-amber-500",
-                    !s && "border-foreground/30",
-                  )}
-                />
-                {RULES[rule]}
-              </li>
-            );
-          })}
-        </ul>
-      </CollapsibleContent>
-    </Collapsible>
   );
 }
 
@@ -460,37 +299,18 @@ export function RunAside({
   const ended = state.completed || state.lifecycle === "failed";
   const active = ended || state.gate ? null : (state.message?.actor ?? step?.actor ?? null);
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <Team active={active === "code" ? null : active} />
-      <Tabs defaultValue="now" className="min-h-0 flex-1 gap-0">
-        <TabsList variant="line" className="w-full justify-start border-b px-3">
-          <TabsTrigger value="now" className="flex-none">
-            Now
-          </TabsTrigger>
-          <TabsTrigger value="activity" className="flex-none">
-            Activity
-            <motion.span
-              key={state.feed.length}
-              initial={{ scale: 1.3 }}
-              animate={{ scale: 1 }}
-              className="rounded-full bg-muted px-1.5 font-mono font-semibold text-[10.5px] text-muted-foreground"
-            >
-              {state.feed.length}
-            </motion.span>
-          </TabsTrigger>
-        </TabsList>
-        <TabsContent value="now" className="min-h-0 overflow-y-auto">
-          <div className="flex flex-col gap-3.5 p-3.5">
-            <NowCard state={state} holding={holding} onContinue={onContinue} typing={typing} />
-            <Steps state={state} />
-            <NextStop state={state} />
-            <Rules state={state} />
-          </div>
-        </TabsContent>
-        <TabsContent value="activity" className="min-h-0 overflow-y-auto p-3.5">
-          <Activity state={state} />
-        </TabsContent>
-      </Tabs>
-    </div>
+    <RunAsidePanel
+      team={<AgentStrip cast={TEAM} active={active === "code" ? null : active} />}
+      activityCount={state.feed.length}
+      activity={<Activity state={state} />}
+    >
+      <NowCard state={state} holding={holding} onContinue={onContinue} typing={typing} />
+      <Steps state={state} />
+      <NextStop state={state} />
+      <StageRules
+        title="Rules Popper never bends"
+        rules={RULE_IDS.map((id) => ({ id: String(id), text: RULES[id], state: state.rules[id] }))}
+      />
+    </RunAsidePanel>
   );
 }

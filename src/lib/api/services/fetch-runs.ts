@@ -110,7 +110,8 @@ export interface StageGateAnswer {
 
 /** Accepts a finished pipeline stage with what goes forward. */
 export interface AcceptStageRequest {
-  selection: { hypothesis_ids: string[] };
+  /** Stage-specific selection; stages with no selectable items accept an empty object. */
+  selection: Record<string, string[]>;
   note?: string;
 }
 

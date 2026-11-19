@@ -632,6 +632,7 @@ export interface GateOption {
 export interface Gate {
   id: string;
   kind: GateKind;
+  stageKey?: "dataset";
   title: string;
   /** Why the run stopped here, in terms of the review mode. */
   why: string;

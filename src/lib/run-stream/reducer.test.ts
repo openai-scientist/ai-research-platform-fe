@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { GateAnswer, ReviewMode, RunEvent, RunEventOf, RunEventType } from "./contract";
-import { SHOW_DATA_STAGE } from "./features";
 import { MockRun } from "./mock/mock-run";
 import { applyRunEvent, replayRunEvents } from "./reducer";
 import { initialRunState } from "./run-state";
@@ -388,19 +387,13 @@ describe("mock stages after the hypotheses", () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "performance"] });
     const events: RunEvent[] = [];
     let run: MockRun | undefined;
-    run = new MockRun(
-      "RUN-TEST",
-      mode,
-      (e) => {
-        events.push(e);
-        if (e.type === "gate.opened") {
-          const { gate } = e.payload;
-          queueMicrotask(() => run?.answerGate(gate.id, answer(gate)));
-        }
-      },
-      undefined,
-      { withData: SHOW_DATA_STAGE },
-    );
+    run = new MockRun("RUN-TEST", mode, (e) => {
+      events.push(e);
+      if (e.type === "gate.opened") {
+        const { gate } = e.payload;
+        queueMicrotask(() => run?.answerGate(gate.id, answer(gate)));
+      }
+    });
     run.setSpeed(50);
     run.start();
     for (let i = 0; i < 400 && !events.some((e) => e.type === "run.completed"); i++)
@@ -415,9 +408,7 @@ describe("mock stages after the hypotheses", () => {
     expect(state.completed).toBe(true);
     expect(events.some((e) => e.type === "gate.opened")).toBe(false);
     // Stages 1 to 9 always come from a real run: the mock plays none of them.
-    expect([...new Set(state.plan.map((s) => s.stage))]).toEqual(
-      (SHOW_DATA_STAGE ? ["data"] : []).concat(["experiment", "interpret", "report", "write"]),
-    );
+    expect([...new Set(state.plan.map((s) => s.stage))]).toEqual(["experiment", "interpret", "report", "write"]);
     // The PI pivots once, so round 2 tests H5 and H6.
     expect(Object.keys(finalResults(state)).sort()).toEqual(["H1", "H2", "H3", "H5", "H6"]);
     const write = state.stages.write.content;
@@ -448,6 +439,6 @@ describe("mock stages after the hypotheses", () => {
     expect(lockAt).toBeGreaterThan(-1);
     expect(lockAt).toBeLessThan(firstNode);
     expect(events[lockAt].stage_key).toBe("r1-experiment");
-    expect(Boolean(replayRunEvents("run", events).stages.data)).toBe(SHOW_DATA_STAGE);
+    expect(replayRunEvents("run", events).stages.data).toBeUndefined();
   });
 });

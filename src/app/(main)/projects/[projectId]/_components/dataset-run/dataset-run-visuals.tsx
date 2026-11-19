@@ -4,17 +4,18 @@ import type { ReactNode } from "react";
 
 import { cn } from "cn";
 import { ArrowRight, Check, Columns3, FileText, HardDrive, ShieldCheck, Undo2 } from "lucide-react";
-import { motion } from "motion/react";
+import { motion, useReducedMotion } from "motion/react";
 
 import type { DataCardVariable } from "@/lib/api/services/fetch-dataset-runs";
 import type { DatasetVersionItem } from "@/lib/api/services/fetch-datasets";
 import type { LocalNodeItem } from "@/lib/api/services/fetch-local-nodes";
+import type { StepView } from "@/lib/run-stream/dataset-run-model";
 
 import { ColumnKindIcon } from "../column-kind-icon";
 import type { ColumnKind } from "../dataset-preview";
 import { AnimatedNumber } from "../run-studio/animated-number";
+import { RUN_EASE } from "../run-studio/run-track";
 import { PendingLines } from "../run-studio/scenes/scene-ui";
-import type { DatasetRunModel, StepView } from "./dataset-run-model";
 
 const KIND: Record<DataCardVariable["type"], ColumnKind> = { numeric: "number", string: "text", date: "date" };
 
@@ -27,14 +28,13 @@ export function splitClause(clause: string): { label: string; columns: string[] 
 const reveal = (i: number) => ({
   initial: { opacity: 0, y: 6 },
   animate: { opacity: 1, y: 0 },
-  transition: { delay: Math.min(i, 12) * 0.05, duration: 0.3 },
+  transition: { delay: Math.min(i, 12) * 0.05, duration: 0.3, ease: RUN_EASE },
 });
 
 function Chip({ name, kind, tone }: { name: string; kind?: ColumnKind; tone?: "warn" }) {
   return (
     <motion.code
       {...reveal(0)}
-      data-cursor={`col:${name}`}
       className={cn(
         "inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 font-mono text-[11px]",
         tone === "warn" ? "bg-amber-500/15 text-amber-800 dark:text-amber-300" : "bg-muted",
@@ -56,7 +56,10 @@ function Box({ title, children }: { title: ReactNode; children: ReactNode }) {
 }
 
 /** The steward's plan for a step that has nothing to show yet: what it will do, in grey bars that shimmer. */
-function Skeleton({ step, active }: { step: StepView; active: boolean }) {
+function Skeleton({ step, active, localWork }: { step: StepView; active: boolean; localWork: boolean }) {
+  if (localWork) {
+    return <p className="text-muted-foreground text-xs">Your Local Node is running this check.</p>;
+  }
   return (
     <Box title={active ? "Working on it" : "What the steward will do"}>
       <div className="rounded-lg border border-dashed p-3">
@@ -68,6 +71,7 @@ function Skeleton({ step, active }: { step: StepView; active: boolean }) {
 }
 
 function MissingBar({ missing, total }: { missing: number; total: number }) {
+  const reducedMotion = useReducedMotion();
   const pct = total ? Math.round((missing / total) * 100) : 0;
   return (
     <span className="flex items-center gap-2">
@@ -76,7 +80,7 @@ function MissingBar({ missing, total }: { missing: number; total: number }) {
           className={cn("block h-full rounded-full", pct > 20 ? "bg-amber-500" : "bg-foreground/60")}
           initial={{ width: 0 }}
           animate={{ width: `${pct}%` }}
-          transition={{ duration: 0.7 }}
+          transition={{ duration: reducedMotion ? 0 : 0.7, ease: RUN_EASE }}
         />
       </span>
       <span className="font-mono text-[11px] text-muted-foreground tabular-nums">{pct}%</span>
@@ -98,7 +102,7 @@ function VariableTable({ variables }: { variables: DataCardVariable[] }) {
         </thead>
         <tbody className="divide-y">
           {variables.map((v, i) => (
-            <motion.tr key={v.name} data-cursor={`col:${v.name}`} {...reveal(i)}>
+            <motion.tr key={v.name} {...reveal(i)}>
               <td className="px-3 py-1.5 font-mono">
                 <span className="inline-flex items-center gap-1.5">
                   <ColumnKindIcon kind={KIND[v.type]} className="size-3 text-muted-foreground" />
@@ -147,7 +151,7 @@ function DictionaryTable({ reason, columns }: { reason: string; columns: string[
         </thead>
         <tbody className="divide-y">
           {names.map((name, i) => (
-            <motion.tr key={name} data-cursor={`col:${name}`} {...reveal(i)}>
+            <motion.tr key={name} {...reveal(i)}>
               <td className="px-3 py-1.5 font-mono">{name}</td>
               {DICTIONARY_PARTS.map((p) => {
                 const open = clauses.some((c) => p.match.test(c.label) && c.columns.includes(name));
@@ -173,6 +177,7 @@ function DictionaryTable({ reason, columns }: { reason: string; columns: string[
 
 /** What code found, one line per clause of the reason, with the columns it names. */
 function ReasonRows({ reason, rows }: { reason: string; rows: number }) {
+  const reducedMotion = useReducedMotion();
   const clauses = reason.split(/;\s*/).filter(Boolean);
   return (
     <ul className="grid gap-2">
@@ -180,7 +185,7 @@ function ReasonRows({ reason, rows }: { reason: string; rows: number }) {
         const { label, columns } = splitClause(clause);
         const count = Number(clause.match(/(\d[\d,]*)\s+(?:failing\s+)?rows?/i)?.[1]?.replaceAll(",", ""));
         return (
-          <motion.li key={clause} data-cursor={`reason:${i}`} {...reveal(i)} className="grid gap-1.5 text-sm">
+          <motion.li key={clause} {...reveal(i)} className="grid gap-1.5 text-sm">
             <span className="flex gap-2 leading-relaxed">
               <span className="mt-2 size-1.5 shrink-0 rounded-full bg-current opacity-50" />
               <span className="min-w-0 break-words">{label}</span>
@@ -199,7 +204,7 @@ function ReasonRows({ reason, rows }: { reason: string; rows: number }) {
                     className="block h-full rounded-full bg-rose-500"
                     initial={{ width: 0 }}
                     animate={{ width: `${Math.min(100, (count / rows) * 100)}%` }}
-                    transition={{ duration: 0.7 }}
+                    transition={{ duration: reducedMotion ? 0 : 0.7, ease: RUN_EASE }}
                   />
                 </span>
                 <AnimatedNumber value={count} /> of {rows.toLocaleString("en-US")} rows
@@ -216,14 +221,17 @@ function ReasonRows({ reason, rows }: { reason: string; rows: number }) {
 function ReleaseFlow({
   version,
   node,
-  waiting,
+  state,
 }: {
   version: DatasetVersionItem | undefined;
   node: LocalNodeItem | undefined;
-  waiting: boolean;
+  state: StepView["state"];
 }) {
   const names = version?.column_names ?? [];
   const kinds = new Map(version?.local_card?.variables.map((v) => [v.name, KIND[v.type]]));
+  const waiting = state === "asking";
+  const reviewed = state === "done";
+  const releaseStatus = waiting ? "Waits for your review" : "Pending";
   return (
     <div className="grid gap-3">
       <div className="grid items-stretch gap-2 md:grid-cols-[1fr_auto_1fr_auto_1fr]">
@@ -240,7 +248,6 @@ function ReleaseFlow({
         </div>
         <ArrowRight className="hidden size-4 self-center text-muted-foreground md:block" />
         <div
-          data-cursor="gate"
           className={cn(
             "relative grid place-content-center justify-items-center gap-1 rounded-lg border-2 p-3 text-center",
             waiting ? "border-amber-500 bg-amber-500/10" : "border-dashed",
@@ -252,7 +259,7 @@ function ReleaseFlow({
           <ShieldCheck className={cn("size-5", waiting ? "text-amber-600" : "text-muted-foreground")} />
           <b className="text-xs">Release gate</b>
           <span className="text-[11px] text-muted-foreground">Counts rounded · rows withheld</span>
-          <span className="font-medium text-[11px]">{waiting ? "Waits for your review" : "Reviewed"}</span>
+          <span className="font-medium text-[11px]">{reviewed ? "Reviewed" : releaseStatus}</span>
         </div>
         <ArrowRight className="hidden size-4 self-center text-muted-foreground md:block" />
         <div className="rounded-lg border p-3">
@@ -277,27 +284,31 @@ function ReleaseFlow({
           </dl>
         </div>
       </div>
-      <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-muted-foreground text-xs">
-        {node && (
-          <>
-            <span>
-              <b className="font-mono text-foreground tabular-nums">
-                <AnimatedNumber value={node.pending_reviews} />
-              </b>{" "}
-              waiting for review on {node.name}
+      {!reviewed && (Boolean(node) || waiting) && (
+        <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-muted-foreground text-xs">
+          {node && (
+            <>
+              <span>
+                <b className="font-mono text-foreground tabular-nums">
+                  <AnimatedNumber value={node.pending_reviews} />
+                </b>{" "}
+                waiting for review on {node.name}
+              </span>
+              <span>
+                <b className="font-mono text-foreground tabular-nums">
+                  <AnimatedNumber value={node.release_count} />
+                </b>{" "}
+                released so far
+              </span>
+            </>
+          )}
+          {waiting && (
+            <span className="flex items-center gap-1">
+              <Undo2 className="size-3" /> Open the Local Node app and go to Releases to approve.
             </span>
-            <span>
-              <b className="font-mono text-foreground tabular-nums">
-                <AnimatedNumber value={node.release_count} />
-              </b>{" "}
-              released so far
-            </span>
-          </>
-        )}
-        <span className="flex items-center gap-1">
-          <Undo2 className="size-3" /> Open the Local Node app and go to Releases to approve.
-        </span>
-      </p>
+          )}
+        </p>
+      )}
     </div>
   );
 }
@@ -305,28 +316,28 @@ function ReleaseFlow({
 /** What the step looks like, from what the engine really reported for it. */
 export function StepVisual({
   step,
-  model,
   version,
   variables,
   node,
+  localWork,
 }: {
   step: StepView;
-  model: DatasetRunModel;
   version: DatasetVersionItem | undefined;
   /** The published data card's variables, or the Local Node's card. */
   variables: DataCardVariable[] | undefined;
   node: LocalNodeItem | undefined;
+  localWork: boolean;
 }) {
   const names = version?.column_names ?? [];
   const rows = version?.row_count ?? 0;
   const active = step.state === "now" || step.state === "asking";
   const reason = step.state === "done" ? "" : (step.reason ?? "");
-  if (step.key === "release") return <ReleaseFlow version={version} node={node} waiting={model.releaseWait} />;
+  if (step.key === "release") return <ReleaseFlow version={version} node={node} state={step.state} />;
   if (step.key === "dictionary") {
     return names.length || reason ? (
       <DictionaryTable reason={reason} columns={names} />
     ) : (
-      <Skeleton step={step} active={active} />
+      <Skeleton step={step} active={active} localWork={localWork} />
     );
   }
   if (["sources", "table_model", "profile_quality", "disclosure"].includes(step.key)) {
@@ -354,5 +365,5 @@ export function StepVisual({
         <Columns3 className="size-4" /> Code found nothing left open here.
       </p>
     );
-  return <Skeleton step={step} active={active} />;
+  return <Skeleton step={step} active={active} localWork={localWork} />;
 }

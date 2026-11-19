@@ -5,24 +5,31 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 
 import { cn } from "cn";
-import { ArrowRight, Check, FileSpreadsheet, Flag, HardDrive, ShieldCheck } from "lucide-react";
+import {
+  ArrowRight,
+  Check,
+  ClipboardCheck,
+  FileSpreadsheet,
+  Flag,
+  HardDrive,
+  MousePointer2,
+  ShieldCheck,
+} from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
-import type { DataCardVariable } from "@/lib/api/services/fetch-dataset-runs";
+import type { DataCardBody, DataCardVariable } from "@/lib/api/services/fetch-dataset-runs";
 import type { DatasetVersionItem } from "@/lib/api/services/fetch-datasets";
 import type { LocalNodeItem } from "@/lib/api/services/fetch-local-nodes";
-import type { RunItem } from "@/lib/api/services/fetch-runs";
-import type { RunDisplayStatus } from "@/lib/run-stream/selectors";
+import { activeAgent, type DatasetRunModel, type StepView } from "@/lib/run-stream/dataset-run-model";
 
-import { useDatasetOutputs } from "../dataset-stage-hooks";
 import { AnimatedNumber } from "../run-studio/animated-number";
-import { AgentAvatar, AgentCursor } from "../run-studio/run-bits";
-import { compactNumber } from "../run-studio/run-stats";
-import { Pane, Placeholder } from "../run-studio/scenes/scene-ui";
-import { activeAgent, type DatasetRunModel, type StepView } from "./dataset-run-model";
-import { StepVisual, splitClause } from "./dataset-run-visuals";
+import { AgentAvatar } from "../run-studio/run-bits";
+import { AGENTS } from "../run-studio/run-meta";
+import { RUN_EASE } from "../run-studio/run-track";
+import { Pane, PendingLines } from "../run-studio/scenes/scene-ui";
+import { StepVisual } from "./dataset-run-visuals";
 
 /** Seconds the long computation has run: the engine's last count plus the time since it arrived. */
 export function useElapsed(progress: DatasetRunModel["progress"]) {
@@ -76,11 +83,6 @@ function Chip({ tone }: { tone: Tone }) {
   );
 }
 
-/** Column names a reason points at: the lists after a colon in its clauses. */
-export function columnsIn(reason: string): string[] {
-  return reason.split(/;\s*/).flatMap((clause) => splitClause(clause).columns);
-}
-
 /** The step the stage is on, large: what code found, what the steward does about it, and what it waits for. */
 function FocusStep({
   step,
@@ -90,6 +92,7 @@ function FocusStep({
   version,
   variables,
   node,
+  local,
 }: {
   step: StepView;
   model: DatasetRunModel;
@@ -98,10 +101,13 @@ function FocusStep({
   version: DatasetVersionItem | undefined;
   variables: DataCardVariable[] | undefined;
   node: LocalNodeItem | undefined;
+  local: boolean;
 }) {
   const elapsed = useElapsed(current ? model.progress : null);
   const tone = toneOf(step);
   const working = live && current && step.state === "now";
+  const actor = live && current ? activeAgent(model, false) : null;
+  const pointer = actor === "steward" || actor === "reviewer" ? AGENTS[actor] : null;
   return (
     <Pane
       title={
@@ -118,18 +124,14 @@ function FocusStep({
     >
       <p className="text-muted-foreground text-sm">{step.explain}</p>
       <div className="mt-3 grid gap-3 text-sm">
-        <StepVisual step={step} model={model} version={version} variables={variables} node={node} />
-        {step.needsYou && step.state !== "done" && (
+        <StepVisual step={step} version={version} variables={variables} node={node} localWork={local && working} />
+        {step.needsYou && step.key !== "release" && step.state !== "done" && (
           <p className="rounded-lg bg-amber-500/10 px-3 py-2 text-amber-800 text-xs dark:text-amber-300">
             This waits for you: only you can say which columns answer your question and what the sources are.
           </p>
         )}
         {model.progress && current && (
-          <div
-            role="status"
-            data-cursor="progress"
-            className="flex items-center gap-2.5 rounded-lg bg-muted/50 px-3 py-2"
-          >
+          <div role="status" className="flex items-center gap-2.5 rounded-lg bg-muted/50 px-3 py-2">
             <Spinner className="size-4" />
             <span className="min-w-0 flex-1 truncate">{model.progress.text.replace(/:\s*\d+ s( so far)?$/, "")}</span>
             <span className="font-mono text-muted-foreground text-xs tabular-nums">
@@ -138,7 +140,7 @@ function FocusStep({
             <AgentAvatar agent="code" size="sm" />
           </div>
         )}
-        <p className="flex flex-wrap items-center gap-x-2 text-muted-foreground text-xs">
+        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-muted-foreground text-xs">
           <span className="font-mono">{step.key}</span>·
           {step.tokens ? (
             <span className="tabular-nums">
@@ -146,6 +148,19 @@ function FocusStep({
             </span>
           ) : (
             <span>Code check · no AI</span>
+          )}
+          {pointer && (
+            <span
+              data-dataset-agent
+              className={cn(
+                "inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 font-medium",
+                pointer.soft,
+                pointer.text,
+              )}
+            >
+              <MousePointer2 aria-hidden="true" className="size-3" />
+              {pointer.name}
+            </span>
           )}
         </p>
       </div>
@@ -164,18 +179,12 @@ function Checklist({
   onView(key: string): void;
 }) {
   return (
-    <ul aria-label="All checks" className="divide-y overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10">
+    <ul aria-label="All checks" className="divide-y">
       {steps.map((step) => {
         const tone = toneOf(step);
         const quiet = step.state === "todo" && !step.needsYou && step.item !== "red";
         return (
-          <motion.li
-            key={step.key}
-            data-cursor={`item:${step.key}`}
-            layout="position"
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-          >
+          <motion.li key={step.key} layout="position" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}>
             <button
               type="button"
               onClick={() => onView(step.key)}
@@ -223,6 +232,7 @@ export function DatasetRunScene({
   onView,
   variables,
   node,
+  showLocalProgress,
 }: {
   steps: StepView[];
   model: DatasetRunModel;
@@ -234,41 +244,25 @@ export function DatasetRunScene({
   onView(key: string | null): void;
   variables?: DataCardVariable[];
   node?: LocalNodeItem;
+  showLocalProgress?: boolean;
 }) {
   const items = steps.filter((s) => s.gate !== true || s.key === "release");
   const done = steps.filter((s) => s.state === "done").length;
   const current = steps.find((s) => s.state === "now" || s.state === "asking");
   const shown = steps.find((s) => s.key === focusKey) ?? current;
-  const started = Object.keys(model.items).length > 0 || model.releaseWait;
-  const scene = useRef<HTMLDivElement>(null);
-  const agent = live ? activeAgent(model, false) : null;
-  // The pointer follows the newest event; an item that is not listed falls back to the step in progress.
-  const wanted = model.cursor?.startsWith("item:") ? model.cursor.slice(5) : null;
-  const onScreen = wanted && items.some((s) => s.key === wanted) ? wanted : current?.key;
-  const firstColumn = onScreen === shown?.key ? columnsIn(shown?.reason ?? "")[0] : undefined;
-  let target: string | null = onScreen ? `item:${onScreen}` : null;
-  if (firstColumn) target = `col:${firstColumn}`;
-  if (model.cursor === "progress") target = "progress";
+  const started = Object.keys(model.items).length > 0 || model.releaseWait || model.published || Boolean(focusKey);
   return (
-    <div ref={scene} className="relative flex flex-col gap-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <span className="grid size-8 place-items-center rounded-lg bg-teal-500/12 text-teal-700 dark:text-teal-300">
-          <FileSpreadsheet className="size-4" />
-        </span>
-        <div className="flex min-w-0 flex-wrap items-baseline gap-2.5">
-          <span className="truncate font-mono font-semibold text-sm">{dataset.name}</span>
-          {version && (
-            <span className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-muted-foreground text-xs">
-              v{version.version_number}
-            </span>
-          )}
-          {local && (
-            <span className="inline-flex items-center gap-1 text-muted-foreground text-xs">
-              <HardDrive aria-hidden="true" className="size-3.5" /> Rows stay on the Local Node
-            </span>
-          )}
-        </div>
-        <dl className="ml-auto flex gap-6 text-right">
+    <div className="flex flex-col gap-4">
+      <Pane
+        title={
+          <span className="flex min-w-0 items-center gap-2">
+            <FileSpreadsheet className="size-4 shrink-0 text-muted-foreground" />
+            <span className="wrap-anywhere">{dataset.name}</span>
+          </span>
+        }
+        aside={version && `v${version.version_number}`}
+      >
+        <dl className="flex flex-wrap items-baseline gap-x-6 gap-y-2 border-t pt-3">
           <div>
             <dt className="text-[11px] text-muted-foreground">Rows</dt>
             <dd className="font-mono font-semibold text-sm tabular-nums">
@@ -285,19 +279,38 @@ export function DatasetRunScene({
               <AnimatedNumber value={done} />/{steps.length}
             </dd>
           </div>
+          {local && <dt className="sr-only">Row storage</dt>}
+          {local && (
+            <dd className="flex items-center gap-1 text-muted-foreground text-xs sm:ml-auto">
+              <HardDrive aria-hidden="true" className="size-3.5" />
+              <span>Rows stay on the Local Node</span>
+            </dd>
+          )}
         </dl>
-      </div>
+      </Pane>
 
       {!started ? (
-        <Pane title="What the steward settles" aside="Code checks each item; the steward repairs the red ones">
-          <Placeholder icon={<Spinner className="size-4" />}>
-            {model.progress ? model.progress.text : "Waiting for the first check from the engine."}
-          </Placeholder>
+        <Pane
+          title={
+            <span className="flex items-center gap-2">
+              <ClipboardCheck className="size-4 text-muted-foreground" />
+              What the steward settles
+            </span>
+          }
+          aside="Code checks each item"
+        >
+          <p className="mb-3 text-muted-foreground text-sm">
+            {model.progress?.text ??
+              (showLocalProgress
+                ? "Your Local Node is preparing the dataset checks. Results will appear here as they arrive."
+                : "Waiting for the first check from the engine.")}
+          </p>
+          {!showLocalProgress && <PendingLines lines={3} />}
         </Pane>
       ) : (
         <>
           {shown && (
-            <div className="flex flex-col gap-1.5">
+            <div id="dataset-focused-step" className="flex flex-col gap-1.5">
               {focusKey && shown !== current && (
                 <Button variant="ghost" size="xs" className="w-fit" onClick={() => onView(null)}>
                   Back to the current step
@@ -309,7 +322,7 @@ export function DatasetRunScene({
                   initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0 }}
-                  transition={{ duration: 0.2 }}
+                  transition={{ duration: 0.45, ease: RUN_EASE }}
                 >
                   <FocusStep
                     step={shown}
@@ -319,24 +332,36 @@ export function DatasetRunScene({
                     version={version}
                     variables={variables}
                     node={node}
+                    local={local}
                   />
                 </motion.div>
               </AnimatePresence>
             </div>
           )}
-          <Checklist steps={items} shownKey={shown?.key} onView={onView} />
+          <Pane
+            title={
+              <span className="flex items-center gap-2">
+                <ClipboardCheck className="size-4 text-muted-foreground" />
+                Dataset checks
+              </span>
+            }
+            aside={`${done} of ${steps.length} steps done`}
+          >
+            <Checklist steps={items} shownKey={shown?.key} onView={onView} />
+          </Pane>
         </>
       )}
 
-      <AgentCursor
-        agent={agent === "steward" || agent === "reviewer" ? agent : null}
-        container={scene}
-        target={target}
-        version={`${model.lastSeq}:${focusKey}`}
-      />
-
       {model.review && (
-        <Pane title="Independent review" aside={`Round ${model.review.round}`}>
+        <Pane
+          title={
+            <span className="flex items-center gap-2">
+              <ShieldCheck className="size-4 text-muted-foreground" />
+              Independent review
+            </span>
+          }
+          aside={`Round ${model.review.round}`}
+        >
           <div className="flex flex-wrap items-center gap-4 text-sm">
             <AgentAvatar agent="reviewer" size="md" />
             <span>
@@ -364,33 +389,37 @@ export function DatasetRunScene({
 export function DatasetRunEnd({
   projectId,
   datasetId,
-  run,
-  status,
+  runId,
+  card,
+  questions,
+  accepted,
 }: {
   projectId: string;
   datasetId: string;
-  run: RunItem;
-  status: RunDisplayStatus;
+  runId: string;
+  card?: DataCardBody | null;
+  questions: number;
+  accepted: boolean;
 }) {
-  const outputs = useDatasetOutputs(projectId, status === "completed" ? run : undefined);
-  const card = outputs.data?.card;
-  const questions = outputs.data?.brief?.questions.length ?? 0;
-  if (status !== "completed") return null;
   return (
     <Pane
-      title="Dataset stage accepted · Hypothesis next"
-      aside={<ShieldCheck className="size-4" aria-hidden="true" />}
+      title={
+        <span className="flex items-center gap-2">
+          <ShieldCheck className="size-4 shrink-0 text-emerald-600" aria-hidden="true" />
+          {accepted ? "Dataset stage accepted" : "Data card ready for review"}
+        </span>
+      }
     >
       <p className="text-sm">
         {card
           ? `${card.title}: ${card.n_rows.toLocaleString("en-US")} rows, ${card.n_columns} variables${questions ? `, ${questions} ${questions === 1 ? "question" : "questions"} in the brief` : ""}.`
-          : "The data card and the brief are published."}
+          : "The data card is published."}
       </p>
       <p className="mt-1 text-muted-foreground text-sm">
         Used by Hypothesis and Experiment design. They read the card and the brief, never the rows.
       </p>
       <Button className="mt-3" size="sm" asChild>
-        <Link href={`/projects/${projectId}/datasets/${datasetId}?view=card&run=${run.id}`}>
+        <Link href={`/projects/${projectId}/datasets/${datasetId}?view=card&run=${runId}`}>
           Open the Data card
           <ArrowRight data-icon="inline-end" />
         </Link>

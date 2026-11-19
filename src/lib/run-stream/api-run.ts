@@ -70,6 +70,7 @@ export class ApiRun implements RunCommands {
     receive: (events: RunEvent[], live: boolean) => void,
     /** Set for a pipeline run: what it says about itself before its events. */
     pipeline?: PipelineRunInfo,
+    private readonly receiveEnvelopes?: (events: PipelineEnvelope[], live: boolean) => void,
   ) {
     this.pacer = new RunPacer((events) => receive(events, this.following));
     this.adapter = pipeline ? new PipelineAdapter(pipeline) : null;
@@ -100,6 +101,7 @@ export class ApiRun implements RunCommands {
       {
         onEvents: (events, origin) => {
           this.lastSeq = events[events.length - 1]?.seq ?? this.lastSeq;
+          this.receiveEnvelopes?.(events as unknown as PipelineEnvelope[], origin === "live");
           if (origin === "history") {
             this.pacer.now(this.adapt(events));
             return;
@@ -137,8 +139,14 @@ export class ApiRun implements RunCommands {
 
   async answerGate(gateId: string, answer: GateAnswer) {
     try {
-      if (this.adapter) await this.answerStage(this.adapter, gateId, answer);
-      else await fetchRuns.answerGate(this.projectId, this.runId, gateId, answer);
+      const route = this.adapter?.route(gateId);
+      if (this.adapter) {
+        await this.answerStage(this.adapter, gateId, answer);
+        if (route?.to === "gate" && route.kind === "question") {
+          this.following = true;
+          this.pacer.now(this.adapter.acknowledgeGate(gateId, answer));
+        }
+      } else await fetchRuns.answerGate(this.projectId, this.runId, gateId, answer);
       return true;
     } catch (error) {
       showError(error);
@@ -160,7 +168,9 @@ export class ApiRun implements RunCommands {
     if (route.to === "accept") {
       const dropped = answer.dropped ?? [];
       await fetchRuns.acceptStage(this.projectId, this.runId, route.stageRunId, {
-        selection: { hypothesis_ids: route.hypothesisIds.filter((id) => !dropped.includes(id)) },
+        selection: route.hypothesisIds
+          ? { hypothesis_ids: route.hypothesisIds.filter((id) => !dropped.includes(id)) }
+          : {},
         ...(note ? { note } : {}),
       });
       return;

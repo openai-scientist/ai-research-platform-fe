@@ -46,7 +46,7 @@ export type GateRoute =
       artifactId?: string;
       findings?: Record<string, unknown>[];
     }
-  | { to: "accept"; stageRunId: string; hypothesisIds: string[] }
+  | { to: "accept"; stageRunId: string; hypothesisIds?: string[] }
   /** The PI's charter: endorse its draft, or write it yourself; `retry` asks the PI again after it failed. */
   | { to: "charter"; consultationId: string };
 
@@ -627,6 +627,7 @@ export interface PipelineRunInfo {
   topic: string;
   domains: string[];
   mode: ReviewMode;
+  datasetFirst?: boolean;
 }
 
 /** One content item as it was shown: the scenes' event and who said it. */
@@ -643,12 +644,19 @@ interface Shown {
  */
 export class PipelineAdapter {
   private started = false;
+  private datasetAccepted = false;
   private screen: Screen | null = null;
   /** Index of the furthest step reached on this screen; steps only move forward. */
   private reached = -1;
   private step: string | null = null;
   private stageRun: string | null = null;
-  private gate: { id: string; kind: GateKind; engineKind: "question" | "artifact_review" | null } | null = null;
+  private gate: {
+    id: string;
+    kind: GateKind;
+    engineKind: "question" | "artifact_review" | null;
+    stageKey?: string;
+    stageRunId?: string;
+  } | null = null;
   private decision: Record<string, unknown> | null = null;
   private failed = false;
   private completed = false;
@@ -704,22 +712,53 @@ export class PipelineAdapter {
   /** Where an answer to this gate goes, or null when the gate is not open. */
   route(gateId: string): GateRoute | null {
     if (this.gate?.kind === "charter" && this.gate.id === gateId) return { to: "charter", consultationId: gateId };
-    if (!this.gate || this.gate.id !== gateId || !this.stageRun) return null;
-    if (this.gate.kind === "accept") return { to: "accept", stageRunId: this.stageRun, hypothesisIds: this.final() };
+    if (!this.gate || this.gate.id !== gateId) return null;
+    const stageRunId = this.gate.stageRunId ?? this.stageRun;
+    if (!stageRunId) return null;
+    if (this.gate.kind === "accept")
+      return {
+        to: "accept",
+        stageRunId,
+        ...(this.isHypothesisStage(this.gate.stageKey) ? { hypothesisIds: this.final() } : {}),
+      };
     if (!this.gate.engineKind) return null;
-    if (this.gate.engineKind === "question") return { to: "gate", stageRunId: this.stageRun, kind: "question" };
+    if (this.gate.engineKind === "question") return { to: "gate", stageRunId, kind: "question" };
     return {
       to: "gate",
-      stageRunId: this.stageRun,
+      stageRunId,
       kind: "artifact_review",
       ...(this.review.artifactId ? { artifactId: this.review.artifactId } : {}),
       findings: [...this.review.raw],
     };
   }
 
+  /** The gate POST succeeded, so do not leave the UI waiting for a second delivery of `run.gate_closed`. */
+  acknowledgeGate(gateId: string, answer: GateAnswer): RunEvent[] {
+    this.out = [];
+    const gate = this.gate?.id === gateId ? this.gate : null;
+    if (gate) {
+      if (gate.kind !== "decision") this.closeStep();
+      this.gate = null;
+      this.decision = null;
+    }
+    const kind = gate?.kind ?? "decision";
+    const summary = this.answered(
+      kind,
+      answer.option_id,
+      answer.dropped ?? [],
+      answer.findings?.length ?? 0,
+      answer.kept?.length ?? 0,
+    );
+    this.emit("gate.resolved", { gate_id: gateId, answer, summary }, "pi");
+    return this.out;
+  }
+
   /** The screens of the run: one per round of hypotheses. */
   private screens(): Screen[] {
     return SCREENS.flatMap((screen) => {
+      if (screen.stage === "scope" && this.datasetAccepted) {
+        return [{ ...screen, reads: ["Accepted data card", ...(screen.reads ?? [])] }];
+      }
       if (screen.stage !== "hypothesize") return [screen];
       return Array.from({ length: this.round }, (_, i) => ({
         ...screen,
@@ -798,7 +837,7 @@ export class PipelineAdapter {
     }
     if (this.sent && (envelope.phase === "revising" || envelope.step_key === "critique")) this.revise();
     const base = envelope.step_key ? SCREEN_OF[envelope.step_key] : undefined;
-    if (base && envelope.type !== "decision.recorded") this.goTo(this.keyOf(base));
+    if (base && envelope.stage_key !== "dataset" && envelope.type !== "decision.recorded") this.goTo(this.keyOf(base));
 
     const { type, payload } = envelope;
     const engine = `${envelope.stage_key ?? "hypothesis"}.`;
@@ -810,7 +849,8 @@ export class PipelineAdapter {
   private emit(type: RunEvent["type"], payload: unknown, actor?: AgentRole, stageKey?: string) {
     const at = this.at as PipelineEnvelope;
     this.seq += 1;
-    const key = stageKey ?? this.screen?.key;
+    const key =
+      stageKey ?? (type.startsWith("gate.") && this.gate?.stageKey === "dataset" ? "dataset" : this.screen?.key);
     this.out.push({
       seq: this.seq,
       run_id: at.run_id,
@@ -1173,9 +1213,12 @@ export class PipelineAdapter {
   }
 
   private openCharter(id: string, failed: boolean) {
-    this.goTo("scope");
-    this.openStep("charter");
-    this.gate = { id, kind: "charter", engineKind: null };
+    const dataset = this.run.datasetFirst && !this.datasetAccepted;
+    if (!dataset) {
+      this.goTo("scope");
+      this.openStep("charter");
+    }
+    this.gate = { id, kind: "charter", engineKind: null, stageKey: dataset ? "dataset" : undefined };
     this.emit("run.status", { status: "awaiting_review" });
     this.emit("gate.opened", { gate: this.charterGate(id, failed) }, "pi");
   }
@@ -1239,7 +1282,16 @@ export class PipelineAdapter {
   private openGate(payload: Record<string, unknown>) {
     const engineKind = payload.kind === "artifact_review" ? "artifact_review" : "question";
     const id = String(payload.gate_id ?? "");
-    const kind: GateKind = engineKind === "artifact_review" ? "hypotheses" : "screen";
+    const selection = payload.selection as { valid_ids?: unknown } | undefined;
+    const currentStep = payload.step_key ?? this.at?.step_key ?? this.step;
+    const isScreenGate =
+      engineKind === "question" &&
+      (currentStep === "screen" ||
+        (this.screen?.key === "screen" && (this.step === "shortlist" || this.step === "screen_gate")) ||
+        Array.isArray(selection?.valid_ids));
+    let kind: GateKind = "decision";
+    if (engineKind === "artifact_review") kind = "hypotheses";
+    else if (isScreenGate) kind = "screen";
     const reviewed = (payload.artifact_ids as string[] | undefined)?.[0];
     if (kind === "hypotheses" && reviewed) {
       this.review.artifactId = reviewed;
@@ -1248,13 +1300,54 @@ export class PipelineAdapter {
         anchor: { ...(f.anchor as object), artifact_id: reviewed },
       }));
     }
-    const valid = (payload.selection as { valid_ids?: string[] } | undefined)?.valid_ids;
+    const valid = selection?.valid_ids as string[] | undefined;
     if (kind === "hypotheses") this.goTo("map");
-    this.openStep(kind === "screen" ? "screen_gate" : "hypotheses_gate");
-    this.gate = { id, kind, engineKind };
+    if (kind === "screen") this.openStep("screen_gate");
+    else if (kind === "hypotheses") this.openStep("hypotheses_gate");
+    this.gate = {
+      id,
+      kind,
+      engineKind,
+      stageKey: this.at?.stage_key ?? undefined,
+      stageRunId: this.stageRun ?? undefined,
+    };
     this.decision = null;
     this.emit("run.status", { status: "awaiting_review" });
-    this.emit("gate.opened", { gate: kind === "screen" ? this.screenGate(id, valid) : this.hypothesesGate(id) }, "pi");
+    let gate: Gate;
+    if (kind === "screen") gate = this.screenGate(id, valid);
+    else if (kind === "hypotheses") gate = this.hypothesesGate(id);
+    else gate = this.questionGate(id, payload);
+    this.emit("gate.opened", { gate }, "pi");
+  }
+
+  private questionGate(id: string, payload: Record<string, unknown>): Gate {
+    const defaultOptionId = payload.default_option_id;
+    const rawOptions = Array.isArray(payload.options) ? payload.options : [];
+    const options = rawOptions.flatMap((raw): Gate["options"] => {
+      if (!raw || typeof raw !== "object" || Array.isArray(raw)) return [];
+      const option = raw as Record<string, unknown>;
+      if (typeof option.option_id !== "string" || typeof option.label !== "string") return [];
+      return [
+        {
+          id: option.option_id,
+          label: option.label,
+          description: typeof option.description === "string" ? option.description : "",
+          leads_to: "The stage continues with your answer.",
+          confirm_label: "Confirm answer",
+          recommended: option.option_id === defaultOptionId,
+        },
+      ];
+    });
+    return {
+      id,
+      kind: "decision",
+      title: typeof payload.header === "string" ? payload.header : "Question",
+      why: typeof payload.prompt === "string" ? payload.prompt : "",
+      summary: [],
+      options,
+      stop_index: 1,
+      stop_total: 1,
+    };
   }
 
   private closeGate(gateId: string, action: string) {
@@ -1284,33 +1377,50 @@ export class PipelineAdapter {
   }
 
   private stageStatus(status: string, reason?: unknown) {
+    const stageKey = this.at?.stage_key ?? undefined;
     if (status === "RUNNING" || status === "PENDING") this.recover();
     if (status === "COMPLETED") {
-      this.goTo("map");
-      this.openStep("accept");
-      this.gate = { id: `accept-${this.stageRun ?? "stage"}`, kind: "accept", engineKind: null };
+      if (this.isHypothesisStage(stageKey)) {
+        this.goTo("map");
+        this.openStep("accept");
+      }
+      this.gate = {
+        id: `accept-${this.stageRun ?? "stage"}`,
+        kind: "accept",
+        engineKind: null,
+        stageKey,
+        stageRunId: this.stageRun ?? undefined,
+      };
       this.emit("run.status", { status: "awaiting_review" });
       this.emit("gate.opened", { gate: this.acceptGate(this.gate.id) }, "pi");
     } else if (status === "ACCEPTED") {
-      const selection = ((this.decision?.selection ?? {}) as { hypothesis_ids?: string[] }).hypothesis_ids;
-      const set = this.final();
-      const taken = selection ?? set;
-      const dropped = set.filter((id) => !taken.includes(id));
+      const acceptedStageKey = this.gate?.stageKey ?? stageKey;
+      if (acceptedStageKey === "dataset") this.datasetAccepted = true;
+      const hypothesisStage = this.isHypothesisStage(acceptedStageKey);
       if (this.gate?.kind === "accept") {
-        const answer: GateAnswer = {
-          option_id: "accept",
-          ...(dropped.length ? { dropped } : {}),
-          ...(this.decision?.note ? { note: String(this.decision.note) } : {}),
-        };
-        const summary = `Accepted ${taken.length === set.length ? `all ${set.length}` : `${taken.length} of ${set.length}`} hypotheses: ${taken.join(", ")}.`;
+        let answer: GateAnswer = { option_id: "accept" };
+        let summary: string;
+        if (hypothesisStage) {
+          const selection = ((this.decision?.selection ?? {}) as { hypothesis_ids?: string[] }).hypothesis_ids;
+          const set = this.final();
+          const taken = selection ?? set;
+          const dropped = set.filter((id) => !taken.includes(id));
+          answer = { option_id: "accept", ...(dropped.length ? { dropped } : {}) };
+          summary = `Accepted ${taken.length === set.length ? `all ${set.length}` : `${taken.length} of ${set.length}`} hypotheses: ${taken.join(", ")}.`;
+        } else {
+          summary = `Accepted the ${this.acceptSubject(acceptedStageKey)}.`;
+        }
+        if (this.decision?.note) answer.note = String(this.decision.note);
         this.emit("gate.resolved", { gate_id: this.gate.id, answer, summary }, "pi");
       }
       this.gate = null;
       this.decision = null;
       this.closeStep();
-      if (this.screen) this.emit("stage.completed", { summary: this.summary(this.screen.key) });
-      this.completed = true;
-      this.emit("run.completed", {});
+      if (hypothesisStage) {
+        if (this.screen) this.emit("stage.completed", { summary: this.summary(this.screen.key) });
+        this.completed = true;
+        this.emit("run.completed", {});
+      } else this.emit("run.status", { status: "running" });
     } else if (status === "FAILED") this.fail("The stage stopped before it finished.");
     else if (status === "STOPPED")
       this.fail(
@@ -1484,6 +1594,31 @@ export class PipelineAdapter {
   }
 
   private acceptGate(id: string): Gate {
+    const stageKey = this.gate?.stageKey ?? this.at?.stage_key ?? undefined;
+    if (!this.isHypothesisStage(stageKey)) {
+      const subject = this.acceptSubject(stageKey);
+      return {
+        id,
+        kind: "accept",
+        title: `Accept the ${subject}`,
+        why: `The ${subject} is published and ready for the next stage. Accept it to continue the run.`,
+        summary: [`The ${subject} is ready to pass to the next stage.`],
+        options: [
+          {
+            id: "accept",
+            label: `Accept the ${subject}`,
+            description: `Use this published ${subject} in the next stage.`,
+            leads_to: "The next stage can begin",
+            confirm_label: "Accept",
+            recommended: true,
+          },
+        ],
+        stop_index: 1,
+        stop_total: 1,
+        ...(this.advice.stage_outcome ? { advice: this.advice.stage_outcome } : {}),
+      };
+    }
+
     const set = this.final();
     const drafts = this.drafts();
     return {
@@ -1511,8 +1646,25 @@ export class PipelineAdapter {
     };
   }
 
+  private isHypothesisStage(stageKey?: string) {
+    return (
+      stageKey === "hypothesis" ||
+      stageKey === "hypothesize" ||
+      stageKey === "map" ||
+      (!stageKey && (this.screen?.stage === "hypothesize" || this.screen?.stage === "map"))
+    );
+  }
+
+  private acceptSubject(stageKey?: string) {
+    if (stageKey === "dataset") return "data card";
+    if (this.isHypothesisStage(stageKey)) return "hypotheses";
+    const label = stageKey?.replace(/[_-]+/g, " ").trim();
+    return label || "stage";
+  }
+
   /** The one-line record of an answer, as a Popper run words it. */
   private answered(kind: GateKind, option: string, dropped: string[], comments: number, kept = 0) {
+    if (kind === "decision") return "Answered the question.";
     if (option === "reject")
       return kind === "screen" ? "Asked for a new search." : "Asked for a new set of hypotheses.";
     if (option === "comment") return `Sent the hypotheses back for revision with ${plural(comments, "comment")}.`;

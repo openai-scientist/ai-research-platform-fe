@@ -766,6 +766,7 @@ export function applyRunEvent(previous: RunState, event: RunEvent): RunState {
           state.gate = {
             id: payload.gate?.id ?? payload.gate_id ?? "gate-1",
             kind: raw.kind ?? "screen",
+            ...(event.stage_key === "dataset" ? { stageKey: "dataset" as const } : {}),
             title: raw.title ?? "Review Paper Shortlist",
             why: raw.why ?? "Screening complete. Shortlist prepared for human review.",
             summary: Array.isArray(raw.summary)

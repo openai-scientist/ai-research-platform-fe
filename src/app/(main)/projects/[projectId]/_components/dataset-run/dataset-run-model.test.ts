@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
 
-import type { PipelineEnvelope } from "@/lib/run-stream/pipeline-adapter";
-
-import charterEvents from "../../../../../../../tests/screens/fixtures/dataset-run-charter-events.json";
-import real from "../../../../../../../tests/screens/fixtures/dataset-run-real-events.json";
 import {
   activeAgent,
   applyDatasetEvent,
@@ -14,8 +10,12 @@ import {
   outcomePending,
   RELEASE_WAIT,
   stepViews,
-} from "./dataset-run-model";
-import { columnsIn } from "./dataset-run-scene";
+} from "@/lib/run-stream/dataset-run-model";
+import type { PipelineEnvelope } from "@/lib/run-stream/pipeline-adapter";
+
+import charterEvents from "../../../../../../../tests/screens/fixtures/dataset-run-charter-events.json";
+import real from "../../../../../../../tests/screens/fixtures/dataset-run-real-events.json";
+import { splitClause } from "./dataset-run-visuals";
 
 let seq = 0;
 const ev = (
@@ -186,8 +186,11 @@ describe("the run scene and pointer", () => {
   });
 
   it("reads column names out of a reason", () => {
-    expect(columnsIn("the meaning was written by a model, for the key: participant_id")).toEqual(["participant_id"]);
-    expect(columnsIn("no meaning for: a_b, c; map the question with map_question")).toEqual(["a_b", "c"]);
+    expect(splitClause("the meaning was written by a model, for the key: participant_id").columns).toEqual([
+      "participant_id",
+    ]);
+    expect(splitClause("no meaning for: a_b, c").columns).toEqual(["a_b", "c"]);
+    expect(splitClause("map the question with map_question").columns).toEqual([]);
   });
 });
 

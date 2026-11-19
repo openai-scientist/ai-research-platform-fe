@@ -1,13 +1,15 @@
 import { toast } from "sonner";
 import { create } from "zustand";
 
-import { type CreateRunRequest, fetchRuns, type RunItem, runProblem, runTitle } from "@/lib/api/services/fetch-runs";
+import { type CreateRunRequest, fetchRuns, type RunItem, runTitle } from "@/lib/api/services/fetch-runs";
 import { isActiveRun } from "@/lib/research-workspace";
 import { ApiError } from "@/types/api";
 import { RunStatus } from "@/types/enums";
 
 import { ApiRun } from "./api-run";
 import type { GateAnswer, ReviewMode, RunCommands, RunEvent, RunInput } from "./contract";
+import { type DatasetRunModel, emptyDatasetRun, foldDatasetEvents } from "./dataset-run-model";
+import type { PipelineEnvelope } from "./pipeline-adapter";
 import { applyRunEvent } from "./reducer";
 import { initialRunState, type RunState } from "./run-state";
 
@@ -23,6 +25,7 @@ export interface RunSession {
   createdAt: string;
   /** Has taken in a live event. Until then its events are history, such as a reload replaying how it ended. */
   followed?: boolean;
+  dataset?: { model: DatasetRunModel; acceptedLive: boolean; id: string | null };
   state: RunState;
 }
 
@@ -52,6 +55,10 @@ export interface Stream extends RunCommands {
   follow?(): void;
 }
 
+export function isStudioRun(run: RunItem) {
+  return run.pipeline_key === "dataset_first" || Boolean(run.case?.problem);
+}
+
 const labelOf = (runId: string) => `RUN-${runId.slice(0, 4).toUpperCase()}`;
 
 export function createRunRequest(mode: ReviewMode, input: RunInput, datasetVersionId?: string): CreateRunRequest {
@@ -70,6 +77,7 @@ export function createRunRequest(mode: ReviewMode, input: RunInput, datasetVersi
 // Live streams sit outside React state; only the folded state goes into the store.
 const streams = new Map<string, Stream>();
 const queue = new Map<string, RunEvent[]>();
+const datasetQueue = new Map<string, { events: PipelineEnvelope[]; acceptedLive: boolean }>();
 const followed = new Set<string>();
 let frame = 0;
 
@@ -78,11 +86,23 @@ export const useRunStudio = create<RunStudioState>()((set, get) => {
   const flush = () => {
     frame = 0;
     const pending = [...queue.entries()];
+    const datasets = [...datasetQueue.entries()];
     const live = new Set(followed);
     queue.clear();
+    datasetQueue.clear();
     followed.clear();
     set((store) => {
       const sessions = { ...store.sessions };
+      for (const [runId, { events, acceptedLive }] of datasets) {
+        const session = sessions[runId];
+        const dataset = session?.dataset;
+        if (!dataset || !session) continue;
+        const model = foldDatasetEvents(events, dataset.model);
+        sessions[runId] = {
+          ...session,
+          dataset: { ...dataset, model, acceptedLive: dataset.acceptedLive || acceptedLive },
+        };
+      }
       for (const [runId, events] of pending) {
         const session = sessions[runId];
         if (!session) continue;
@@ -95,16 +115,35 @@ export const useRunStudio = create<RunStudioState>()((set, get) => {
       return { sessions };
     });
   };
-  const receive = (event: RunEvent, live: boolean) => {
-    if (live) followed.add(event.run_id);
-    const list = queue.get(event.run_id) ?? [];
-    list.push(event);
-    queue.set(event.run_id, list);
+  const schedule = () => {
     if (!frame)
       frame =
         typeof requestAnimationFrame === "function"
           ? requestAnimationFrame(flush)
           : (setTimeout(flush, 16) as unknown as number);
+  };
+  const receive = (event: RunEvent, live: boolean) => {
+    if (live) followed.add(event.run_id);
+    const list = queue.get(event.run_id) ?? [];
+    list.push(event);
+    queue.set(event.run_id, list);
+    schedule();
+  };
+  const receiveDataset = (runId: string, events: PipelineEnvelope[], live: boolean) => {
+    const scoped = events.filter(
+      (event) =>
+        event.stage_key === "dataset" ||
+        (!event.stage_key && (event.payload.kind === "charter" || event.type.startsWith("pi.charter_"))),
+    );
+    if (!scoped.length) return;
+    const acceptedLive =
+      live && scoped.some((event) => event.type === "stage.status_changed" && event.payload.status === "ACCEPTED");
+    const pending = datasetQueue.get(runId);
+    if (pending) {
+      pending.events.push(...scoped);
+      pending.acceptedLive ||= acceptedLive;
+    } else datasetQueue.set(runId, { events: scoped, acceptedLive });
+    schedule();
   };
   // Adds a session. As the project's run, it replaces the one before it.
   const track = (session: RunSession, stream: Stream, active: boolean) => {
@@ -142,7 +181,7 @@ export const useRunStudio = create<RunStudioState>()((set, get) => {
         // The project already has a run going: show that one instead.
         try {
           const running = (await fetchRuns.getList(projectId, { limit: 1 })).data[0];
-          if (!running || !runProblem(running)) return null;
+          if (!running || !isStudioRun(running)) return null;
           get().attachRun(projectId, running, true);
           return running.id;
         } catch {
@@ -158,13 +197,15 @@ export const useRunStudio = create<RunStudioState>()((set, get) => {
       const failed = [RunStatus.Failed, RunStatus.BudgetExceeded, RunStatus.Stopped].includes(run.status);
       const mode = run.review_mode ?? "light";
       const pipeline = Boolean(run.pipeline_key);
+      const datasetFirst = run.pipeline_key === "dataset_first";
       const stream = new ApiRun(
         projectId,
         run.id,
         (events, live) => {
           for (const event of events) receive(event, live);
         },
-        pipeline ? { topic: runTitle(run) ?? "", domains: run.domains ?? [], mode } : undefined,
+        pipeline ? { topic: runTitle(run) ?? "", domains: run.domains ?? [], mode, datasetFirst } : undefined,
+        datasetFirst ? (events, live) => receiveDataset(run.id, events, live) : undefined,
       );
       track(
         {
@@ -172,6 +213,7 @@ export const useRunStudio = create<RunStudioState>()((set, get) => {
           projectId,
           label: run.label ?? labelOf(run.id),
           pipeline,
+          ...(datasetFirst ? { dataset: { id: run.dataset_id, model: emptyDatasetRun(), acceptedLive: false } } : {}),
           createdAt: run.created_at,
           // What the run already says about itself, until its events arrive.
           state: {

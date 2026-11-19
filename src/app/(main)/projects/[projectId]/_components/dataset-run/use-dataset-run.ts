@@ -9,16 +9,14 @@ import { useRunDetailQuery } from "@/hooks/use-runs-query";
 import { projectKeys } from "@/lib/api/query-keys";
 import { subscribeRunEvents } from "@/lib/realtime/run-events";
 import { isActiveRun } from "@/lib/research-workspace";
+import { applyDatasetEvent, type DatasetRunModel, emptyDatasetRun } from "@/lib/run-stream/dataset-run-model";
 import type { PipelineEnvelope } from "@/lib/run-stream/pipeline-adapter";
-
-import { applyDatasetEvent, type DatasetRunModel, emptyDatasetRun } from "./dataset-run-model";
 
 const consultationsKey = (projectId: string, runId: string) =>
   projectKeys.run(projectId, runId).concat(["pi", "consultations"]);
 
 /**
- * A Dataset run: its record (polled while it is open) and its events, folded into the dataset model. The events come
- * from the same endpoint Run Studio reads, but they never enter its store, so a Dataset run does not show up there.
+ * Reads the Dataset stage for its direct route. Run Studio folds the same envelopes from its own subscription.
  */
 export function useDatasetRun(projectId: string, runId: string) {
   const query = useRunDetailQuery(projectId, runId);
@@ -53,7 +51,11 @@ export function useDatasetRun(projectId: string, runId: string) {
       { after: 0, live: following },
       {
         onEvents: (events) => {
-          queue.push(...(events as unknown as PipelineEnvelope[]));
+          queue.push(
+            ...(events as unknown as PipelineEnvelope[]).filter(
+              (event) => !event.stage_key || event.stage_key === "dataset",
+            ),
+          );
           if (!frame) frame = requestAnimationFrame(flush);
         },
         onEnded: () => setLoaded(true),

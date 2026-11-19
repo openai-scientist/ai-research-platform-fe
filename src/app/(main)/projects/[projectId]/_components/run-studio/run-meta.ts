@@ -1,5 +1,5 @@
 import type { AgentRole, GateKind, ReviewMode, RuleId, RunStage, Verdict } from "@/lib/run-stream/contract";
-import { RUN_ENDS_AT, SHOW_DATA_STAGE, SHOW_MAP_STAGE } from "@/lib/run-stream/features";
+import { RUN_ENDS_AT, SHOW_MAP_STAGE } from "@/lib/run-stream/features";
 
 export interface AgentMeta {
   name: string;
@@ -93,7 +93,6 @@ export const AGENTS: Record<AgentRole, AgentMeta> = {
 };
 
 export const TEAM: AgentRole[] = [
-  ...(SHOW_DATA_STAGE ? (["steward"] as const) : []),
   "strategist",
   "librarian",
   "theorist",
@@ -240,9 +239,7 @@ const FULL_PIPELINE: { stage: RunStage; title: string; text: string }[] = [
   { stage: "write", title: "Write the paper", text: "The paper is written from the report, reviewed and checked." },
 ];
 
-const SHOWN_PIPELINE = FULL_PIPELINE.filter(
-  (p) => (SHOW_DATA_STAGE || p.stage !== "data") && (SHOW_MAP_STAGE || p.stage !== "map"),
-);
+const SHOWN_PIPELINE = FULL_PIPELINE.filter((p) => p.stage !== "data" && (SHOW_MAP_STAGE || p.stage !== "map"));
 const LAST_REACHED =
   RUN_ENDS_AT === "hypotheses"
     ? SHOWN_PIPELINE.findIndex((p) => p.stage === (SHOW_MAP_STAGE ? "map" : "hypothesize")) + 1

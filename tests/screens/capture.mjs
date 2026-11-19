@@ -34,6 +34,8 @@ let ds6Runs = "none";
 let ds8Upto = 0;
 // FE-DS11: a finished stage that waits for the researcher to accept it.
 let ds6Accept = false;
+let studioDataset = null;
+let studioAccepted = false;
 let nodeNoCap = false;
 let artifactSchema = null;
 const DS6_RUN_ID = "44444444-4444-4444-8444-444444444444";
@@ -79,15 +81,24 @@ function ds8Events() {
   return all.slice(0, ds8Upto).map((e) => ({ ...e, run_id: DS6_RUN_ID, stage_run_id: "stage-1" }));
 }
 function ds6Run() {
-  const status = { running: "running", review: "awaiting_review", offline: "paused", done: "completed" }[ds6Runs];
+  const status =
+    studioDataset === "accept"
+      ? studioAccepted
+        ? "running"
+        : "awaiting_review"
+      : { running: "running", review: "awaiting_review", offline: "paused", done: "completed" }[ds6Runs];
   return {
     ...runItem(),
     id: DS6_RUN_ID,
+    ...(studioDataset === "cloud" ? { dataset_id: "remote-dataset", dataset_version_id: remoteV2.id } : {}),
     status,
     ...(ds6Accept
       ? { case: { problem: { text: "Does access to services explain commute time?", source: "researcher" } } }
       : {}),
-    title: "Explore dataset Neighborhood Travel Diary",
+    title:
+      studioDataset === "cloud"
+        ? "Explore dataset Commute and Service Access Survey"
+        : "Explore dataset Neighborhood Travel Diary",
     pipeline_key: "dataset_first",
     created_at: "2026-11-13T11:30:00.000Z",
     finished_at: status === "completed" ? timestamp : null,
@@ -98,11 +109,36 @@ function ds6Run() {
         ? null
         : {
             stage_run_id: "stage-1",
-            stage_key: "dataset",
+            stage_key: studioAccepted ? "hypothesis" : "dataset",
             status: ds6Accept ? "COMPLETED" : status === "running" ? "running" : "awaiting_review",
             phase: ds6Accept ? "published" : status === "running" ? "table_quality" : "release_review",
           },
   };
+}
+function studioDatasetEvents() {
+  const events = ds7Events();
+  const last = events.at(-1);
+  const complete = { ...last, seq: last.seq + 1, type: "stage.status_changed", payload: { status: "COMPLETED" } };
+  if (!studioAccepted) return [...events, complete];
+  const accept = { ...complete, seq: complete.seq + 1, payload: { status: "ACCEPTED" } };
+  const goals = {
+    title: "Access to services and commute time",
+    problem: "Does access to services explain commute time in the travel diary?",
+    objective: "Estimate the association between service access and commute time.",
+    scope: "Use the accepted travel diary data card to define variables and checks.",
+    success: "State a testable hypothesis and specify the outcome and access measure.",
+  };
+  const scope = runEvents()
+    .filter((event) => event.seq >= 6 && event.seq <= 14)
+    .map((event, i) => ({
+      ...event,
+      run_id: DS6_RUN_ID,
+      seq: accept.seq + i + 1,
+      ...(event.type === "hypothesis.scope.goal"
+        ? { payload: { ...event.payload, value: goals[event.payload.field] } }
+        : {}),
+    }));
+  return [...events, complete, accept, ...scope];
 }
 // FE-DS7: the events a Dataset run stores, named as the dataset engine sends them (`dataset.item`, `dataset.review`,
 // `dataset.progress`) with the lifecycle events around them. `ds6Runs` picks how far the run got.
@@ -204,6 +240,7 @@ function runItem() {
     updated_at: timestamp,
     label: "RUN-78D5",
     title: "Does the commute time depend on access to services?",
+    ...(runScenario ? { case: { problem: { text: "Does the commute time depend on access to services?" } } } : {}),
     pipeline_key: "logos",
     review_mode: "light",
     domains: ["urban planning"],
@@ -525,10 +562,19 @@ function dataForPath(path) {
       detection_status: "ready",
     });
   }
-  if (path === `/projects/${PROJECT_ID}/runs`) return envelope(ds6Runs === "none" ? [] : [ds6Run()]);
+  if (path === `/projects/${PROJECT_ID}/runs`)
+    return envelope(runScenario ? [runItem()] : ds6Runs === "none" ? [] : [ds6Run()]);
   if (path === `/projects/${PROJECT_ID}/runs/${DS6_RUN_ID}`) return envelope(ds6Run());
   if (path === `/projects/${PROJECT_ID}/runs/${DS6_RUN_ID}/events`)
-    return envelope(ds8Upto ? ds8Events() : ds6Runs === "none" ? [] : ds7Events());
+    return envelope(
+      studioDataset === "accept"
+        ? studioDatasetEvents()
+        : ds8Upto
+          ? ds8Events()
+          : ds6Runs === "none"
+            ? []
+            : ds7Events(),
+    );
   if (path === `/projects/${PROJECT_ID}/runs/${DS6_RUN_ID}/artifacts`)
     return envelope(
       ds6Runs === "done" || ds6Accept
@@ -555,7 +601,6 @@ function dataForPath(path) {
     return { ...ds6Card, variables: [...localCard.variables, ...ds6Card.variables] };
   if (path === `/projects/${PROJECT_ID}/runs/${DS6_RUN_ID}/artifacts/art-brief/download`) return ds6Brief;
   if (runScenario) {
-    if (path === `/projects/${PROJECT_ID}/runs`) return envelope([runItem()]);
     if (path === `/projects/${PROJECT_ID}/runs/${RUN_ID}`) return envelope(runItem());
     if (path === `/projects/${PROJECT_ID}/runs/${RUN_ID}/events`) return envelope(runEvents());
   }
@@ -565,7 +610,9 @@ function dataForPath(path) {
         ? { ...node, online: false, last_seen_at: "2026-11-11T12:00:00.000Z", pending_reviews: 0 }
         : nodeNoCap
           ? { ...node, capabilities: { ...node.capabilities, families: node.capabilities.families.slice(1) } }
-          : node,
+          : (isDatasetLive || isDatasetStudio) && ds6Runs !== "review" && runScenario !== "review"
+            ? { ...node, pending_reviews: 0 }
+            : node,
     ]);
   if (path === `/projects/${PROJECT_ID}/runners/${NODE_ID}/releases`) return envelope(releases);
   if (path === "/datasets/file-types") return envelope(["text/csv", ".csv"]);
@@ -658,6 +705,9 @@ const isDs13 = TAG === "FE-DS13";
 const isDs8 = TAG.startsWith("FE-DS8") || isDs10;
 const isDs9 = TAG === "FE-DS9";
 const isRun1 = TAG === "FE-RUN1";
+const isDatasetLive = TAG.startsWith("dataset-live-");
+const isDatasetStudio = TAG === "dataset-studio";
+const verifyDatasetLive = TAG === "dataset-live-after";
 // E2E journey set: desktop light and mobile dark only, viewport captures.
 const isE2e = TAG === "E2E";
 const sizes = isRun1
@@ -711,6 +761,162 @@ async function hideDialogCaptureControls(page) {
   });
 }
 
+async function verifyDatasetRunControls(page, scenario, width) {
+  const workspace = page.getByRole("region", { name: /Dataset run/ });
+  if (scenario === "cloud-question" || scenario === "dataset-accept") {
+    const gate = workspace.getByRole("dialog");
+    await gate.getByRole("button", { name: "Hide to look at the work" }).click();
+    await gate.waitFor({ state: "hidden" });
+    await workspace.getByRole("button", { name: "View", exact: true }).click();
+    await gate.waitFor();
+    await page.keyboard.press("Escape");
+    await gate.waitFor({ state: "hidden" });
+    return;
+  }
+  if (scenario !== "local-running") return;
+
+  const track = workspace.getByRole("list", { name: "Steps of the Dataset stage" });
+  await track.getByRole("button", { name: "Dictionary", exact: true }).click();
+  const focused = workspace.locator("#dataset-focused-step");
+  await focused.getByText("Write the dictionary", { exact: true }).waitFor();
+  await focused.getByRole("button", { name: "Back to the current step" }).click();
+  await focused.getByText("Check data quality", { exact: true }).waitFor();
+
+  await workspace.getByRole("button", { name: "Stop", exact: true }).click();
+  const confirm = page.getByRole("alertdialog", { name: /Stop RUN-/ });
+  await confirm.getByRole("button", { name: "Cancel" }).click();
+
+  let panel;
+  if (width < 1024) {
+    await workspace.getByRole("button", { name: "Steps and activity" }).click();
+    panel = page.getByRole("dialog", { name: "Steps and activity" });
+  } else {
+    const toggle = workspace.getByRole("button", { name: "Show or hide the side panel" });
+    panel = workspace.locator("aside");
+    await toggle.click();
+    await panel.waitFor({ state: "hidden" });
+    await toggle.click();
+  }
+  await panel.getByRole("tab", { name: /Activity/ }).click();
+  await panel
+    .getByRole("tabpanel")
+    .getByText(/Reading the file/)
+    .waitFor();
+  await panel.getByRole("tab", { name: "Now" }).click();
+  await panel.getByRole("button", { name: /Rules the Dataset stage never bends/ }).click();
+  await panel.getByText("Rows stay on the Local Node.", { exact: true }).waitFor();
+  if (width < 1024) await page.keyboard.press("Escape");
+}
+
+async function expectExpandedStage(workspace, name) {
+  const pipeline = workspace.getByRole("navigation", { name: "Pipeline stages" });
+  await pipeline.getByRole("button", { name, exact: true, expanded: true }).waitFor();
+  if ((await pipeline.locator("button[aria-expanded=true]").count()) !== 1) {
+    throw new Error("Exactly one pipeline stage should be expanded");
+  }
+  return pipeline;
+}
+
+async function verifyStudioDataset(page, scenario) {
+  if (scenario.tag === "dataset-deep-link") {
+    const direct = page.getByRole("region", { name: /Dataset run/ });
+    await direct.getByRole("link", { name: "Open in Run Studio" }).waitFor();
+    await direct.getByRole("list", { name: "Steps of the Dataset stage" }).waitFor();
+    return;
+  }
+  const workspace = page.getByRole("region", { name: /Research run/ });
+  const pipeline = await expectExpandedStage(workspace, "Dataset");
+  if (scenario.tag === "hypothesis-locked") {
+    await pipeline.getByRole("button", { name: "Hypothesis", exact: true }).click();
+    await expectExpandedStage(workspace, "Hypothesis");
+    await pipeline.getByRole("list", { name: "Steps of the Hypothesis stage" }).waitFor();
+  }
+  if (scenario.tag === "dataset-accept")
+    await workspace.getByRole("dialog", { name: "Accept the data card" }).waitFor();
+  else await workspace.getByText(scenario.marker).locator("visible=true").first().waitFor();
+  if (scenario.tag === "dataset-local-running") {
+    const agent = workspace.locator("[data-dataset-agent]");
+    await agent.waitFor();
+    const overlaps = await agent.evaluate((chip) => {
+      const label = [...chip.parentElement.children].find((item) => item.textContent === "Code check · no AI");
+      if (!label) throw new Error("Code check label is missing");
+      const a = chip.getBoundingClientRect();
+      const b = label.getBoundingClientRect();
+      return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+    });
+    if (overlaps) throw new Error("Steward chip overlaps the code check label");
+  }
+  if (scenario.tag === "dataset-cloud-running") {
+    await workspace.getByText("Commute and Service Access Survey", { exact: true }).first().waitFor();
+    const track = pipeline.getByRole("list", { name: "Steps of the Dataset stage" });
+    if (await track.getByRole("button", { name: "Release", exact: true }).count())
+      throw new Error("Cloud has a release step");
+    if (await workspace.getByText("Running on your Local Node", { exact: true }).count())
+      throw new Error("Cloud is labelled as a Local Node run");
+  }
+  await page.waitForFunction(
+    () => {
+      const run = document.querySelector('section[aria-label^="Research run"]');
+      return run && run.scrollWidth <= document.documentElement.clientWidth;
+    },
+    undefined,
+    { timeout: 4000 },
+  );
+}
+
+async function captureDatasetHandoff(page, size, theme) {
+  const workspace = page.getByRole("region", { name: /Research run/ });
+  const capture = async (tag) => {
+    const path = `${tag}-${size.name}-${theme}.png`;
+    await page.screenshot({ path: join(OUTPUT, path), animations: "disabled" });
+    return path;
+  };
+  await workspace
+    .getByRole("dialog", { name: "Accept the data card" })
+    .getByRole("button", { name: "Accept", exact: true })
+    .click();
+  await workspace
+    .getByText(/Hypothesis stage starting/)
+    .first()
+    .waitFor();
+  await workspace.getByRole("dialog", { name: "Accept the data card" }).waitFor({ state: "hidden" });
+  await expectExpandedStage(workspace, "Dataset");
+  const handoff = await capture("dataset-handoff");
+
+  await workspace.getByRole("heading", { name: "Scope the question" }).scrollIntoViewIfNeeded();
+  const pipeline = await expectExpandedStage(workspace, "Hypothesis");
+  await pipeline.getByRole("list", { name: "Steps of the Hypothesis stage" }).waitFor();
+  const scope = await capture("hypothesis-scope");
+  await pipeline.getByRole("button", { name: "Dataset", exact: true, expanded: false }).click();
+  await expectExpandedStage(workspace, "Dataset");
+  await workspace.getByRole("heading", { name: /^Dataset Stage/ }).waitFor();
+  if ((await pipeline.getByRole("button", { name: "Hypothesis", exact: true }).getAttribute("aria-current")) !== "step")
+    throw new Error("Hypothesis stopped being marked live during Dataset review");
+  await workspace.getByRole("link", { name: "Open the Data card" }).waitFor();
+  const steps = pipeline.getByRole("list", { name: "Steps of the Dataset stage" });
+  const release = steps.getByRole("button", { name: "Release", exact: true });
+  await release.waitFor();
+  await page.waitForFunction(() => {
+    const list = document.querySelector('[aria-label="Steps of the Dataset stage"]');
+    const expanding = list?.parentElement?.parentElement;
+    return expanding?.style.height === "auto";
+  });
+  const review = await capture("dataset-finished-review");
+  await release.click();
+  await workspace.getByText("Reviewed", { exact: true }).waitFor();
+  let panel = workspace.locator("aside");
+  if (size.width < 1024) {
+    await workspace.getByRole("button", { name: "Steps and activity" }).click();
+    panel = page.getByRole("dialog", { name: "Steps and activity" });
+  }
+  await panel.getByRole("tab", { name: /Activity/ }).click();
+  await panel
+    .getByRole("tabpanel")
+    .getByText(/Review round 1/)
+    .waitFor();
+  return [handoff, scope, review];
+}
+
 async function capture() {
   const { chromium } = playwrightRequire();
   await mkdir(OUTPUT, { recursive: true });
@@ -725,6 +931,7 @@ async function capture() {
         const context = await browser.newContext({
           viewport: { width: size.width, height: size.height },
           colorScheme: theme,
+          ...(isDatasetStudio && theme === "dark" ? { reducedMotion: "reduce" } : {}),
         });
         const page = await context.newPage();
         await context.addCookies([
@@ -734,11 +941,55 @@ async function capture() {
         await page.route("**/api/v1/**", async (route) => {
           const url = new URL(route.request().url());
           artifactSchema = url.searchParams.get("schema");
+          if (
+            studioDataset === "accept" &&
+            url.pathname.endsWith(`/runs/${DS6_RUN_ID}/stages/stage-1/accept`) &&
+            route.request().method() === "POST"
+          ) {
+            studioAccepted = true;
+            await route.fulfill({ json: envelope({ status: "ACCEPTED" }) });
+            return;
+          }
           const body = dataForPath(url.pathname.replace(/^\/api\/v1/, ""));
           await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
         });
 
         const common = `projects/${PROJECT_ID}`;
+        const studioRoutes = [
+          { tag: "dataset-local-running", runs: "running", studio: "local", marker: "Running on your Local Node" },
+          {
+            tag: "hypothesis-locked",
+            runs: "running",
+            studio: "local",
+            marker: "Starts after the Dataset stage is accepted",
+          },
+          { tag: "dataset-release-wait", runs: "review", studio: "release", marker: /Waiting for release review/ },
+          { tag: "dataset-accept", runs: "done", studio: "accept", accept: true, marker: "Accept the data card" },
+          { tag: "dataset-cloud-running", runs: "running", studio: "cloud", marker: "Check data quality" },
+        ]
+          .map((item) => ({ ...item, url: `${common}/experiments?run=${DS6_RUN_ID}` }))
+          .concat([
+            {
+              tag: "dataset-deep-link",
+              runs: "running",
+              studio: null,
+              url: `${common}/datasets/local-dataset/runs/${DS6_RUN_ID}`,
+            },
+          ]);
+        const datasetLiveRoutes = [
+          { tag: "local-running", marker: /Reading the file/, runs: "running" },
+          { tag: "local-release", marker: /Waiting for release review/, runs: "review" },
+          { tag: "local-offline", marker: /Waiting for the Local Node/, runs: "offline", offline: true },
+          { tag: "local-done", marker: /Hypothesis next/, runs: "done" },
+          { tag: "cloud-replay", marker: /Write the dictionary/, runs: "running", ds8: 12 },
+          { tag: "cloud-question", marker: /Link the question/, runs: "running", ds8: 29 },
+          { tag: "dataset-accept", marker: /Dataset stage outcome/, runs: "review", ds8: 275, accept: true },
+        ]
+          .map((item) => ({
+            ...item,
+            url: `${common}/datasets/${item.tag.startsWith("local") ? "local" : "remote"}-dataset/runs/${DS6_RUN_ID}`,
+          }))
+          .concat([{ tag: "research-stage", url: `${common}/experiments?run=${RUN_ID}`, run: "review" }]);
         const routes = isRun1
           ? [
               { tag: "launcher-no-dataset", url: `${common}/experiments` },
@@ -967,7 +1218,7 @@ async function capture() {
                                   run: "review",
                                 },
                               ];
-        for (const item of routes) {
+        for (const item of isDatasetStudio ? studioRoutes : isDatasetLive ? datasetLiveRoutes : routes) {
           if (ONLY && !ONLY.includes(item.tag)) continue;
           forceEmptyDatasets = isDs5 && item.empty === true;
           nodeOffline = item.offline === true;
@@ -975,6 +1226,8 @@ async function capture() {
           ds6Runs = item.runs ?? "none";
           ds8Upto = item.ds8 ?? 0;
           ds6Accept = item.accept === true;
+          studioDataset = item.studio ?? null;
+          studioAccepted = false;
           nodeNoCap = item.nocap === true;
           let response;
           for (let attempt = 0; attempt < 4; attempt += 1) {
@@ -1009,15 +1262,16 @@ async function capture() {
               `${item.tag}: expected ${theme} theme, got mode=${themeApplied.mode}, dark=${themeApplied.darkClass}`,
             );
           }
-          await page
-            .getByRole("heading", {
-              name: /Commute and Service Access Survey|Neighborhood Travel Diary|Datasets|Local Nodes|Version history/,
-            })
-            .first()
-            .waitFor({ timeout: 20_000 })
-            .catch(() => {
-              // Some routes do not expose a matching page heading.
-            });
+          if (!isDatasetLive && !isDatasetStudio)
+            await page
+              .getByRole("heading", {
+                name: /Commute and Service Access Survey|Neighborhood Travel Diary|Datasets|Local Nodes|Version history/,
+              })
+              .first()
+              .waitFor({ timeout: 20_000 })
+              .catch(() => {
+                // Some routes do not expose a matching page heading.
+              });
           if (item.superseded) {
             await page.getByRole("button", { name: "History" }).click();
             await page.getByRole("button", { name: "Show version 1 in the preview" }).click();
@@ -1040,6 +1294,18 @@ async function capture() {
               .first()
               .waitFor({ timeout: 30_000 });
           }
+          if (isDatasetLive && item.marker) {
+            const workspace = page.getByRole("region", { name: /Dataset run/ });
+            await workspace.getByText(item.marker).locator("visible=true").first().waitFor({ timeout: 30_000 });
+            const fitsViewport = await workspace.evaluate(
+              (element) => element.scrollWidth <= document.documentElement.clientWidth,
+            );
+            if (!fitsViewport) throw new Error(`${item.tag}: Dataset workspace overflows the viewport`);
+            if (verifyDatasetLive && ["cloud-question", "dataset-accept"].includes(item.tag)) {
+              await workspace.getByRole("dialog").waitFor();
+            }
+          }
+          if (isDatasetStudio) await verifyStudioDataset(page, item);
           if (isRun1) {
             if (item.tag === "dataset-local-cta") {
               await page.getByText("Use in a research run").first().waitFor({ timeout: 30_000 });
@@ -1171,10 +1437,14 @@ async function capture() {
           const filename = `${item.tag}-${size.name}-${theme}.png`;
           await page.screenshot({
             path: join(OUTPUT, filename),
-            fullPage: !isDs4 && !isDs5 && !isE2e,
+            fullPage: !isDs4 && !isDs5 && !isE2e && !isDatasetStudio,
             animations: "disabled",
           });
           names.push(filename);
+          if (verifyDatasetLive) await verifyDatasetRunControls(page, item.tag, size.width);
+          if (isDatasetStudio && item.tag === "dataset-accept") {
+            names.push(...(await captureDatasetHandoff(page, size, theme)));
+          }
           if (isDs4 && item.tag.includes("remote")) {
             const selected = "dataset-remote-selected-column";
             await page
@@ -1217,7 +1487,7 @@ async function capture() {
           await context.close();
           continue;
         }
-        if (isDs4 || isDs6 || isDs7 || ONLY) {
+        if (isDs4 || isDs6 || isDs7 || isDatasetLive || isDatasetStudio || ONLY) {
           await context.close();
           continue;
         }
@@ -1276,7 +1546,23 @@ async function capture() {
   } finally {
     await browser.close();
   }
-  const expected = isRun1 ? 12 : isE2e ? 10 : isDs4 ? 18 : isDs5 ? 18 : isDs6 ? 28 : isDs7 ? 24 : 56;
+  const expected = isDatasetStudio
+    ? 36
+    : isDatasetLive
+      ? 32
+      : isRun1
+        ? 12
+        : isE2e
+          ? 10
+          : isDs4
+            ? 18
+            : isDs5
+              ? 18
+              : isDs6
+                ? 28
+                : isDs7
+                  ? 24
+                  : 56;
   if (!ONLY && names.length !== expected) throw new Error(`Expected ${expected} screenshots, wrote ${names.length}`);
   if (isDs4) {
     for (const size of sizes) {

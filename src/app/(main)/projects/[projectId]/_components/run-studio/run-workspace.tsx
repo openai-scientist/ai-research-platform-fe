@@ -3,34 +3,30 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { cn } from "cn";
-import { ArrowDown, ArrowLeft, ArrowRight, PanelRight, Pause, Play, Square } from "lucide-react";
-import { AnimatePresence, motion } from "motion/react";
+import { ArrowDown, ArrowLeft, ArrowRight, Pause, Play } from "lucide-react";
+import { AnimatePresence, MotionConfig, motion } from "motion/react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
 
-import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
-import { useApiMutation } from "@/hooks/use-api";
-import { useProjectDetailQuery } from "@/hooks/use-projects-query";
-import { useRunsQuery } from "@/hooks/use-runs-query";
-import { projectKeys } from "@/lib/api/query-keys";
-import { fetchRuns, runProblem } from "@/lib/api/services/fetch-runs";
-import { getProjectAccess } from "@/lib/auth/project-access";
+import { useRunDetailQuery, useRunsQuery } from "@/hooks/use-runs-query";
 import type { GateAnswer } from "@/lib/run-stream/contract";
-import { SHOW_REVIEW_MODE } from "@/lib/run-stream/features";
-import { type RunSession, useProjectRun, useRunSession, useRunStudio } from "@/lib/run-stream/run-store";
+import { isStudioRun, type RunSession, useProjectRun, useRunSession, useRunStudio } from "@/lib/run-stream/run-store";
 import { displayStatus, liveStageKey } from "@/lib/run-stream/selectors";
 
-import { perform } from "../workspace-ui";
+import { DatasetNowCard, DatasetRunAside } from "../dataset-run/dataset-run-aside";
+import { DatasetStageScene, useDatasetStagePresentation } from "../dataset-run/dataset-stage-scene";
 import { DropBar, GateSheet } from "./gate-sheet";
 import { LocalNodeWaitBanner, SupersededDatasetBanner } from "./local-node-status";
+import { DATASET_STAGE, pipelineStageOf } from "./pipeline-stage-selection";
 import { RecoveryBar } from "./recovery-bar";
 import { NowCard, RunAside } from "./run-aside";
-import { FlightLayer, PulseDot, StatusPill } from "./run-bits";
-import { MODES, STAGE_SHORT } from "./run-meta";
+import { FlightLayer, PulseDot } from "./run-bits";
+import { RunHeader, StopRun } from "./run-header";
+import { STAGE_SHORT } from "./run-meta";
+import { Pane } from "./scenes/scene-ui";
 import { useStageHold } from "./stage-hold";
 import { StageScreen } from "./stage-screen";
 import { StageTrack } from "./stage-track";
@@ -50,49 +46,27 @@ import { WritingPreview } from "./writing-preview";
 
 function stageName(session: RunSession, key: string | null) {
   if (!key) return "";
+  if (key === DATASET_STAGE) return "Dataset";
   if (key === "done") return "Paper";
   if (key === "write") return "Write";
   const planned = session.state.plan.find((s) => s.key === key);
   return planned ? `${STAGE_SHORT[planned.stage]}${planned.round ? ` · R${planned.round}` : ""}` : key;
 }
 
-/** Stops the run: the open stage is cancelled on its engine, and can be rerun later. */
-function StopRun({ session }: { session: RunSession }) {
-  const { data } = useProjectDetailQuery(session.projectId);
-  const stop = useApiMutation(
-    () => fetchRuns.stop(session.projectId, session.runId),
-    [projectKeys.run(session.projectId, session.runId)],
-  );
-  const project = data?.data;
-  if (!project || !getProjectAccess(project.my_role, project.status).canWrite) return null;
-  return (
-    <ConfirmDialog
-      title={`Stop ${session.label}?`}
-      description="The stage running now is cancelled. What finished stays, and you can rerun the stage later to go on."
-      confirmLabel="Stop run"
-      destructive
-      disabled={stop.isPending}
-      onConfirm={() => void perform(() => stop.mutateAsync(), `Run ${session.label} stopped.`)}
-      trigger={
-        <Button variant="outline" size="sm" disabled={stop.isPending} title="Stop this run">
-          <Square />
-          {stop.isPending ? "Stopping…" : "Stop"}
-        </Button>
-      }
-    />
-  );
-}
-
 function RunWorkspace({ session }: { session: RunSession }) {
-  const { state, runId } = session;
+  const { state, runId, dataset } = session;
   const closeWorkspace = useRunStudio((s) => s.closeWorkspace);
   const answerGate = useRunStudio((s) => s.answerGate);
   const pause = useRunStudio((s) => s.pause);
   const resume = useRunStudio((s) => s.resume);
   const openFrom = useRunStudio((s) => s.openFrom);
   const scroller = useRef<HTMLDivElement>(null);
-  const live = liveStageKey(state);
+  const researchLive = liveStageKey(state);
   const [viewKey, setViewKey] = useState<string | null>(null);
+  const [datasetFocus, setDatasetFocus] = useState<string | null>(null);
+  const [acceptConfirmed, setAcceptConfirmed] = useState(false);
+  const [handoffSeen, setHandoffSeen] = useState(false);
+  const acceptedAtOpen = useRef(dataset?.model.accepted === true);
   const [follow, setFollow] = useState(true);
   const [dropMode, setDropMode] = useState(false);
   const [dropped, setDropped] = useState<string[]>([]);
@@ -107,11 +81,44 @@ function RunWorkspace({ session }: { session: RunSession }) {
   const paused = state.lifecycle === "paused";
   // A run that failed has ended too: nothing is live and there is nothing to pause.
   const ended = state.completed || state.lifecycle === "failed";
+  const datasetAccepted = Boolean(dataset && (dataset.model.accepted === true || acceptConfirmed));
+  const handoff = Boolean(
+    dataset && (acceptConfirmed || (dataset.acceptedLive && !acceptedAtOpen.current)) && !handoffSeen && !ended,
+  );
+  const datasetLive = Boolean(dataset) && (!datasetAccepted || handoff);
+  const live = datasetLive ? DATASET_STAGE : (researchLive ?? (dataset && !ended ? "scope" : null));
+  const datasetRun = useRunDetailQuery(session.projectId, runId, { enabled: Boolean(dataset) }).data?.data;
+  const datasetId = datasetRun?.dataset_id ?? dataset?.id ?? "";
+  const datasetStage = useDatasetStagePresentation(
+    session.projectId,
+    datasetId,
+    datasetRun,
+    dataset?.model,
+    datasetAccepted ? "completed" : status,
+  );
+  let headerStatus = status;
+  if (datasetLive && status === "running" && datasetStage?.stageStatus === "waiting") headerStatus = "waiting";
+  useEffect(() => {
+    if (!handoff) return;
+    const timer = window.setTimeout(() => setHandoffSeen(true), 1800);
+    return () => window.clearTimeout(timer);
+  }, [handoff]);
   // The live view finishes showing a stage before it follows the run to the next one.
-  const hold = useStageHold(live, ended, state.stages, Boolean(state.gate) || viewKey !== null);
-  const followed = hold.shown.key;
+  const hold = useStageHold(researchLive, ended, state.stages, Boolean(state.gate) || viewKey !== null);
+  const followed = datasetLive ? DATASET_STAGE : (hold.shown.key ?? live);
   const shown = viewKey ?? followed ?? state.stageOrder[0] ?? null;
   const isLiveView = shown === followed;
+  const showingDataset = shown === DATASET_STAGE && datasetStage !== undefined;
+  const hypothesisLocked = Boolean(dataset) && !datasetAccepted && pipelineStageOf(state.plan, shown) === "hypothesis";
+  const showingDatasetProgress = showingDataset || hypothesisLocked;
+  const datasetGate = state.gate?.stageKey === DATASET_STAGE;
+  if (datasetGate && datasetAccepted && status === "waiting") headerStatus = "running";
+  const showGate =
+    state.gate &&
+    (!dataset || datasetGate === showingDataset) &&
+    !(datasetGate && datasetAccepted && state.gate.kind === "accept")
+      ? state.gate
+      : null;
   /* The Write stage is a preview of the writing run, with its own track, stops and aside. */
   const writing = shown === "write";
   const openWriting = () => {
@@ -131,12 +138,12 @@ function RunWorkspace({ session }: { session: RunSession }) {
   // A review stop always brings you back to the live stage.
   const gateId = state.gate?.id;
   useEffect(() => {
+    setAnswering(false);
     if (!gateId) return;
     setViewKey(null);
     setMinimized(false);
     setDropMode(false);
     setDropped([]);
-    setAnswering(false);
   }, [gateId]);
 
   // The finished paper gets the full width.
@@ -145,7 +152,7 @@ function RunWorkspace({ session }: { session: RunSession }) {
   }, [state.completed]);
 
   // Slide in the direction of travel, and start each stage at the top.
-  const order = [...state.plan.map((s) => s.key), "done", "write"];
+  const order = [DATASET_STAGE, ...state.plan.map((s) => s.key), "done", "write"];
   const previous = useRef(shown);
   const direction = order.indexOf(shown ?? "") >= order.indexOf(previous.current ?? "") ? 1 : -1;
   useEffect(() => {
@@ -183,12 +190,18 @@ function RunWorkspace({ session }: { session: RunSession }) {
     return () => window.removeEventListener("keydown", onKey);
   });
 
-  // The gate closes when the backend's `gate.resolved` arrives; until then the answer can't be sent again.
+  // Keep answers disabled while the server records them; ApiRun reconciles a successful gate POST immediately.
   const answer = async (a: GateAnswer) => {
     if (!state.gate || answering) return false;
+    const acceptingDataset = dataset && datasetGate && state.gate.kind === "accept" && a.option_id === "accept";
     setAnswering(true);
     const recorded = await answerGate(runId, state.gate.id, a);
     if (!recorded) setAnswering(false);
+    if (recorded && acceptingDataset) {
+      setAcceptConfirmed(true);
+      setDatasetFocus(null);
+      setViewKey(null);
+    }
     return recorded;
   };
   const droppable = state.gate?.droppable ?? [];
@@ -222,6 +235,16 @@ function RunWorkspace({ session }: { session: RunSession }) {
     ? `inset(${openFrom.top}px ${W - openFrom.right}px ${H - openFrom.bottom}px ${openFrom.left}px round 12px)`
     : "inset(0px 0px 0px 0px round 0px)";
   const liveRound = (live && state.stages[live]?.plan.round) || 1;
+  const datasetAside =
+    showingDatasetProgress && datasetStage ? (
+      <DatasetRunAside
+        model={datasetStage.model}
+        steps={datasetStage.steps}
+        status={datasetStage.status}
+        local={datasetStage.local}
+        typing
+      />
+    ) : null;
 
   return (
     <WorkspaceContext.Provider value={ctx}>
@@ -233,67 +256,74 @@ function RunWorkspace({ session }: { session: RunSession }) {
         exit={{ clipPath: from, opacity: 0.6 }}
         transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
       >
-        <header className="flex min-h-14 flex-wrap items-center gap-x-2.5 gap-y-1.5 border-b px-3 py-2 md:flex-nowrap md:pr-4">
-          <Button variant="ghost" size="sm" onClick={closeWorkspace} title="Leave the workspace. The run keeps going.">
-            <ArrowLeft />
-            Research flow
-          </Button>
-          <Separator orientation="vertical" className="h-5 max-md:hidden" />
-          <div className="flex min-w-0 flex-1 items-baseline gap-2.5">
-            <b className="whitespace-nowrap font-mono font-semibold text-sm">{session.label}</b>
-            <span className="truncate text-muted-foreground text-sm max-md:hidden">{state.topic}</span>
-          </div>
-          <StatusPill status={status} />
-          {SHOW_REVIEW_MODE && (
-            <span className="whitespace-nowrap text-muted-foreground text-xs max-lg:hidden">
-              Review mode <b className="font-medium text-foreground">{MODES[state.mode].label}</b>
-            </span>
-          )}
-          <div className="flex items-center gap-2 max-md:w-full max-md:justify-between">
-            {/* A pipeline run can't be paused yet; the writing preview has its own controls. */}
-            {!session.pipeline && !writing && (
-              <>
-                <span className="flex items-center gap-2 whitespace-nowrap text-xs">
-                  <Switch
-                    id="pause-each-step"
-                    checked={stepPause}
-                    onCheckedChange={(on) => {
-                      setStepPause(on);
-                      if (!on && holding) togglePause();
-                    }}
-                  />
-                  <label htmlFor="pause-each-step" className="cursor-pointer">
-                    Pause each step
-                  </label>
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={togglePause}
-                  disabled={Boolean(state.gate) || ended}
-                  title="Pause or resume (Space)"
-                >
-                  {paused ? <Play /> : <Pause />}
-                  {paused ? "Resume" : "Pause"}
-                </Button>
-              </>
-            )}
-            {session.pipeline && !ended && <StopRun session={session} />}
+        <RunHeader
+          back={
             <Button
               variant="ghost"
-              size="icon-sm"
-              className="max-lg:hidden"
-              onClick={() => setAsideOpen((o) => !o)}
-              aria-label="Show or hide the side panel"
+              size="sm"
+              onClick={closeWorkspace}
+              title="Leave the workspace. The run keeps going."
             >
-              <PanelRight />
+              <ArrowLeft />
+              Research flow
             </Button>
-          </div>
-        </header>
+          }
+          label={session.label}
+          question={state.topic}
+          status={headerStatus}
+          mode={state.mode}
+          asideOpen={asideOpen}
+          onToggleAside={() => setAsideOpen((open) => !open)}
+          actions={
+            <>
+              {/* A pipeline run can't be paused yet; the writing preview has its own controls. */}
+              {!session.pipeline && !writing && (
+                <>
+                  <span className="flex items-center gap-2 whitespace-nowrap text-xs">
+                    <Switch
+                      id="pause-each-step"
+                      checked={stepPause}
+                      onCheckedChange={(on) => {
+                        setStepPause(on);
+                        if (!on && holding) togglePause();
+                      }}
+                    />
+                    <label htmlFor="pause-each-step" className="cursor-pointer">
+                      Pause each step
+                    </label>
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={togglePause}
+                    disabled={Boolean(state.gate) || ended}
+                    title="Pause or resume (Space)"
+                  >
+                    {paused ? <Play /> : <Pause />}
+                    {paused ? "Resume" : "Pause"}
+                  </Button>
+                </>
+              )}
+              {session.pipeline && !ended && (
+                <StopRun projectId={session.projectId} runId={session.runId} label={session.label} />
+              )}
+            </>
+          }
+        />
 
         <StageTrack
           state={state}
           viewKey={shown}
+          dataset={
+            datasetStage && {
+              steps: datasetStage.steps,
+              accepted: datasetAccepted,
+              handoff,
+              viewKey: datasetFocus,
+              liveFill: Math.min(85, 30 + (datasetStage.model.progress?.seconds ?? 0)),
+              onView: setDatasetFocus,
+            }
+          }
           onView={(key) => {
             if (key === "write") return openWriting();
             if (key === live) hold.release();
@@ -312,14 +342,24 @@ function RunWorkspace({ session }: { session: RunSession }) {
           <div className={cn("grid min-h-0 flex-1", asideOpen ? "lg:grid-cols-[minmax(0,1fr)_352px]" : "grid-cols-1")}>
             <div className="relative flex min-h-0 min-w-0 flex-col">
               <div className="border-b px-4 py-2.5 lg:hidden">
-                <NowCard state={state} holding={holding} onContinue={togglePause} compact typing />
+                {showingDatasetProgress && datasetStage ? (
+                  <DatasetNowCard
+                    model={datasetStage.model}
+                    steps={datasetStage.steps}
+                    status={datasetStage.status}
+                    compact
+                    typing
+                  />
+                ) : (
+                  <NowCard state={state} holding={holding} onContinue={togglePause} compact typing />
+                )}
                 <Button variant="ghost" size="xs" className="mt-1.5" onClick={() => setDetailsOpen(true)}>
                   Steps and activity
                 </Button>
               </div>
               <div
                 ref={scroller}
-                className="min-h-0 flex-1 overflow-y-auto"
+                className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto"
                 onWheel={() => isLiveView && setFollow(false)}
                 onTouchMove={() => isLiveView && setFollow(false)}
               >
@@ -354,15 +394,37 @@ function RunWorkspace({ session }: { session: RunSession }) {
                       className="px-4 pt-5 pb-56 md:px-8"
                     >
                       <BusyContext.Provider value={isLiveView ? hold.busyContext : null}>
-                        <StageScreen
-                          state={state}
-                          stageKey={shown}
-                          runLabel={session.label}
-                          live={isLiveView && !hold.shown.ended}
-                          scroller={scroller}
-                          onOpenReport={() => setViewKey("report")}
-                          onClose={closeWorkspace}
-                        />
+                        {showingDataset && datasetStage ? (
+                          <DatasetStageScene
+                            projectId={session.projectId}
+                            datasetId={datasetId}
+                            run={datasetRun}
+                            stage={datasetStage}
+                            focusKey={datasetFocus}
+                            onView={setDatasetFocus}
+                            studio
+                            handoff={handoff}
+                          />
+                        ) : hypothesisLocked ? (
+                          <Pane title="Starts after the Dataset stage is accepted">
+                            <p className="text-muted-foreground text-sm">
+                              Hypothesis starts with Scope and uses the data card approved in Dataset.
+                            </p>
+                            <Button className="mt-3" size="sm" variant="outline" onClick={() => setViewKey(null)}>
+                              Back to Dataset
+                            </Button>
+                          </Pane>
+                        ) : (
+                          <StageScreen
+                            state={state}
+                            stageKey={shown}
+                            runLabel={session.label}
+                            live={isLiveView && !hold.shown.ended}
+                            scroller={scroller}
+                            onOpenReport={() => setViewKey("report")}
+                            onClose={closeWorkspace}
+                          />
+                        )}
                       </BusyContext.Provider>
                     </motion.div>
                   )}
@@ -394,7 +456,7 @@ function RunWorkspace({ session }: { session: RunSession }) {
                     </Button>
                   </motion.div>
                 )}
-                {isLiveView && hold.holding && live && followed !== live && (
+                {!showingDataset && isLiveView && hold.holding && live && followed !== live && (
                   <motion.div
                     key="finishing"
                     initial={{ y: 16, opacity: 0 }}
@@ -412,7 +474,7 @@ function RunWorkspace({ session }: { session: RunSession }) {
                     </Button>
                   </motion.div>
                 )}
-                {isLiveView && !hold.holding && !follow && !ended && !state.gate && (
+                {!showingDataset && isLiveView && !hold.holding && !follow && !ended && !state.gate && (
                   <motion.div
                     initial={{ y: 16, opacity: 0 }}
                     animate={{ y: 0, opacity: 1 }}
@@ -428,10 +490,10 @@ function RunWorkspace({ session }: { session: RunSession }) {
               </AnimatePresence>
 
               <AnimatePresence>
-                {state.gate && !dropMode && (
+                {showGate && !dropMode && (
                   <GateSheet
-                    key={state.gate.id}
-                    gate={state.gate}
+                    key={showGate.id}
+                    gate={showGate}
                     mode={state.mode}
                     round={liveRound}
                     minimized={minimized}
@@ -446,12 +508,12 @@ function RunWorkspace({ session }: { session: RunSession }) {
                     pending={answering}
                   />
                 )}
-                {state.gate && dropMode && (
+                {showGate && dropMode && (
                   <DropBar
                     kept={droppable.length - dropped.length + kept.length}
                     total={droppable.length}
                     noun={dropsPapers ? "paper in the shortlist" : "hypothesis in the set"}
-                    keepable={state.gate.keepable?.length ?? 0}
+                    keepable={showGate.keepable?.length ?? 0}
                     restored={kept.length}
                     onReset={() => {
                       setDropped([]);
@@ -476,17 +538,17 @@ function RunWorkspace({ session }: { session: RunSession }) {
 
             {asideOpen && (
               <aside className="min-h-0 border-l bg-sidebar max-lg:hidden">
-                <RunAside state={state} holding={holding} onContinue={togglePause} typing />
+                {datasetAside ?? <RunAside state={state} holding={holding} onContinue={togglePause} typing />}
               </aside>
             )}
           </div>
         )}
         <Sheet open={detailsOpen} onOpenChange={setDetailsOpen}>
-          <SheetContent side="bottom" className="h-[80vh] p-0">
+          <SheetContent side="bottom" className="p-0 data-[side=bottom]:h-[80dvh]">
             <SheetHeader className="sr-only">
               <SheetTitle>Steps and activity</SheetTitle>
             </SheetHeader>
-            <RunAside state={state} holding={holding} onContinue={togglePause} typing />
+            {datasetAside ?? <RunAside state={state} holding={holding} onContinue={togglePause} typing />}
           </SheetContent>
         </Sheet>
       </motion.section>
@@ -514,8 +576,7 @@ function useLatestRun(projectId: string, session: RunSession | undefined) {
   const shown = session?.runId;
   const shownAt = session?.createdAt;
   useEffect(() => {
-    // A run that explores a dataset has no problem of its own and keeps its own page.
-    if (!run || !runProblem(run) || run.id === shown) return;
+    if (!run || !isStudioRun(run) || run.id === shown) return;
     // Only a newer run: a cached answer from before may still name an older one.
     if (shownAt && Date.parse(run.created_at) <= Date.parse(shownAt)) return;
     // Not while the ended run is open: switching would close the workspace under you.
@@ -556,10 +617,19 @@ export function RunWorkspaceHost({ projectId }: { projectId: string }) {
   const runId = session?.runId;
   const told = useRef<string | null>(null);
   useEffect(() => {
-    if (!gate || !away || !runId || told.current === gate.id) return;
-    told.current = gate.id;
+    if (!runId) return;
+    const id = `run-gate-${runId}`;
+    if (!gate || !away) {
+      toast.dismiss(id);
+      return;
+    }
+    const notification = `${runId}:${gate.id}`;
+    if (told.current === notification) return;
+    told.current = notification;
     toast.warning(`${label} needs you`, {
+      id,
       description: gate.title,
+      position: "bottom-right",
       duration: 12_000,
       action: { label: "Review now", onClick: () => openWorkspace(runId) },
     });
@@ -592,7 +662,11 @@ export function RunWorkspaceHost({ projectId }: { projectId: string }) {
     <>
       <FlightLayer />
       <AnimatePresence>
-        {open?.projectId === projectId && <RunWorkspace key={open.runId} session={open} />}
+        {open?.projectId === projectId && (
+          <MotionConfig key={open.runId} reducedMotion="user">
+            <RunWorkspace session={open} />
+          </MotionConfig>
+        )}
         {previewOpen && !open && <WritingPreview key="writing-preview" />}
       </AnimatePresence>
     </>,

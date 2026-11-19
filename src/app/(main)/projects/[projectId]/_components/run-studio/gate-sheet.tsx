@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { type ReactNode, useState } from "react";
 
 import { cn } from "cn";
-import { ArrowRight, Check, ChevronDown, ChevronUp, Info } from "lucide-react";
+import { ArrowRight, Check, Info, TriangleAlert } from "lucide-react";
 import { motion } from "motion/react";
 import { toast } from "sonner";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -16,13 +17,69 @@ import type { Decision, Gate, GateAnswer, OwnFinding } from "@/lib/run-stream/co
 import { AcceptReview } from "./accept-review";
 import { CharterReview } from "./charter-panel";
 import { ForkDiagram } from "./fork-diagram";
+import { GateFrame } from "./gate-frame";
+import { parseGatePrompt, parseGatePromptTokens } from "./gate-prompt";
 import { RevisePicker } from "./revise-picker";
-import { PulseDot } from "./run-bits";
 import { MODES } from "./run-meta";
 
 const DECISIONS: Decision[] = ["proceed", "refine", "pivot"];
 
 const asDecision = (id: string) => DECISIONS.find((d) => d === id);
+
+function GatePromptText({ text }: { text: string }) {
+  return parseGatePromptTokens(text).map((token) => {
+    if (token.kind === "column") {
+      return (
+        <Badge
+          key={`column-${token.text}`}
+          variant="secondary"
+          className="mr-1 bg-background align-[1px] font-mono text-foreground ring-1 ring-foreground/10"
+        >
+          {token.text}
+        </Badge>
+      );
+    }
+    if (token.kind === "fill-count") {
+      return (
+        <Badge
+          key={`fill-count-${token.filled}-${token.total}`}
+          variant="secondary"
+          className="ml-1 bg-emerald-500/12 align-[1px] text-emerald-700 dark:text-emerald-300"
+        >
+          {token.filled}/{token.total} filled
+        </Badge>
+      );
+    }
+    return <span key={`text-${token.text}`}>{token.text}</span>;
+  });
+}
+
+function GatePromptSectionLine({
+  label,
+  risk = false,
+  children,
+}: {
+  label: string;
+  risk?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <p className="text-[13px] text-muted-foreground leading-relaxed">
+      {/* Inline label: Risk is the only badge; "The data shows" is implied by its value badges. */}
+      {risk ? (
+        <Badge
+          variant="secondary"
+          className="mr-1.5 bg-amber-500/15 align-[1px] text-amber-800 text-xs dark:text-amber-300"
+        >
+          {label}
+        </Badge>
+      ) : label.toLowerCase() === "the data shows" ? null : (
+        <span className="font-medium text-foreground/80">{label} · </span>
+      )}
+      {children}
+    </p>
+  );
+}
 
 /** A review stop: why the run stopped, what is ready, what each choice leads to. */
 export function GateSheet({
@@ -49,6 +106,7 @@ export function GateSheet({
   const [choice, setChoice] = useState(preferred?.id ?? "");
   const [hover, setHover] = useState<string | null>(null);
   const [note, setNote] = useState("");
+  const [moreOpen, setMoreOpen] = useState(false);
   // Items left out of a selection; everything starts picked.
   const [left, setLeft] = useState<string[]>([]);
   // Findings to send back for revision; the blocking and major ones start picked.
@@ -58,18 +116,6 @@ export function GateSheet({
   const [own, setOwn] = useState<OwnFinding[]>([]);
   const revising = choice === "revise" && Boolean(gate.review);
 
-  // Escape hides the sheet like "Hide to look at the work"; a menu or dialog open over it closes first.
-  useEffect(() => {
-    if (minimized) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key !== "Escape" || event.defaultPrevented) return;
-      if (window.document.querySelector("[data-radix-popper-content-wrapper], [role='dialog'][data-state='open']"))
-        return;
-      onMinimize(true);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [minimized, onMinimize]);
   const sendCount = sendBack.length + own.length;
   const option = gate.options.find((o) => o.id === choice);
   const picked = (gate.selection ?? []).filter((item) => !left.includes(item.id));
@@ -79,24 +125,7 @@ export function GateSheet({
     else setLeft([...left, id]);
   };
   const shownDecision = asDecision(hover ?? choice);
-
-  if (minimized)
-    return (
-      <motion.div
-        initial={{ y: 20, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        className="absolute bottom-4 left-1/2 z-30 flex max-w-[calc(100%-2rem)] -translate-x-1/2 items-center gap-3 whitespace-nowrap rounded-full bg-card py-1.5 pr-1.5 pl-4 text-sm shadow-lg ring-1 ring-amber-500/60"
-      >
-        <PulseDot className="bg-amber-500" />
-        <span className="truncate">
-          <b className="font-semibold">Waiting for you:</b> {gate.title}
-        </span>
-        <Button size="sm" onClick={() => onMinimize(false)}>
-          <ChevronUp />
-          Answer
-        </Button>
-      </motion.div>
-    );
+  const prompt = parseGatePrompt(gate.why);
 
   const confirm = () => {
     if (!option || option.disabled) return;
@@ -126,46 +155,16 @@ export function GateSheet({
 
   // The charter and the accept are documents to read before answering: they get a wider sheet of their own.
   const document = gate.kind === "charter" || gate.kind === "accept";
-  const header = (
-    <>
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="inline-flex h-6 items-center gap-2 rounded-full bg-amber-500/15 px-2.5 font-medium text-amber-800 text-xs dark:text-amber-300">
-          <PulseDot className="bg-amber-500" />
-          Your turn
-        </span>
-        <span className="text-muted-foreground text-xs">
-          Stop {gate.stop_index} of {gate.stop_total} · {MODES[mode].label} mode
-        </span>
-        <Button variant="ghost" size="sm" className="ml-auto" onClick={() => onMinimize(true)}>
-          <ChevronDown />
-          Hide to look at the work
-        </Button>
-      </div>
-      <h3 className="font-semibold text-lg tracking-tight">{gate.title}</h3>
-    </>
-  );
-
   return (
-    <>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="absolute inset-0 z-20 bg-black/25 dark:bg-black/50"
-      />
-      <motion.div
-        role="dialog"
-        aria-label={gate.title}
-        initial={{ y: "110%" }}
-        animate={{ y: 0 }}
-        exit={{ y: "110%" }}
-        transition={{ type: "spring", stiffness: 260, damping: 30 }}
-        className={cn(
-          "absolute inset-x-4 bottom-4 z-30 mx-auto flex max-h-[calc(100%-2rem)] flex-col overflow-hidden rounded-2xl bg-popover text-popover-foreground shadow-2xl ring-1 ring-foreground/10",
-          document ? "max-w-[880px]" : "max-w-[700px]",
-        )}
-      >
-        {gate.kind === "charter" ? (
+    <GateFrame
+      title={gate.title}
+      detail={`Stop ${gate.stop_index} of ${gate.stop_total} · ${MODES[mode].label} mode`}
+      minimized={minimized}
+      onMinimize={onMinimize}
+      wide={document}
+    >
+      {(header) =>
+        gate.kind === "charter" ? (
           <CharterReview gate={gate} header={header} pending={pending} onAnswer={onAnswer} />
         ) : gate.kind === "accept" ? (
           <AcceptReview gate={gate} header={header} pending={pending} onAnswer={onAnswer} />
@@ -175,9 +174,102 @@ export function GateSheet({
               {header}
               <div className="grid grid-cols-[auto_1fr] gap-2.5 rounded-xl bg-muted px-3 py-2.5 text-sm">
                 <Info className="mt-0.5 size-4 text-muted-foreground" />
-                <p>
-                  <b className="font-semibold">Why Popper stopped here.</b> {gate.why}
-                </p>
+                {prompt.kind === "labelled" ? (
+                  <div className="flex min-w-0 flex-col gap-2">
+                    <p className="whitespace-pre-line leading-relaxed">
+                      <b className="font-semibold">Why Popper stopped here.</b>{" "}
+                      {prompt.question.label.toLowerCase() === "decision"
+                        ? prompt.question.text
+                        : `${prompt.question.label}: ${prompt.question.text}`}
+                    </p>
+                    {prompt.essential.map((section) => {
+                      const isRisk = section.label.toLowerCase() === "risk";
+                      if (gate.kind === "decision") {
+                        return (
+                          <GatePromptSectionLine key={section.label} label={section.label} risk={isRisk}>
+                            {section.label.toLowerCase() === "the data shows" ? (
+                              <GatePromptText text={section.text} />
+                            ) : (
+                              section.text
+                            )}
+                          </GatePromptSectionLine>
+                        );
+                      }
+
+                      return (
+                        <p key={section.label} className="flex items-start gap-1.5 text-[13px] text-muted-foreground">
+                          {isRisk && (
+                            <TriangleAlert
+                              aria-hidden="true"
+                              className="mt-0.5 size-3 shrink-0 text-muted-foreground"
+                            />
+                          )}
+                          <span>
+                            <span className="font-medium">{section.label}: </span>
+                            {section.text}
+                          </span>
+                        </p>
+                      );
+                    })}
+                    {prompt.more.length > 0 && (
+                      <>
+                        {moreOpen &&
+                          (gate.kind === "decision" ? (
+                            <ul
+                              id={`gate-prompt-more-${gate.id}`}
+                              className="flex flex-col gap-1.5 text-[13px] text-muted-foreground"
+                            >
+                              {prompt.more.map((section) => (
+                                <li key={section.label ? `${section.label}-${section.text}` : section.text}>
+                                  {section.label ? (
+                                    <GatePromptSectionLine label={section.label}>{section.text}</GatePromptSectionLine>
+                                  ) : (
+                                    section.text
+                                  )}
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <div
+                              id={`gate-prompt-more-${gate.id}`}
+                              className="flex flex-col gap-1.5 text-[13px] text-muted-foreground"
+                            >
+                              {prompt.more.map((section) => (
+                                <p
+                                  key={section.label ? `${section.label}-${section.text}` : section.text}
+                                  className="leading-snug"
+                                >
+                                  {section.label && (
+                                    <span className="font-medium text-muted-foreground">{section.label}: </span>
+                                  )}
+                                  {section.text}
+                                </p>
+                              ))}
+                            </div>
+                          ))}
+                        <button
+                          type="button"
+                          aria-expanded={moreOpen}
+                          aria-controls={moreOpen ? `gate-prompt-more-${gate.id}` : undefined}
+                          className="mt-0.5 w-fit self-start rounded-sm font-medium text-muted-foreground text-xs underline-offset-4 outline-none hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+                          onClick={() => setMoreOpen(!moreOpen)}
+                        >
+                          {moreOpen ? "Show less" : "Read more"}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex min-w-0 flex-col gap-2">
+                    {prompt.paragraphs.map((paragraph, index) => (
+                      <p key={index} className="whitespace-pre-line leading-relaxed">
+                        {index === 0 && <b className="font-semibold">Why Popper stopped here.</b>}
+                        {index === 0 ? " " : null}
+                        {paragraph}
+                      </p>
+                    ))}
+                  </div>
+                )}
               </div>
               {shownDecision ? (
                 <ForkDiagram choice={shownDecision} round={round} className="max-w-[520px]" />
@@ -295,9 +387,9 @@ export function GateSheet({
               </Button>
             </div>
           </>
-        )}
-      </motion.div>
-    </>
+        )
+      }
+    </GateFrame>
   );
 }
 

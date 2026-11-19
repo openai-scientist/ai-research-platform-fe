@@ -95,7 +95,9 @@ export function PulseDot({ className, pulse = true }: { className: string; pulse
   return (
     <span className="relative flex size-2 shrink-0">
       {pulse && (
-        <span className={cn("absolute inline-flex size-full animate-ping rounded-full opacity-60", className)} />
+        <span
+          className={cn("absolute inline-flex size-full rounded-full opacity-60 motion-safe:animate-ping", className)}
+        />
       )}
       <span className={cn("relative inline-flex size-2 rounded-full", className)} />
     </span>
@@ -315,7 +317,10 @@ export function Caret({ className }: { className?: string }) {
   return (
     <span
       aria-hidden
-      className={cn("ml-0.5 inline-block h-[1.05em] w-0.5 animate-pulse bg-current align-[-0.15em]", className)}
+      className={cn(
+        "ml-0.5 inline-block h-[1.05em] w-0.5 bg-current align-[-0.15em] motion-safe:animate-pulse",
+        className,
+      )}
     />
   );
 }
