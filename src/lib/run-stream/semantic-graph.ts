@@ -29,6 +29,7 @@ export const VOCABULARY: Record<MapRelation, { from: EntityType; to: EntityType 
   addresses: { from: "hypothesis", to: "gap" },
   informs: { from: "hypothesis", to: "contribution" },
   targets: { from: "contribution", to: "gap" },
+  cites: { from: "hypothesis", to: "evidence" },
 };
 
 export interface GraphIssue {

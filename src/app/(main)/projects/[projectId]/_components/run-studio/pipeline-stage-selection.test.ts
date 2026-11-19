@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { pipelineStageOf, selectPipelineStage } from "./pipeline-stage-selection";
+import { pipelineStageOf, selectPipelineStage, summarizeTrackStep } from "./pipeline-stage-selection";
 
 const plan = [
   { key: "scope", stage: "scope" },
@@ -55,5 +55,22 @@ describe("Run Studio pipeline step expansion", () => {
 
   it("opens the Writing preview independently of the live research step", () => {
     expect(selected({ accepted: true, viewKey: "write" }).expanded).toBe("writing");
+  });
+});
+
+describe("Compact step track", () => {
+  const steps = [{ key: "release" }, { key: "sources" }, { key: "review" }];
+
+  it("summarizes the step the user is reviewing while another step is live", () => {
+    expect(summarizeTrackStep(steps, "release", "review")).toEqual({ item: steps[0], position: 1, count: 3 });
+  });
+
+  it("follows the live step when the selection belongs to a different stage", () => {
+    expect(summarizeTrackStep(steps, "dataset", "sources")).toEqual({ item: steps[1], position: 2, count: 3 });
+  });
+
+  it("uses the first planned step before activity and handles an empty plan", () => {
+    expect(summarizeTrackStep(steps, null, null)?.item).toEqual(steps[0]);
+    expect(summarizeTrackStep([], null, null)).toBeNull();
   });
 });

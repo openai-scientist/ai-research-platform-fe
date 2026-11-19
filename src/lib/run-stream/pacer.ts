@@ -40,6 +40,7 @@ function beat(event: RunEvent): number {
       return 450;
     case "run.started":
     case "run.plan":
+    case "run.activity":
     case "run.status":
     case "run.completed":
     case "gate.opened":

@@ -18,11 +18,12 @@ import {
 } from "@/lib/run-stream/dataset-run-model";
 import type { RunDisplayStatus } from "@/lib/run-stream/selectors";
 
-import { useDatasetOutputs } from "../dataset-stage-hooks";
+import { useDatasetBriefAvailability, useDatasetCard, useDatasetReviewFindings } from "../dataset-stage-hooks";
 import { Pane } from "../run-studio/scenes/scene-ui";
 import { StageHeading, StageLineage } from "../run-studio/stage-heading";
+import { DatasetCardPreview } from "./dataset-card-preview";
 import { ReleaseCard } from "./dataset-run-gate";
-import { DatasetRunEnd, DatasetRunScene } from "./dataset-run-scene";
+import { DatasetRunScene } from "./dataset-run-scene";
 
 const STAGE_STATUS = {
   running: "active",
@@ -39,6 +40,7 @@ export function useDatasetStagePresentation(
   run: RunItem | undefined,
   model: DatasetRunModel | undefined,
   status: RunDisplayStatus,
+  acceptGateOpen = false,
 ) {
   const dataset = useDatasetDetailQuery(projectId, datasetId).data?.data;
   const versions = useDatasetVersionsQuery(projectId, datasetId).data?.data;
@@ -50,10 +52,25 @@ export function useDatasetStagePresentation(
   const local = isLocalVersion(version);
   const nodes = useLocalNodesQuery(local ? projectId : "").data?.data;
   const node = nodes?.find((n) => n.id === version?.runner_id) ?? nodes?.[0];
-  const outputs = useDatasetOutputs(projectId, status === "completed" || model?.published ? run : undefined).data;
+  const cardExpected = Boolean(
+    status === "completed" ||
+      acceptGateOpen ||
+      model?.readyToAccept ||
+      model?.published ||
+      model?.delivered.includes(DATA_CARD_SCHEMA),
+  );
+  const outputQuery = useDatasetCard(projectId, cardExpected ? run?.id : undefined, model?.dataCardArtifactId);
+  const card = outputQuery.data;
+  const briefFromStream = model?.delivered.includes(BRIEF_SCHEMA);
+  const briefOnServer = useDatasetBriefAvailability(
+    projectId,
+    cardExpected && !briefFromStream ? run?.id : undefined,
+  ).data;
+  const findings = useDatasetReviewFindings(projectId, run?.id, model?.reviewResult?.artifactId).data;
   if (!model) return undefined;
 
   const ended = status === "completed" || status === "failed" || status === "stopped";
+  const waitingForAccept = !ended && (acceptGateOpen || model.readyToAccept === true || outcomePending(model));
   const nodePending = nodes?.some((n) => n.pending_reviews > 0 && (!version?.runner_id || n.id === version.runner_id));
   const releaseWait = Boolean(
     local &&
@@ -62,21 +79,20 @@ export function useDatasetStagePresentation(
       !model.accepted &&
       (model.releaseWait || (!model.gate && status === "running" && nodePending)),
   );
-  const shownModel = releaseWait === model.releaseWait ? model : { ...model, releaseWait };
+  const shownModel =
+    releaseWait === model.releaseWait && !acceptGateOpen
+      ? model
+      : { ...model, releaseWait, readyToAccept: acceptGateOpen || model.readyToAccept };
   const steps = stepViews(shownModel, { local, ended: status === "completed" ? "done" : ended ? "failed" : null });
   const waiting =
-    status === "waiting" ||
-    shownModel.releaseWait ||
-    model.gate !== null ||
-    charterPending(model) ||
-    outcomePending(model);
+    status === "waiting" || shownModel.releaseWait || model.gate !== null || charterPending(model) || waitingForAccept;
   const writes = [
-    { id: DATA_CARD_SCHEMA, label: "Data card", step: "disclosure", available: Boolean(outputs?.card) },
-    { id: BRIEF_SCHEMA, label: "Dataset brief", step: "review", available: Boolean(outputs?.brief) },
+    { id: DATA_CARD_SCHEMA, label: "Data card", step: "disclosure", available: Boolean(card) },
+    { id: BRIEF_SCHEMA, label: "Dataset brief", step: "review", available: Boolean(briefOnServer) },
   ].map(({ id, label, step, available }) => ({
     id,
     label,
-    done: available || model.delivered.includes(id),
+    done: Boolean(available) || model.delivered.includes(id),
     active: !ended && steps.some((item) => item.key === step && item.state === "now"),
   }));
   return {
@@ -90,10 +106,37 @@ export function useDatasetStagePresentation(
     name: dataset?.name ?? "Dataset",
     stageStatus: status === "running" && waiting ? "waiting" : STAGE_STATUS[status],
     writes,
-    variables: outputs?.card?.variables ?? version?.local_card?.variables,
-    card: outputs?.card,
-    questions: outputs?.brief?.questions.length ?? 0,
+    variables: card?.variables ?? version?.local_card?.variables,
+    card,
+    cardExpected,
+    cardLoading: cardExpected && outputQuery.isPending,
+    findings,
+    waitingForAccept,
   } as const;
+}
+
+type DatasetStage = NonNullable<ReturnType<typeof useDatasetStagePresentation>>;
+
+export function DatasetStageCard({
+  stage,
+  projectId,
+  datasetId,
+  runId,
+}: {
+  stage: Pick<DatasetStage, "card" | "cardLoading" | "model" | "version">;
+  projectId: string;
+  datasetId: string;
+  runId?: string;
+}) {
+  return (
+    <DatasetCardPreview
+      card={stage.card}
+      loading={stage.cardLoading}
+      href={runId && datasetId ? `/projects/${projectId}/datasets/${datasetId}?view=card&run=${runId}` : undefined}
+      fitness={stage.model.items.fitness}
+      localNotes={stage.version?.local_card?.report.gaps}
+    />
+  );
 }
 
 export function DatasetStageScene({
@@ -105,29 +148,25 @@ export function DatasetStageScene({
   onView,
   studio = false,
   handoff = false,
+  cardInGate = false,
 }: {
   projectId: string;
   datasetId: string;
   run?: RunItem;
-  stage: NonNullable<ReturnType<typeof useDatasetStagePresentation>>;
+  stage: DatasetStage;
   focusKey: string | null;
   onView(key: string | null): void;
   studio?: boolean;
   handoff?: boolean;
+  cardInGate?: boolean;
 }) {
-  const { model, steps, status, ended, local, version, node, name, stageStatus, writes, variables, card, questions } =
-    stage;
+  const { model, steps, status, ended, local, version, node, name, stageStatus, writes, variables, card } = stage;
   const accepted = status === "completed";
   const outcome =
-    run && datasetId && (accepted || (studio && model.readyToAccept && !ended)) ? (
-      <DatasetRunEnd
-        projectId={projectId}
-        datasetId={datasetId}
-        runId={run.id}
-        card={card}
-        questions={questions}
-        accepted={accepted}
-      />
+    !cardInGate && stage.cardExpected ? (
+      <Pane title={accepted ? "Dataset stage accepted" : "Data card ready for review"}>
+        <DatasetStageCard stage={stage} projectId={projectId} datasetId={datasetId} runId={run?.id} />
+      </Pane>
     ) : null;
   const scene = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -187,6 +226,8 @@ export function DatasetStageScene({
         variables={variables}
         node={node}
         showLocalProgress={local && stageStatus === "active"}
+        findings={stage.findings}
+        waitingForAccept={stage.waitingForAccept}
       />
       {!studio && outcome}
     </div>

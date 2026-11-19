@@ -24,6 +24,19 @@ const syntheticDatasetGateEvents: PipelineEnvelope[] = readFileSync(
     const event = JSON.parse(line) as PipelineEnvelope & { created_at: string };
     return { ...event, ts: event.created_at };
   });
+const agentWorkEvents: PipelineEnvelope[] = readFileSync(
+  new URL("./fixtures/hypothesis-agent-work.jsonl", import.meta.url),
+  "utf8",
+)
+  .trim()
+  .split("\n")
+  .map((line) => ({
+    ...envelopes[0],
+    stage_key: "hypothesis",
+    step_key: "work",
+    phase: "drafting",
+    ...JSON.parse(line),
+  }));
 
 const STAGE_RUN = "e0b47365-5008-4996-b97b-88cfce00fdd2";
 
@@ -61,6 +74,52 @@ const appended = (base: PipelineEnvelope, type: string, payload: Record<string, 
 });
 
 describe("PipelineAdapter", () => {
+  it("follows actual tools within one Hypothesis work step and records checklist checks separately", () => {
+    const replay = (count: number) => replayRunEvents("run-1", convert(agentWorkEvents.slice(0, count)));
+    const planning = replay(7);
+    expect(planning.currentStageKey).toBe("scope");
+    expect(planning.stages.scope.currentStepId).toBe("charter");
+    expect(planning.message?.text).toBe("Locked the review plan (turn 19)");
+
+    const searching = replay(15);
+    expect(searching.currentStageKey).toBe("search");
+    expect(searching.stages.search.currentStepId).toBe("collect");
+    expect(searching.stages.scope).toMatchObject({ status: "done", content: { goal: [], subQuestions: [] } });
+    expect(searching.message?.text).toBe(
+      "Searching the literature: Nightly sleep duration academic attainment (turn 21)",
+    );
+    expect(searching.workNotes.search).toContain("temporarily rate limited");
+    expect(searching.workChecks.search.collect.search_log.state).toBe("amber");
+    expect(searching.workChecks["r1-hypothesize"].write.hypotheses.reason).toBe("0 hypotheses, propose at least 1");
+    expect(searching.feed.map((entry) => entry.text)).toEqual(
+      expect.arrayContaining([
+        "Use the proposed search and screening rules?",
+        "Answered by the researcher: Approve (recommended)",
+        "Prepare search",
+        "The agent worked through a turn (turn 21)",
+      ]),
+    );
+
+    const screening = replay(agentWorkEvents.length);
+    expect(screening.currentStageKey).toBe("screen");
+    expect(screening.stages.screen.currentStepId).toBe("score");
+    expect(screening.message?.text).toBe("Screening papers: 0 records (turn 22)");
+    expect(screening.workChecks.screen.score.screening.state).toBe("needs_you");
+  });
+
+  it("uses an unfamiliar tool as narration without moving the live step", () => {
+    const late = {
+      ...agentWorkEvents[13],
+      seq: 20,
+      type: "hypothesis.agent.tool",
+      payload: { tool: "check_workspace" },
+    };
+    const state = replayRunEvents("run-1", convert([...agentWorkEvents, late]));
+    expect(state.currentStageKey).toBe("screen");
+    expect(state.message?.text).toBe("Check workspace");
+    expect(state.feed.at(-1)?.text).toBe("Check workspace");
+  });
+
   it("keeps Dataset review and acceptance in Dataset before Scope opens", () => {
     const adapter = new PipelineAdapter({ ...info, datasetFirst: true });
     const first = envelopes[0];

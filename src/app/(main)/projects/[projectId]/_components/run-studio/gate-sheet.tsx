@@ -91,6 +91,7 @@ export function GateSheet({
   onAnswer,
   onStartDrop,
   pending = false,
+  documentPreview,
 }: {
   gate: Gate;
   mode: keyof typeof MODES;
@@ -101,6 +102,7 @@ export function GateSheet({
   onStartDrop(): void;
   /** The answer is on its way; it can't be sent twice. */
   pending?: boolean;
+  documentPreview?: ReactNode;
 }) {
   const preferred = gate.options.find((o) => o.recommended && !o.disabled) ?? gate.options.find((o) => !o.disabled);
   const [choice, setChoice] = useState(preferred?.id ?? "");
@@ -167,7 +169,13 @@ export function GateSheet({
         gate.kind === "charter" ? (
           <CharterReview gate={gate} header={header} pending={pending} onAnswer={onAnswer} />
         ) : gate.kind === "accept" ? (
-          <AcceptReview gate={gate} header={header} pending={pending} onAnswer={onAnswer} />
+          <AcceptReview
+            gate={gate}
+            header={header}
+            pending={pending}
+            onAnswer={onAnswer}
+            documentPreview={documentPreview}
+          />
         ) : (
           <>
             <div className="flex flex-col gap-3.5 overflow-y-auto px-5 pt-4.5 pb-4">

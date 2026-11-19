@@ -127,34 +127,38 @@ function TreeFrame({ objective, active }: { objective?: string; active: boolean 
       }
       aside={active ? "Splitting the goal into sub-questions" : "Stage 02"}
     >
-      <div className="flex flex-col items-center">
-        <div className="w-full max-w-2xl rounded-lg bg-muted px-3.5 py-2.5 text-center text-muted-foreground text-xs leading-snug">
-          <span className="block font-semibold text-[10.5px] uppercase tracking-wide">Objective</span>
-          {objective ?? <Bone active={active} className="mx-auto mt-1 w-2/3" />}
+      {!active ? (
+        <p className="text-muted-foreground text-sm">Not written yet.</p>
+      ) : (
+        <div className="flex flex-col items-center">
+          <div className="w-full max-w-2xl rounded-lg bg-muted px-3.5 py-2.5 text-center text-muted-foreground text-xs leading-snug">
+            <span className="block font-semibold text-[10.5px] uppercase tracking-wide">Objective</span>
+            {objective ?? <Bone active={active} className="mx-auto mt-1 w-2/3" />}
+          </div>
+          <span aria-hidden className="h-4 w-px bg-border" />
+          <ol aria-hidden className="grid w-full gap-3 md:grid-cols-2 xl:grid-cols-4">
+            {Array.from({ length: FRAME_BRANCHES }, (_, i) => (
+              // biome-ignore lint/suspicious/noArrayIndexKey: empty branches have no ids
+              <li key={i} className="relative flex flex-col pt-4">
+                <span
+                  className={cn(
+                    "absolute top-0 hidden h-px bg-border xl:block",
+                    i === 0 ? "left-1/2" : "-left-1.5",
+                    i === FRAME_BRANCHES - 1 ? "right-1/2" : "-right-1.5",
+                  )}
+                />
+                <span className="absolute top-0 left-1/2 h-4 w-px bg-border" />
+                <span className="flex h-full flex-col gap-2.5 rounded-xl border border-dashed px-3.5 py-3">
+                  <Bone active={active} className="h-5 w-10 rounded-md" />
+                  <Bone active={active} />
+                  <Bone active={active} className="w-3/4" />
+                  <Bone active={active} className="mt-1 h-2 w-1/2" />
+                </span>
+              </li>
+            ))}
+          </ol>
         </div>
-        <span aria-hidden className="h-4 w-px bg-border" />
-        <ol aria-hidden className="grid w-full gap-3 md:grid-cols-2 xl:grid-cols-4">
-          {Array.from({ length: FRAME_BRANCHES }, (_, i) => (
-            // biome-ignore lint/suspicious/noArrayIndexKey: empty branches have no ids
-            <li key={i} className="relative flex flex-col pt-4">
-              <span
-                className={cn(
-                  "absolute top-0 hidden h-px bg-border xl:block",
-                  i === 0 ? "left-1/2" : "-left-1.5",
-                  i === FRAME_BRANCHES - 1 ? "right-1/2" : "-right-1.5",
-                )}
-              />
-              <span className="absolute top-0 left-1/2 h-4 w-px bg-border" />
-              <span className="flex h-full flex-col gap-2.5 rounded-xl border border-dashed px-3.5 py-3">
-                <Bone active={active} className="h-5 w-10 rounded-md" />
-                <Bone active={active} />
-                <Bone active={active} className="w-3/4" />
-                <Bone active={active} className="mt-1 h-2 w-1/2" />
-              </span>
-            </li>
-          ))}
-        </ol>
-      </div>
+      )}
     </Pane>
   );
 }
@@ -288,8 +292,10 @@ export function ScopeScene({
                           )}
                         />
                       )
-                    ) : (
+                    ) : live && step === "goal" ? (
                       <PendingLines lines={isTitle ? 1 : 2} />
+                    ) : (
+                      <span className="text-muted-foreground text-xs">Not written yet.</span>
                     )}
                   </dd>
                 </div>
@@ -461,7 +467,7 @@ export function ScopeScene({
             </div>
           </Pane>
         ) : (
-          <TreeFrame objective={objective} active={step === "decompose"} />
+          <TreeFrame objective={objective} active={live && step === "decompose"} />
         )}
       </div>
 

@@ -1,4 +1,5 @@
 import { fetchArtifacts } from "./fetch-artifacts";
+import type { LocalCard } from "./fetch-datasets";
 import type { RunItem } from "./fetch-runs";
 
 export const DATA_CARD_SCHEMA = "dataset.data_card/v1";
@@ -29,6 +30,7 @@ export interface DataCardBody {
   n_rows: number;
   n_columns: number;
   min_cell?: number;
+  split?: LocalCard["split"] | null;
   variables: DataCardVariable[];
   caveats?: string[];
   gaps?: string[];
@@ -40,6 +42,17 @@ export interface DatasetBriefBody {
   questions: { id: string; text: string; variables: string[]; rationale?: string | null; n_complete?: number | null }[];
   chosen?: { question_id: string; text: string } | null;
   domains?: string[];
+}
+
+export interface DatasetReviewFindings {
+  passed: boolean;
+  findings: {
+    finding_id: string;
+    severity: "blocking" | "major" | "minor";
+    issue: string;
+    suggestion?: string | null;
+    open?: boolean;
+  }[];
 }
 
 export const datasetRunKeys = {
@@ -57,14 +70,25 @@ async function readJson<T>(projectId: string, runId: string, schema: string, sig
   const list = await fetchArtifacts.getBySchema(projectId, runId, schema, signal);
   const artifact = list.data.find((item) => item.primary) ?? list.data[0];
   if (!artifact) return null;
-  const file = await fetchArtifacts.download(projectId, runId, artifact.id, signal);
+  return downloadJson<T>(projectId, runId, artifact.id, signal);
+}
+
+async function downloadJson<T>(projectId: string, runId: string, artifactId: string, signal?: AbortSignal): Promise<T> {
+  const file = await fetchArtifacts.download(projectId, runId, artifactId, signal);
   return JSON.parse(await file.blob.text()) as T;
 }
 
 export const fetchDatasetRuns = {
+  reviewFindings: downloadJson<DatasetReviewFindings>,
+  card: (projectId: string, runId: string, artifactId?: string, signal?: AbortSignal) =>
+    artifactId
+      ? downloadJson<DataCardBody>(projectId, runId, artifactId, signal)
+      : readJson<DataCardBody>(projectId, runId, DATA_CARD_SCHEMA, signal),
+  hasBrief: async (projectId: string, runId: string, signal?: AbortSignal) =>
+    (await fetchArtifacts.getBySchema(projectId, runId, BRIEF_SCHEMA, signal)).data.length > 0,
   /** The Dataset stage's outputs of one run; each is null until the stage has published it. */
   outputs: async (projectId: string, runId: string, signal?: AbortSignal) => ({
-    card: await readJson<DataCardBody>(projectId, runId, DATA_CARD_SCHEMA, signal),
+    card: await fetchDatasetRuns.card(projectId, runId, undefined, signal),
     brief: await readJson<DatasetBriefBody>(projectId, runId, BRIEF_SCHEMA, signal),
   }),
 };

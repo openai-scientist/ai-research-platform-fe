@@ -144,6 +144,7 @@ export interface DatasetRunModel {
   phase: string | null;
   pauseReason?: string;
   review: { object: string; round: number; findings: number; blocking: number } | null;
+  reviewResult?: { round: number; passed?: boolean; artifactId?: string; error?: boolean };
   /** The long computation going on now, as the engine words it. */
   progress: { task: string; state: "running" | "done"; seconds: number; text: string } | null;
   message: { actor: DatasetAgent; text: string } | null;
@@ -156,6 +157,7 @@ export interface DatasetRunModel {
   releaseWait: boolean;
   /** Schemas the run delivered, such as `dataset.data_card/v1`. */
   delivered: string[];
+  dataCardArtifactId?: string;
   published: boolean;
   accepted?: boolean;
   readyToAccept?: boolean;
@@ -318,9 +320,20 @@ export function applyDatasetEvent(previous: DatasetRunModel, event: PipelineEnve
     case "run.gate_closed":
       if (!payload.gate_id || model.gate?.id === payload.gate_id) model.gate = null;
       break;
+    case "review.completed":
+      model.reviewResult = {
+        round: num(payload.round) ?? model.review?.round ?? 1,
+        passed: typeof payload.passed === "boolean" ? payload.passed : undefined,
+        artifactId: str(payload.artifact_id),
+        error: Boolean(payload.error),
+      };
+      break;
     case "artifact.delivered": {
       const schema = str(payload.schema);
       if (schema && !model.delivered.includes(schema)) model.delivered = [...model.delivered, schema];
+      if (schema === "dataset.data_card/v1") {
+        model.dataCardArtifactId = str(payload.artifact_id) ?? model.dataCardArtifactId;
+      }
       break;
     }
     case "pi.consultation_requested":
@@ -447,7 +460,7 @@ export function stepViews(model: DatasetRunModel, { local, ended }: StepOptions)
     return !def.optional || Boolean(item);
   });
   const open = defs.find((def) => ["red", "needs_you"].includes(model.items[def.key]?.state ?? ""));
-  const reviewing = model.engineStep === "review" || Boolean(model.review);
+  const reviewing = model.engineStep === "review" || Boolean(model.review ?? model.reviewResult);
   const views: StepView[] = defs.map((def) => {
     const item = model.items[def.key];
     const done = item?.state === "green" || reviewing || ended === "done" || model.published;

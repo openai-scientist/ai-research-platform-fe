@@ -8,7 +8,7 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type { AgentRole } from "@/lib/run-stream/contract";
+import type { AgentRole, WorkCheck } from "@/lib/run-stream/contract";
 
 import { AgentAvatar } from "./run-bits";
 import { AGENTS } from "./run-meta";
@@ -76,6 +76,7 @@ type StageStepRow = {
   done: boolean;
   now: boolean;
   asking: boolean;
+  checks?: WorkCheck[];
 };
 
 export function StageSteps({ steps, count }: { steps: StageStepRow[]; count: string }) {
@@ -140,6 +141,31 @@ export function StageSteps({ steps, count }: { steps: StageStepRow[]; count: str
                     </span>
                   )}
                 </small>
+                {Boolean(step.checks?.length) && (
+                  <ul aria-label="Checklist" className="mt-1.5 grid gap-1.5">
+                    {step.checks?.map(({ key, label, state, status, reason }) => (
+                      <li
+                        key={key}
+                        className="flex items-start gap-1.5 text-[11px] text-muted-foreground leading-normal"
+                      >
+                        <span
+                          className={cn(
+                            "mt-1 size-1.5 shrink-0 rounded-full",
+                            state === "green" && "bg-emerald-600",
+                            (state === "amber" || state === "needs_you") && "bg-amber-500",
+                            state === "red" && "bg-destructive",
+                            state === "not_applicable" && "bg-muted-foreground",
+                          )}
+                          aria-hidden
+                        />
+                        <span>
+                          <span className="font-medium text-foreground">{label}</span> · {status}
+                          {reason && <span className="block">{reason}</span>}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </span>
             </li>
           );

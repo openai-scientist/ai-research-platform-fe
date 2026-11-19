@@ -6,11 +6,13 @@ import { cn } from "cn";
 import { ArrowRight, Check, CircleCheck } from "lucide-react";
 import { motion } from "motion/react";
 
+import { claimScopeSummary } from "@/lib/run-stream/claim-scope";
 import type { Figure, KnowledgeCard, PlannedStage } from "@/lib/run-stream/contract";
-import type { RunState, StageState } from "@/lib/run-stream/run-state";
+import type { RunState, ScopeContent, StageState } from "@/lib/run-stream/run-state";
 import { liveStageKey } from "@/lib/run-stream/selectors";
 
 import { AnimatedNumber } from "./animated-number";
+import { ClaimScopeScene } from "./scenes/claim-scope-scene";
 import { ExperimentScene } from "./scenes/experiment-scene";
 import { HypothesizeScene } from "./scenes/hypothesize-scene";
 import { InterpretScene } from "./scenes/interpret-scene";
@@ -112,6 +114,10 @@ function RunEnd({ state, count }: { state: RunState; count: number }) {
   );
 }
 
+function claimOnly(scope: ScopeContent) {
+  return !scope.goal.length && !scope.subQuestions.length && !scope.evaluation ? scope.claimScope : undefined;
+}
+
 /** What the stage builds on and what it writes, so the hand-offs between stages stay visible. */
 function StageHeader({
   stage,
@@ -136,13 +142,31 @@ function StageHeader({
     round_kind: planned?.round_kind ?? stage.plan.round_kind,
   };
   const done = stage.status === "done";
+  const claim = stage.content.stage === "scope" ? claimOnly(stage.content) : undefined;
+  const map = stage.content.stage === "map" && stage.content.fromArtifacts ? stage.content : undefined;
+  const artifactSummary = map
+    ? `${map.nodes.length} ${map.nodes.length === 1 ? "entity" : "entities"} · ${map.edges.length} ${map.edges.length === 1 ? "relation" : "relations"} · ${map.pieces.length} of 9 canvas pieces recorded`
+    : undefined;
+  const summary = claim ? claimScopeSummary(claim) : (artifactSummary ?? stage.summary);
+  const writes = stage.plan.steps.flatMap((step) =>
+    step.artifact
+      ? [
+          {
+            id: step.id,
+            label: step.artifact,
+            done: stage.doneStepIds.includes(step.id),
+            active: stage.currentStepId === step.id,
+          },
+        ]
+      : [],
+  );
   return (
     <StageHeading
       index={index}
       total={total}
       title={plan.title}
       pipeline={plan.pipeline}
-      purpose={plan.purpose}
+      purpose={claim ? "Decide whether to state a claim and lock the plan for the literature review." : plan.purpose}
       cast={plan.cast}
       status={done ? "done" : ended ? "ended" : "active"}
       titleExtra={
@@ -164,27 +188,20 @@ function StageHeader({
     >
       <StageLineage
         reads={stage.plan.reads ?? []}
-        writes={stage.plan.steps.flatMap((step) =>
-          step.artifact
-            ? [
-                {
-                  id: step.id,
-                  label: step.artifact,
-                  done: stage.doneStepIds.includes(step.id),
-                  active: stage.currentStepId === step.id,
-                },
-              ]
-            : [],
-        )}
+        writes={
+          claim
+            ? [{ id: "protocol", label: "Review plan", done: claim.protocol.status === "locked", active: !done }]
+            : writes
+        }
       />
-      {done && stage.summary && (
+      {(done || claim) && summary && (
         <motion.p
           initial={{ opacity: 0, y: 4 }}
           animate={{ opacity: 1, y: 0 }}
           className="mt-2 flex items-center gap-2 font-medium text-sm"
         >
-          <CircleCheck className="size-3.5 text-emerald-600" />
-          {stage.summary}
+          {done && <CircleCheck className="size-3.5 text-emerald-600" />}
+          {summary}
         </motion.p>
       )}
     </StageHeading>
@@ -255,14 +272,29 @@ export function StageScreen({
     <SceneNote key={n.seq} actor={n.actor} title="Your decision" text={n.text} note={n.note} />
   ));
   if (content.stage === "scope") {
+    const claim = claimOnly(content);
     scene = (
       <>
-        <ScopeScene data={content} topic={state.topic} domains={state.domains} live={live} step={step} />
+        {claim ? (
+          <ClaimScopeScene scope={claim} />
+        ) : (
+          <ScopeScene data={content} topic={state.topic} domains={state.domains} live={live} step={step} />
+        )}
         {decisionNotes}
       </>
     );
   }
-  if (content.stage === "search") scene = <SearchScene data={content} live={live} />;
+  if (content.stage === "search")
+    scene = (
+      <SearchScene
+        data={content}
+        live={live}
+        activity={
+          live && step === "collect" && state.message?.id.startsWith("activity.") ? state.message.text : undefined
+        }
+        notice={state.workNotes[stageKey]}
+      />
+    );
   if (content.stage === "screen")
     scene = (
       <>

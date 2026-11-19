@@ -86,7 +86,17 @@ function keptWhy(m: Merged) {
   return tied ? "tied on citations, so the longer abstract" : "the most citations";
 }
 
-export function SearchScene({ data, live }: { data: SearchContent; live: boolean }) {
+export function SearchScene({
+  data,
+  live,
+  activity,
+  notice,
+}: {
+  data: SearchContent;
+  live: boolean;
+  activity?: string;
+  notice?: string;
+}) {
   const scene = useRef<HTMLDivElement>(null);
   const collectRef = useRef<HTMLDivElement>(null);
   const mergeRef = useRef<HTMLDivElement>(null);
@@ -127,6 +137,13 @@ export function SearchScene({ data, live }: { data: SearchContent; live: boolean
 
   return (
     <div ref={scene} className="relative flex flex-col gap-4">
+      {activity && !data.sources.length && (
+        <Pane title="Collecting candidates">
+          <p className="text-sm">{activity}</p>
+          <p className="mt-1 text-muted-foreground text-xs">Candidate counts appear as the search reports them.</p>
+        </Pane>
+      )}
+      {notice && <p className="rounded-lg bg-muted/60 px-3 py-2 text-muted-foreground text-xs">{notice}</p>}
       {lastAgain && (
         <p className="flex items-start gap-2 rounded-lg bg-muted/60 px-3 py-2 text-muted-foreground text-xs">
           <RotateCcw className="mt-px size-3.5 shrink-0" />
@@ -202,7 +219,7 @@ export function SearchScene({ data, live }: { data: SearchContent; live: boolean
               Angle {data.strategies.length + i + 1} of {angles}
             </Placeholder>
           ))}
-        {!data.strategies.length && (
+        {!data.strategies.length && !activity && (
           <Placeholder className="lg:col-span-3">Search angles are planned first</Placeholder>
         )}
       </div>
@@ -319,7 +336,7 @@ export function SearchScene({ data, live }: { data: SearchContent; live: boolean
               ))}
             </Pane>
           ) : (
-            <Placeholder>Each query then goes to every source</Placeholder>
+            !activity && <Placeholder>Each query then goes to every source</Placeholder>
           )}
           {data.collected && (
             <Pane title="Saved for the next stages" className="flex-1">

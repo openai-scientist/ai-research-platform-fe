@@ -1,0 +1,19 @@
+{"seq":1,"type":"run.phase_changed","payload":{"from":"queued","to":"drafting"}}
+{"seq":2,"type":"run.step_changed","payload":{"step_key":"work"}}
+{"seq":3,"type":"hypothesis.item","payload":{"key":"hypotheses","state":"red","reason":"0 hypotheses, propose at least 1"}}
+{"seq":4,"type":"hypothesis.agent.tool","payload":{"agent":"repair-evidence_review","turn":18,"tool":"write_protocol","args":{},"ok":true,"ms":19}}
+{"seq":5,"type":"hypothesis.action","payload":{"action":"hypothesis.accept_protocol","actor":"agent","outcome":"done"}}
+{"seq":6,"type":"hypothesis.agent.tool","payload":{"agent":"repair-evidence_review","turn":19,"tool":"lock_protocol","args":{},"ok":true,"ms":8}}
+{"seq":7,"type":"hypothesis.item","payload":{"key":"protocol","state":"green","reason":"Review plan locked"}}
+{"seq":8,"type":"hypothesis.inbox_item","payload":{"kind":"review_batch","question":"Use the proposed search and screening rules?"}}
+{"seq":9,"type":"hypothesis.ask_user","payload":{"question":"Use the proposed search and screening rules?"}}
+{"seq":10,"type":"hypothesis.ask_user_answered","payload":{"by":"researcher","label":"Approve (recommended)"}}
+{"seq":11,"type":"hypothesis.span","payload":{"kind":"derived","name":"prepare_search","item":"search_log","ms":12}}
+{"seq":12,"type":"hypothesis.action","payload":{"action":"hypothesis.search","actor":"agent","outcome":"done"}}
+{"seq":13,"type":"hypothesis.agent.tool","payload":{"agent":"repair-evidence_review","turn":21,"tool":"run_search","args":"{\"queries\": [\"Nightly sleep duration academic attainment\"]}","ok":true,"ms":420}}
+{"seq":14,"type":"hypothesis.agent.turn","payload":{"agent":"repair-evidence_review","turn":21,"tools":["run_search"],"model_ms":1910,"tools_ms":420}}
+{"seq":15,"type":"hypothesis.item","payload":{"key":"search_log","state":"amber","reason":"A search source returned 429"}}
+{"seq":16,"type":"hypothesis.action","payload":{"action":"hypothesis.screen","actor":"agent","outcome":"done"}}
+{"seq":17,"type":"hypothesis.agent.tool","payload":{"agent":"repair-evidence_review","turn":22,"tool":"screen","args":"{\"record_ids\": []}","ok":true,"ms":13}}
+{"seq":18,"type":"hypothesis.item","payload":{"key":"screening","state":"needs_you","reason":"Confirm which records to keep"}}
+{"seq":19,"type":"hypothesis.action","payload":{"action":"hypothesis.accept_protocol","actor":"agent","outcome":"done"}}

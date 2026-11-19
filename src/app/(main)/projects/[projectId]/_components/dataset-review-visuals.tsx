@@ -108,7 +108,7 @@ function Completeness({ valid, missing }: { valid: number | null; missing: numbe
 
 /** Distinct values on a log scale, so 2 and 1,200 can share one small bar. */
 function Distinct({ distinct, rows }: { distinct: number | null | undefined; rows: number }) {
-  if (distinct == null) return <span className="text-muted-foreground text-xs">—</span>;
+  if (distinct == null) return <span className="text-muted-foreground text-xs">{stat(distinct)}</span>;
   const width = rows > 1 ? Math.max(4, (Math.log10(Math.max(1, distinct)) / Math.log10(rows)) * 100) : 100;
   return (
     <span className="flex items-center gap-2" title="Distinct values, log scale">
@@ -130,7 +130,7 @@ function MeanSd({
   sd: number | null | undefined;
   topCoded: boolean;
 }) {
-  if (mean == null) return <span className="text-muted-foreground text-xs">—</span>;
+  if (mean == null) return <span className="text-muted-foreground text-xs">{stat(mean)}</span>;
   const spread = sd ?? 0;
   const max = Math.max(mean + 3 * spread, mean * 1.5, 1e-9);
   const at = (value: number) => `${Math.max(0, Math.min(100, (value / max) * 100))}%`;
@@ -168,6 +168,11 @@ function MeanSd({
   );
 }
 
+const stat = (value: number | null | undefined) => {
+  if (value === undefined) return "Not computed";
+  return value === null ? "Withheld" : fmt(value);
+};
+
 function Detail({ v, rows }: { v: DataCardVariable; rows: number }) {
   const flags = v.flags.filter((f) => f !== "levels_withheld");
   return (
@@ -178,10 +183,12 @@ function Detail({ v, rows }: { v: DataCardVariable; rows: number }) {
         <dt className="text-muted-foreground">Missing</dt>
         <dd className="tabular-nums">{v.summary.n_missing == null ? "Withheld" : fmt(v.summary.n_missing)}</dd>
         <dt className="text-muted-foreground">Distinct</dt>
-        <dd className="tabular-nums">{v.summary.n_distinct == null ? "Withheld" : `~${fmt(v.summary.n_distinct)}`}</dd>
+        <dd className="tabular-nums">
+          {v.summary.n_distinct == null ? stat(v.summary.n_distinct) : `~${fmt(v.summary.n_distinct)}`}
+        </dd>
         <dt className="text-muted-foreground">Mean / SD</dt>
         <dd className="tabular-nums">
-          {v.summary.mean == null ? "—" : fmt(v.summary.mean)} / {v.summary.sd == null ? "—" : fmt(v.summary.sd)}
+          {stat(v.summary.mean)} / {stat(v.summary.sd)}
         </dd>
         <dt className="text-muted-foreground">Type</dt>
         <dd className="capitalize">
@@ -210,19 +217,48 @@ function Detail({ v, rows }: { v: DataCardVariable; rows: number }) {
 }
 
 /** One row per variable: type, name, role, how complete, how many distinct values, mean and spread. */
-export function VariableMatrix({ variables, rows }: { variables: DataCardVariable[]; rows: number }) {
+export function VariableMatrix({
+  variables,
+  rows,
+  compact = false,
+}: {
+  variables: DataCardVariable[];
+  rows: number;
+  compact?: boolean;
+}) {
   const [open, setOpen] = useState<string | null>(null);
+  const compactGrid = "grid-cols-[minmax(0,1.15fr)_3.5rem_4rem_minmax(0,1fr)]";
+  const fullGrid = "@min-[42rem]:grid-cols-[minmax(0,1.4fr)_5.5rem_9.5rem_7rem_11rem_1rem]";
+  if (!variables.length) return <p className="text-muted-foreground text-sm">No variable summaries were published.</p>;
   return (
-    <div className="overflow-hidden rounded-lg border">
-      <div className="hidden grid-cols-[minmax(0,1.4fr)_5.5rem_9.5rem_7rem_11rem_1rem] items-center gap-3 bg-muted px-3 py-2 font-medium text-muted-foreground text-xs md:grid">
+    <div className="@container overflow-hidden rounded-lg border">
+      <div
+        className={cn(
+          "items-center gap-2 bg-muted px-2.5 py-1.5 font-medium text-muted-foreground text-xs",
+          compact ? cn("grid", compactGrid) : cn("hidden @min-[42rem]:grid", fullGrid),
+        )}
+      >
         <span>Variable</span>
         <span>Role</span>
-        <span>Completeness</span>
-        <span>Distinct</span>
-        <span>Mean ± SD</span>
-        <span className="sr-only">Status</span>
+        {compact ? (
+          <>
+            <span>Missing</span>
+            <span>Flags</span>
+          </>
+        ) : (
+          <>
+            <span>Completeness</span>
+            <span>Distinct</span>
+            <span>Mean ± SD</span>
+            <span className="sr-only">Status</span>
+          </>
+        )}
       </div>
-      <ul className="divide-y">
+      <ul
+        aria-label="Variables"
+        tabIndex={compact ? 0 : undefined}
+        className={cn("divide-y", compact && "max-h-60 overflow-y-auto focus-visible:outline-ring")}
+      >
         {variables.map((v) => {
           const role = ROLE[roleKind(v)];
           const level = variableLevel(v);
@@ -234,37 +270,71 @@ export function VariableMatrix({ variables, rows }: { variables: DataCardVariabl
                 type="button"
                 aria-expanded={isOpen}
                 onClick={() => setOpen(isOpen ? null : v.name)}
-                className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1.5 px-3 py-2.5 text-left outline-none hover:bg-muted/50 focus-visible:bg-muted/50 md:grid-cols-[minmax(0,1.4fr)_5.5rem_9.5rem_7rem_11rem_1rem]"
+                className={cn(
+                  "grid w-full items-center text-left outline-none hover:bg-muted/50 focus-visible:bg-muted/50",
+                  compact
+                    ? cn("gap-2 px-2.5 py-1", compactGrid)
+                    : cn("grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1.5 px-3 py-2.5", fullGrid),
+                )}
               >
                 <span className="flex min-w-0 items-center gap-2 font-medium text-sm">
-                  <ColumnKindIcon kind={kindOf(v.type)} className="size-4 shrink-0 text-muted-foreground" />
-                  <span className="truncate">{v.name}</span>
-                  {roleKind(v) === "target" && <Target className="size-3.5 shrink-0 text-primary" aria-hidden="true" />}
-                  {roleKind(v) === "key" && (
+                  {!compact && (
+                    <ColumnKindIcon kind={kindOf(v.type)} className="size-4 shrink-0 text-muted-foreground" />
+                  )}
+                  <span className="flex min-w-0 flex-col">
+                    <span className={compact ? "wrap-anywhere text-xs" : "truncate"} title={v.name}>
+                      {v.name}
+                    </span>
+                    {compact && <span className="font-normal text-muted-foreground text-xs capitalize">{v.type}</span>}
+                  </span>
+                  {!compact && roleKind(v) === "target" && (
+                    <Target className="size-3.5 shrink-0 text-primary" aria-hidden="true" />
+                  )}
+                  {!compact && roleKind(v) === "key" && (
                     <KeyRound className="size-3.5 shrink-0 text-violet-600" aria-hidden="true" />
                   )}
                 </span>
-                <span className="flex items-center justify-end gap-2 md:contents">
+                <span className={cn("flex items-center gap-2", !compact && "justify-end @min-[42rem]:contents")}>
                   <span
                     title={role.hint}
                     className={cn("w-fit rounded-full px-2 py-0.5 font-medium text-[11px]", role.chip)}
                   >
                     {role.label}
                   </span>
-                  <i
-                    title={LEVEL[level].label}
-                    className={cn("size-2.5 rounded-full md:order-last md:justify-self-end", LEVEL[level].dot)}
-                  />
+                  {!compact && (
+                    <i
+                      title={LEVEL[level].label}
+                      className={cn(
+                        "size-2.5 rounded-full @min-[42rem]:order-last @min-[42rem]:justify-self-end",
+                        LEVEL[level].dot,
+                      )}
+                    />
+                  )}
                 </span>
-                <span className="col-span-2 md:col-span-1">
-                  <Completeness valid={v.summary.n_valid} missing={v.summary.n_missing} />
-                </span>
-                <span className="hidden md:block">
-                  <Distinct distinct={v.summary.n_distinct} rows={rows} />
-                </span>
-                <span className="hidden md:block">
-                  <MeanSd mean={v.summary.mean} sd={v.summary.sd} topCoded={top} />
-                </span>
+                {compact ? (
+                  <>
+                    <span className="text-muted-foreground text-xs tabular-nums">
+                      {v.summary.n_missing != null && v.summary.n_valid != null
+                        ? `${pct(v.summary.n_missing, v.summary.n_missing + v.summary.n_valid)}%`
+                        : stat(v.summary.n_missing)}
+                    </span>
+                    <span className="wrap-anywhere text-muted-foreground text-xs">
+                      {v.flags.length ? v.flags.map(humanFlag).join(", ") : "None"}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className="col-span-2 @min-[42rem]:col-span-1">
+                      <Completeness valid={v.summary.n_valid} missing={v.summary.n_missing} />
+                    </span>
+                    <span className="hidden @min-[42rem]:block">
+                      <Distinct distinct={v.summary.n_distinct} rows={rows} />
+                    </span>
+                    <span className="hidden @min-[42rem]:block">
+                      <MeanSd mean={v.summary.mean} sd={v.summary.sd} topCoded={top} />
+                    </span>
+                  </>
+                )}
               </button>
               <AnimatePresence initial={false}>
                 {isOpen && (
@@ -283,10 +353,12 @@ export function VariableMatrix({ variables, rows }: { variables: DataCardVariabl
           );
         })}
       </ul>
-      <p className="border-t bg-muted/30 px-3 py-2 text-muted-foreground text-xs">
-        Target is the outcome to explain, Input explains it, Key identifies rows and is not analysed, None has no role
-        yet. The amber bracket on a mean means its largest values were grouped for privacy.
-      </p>
+      {!compact && (
+        <p className="border-t bg-muted/30 px-3 py-2 text-muted-foreground text-xs">
+          Target is the outcome to explain, Input explains it, Key identifies rows and is not analysed, None has no role
+          yet. The amber bracket on a mean means its largest values were grouped for privacy.
+        </p>
+      )}
     </div>
   );
 }

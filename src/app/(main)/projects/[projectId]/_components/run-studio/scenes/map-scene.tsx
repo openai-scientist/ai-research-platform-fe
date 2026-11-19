@@ -161,6 +161,7 @@ function rowOf(node: MapNode) {
 
 /** How each relation is drawn: colour by relation and polarity, line style by how far it can be trusted. */
 const RELATION: Record<MapRelation, { label: string; stroke: string; fill: string }> = {
+  cites: { label: "cites", stroke: "stroke-slate-500", fill: "fill-slate-500" },
   supports: { label: "supports", stroke: "stroke-emerald-600", fill: "fill-emerald-600" },
   contradicts: { label: "contradicts", stroke: "stroke-rose-600", fill: "fill-rose-600" },
   substantiates: { label: "substantiates", stroke: "stroke-orange-500", fill: "fill-orange-500" },
@@ -1849,7 +1850,10 @@ export function MapScene({
   const byId = useMemo(() => new Map(data.nodes.map((n) => [n.id, n])), [data.nodes]);
   const relations = useMemo(() => new Set(RELATION_ORDER.filter((r) => !hiddenRelations.has(r))), [hiddenRelations]);
   const used = useMemo(() => new Set(data.edges.map((e) => e.relation)), [data.edges]);
-  const issues = useMemo(() => checkGraph(data.nodes, data.edges), [data.nodes, data.edges]);
+  const issues = useMemo(
+    () => (data.fromArtifacts ? [] : checkGraph(data.nodes, data.edges)),
+    [data.fromArtifacts, data.nodes, data.edges],
+  );
   const placed = useMemo(
     () => (data.nodes.length ? layout(data.nodes, data.edges, collapsed) : EMPTY),
     [data.nodes, data.edges, collapsed],
@@ -2070,6 +2074,11 @@ export function MapScene({
 
   return (
     <div ref={scene} className="relative flex flex-col gap-3">
+      {data.fromArtifacts && (
+        <p className="rounded-lg bg-muted/60 px-3 py-2 text-muted-foreground text-xs">
+          This map uses the published hypotheses and their recorded evidence. Unrecorded canvas pieces remain open.
+        </p>
+      )}
       <Tabs value={tab} onValueChange={(v) => showTab(v as Tab)} className="gap-3">
         <div className="flex flex-wrap items-center gap-2">
           <TabsList>

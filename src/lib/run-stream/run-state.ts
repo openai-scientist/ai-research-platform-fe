@@ -1,3 +1,4 @@
+import type { ClaimScope } from "./claim-scope";
 import type {
   AgentRole,
   CanvasPiece,
@@ -53,6 +54,7 @@ import type {
   TestDesign,
   TopicScores,
   Verdict,
+  WorkCheck,
 } from "./contract";
 
 export interface DataContent {
@@ -74,6 +76,7 @@ export interface DataContent {
 
 export interface ScopeContent {
   stage: "scope";
+  claimScope?: ClaimScope;
   domains: string[];
   compute?: ComputeProfile;
   goal: { field: GoalField; label: string; value: string }[];
@@ -142,6 +145,7 @@ export interface SynthesizeContent {
 /** The run drawn as a discourse graph and as the nine pieces of a research canvas. */
 export interface MapContent {
   stage: "map";
+  fromArtifacts?: true;
   nodes: MapNode[];
   edges: MapEdge[];
   pieces: CanvasPiece[];
@@ -281,7 +285,7 @@ export interface FeedItem {
   kind: "message" | "event" | "decision";
   /** Stage the item happened in. */
   stageKey?: string;
-  /** The person's note, for decisions made at a review stop. */
+  /** A decision comment or additional context for an activity. */
   note?: string;
   /** The review stop a decision answered. */
   gateId?: string;
@@ -313,6 +317,9 @@ export interface RunState {
   /** The narration being streamed right now, or the last one. */
   message: { id: string; actor: AgentRole; text: string; done: boolean } | null;
   feed: FeedItem[];
+  /** Latest contract checks keyed by screen, step and checklist item. */
+  workChecks: Record<string, Record<string, Record<string, WorkCheck>>>;
+  workNotes: Record<string, string>;
   rules: Partial<Record<RuleId, "pass" | "hit">>;
   gate: Gate | null;
   decisions: FeedItem[];
@@ -425,6 +432,8 @@ export function initialRunState(runId: string): RunState {
     currentStageKey: null,
     message: null,
     feed: [],
+    workChecks: {},
+    workNotes: {},
     rules: {},
     gate: null,
     decisions: [],

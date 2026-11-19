@@ -4,6 +4,7 @@
 // (`<stage_key>.progress`) become the live narration; the run, stage, step and gate events do not map one to one. This
 // adapter turns the envelopes into the run studio's events, so the reducer and every scene work as they do for Popper.
 
+import { type ClaimScope, claimScopeSummary, updateClaimScope } from "./claim-scope";
 import type {
   AgentRole,
   Gate,
@@ -19,6 +20,8 @@ import type {
   StagePlan,
   StagePlanStep,
 } from "./contract";
+import { hypothesisWork } from "./hypothesis-work";
+import { type PublicationRef, type PublishedHypotheses, publishedMap } from "./published-hypotheses";
 
 /** A stored event of a pipeline run, as the backend sends it. */
 export interface PipelineEnvelope {
@@ -645,6 +648,7 @@ interface Shown {
 export class PipelineAdapter {
   private started = false;
   private datasetAccepted = false;
+  private claimScope?: ClaimScope;
   private screen: Screen | null = null;
   /** Index of the furthest step reached on this screen; steps only move forward. */
   private reached = -1;
@@ -664,6 +668,9 @@ export class PipelineAdapter {
   private charterBy: "you" | "pi" = "pi";
   /** The set the stage published: without the hypotheses dropped at the last stop, with any idea kept there. */
   private published: string[] | null = null;
+  private publication?: PublicationRef;
+  private pendingPublication?: PublicationRef;
+  private publishedDetails?: PublishedHypotheses;
   /** What the PI advised, by consultation kind (`charter`, `stage_outcome`). */
   private advice: Record<string, PiAdvice> = {};
   /** The round of hypotheses: each set sent back for revision starts the next one. */
@@ -692,6 +699,24 @@ export class PipelineAdapter {
   private at: PipelineEnvelope | null = null;
 
   constructor(private readonly run: PipelineRunInfo) {}
+
+  publicationToLoad(): PublicationRef | undefined {
+    return this.pendingPublication;
+  }
+
+  applyPublication(ref: PublicationRef, publication?: PublishedHypotheses): RunEvent[] {
+    this.out = [];
+    if (ref !== this.pendingPublication) return this.out;
+    this.pendingPublication = undefined;
+    if (publication) {
+      this.publishedDetails = publication;
+      const question = this.claimScope?.protocol.question ?? this.claimScope?.claim?.question;
+      this.emit("map.published", publishedMap(publication, question), undefined, "map");
+    }
+    if (this.gate?.kind === "accept" && this.gate.stageRunId === ref.stageRunId)
+      this.emit("gate.opened", { gate: this.acceptGate(this.gate.id) }, "pi", "map");
+    return this.out;
+  }
 
   /**
    * A run can end with no event saying so, such as one abandoned before its first stage opened. Given how the run
@@ -841,6 +866,26 @@ export class PipelineAdapter {
 
     const { type, payload } = envelope;
     const engine = `${envelope.stage_key ?? "hypothesis"}.`;
+    if (envelope.stage_key === "hypothesis") {
+      const claimScope = updateClaimScope(this.claimScope, type, payload);
+      if (claimScope && claimScope !== this.claimScope) {
+        this.claimScope = claimScope;
+        if (!this.screen) {
+          this.goTo("scope");
+          this.openStep("charter");
+        }
+        this.emit("scope.claim", claimScope, undefined, "scope");
+      }
+    }
+    if (
+      type === "run.step_changed" &&
+      envelope.stage_key === "hypothesis" &&
+      envelope.step_key === "work" &&
+      !this.screen
+    ) {
+      this.goTo("scope");
+      this.openStep("charter");
+    }
     if (type.startsWith(engine)) this.activity(type.slice(engine.length), payload);
     else this.lifecycle(type, payload, envelope.phase);
     return this.out;
@@ -941,6 +986,33 @@ export class PipelineAdapter {
     else if (kind === "progress") this.progress(payload);
     else if (kind === "review.finding") this.finding(payload);
     else if (kind === "decision") this.claimCheck(payload);
+    else if (this.at?.stage_key === "hypothesis") this.work(kind, payload);
+  }
+
+  private work(kind: string, payload: Record<string, unknown>) {
+    const work = hypothesisWork(kind, payload);
+    if (!work) return;
+    const { text, target, check, note } = work;
+    const key = target ? this.keyOf(target.stage) : this.screen?.key;
+    if (!check && !this.gate) {
+      if (target && key && this.at?.step_key === "work") {
+        this.goTo(key);
+        if (key === this.screen?.key) this.openStep(target.step);
+      } else if (!this.screen) {
+        this.goTo("scope");
+        this.openStep("charter");
+      }
+    }
+    const stageKey = key ?? this.screen?.key;
+    const step = target?.step ?? this.step ?? undefined;
+    const live =
+      !check && !this.gate && stageKey === this.screen?.key && step === (this.step ?? undefined)
+        ? work.live && kind !== "action"
+          ? "replace"
+          : "fallback"
+        : undefined;
+    const actor = step ? STEPS[step]?.actor : undefined;
+    this.emit("run.activity", { text, step_id: step, live, check, note }, actor, stageKey);
   }
 
   /** The reviewer asks whether the papers a hypothesis cites back it, one hypothesis at a time. */
@@ -1117,8 +1189,12 @@ export class PipelineAdapter {
         else if (payload.from === "paused") this.emit("run.status", { status: "running" });
         break;
       case "run.published": {
-        const ids = (payload.selection as { valid_ids?: unknown } | undefined)?.valid_ids;
-        if (Array.isArray(ids)) this.published = ids.map(String);
+        if (this.isHypothesisStage(this.at?.stage_key ?? undefined)) {
+          const ids = (payload.selection as { valid_ids?: unknown } | undefined)?.valid_ids;
+          if (Array.isArray(ids)) this.published = ids.map(String);
+          if (this.stageRun && typeof payload.artifact_id === "string")
+            this.publication = { stageRunId: this.stageRun, primaryId: payload.artifact_id };
+        }
         break;
       }
       case "decision.recorded":
@@ -1370,7 +1446,7 @@ export class PipelineAdapter {
     };
     const summary = this.answered(gate.kind, option, dropped, this.sent?.length ?? 0, params.kept?.length ?? 0);
     this.emit("gate.resolved", { gate_id: gateId, answer, summary }, "pi");
-    this.closeStep();
+    if (!(this.claimScope && gate.kind === "decision" && this.screen?.key === "scope")) this.closeStep();
     this.gate = null;
     this.decision = null;
     this.emit("run.status", { status: "running" });
@@ -1378,6 +1454,16 @@ export class PipelineAdapter {
 
   private stageStatus(status: string, reason?: unknown) {
     const stageKey = this.at?.stage_key ?? undefined;
+    if ((status === "COMPLETED" || status === "ACCEPTED") && this.isHypothesisStage(stageKey)) {
+      const stageRunId = this.stageRun;
+      const missingMap = !this.items("map.node").length || !this.items("canvas.piece").length;
+      if (
+        stageRunId &&
+        !this.publishedDetails &&
+        (!this.final().length || (this.publication && (!this.drafts().size || missingMap)))
+      )
+        this.pendingPublication ??= this.publication?.stageRunId === stageRunId ? this.publication : { stageRunId };
+    }
     if (status === "RUNNING" || status === "PENDING") this.recover();
     if (status === "COMPLETED") {
       if (this.isHypothesisStage(stageKey)) {
@@ -1402,7 +1488,8 @@ export class PipelineAdapter {
         let summary: string;
         if (hypothesisStage) {
           const selection = ((this.decision?.selection ?? {}) as { hypothesis_ids?: string[] }).hypothesis_ids;
-          const set = this.final();
+          const published = this.final();
+          const set = published.length ? published : (selection ?? []);
           const taken = selection ?? set;
           const dropped = set.filter((id) => !taken.includes(id));
           answer = { option_id: "accept", ...(dropped.length ? { dropped } : {}) };
@@ -1463,7 +1550,8 @@ export class PipelineAdapter {
 
   /** The set to accept: as the stage published it, or as it was picked when no publication was read. */
   private final() {
-    return this.published ?? this.set();
+    const eventSet = this.set();
+    return this.published ?? (eventSet.length ? eventSet : (this.publishedDetails?.hypotheses.map((h) => h.id) ?? []));
   }
 
   private kept() {
@@ -1621,6 +1709,7 @@ export class PipelineAdapter {
 
     const set = this.final();
     const drafts = this.drafts();
+    const published = new Map(this.publishedDetails?.hypotheses.map((h) => [h.id, h]));
     return {
       id,
       kind: "accept",
@@ -1642,7 +1731,13 @@ export class PipelineAdapter {
       ],
       ...this.stop("accept"),
       ...(this.advice.stage_outcome ? { advice: this.advice.stage_outcome } : {}),
-      selection: set.map((h) => ({ id: h, label: drafts.get(h) ?? h })),
+      selection: set.map((h) => ({
+        id: h,
+        label: drafts.get(h) ?? published.get(h)?.statement ?? h,
+        ...(!drafts.has(h) && published.has(h) ? { fromArtifact: true } : {}),
+        ...(published.get(h)?.falsify ? { falsify: published.get(h)?.falsify } : {}),
+      })),
+      ...(!set.length && this.pendingPublication ? { selectionPending: true } : {}),
     };
   }
 
@@ -1742,6 +1837,8 @@ export class PipelineAdapter {
     const count = (kind: string) => this.items(kind).length;
     switch (key) {
       case "scope": {
+        if (this.claimScope && !count("scope.goal") && !count("problem.subquestion") && !count("topic.evaluated"))
+          return claimScopeSummary(this.claimScope);
         const overall = this.items<{ overall: number }>("topic.evaluated")[0]?.overall;
         return [
           "Goal set",

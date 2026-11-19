@@ -17,7 +17,7 @@ import { isStudioRun, type RunSession, useProjectRun, useRunSession, useRunStudi
 import { displayStatus, liveStageKey } from "@/lib/run-stream/selectors";
 
 import { DatasetNowCard, DatasetRunAside } from "../dataset-run/dataset-run-aside";
-import { DatasetStageScene, useDatasetStagePresentation } from "../dataset-run/dataset-stage-scene";
+import { DatasetStageCard, DatasetStageScene, useDatasetStagePresentation } from "../dataset-run/dataset-stage-scene";
 import { DropBar, GateSheet } from "./gate-sheet";
 import { LocalNodeWaitBanner, SupersededDatasetBanner } from "./local-node-status";
 import { DATASET_STAGE, pipelineStageOf } from "./pipeline-stage-selection";
@@ -89,12 +89,14 @@ function RunWorkspace({ session }: { session: RunSession }) {
   const live = datasetLive ? DATASET_STAGE : (researchLive ?? (dataset && !ended ? "scope" : null));
   const datasetRun = useRunDetailQuery(session.projectId, runId, { enabled: Boolean(dataset) }).data?.data;
   const datasetId = datasetRun?.dataset_id ?? dataset?.id ?? "";
+  const acceptDataset = !datasetAccepted && state.gate?.stageKey === DATASET_STAGE && state.gate.kind === "accept";
   const datasetStage = useDatasetStagePresentation(
     session.projectId,
     datasetId,
     datasetRun,
     dataset?.model,
     datasetAccepted ? "completed" : status,
+    acceptDataset,
   );
   let headerStatus = status;
   if (datasetLive && status === "running" && datasetStage?.stageStatus === "waiting") headerStatus = "waiting";
@@ -404,6 +406,7 @@ function RunWorkspace({ session }: { session: RunSession }) {
                             onView={setDatasetFocus}
                             studio
                             handoff={handoff}
+                            cardInGate={Boolean(showGate && acceptDataset && !minimized && !dropMode)}
                           />
                         ) : hypothesisLocked ? (
                           <Pane title="Starts after the Dataset stage is accepted">
@@ -506,6 +509,16 @@ function RunWorkspace({ session }: { session: RunSession }) {
                       if (state.gate?.kind === "hypotheses" && round && round !== shown) setViewKey(round);
                     }}
                     pending={answering}
+                    documentPreview={
+                      acceptDataset && datasetStage && !minimized ? (
+                        <DatasetStageCard
+                          stage={datasetStage}
+                          projectId={session.projectId}
+                          datasetId={datasetId}
+                          runId={runId}
+                        />
+                      ) : undefined
+                    }
                   />
                 )}
                 {showGate && dropMode && (

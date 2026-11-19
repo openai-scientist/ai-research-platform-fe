@@ -196,6 +196,7 @@ function Steps({ state }: { state: RunState }) {
           done: stage.doneStepIds.includes(step.id),
           now,
           asking: now && Boolean(step.gate && state.gate),
+          checks: Object.values(state.workChecks[stage.plan.key]?.[step.id] ?? {}),
         };
       })}
     />
@@ -274,6 +275,7 @@ function Activity({ state }: { state: RunState }) {
                 #{String(item.seq).padStart(4, "0")}
               </span>
               <p className={cn("mt-px leading-relaxed", you && "font-medium")}>{item.text}</p>
+              {item.kind === "event" && item.note && <p className="mt-1 leading-relaxed">{item.note}</p>}
             </div>
           </motion.li>
         );

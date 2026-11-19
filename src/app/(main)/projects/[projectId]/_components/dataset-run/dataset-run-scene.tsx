@@ -2,33 +2,24 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import Link from "next/link";
-
 import { cn } from "cn";
-import {
-  ArrowRight,
-  Check,
-  ClipboardCheck,
-  FileSpreadsheet,
-  Flag,
-  HardDrive,
-  MousePointer2,
-  ShieldCheck,
-} from "lucide-react";
+import { Check, ClipboardCheck, FileSpreadsheet, Flag, HardDrive, MousePointer2 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
-import type { DataCardBody, DataCardVariable } from "@/lib/api/services/fetch-dataset-runs";
+import type { DataCardVariable, DatasetReviewFindings } from "@/lib/api/services/fetch-dataset-runs";
 import type { DatasetVersionItem } from "@/lib/api/services/fetch-datasets";
 import type { LocalNodeItem } from "@/lib/api/services/fetch-local-nodes";
-import { activeAgent, type DatasetRunModel, type StepView } from "@/lib/run-stream/dataset-run-model";
+import { activeAgent, type DatasetRunModel, REVIEW_KEY, type StepView } from "@/lib/run-stream/dataset-run-model";
 
 import { AnimatedNumber } from "../run-studio/animated-number";
 import { AgentAvatar } from "../run-studio/run-bits";
 import { AGENTS } from "../run-studio/run-meta";
 import { RUN_EASE } from "../run-studio/run-track";
 import { Pane, PendingLines } from "../run-studio/scenes/scene-ui";
+import { DatasetHandOffReview } from "./dataset-hand-off-review";
 import { StepVisual } from "./dataset-run-visuals";
 
 /** Seconds the long computation has run: the engine's last count plus the time since it arrived. */
@@ -233,6 +224,8 @@ export function DatasetRunScene({
   variables,
   node,
   showLocalProgress,
+  findings,
+  waitingForAccept,
 }: {
   steps: StepView[];
   model: DatasetRunModel;
@@ -245,12 +238,16 @@ export function DatasetRunScene({
   variables?: DataCardVariable[];
   node?: LocalNodeItem;
   showLocalProgress?: boolean;
+  findings?: DatasetReviewFindings;
+  waitingForAccept?: boolean;
 }) {
   const items = steps.filter((s) => s.gate !== true || s.key === "release");
   const done = steps.filter((s) => s.state === "done").length;
   const current = steps.find((s) => s.state === "now" || s.state === "asking");
-  const shown = steps.find((s) => s.key === focusKey) ?? current;
-  const started = Object.keys(model.items).length > 0 || model.releaseWait || model.published || Boolean(focusKey);
+  const recordedReview = Boolean(model.review ?? model.reviewResult);
+  const reviewStep = steps.find((s) => s.key === REVIEW_KEY);
+  const shown = steps.find((s) => s.key === focusKey) ?? current ?? (recordedReview ? reviewStep : undefined);
+  const started = Object.keys(model.items).length > 0 || model.releaseWait || model.published || Boolean(shown);
   return (
     <div className="flex flex-col gap-4">
       <Pane
@@ -324,16 +321,36 @@ export function DatasetRunScene({
                   exit={{ opacity: 0 }}
                   transition={{ duration: 0.45, ease: RUN_EASE }}
                 >
-                  <FocusStep
-                    step={shown}
-                    model={model}
-                    live={live}
-                    current={shown === current}
-                    version={version}
-                    variables={variables}
-                    node={node}
-                    local={local}
-                  />
+                  {shown.key === REVIEW_KEY ? (
+                    <Pane
+                      title={shown.title}
+                      aside={
+                        shown.state === "done" ? (
+                          <Badge variant="secondary">Step complete</Badge>
+                        ) : (
+                          <Chip tone={toneOf(shown)} />
+                        )
+                      }
+                    >
+                      <DatasetHandOffReview
+                        model={model}
+                        findings={findings}
+                        waitingForAccept={Boolean(waitingForAccept)}
+                        reviewing={shown.state === "now"}
+                      />
+                    </Pane>
+                  ) : (
+                    <FocusStep
+                      step={shown}
+                      model={model}
+                      live={live}
+                      current={shown === current}
+                      version={version}
+                      variables={variables}
+                      node={node}
+                      local={local}
+                    />
+                  )}
                 </motion.div>
               </AnimatePresence>
             </div>
@@ -351,79 +368,6 @@ export function DatasetRunScene({
           </Pane>
         </>
       )}
-
-      {model.review && (
-        <Pane
-          title={
-            <span className="flex items-center gap-2">
-              <ShieldCheck className="size-4 text-muted-foreground" />
-              Independent review
-            </span>
-          }
-          aside={`Round ${model.review.round}`}
-        >
-          <div className="flex flex-wrap items-center gap-4 text-sm">
-            <AgentAvatar agent="reviewer" size="md" />
-            <span>
-              <b className="font-mono tabular-nums">{model.review.findings}</b>{" "}
-              {model.review.findings === 1 ? "finding" : "findings"} on the {model.review.object.replaceAll("_", " ")}
-            </span>
-            <span
-              className={cn(
-                "rounded-full px-2 py-0.5 font-medium text-xs",
-                model.review.blocking
-                  ? "bg-amber-500/15 text-amber-800 dark:text-amber-300"
-                  : "bg-emerald-500/12 text-emerald-700 dark:text-emerald-300",
-              )}
-            >
-              {model.review.blocking ? `${model.review.blocking} block the hand-off` : "None block the hand-off"}
-            </span>
-          </div>
-        </Pane>
-      )}
     </div>
-  );
-}
-
-/** After the run: what it published, where to read it, and who uses it next. */
-export function DatasetRunEnd({
-  projectId,
-  datasetId,
-  runId,
-  card,
-  questions,
-  accepted,
-}: {
-  projectId: string;
-  datasetId: string;
-  runId: string;
-  card?: DataCardBody | null;
-  questions: number;
-  accepted: boolean;
-}) {
-  return (
-    <Pane
-      title={
-        <span className="flex items-center gap-2">
-          <ShieldCheck className="size-4 shrink-0 text-emerald-600" aria-hidden="true" />
-          {accepted ? "Dataset stage accepted" : "Data card ready for review"}
-        </span>
-      }
-    >
-      <p className="text-sm">
-        {card
-          ? `${card.title}: ${card.n_rows.toLocaleString("en-US")} rows, ${card.n_columns} variables${questions ? `, ${questions} ${questions === 1 ? "question" : "questions"} in the brief` : ""}.`
-          : "The data card is published."}
-      </p>
-      <p className="mt-1 text-muted-foreground text-sm">
-        Used by Hypothesis and Experiment design. They read the card and the brief, never the rows.
-      </p>
-      <Button className="mt-3" size="sm" asChild>
-        <Link href={`/projects/${projectId}/datasets/${datasetId}?view=card&run=${runId}`}>
-          Open the Data card
-          <ArrowRight data-icon="inline-end" />
-        </Link>
-      </Button>
-    </Pane>
   );
 }

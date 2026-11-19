@@ -1,11 +1,15 @@
 import { createElement } from "react";
 
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
 import type { Gate } from "@/lib/run-stream/contract";
+import published from "@/lib/run-stream/fixtures/hypothesis-published.json";
+import { initialRunState } from "@/lib/run-stream/run-state";
 
 import { AcceptReview } from "./accept-review";
+import { WorkspaceContext } from "./workspace-context";
 
 vi.mock("motion/react", () => ({
   AnimatePresence: "div",
@@ -47,5 +51,57 @@ describe("AcceptReview", () => {
     expect(acceptButton).toBeDefined();
     expect(acceptButton).not.toMatch(/\sdisabled(?:=|\s|>)/);
     expect(markup).not.toMatch(/Take forward|0 of 0|Accept 0/);
+  });
+
+  it("shows a published hypothesis as picked and makes Accept available", () => {
+    const source = published.primary.hypotheses[0];
+    const state = initialRunState("run-1");
+    const gate: Gate = {
+      id: "accept-hypotheses",
+      kind: "accept",
+      title: "Accept the hypotheses",
+      why: "",
+      summary: [],
+      options: [],
+      stop_index: 1,
+      stop_total: 1,
+      selection: [{ id: source.id, label: source.statement, falsify: source.falsify.text, fromArtifact: true }],
+    };
+    const markup = renderToStaticMarkup(
+      createElement(
+        QueryClientProvider,
+        { client: new QueryClient() },
+        createElement(
+          WorkspaceContext.Provider,
+          {
+            value: {
+              session: {
+                runId: "run-1",
+                projectId: "project-1",
+                label: "RUN-0719",
+                pipeline: true,
+                createdAt: "",
+                state,
+              },
+              state,
+              follow: false,
+              setFollow: () => undefined,
+              dropMode: false,
+              dropped: [],
+              toggleDrop: () => undefined,
+              kept: [],
+              toggleKeep: () => undefined,
+            },
+          },
+          createElement(AcceptReview, { gate, header: null, pending: false, onAnswer: () => undefined }),
+        ),
+      ),
+    );
+    const accept = markup.match(/<button\b[^>]*>(?:(?!<\/button>)[\s\S])*?Accept 1<\/button>/)?.[0];
+    expect(accept).toBeDefined();
+    expect(accept).not.toMatch(/\sdisabled(?:=|\s|>)/);
+    expect(markup).toContain("1 of 1 picked");
+    expect(markup).toContain(source.statement);
+    expect(markup).toContain(source.falsify.text);
   });
 });

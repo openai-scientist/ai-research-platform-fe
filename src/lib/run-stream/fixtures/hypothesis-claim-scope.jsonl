@@ -1,0 +1,11 @@
+{"seq":1,"type":"run.step_changed","payload":{"step_key":"work"}}
+{"seq":2,"type":"hypothesis.ask_user","payload":{"question":"Decision: State the claim you want tested, or skip and let the review propose the claims."}}
+{"seq":3,"type":"run.gate_opened","phase":"awaiting_researcher","payload":{"gate_id":"ask_user-1","kind":"question","step_key":"work","header":"State a claim","prompt":"Decision: State the claim you want tested, or skip and let the review propose the claims.","options":[{"option_id":"state","label":"State a claim"},{"option_id":"skip","label":"Skip: let the review propose the claims"}],"default_option_id":"skip"}}
+{"seq":4,"type":"decision.recorded","payload":{"option_id":"state"}}
+{"seq":5,"type":"run.gate_closed","payload":{"gate_id":"ask_user-1","action":"approve"}}
+{"seq":6,"type":"hypothesis.ask_user_answered","payload":{"question":"Decision: State the claim you want tested, or skip and let the review propose the claims.","option_id":"state","label":"State a claim","by":"researcher","params":{"topic":"Student sleep habits","question":"Is longer sleep associated with higher grades?","why":"Schools need evidence to guide policies that support student sleep.","outcome":"course_grade","exposure":"nightly_sleep_hours","direction":"> 0"}}}
+{"seq":7,"type":"hypothesis.agent.tool","payload":{"agent":"repair-evidence_review","turn":19,"tool":"write_protocol","args":"{\"question\": \"How does sleep duration relate to academic attainment?\", \"sources\": [\"OpenAlex\", \"Crossref\"], \"year_min\": 2015, \"inclusion\": [\"Studies reporting sleep and grades\"], \"exclusion\": [\"Stud...","ok":true,"ms":14}}
+{"seq":8,"type":"hypothesis.action","payload":{"action":"hypothesis.accept_protocol","actor":"agent","outcome":"done"}}
+{"seq":9,"type":"hypothesis.agent.tool","payload":{"agent":"repair-evidence_review","turn":20,"tool":"lock_protocol","args":"{}","ok":true,"ms":6}}
+{"seq":10,"type":"hypothesis.item","payload":{"key":"protocol","state":"green","reason":""}}
+{"seq":11,"type":"hypothesis.agent.tool","payload":{"agent":"repair-evidence_review","turn":21,"tool":"run_search","args":"{\"queries\": [\"Nightly sleep duration academic attainment\"]}","ok":true,"ms":420}}

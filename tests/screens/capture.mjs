@@ -1,7 +1,7 @@
 import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { mkdir, readFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
@@ -9,6 +9,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
+const APP_DIR = process.env.SCREENS_APP_DIR ? resolve(process.env.SCREENS_APP_DIR) : ROOT;
 // SCREENS_PORT: capture on another port when a real dev server already owns 3000.
 const PORT = process.env.SCREENS_PORT ?? "3000";
 const BASE_URL = `http://127.0.0.1:${PORT}`;
@@ -20,7 +21,8 @@ const TAG = tagIndex >= 0 ? process.argv[tagIndex + 1] : "FE-S0";
 // GUIDE-2: `--only tag1,tag2` captures just those routes (no Add data flows, no count check).
 const onlyIndex = process.argv.indexOf("--only");
 const ONLY = onlyIndex >= 0 ? process.argv[onlyIndex + 1].split(",") : null;
-const OUTPUT = join(ROOT, "test-results", "screens", TAG);
+const OUTPUT = join(ROOT, "test-results", "screens", TAG, process.env.SCREENS_VARIANT ?? "");
+const studioHeights = [];
 const timestamp = "2026-11-13T12:00:00.000Z";
 let forceEmptyDatasets = false;
 // GUIDE-2: the Local Node last seen two days ago and no longer online.
@@ -76,6 +78,18 @@ const ds6Brief = {
   ],
   chosen: { question_id: "Q1", text: "Does access to services explain commute time?" },
 };
+const ds6Review = {
+  passed: false,
+  findings: [
+    {
+      finding_id: "F1",
+      severity: "blocking",
+      issue: "The data card does not record a split.",
+      suggestion: "Define the split before using the card for fitted analysis.",
+      open: true,
+    },
+  ],
+};
 function ds8Events() {
   const all = JSON.parse(readFileSync(join(ROOT, "tests/screens/fixtures/dataset-run-real-events.json"), "utf8"));
   return all.slice(0, ds8Upto).map((e) => ({ ...e, run_id: DS6_RUN_ID, stage_run_id: "stage-1" }));
@@ -116,9 +130,29 @@ function ds6Run() {
   };
 }
 function studioDatasetEvents() {
-  const events = ds7Events();
+  const events = ds7Events().map((event) =>
+    isDatasetCard && event.type === "dataset.review"
+      ? {
+          ...event,
+          summary: "Review round 1 of data_card: 1 blocking",
+          payload: { ...event.payload, findings: 1, blocking: 1 },
+        }
+      : event,
+  );
   const last = events.at(-1);
-  const complete = { ...last, seq: last.seq + 1, type: "stage.status_changed", payload: { status: "COMPLETED" } };
+  if (isDatasetCard)
+    events.push({
+      ...last,
+      seq: last.seq + 1,
+      type: "review.completed",
+      payload: { round: 1, passed: false, artifact_id: "art-review", error: null },
+    });
+  const complete = {
+    ...last,
+    seq: events.at(-1).seq + 1,
+    type: "stage.status_changed",
+    payload: { status: "COMPLETED" },
+  };
   if (!studioAccepted) return [...events, complete];
   const accept = { ...complete, seq: complete.seq + 1, payload: { status: "ACCEPTED" } };
   const goals = {
@@ -203,7 +237,24 @@ function ds7Events() {
   return out;
 }
 const RUN_ID = "78d5a948-f043-45bc-bbdf-35af42aa71fb";
+const WORK_TOPIC = "Does nightly sleep duration affect academic attainment?";
 function runEvents() {
+  if (runScenario === "agent-work" || runScenario === "claim-scope")
+    return readFileSync(join(ROOT, `src/lib/run-stream/fixtures/hypothesis-${runScenario}.jsonl`), "utf8")
+      .trim()
+      .split("\n")
+      .slice(0, 15)
+      .map((line) => ({
+        run_id: RUN_ID,
+        stage_run_id: "b2a929ba-78cb-4888-8a9b-74b739ee9fdc",
+        stage_key: "hypothesis",
+        step_key: "work",
+        phase: "drafting",
+        class: "activity",
+        created_at: timestamp,
+        ts: timestamp,
+        ...JSON.parse(line),
+      }));
   const all = readFileSync(join(ROOT, "src/lib/run-stream/fixtures/logos-run.jsonl"), "utf8")
     .split("\n")
     .filter(Boolean)
@@ -222,6 +273,7 @@ function runEvents() {
 }
 function runItem() {
   const events = runEvents();
+  const topic = isHypothesisWork ? WORK_TOPIC : "Does the commute time depend on access to services?";
   return {
     id: RUN_ID,
     project_id: PROJECT_ID,
@@ -239,8 +291,8 @@ function runItem() {
     finished_at: null,
     updated_at: timestamp,
     label: "RUN-78D5",
-    title: "Does the commute time depend on access to services?",
-    ...(runScenario ? { case: { problem: { text: "Does the commute time depend on access to services?" } } } : {}),
+    title: topic,
+    ...(runScenario ? { case: { problem: { text: topic } } } : {}),
     pipeline_key: "logos",
     review_mode: "light",
     domains: ["urban planning"],
@@ -530,10 +582,13 @@ function envelope(data, total = Array.isArray(data) ? data.length : null) {
 function dataForPath(path) {
   if (path === "/auth/me")
     return envelope({
-      user,
+      user: isAdminKeys ? { ...user, platform_role: "platform_admin" } : user,
       session,
       memberships: [{ project_id: PROJECT_ID, project_name: project.name, role: "project_manager", archived: false }],
     });
+  if (isAdminKeys && path === "/admin/integrations")
+    return envelope([{ name: "typesafe", configured: true, updated_at: null }]);
+  if (isAdminKeys && path === "/admin/models") return envelope({ stage: null, review: null });
   if (path === "/projects") return envelope([project]);
   if (path === `/projects/${PROJECT_ID}`) return envelope(project);
   if (path === `/projects/${PROJECT_ID}/access-context`) return envelope(access);
@@ -598,7 +653,28 @@ function dataForPath(path) {
   if (path === `/projects/${PROJECT_ID}/runs/${DS6_RUN_ID}/artifacts/art-brief/download` && isDs13)
     return { questions: [] };
   if (path === `/projects/${PROJECT_ID}/runs/${DS6_RUN_ID}/artifacts/art-card/download`)
-    return { ...ds6Card, variables: [...localCard.variables, ...ds6Card.variables] };
+    return {
+      ...ds6Card,
+      ...(isDatasetCard
+        ? {
+            description: "Aggregates from the travel diary released by the Local Node.",
+            gaps: [...ds6Card.gaps, "Not computed on the Local Node: text_variants (levels withheld)."],
+          }
+        : {}),
+      variables: [...localCard.variables, ...ds6Card.variables],
+    };
+  if (path === `/projects/${PROJECT_ID}/runs/${DS6_RUN_ID}/artifacts/art-review/download`) return ds6Review;
+  const replayedDownload = path.match(
+    new RegExp(`^/projects/${PROJECT_ID}/runs/${DS6_RUN_ID}/artifacts/([^/]+)/download$`),
+  );
+  if (ds8Upto && replayedDownload) {
+    const delivery = ds8Events().find(
+      (event) => event.type === "artifact.delivered" && event.payload.artifact_id === replayedDownload[1],
+    );
+    if (delivery?.payload.schema === "dataset.data_card/v1")
+      return JSON.parse(readFileSync(join(ROOT, "tests/screens/fixtures/dataset-run-real-card.json"), "utf8"));
+    if (delivery?.payload.schema === "review.findings/v1") return ds6Review;
+  }
   if (path === `/projects/${PROJECT_ID}/runs/${DS6_RUN_ID}/artifacts/art-brief/download`) return ds6Brief;
   if (runScenario) {
     if (path === `/projects/${PROJECT_ID}/runs/${RUN_ID}`) return envelope(runItem());
@@ -678,7 +754,7 @@ function startDevServer(apiPort) {
   const npm = process.platform === "win32" ? "npm.cmd" : "npm";
   const bundler = TAG === "FE-DS4" || process.env.SCREENS_WEBPACK ? ["--webpack"] : [];
   return spawn(npm, ["run", "dev", "--", ...bundler, "--hostname", "127.0.0.1", "--port", PORT], {
-    cwd: ROOT,
+    cwd: APP_DIR,
     env: { ...process.env, API_URL: `http://127.0.0.1:${apiPort}` },
     stdio: "inherit",
     windowsHide: true,
@@ -706,7 +782,10 @@ const isDs8 = TAG.startsWith("FE-DS8") || isDs10;
 const isDs9 = TAG === "FE-DS9";
 const isRun1 = TAG === "FE-RUN1";
 const isDatasetLive = TAG.startsWith("dataset-live-");
-const isDatasetStudio = TAG === "dataset-studio";
+const isDatasetCard = TAG === "dataset-inline-card";
+const isHypothesisWork = TAG === "hypothesis-live-work";
+const isAdminKeys = TAG === "admin-integration-keys";
+const isDatasetStudio = TAG === "dataset-studio" || isDatasetCard;
 const verifyDatasetLive = TAG === "dataset-live-after";
 // E2E journey set: desktop light and mobile dark only, viewport captures.
 const isE2e = TAG === "E2E";
@@ -817,6 +896,70 @@ async function expectExpandedStage(workspace, name) {
   return pipeline;
 }
 
+async function recordStudioHeight(workspace, scenario, size, theme) {
+  const dimensions = await workspace.evaluate((run) => {
+    const header = run.querySelector(":scope > header");
+    const track = run.querySelector('nav[aria-label="Pipeline stages"]');
+    const trackBox = track.getBoundingClientRect();
+    if (track.querySelector("[data-stage-steps]")) {
+      const pills = [...track.querySelectorAll(":scope > ol > li > button")];
+      if (
+        pills.some((pill) => {
+          const box = pill.getBoundingClientRect();
+          return box.left < trackBox.left - 1 || box.right > trackBox.right + 1 || box.bottom > trackBox.bottom;
+        })
+      )
+        throw new Error("A pipeline pill left the inline track");
+      track.scrollLeft = 20;
+      if (track.scrollLeft !== 0) throw new Error("The entire pipeline track scrolls");
+    }
+    return {
+      header: Math.round(header.getBoundingClientRect().height),
+      stepper: Math.round(trackBox.height),
+    };
+  });
+  studioHeights.push({
+    scenario,
+    viewport: size.name,
+    theme,
+    ...dimensions,
+    total: dimensions.header + dimensions.stepper,
+  });
+}
+
+async function waitForStudioSteps(page, pipeline, name) {
+  const stage = pipeline.getByRole("button", { name, exact: true, expanded: true });
+  const stepsLabel = `Steps of the ${name} stage`;
+  const segment = stage.locator("..").locator("[data-stage-steps]");
+  if (await segment.count()) {
+    await segment.waitFor();
+    await page.waitForFunction(
+      () => {
+        const expanded = document.querySelector('nav[aria-label="Pipeline stages"] button[aria-expanded="true"]');
+        const segment = expanded?.parentElement.querySelector("[data-stage-steps]");
+        return segment && Number(getComputedStyle(segment).opacity) >= 0.99;
+      },
+      undefined,
+      { timeout: 3000 },
+    );
+    return page.viewportSize().width < 640
+      ? segment.getByRole("button", { name: stepsLabel })
+      : segment.getByRole("list", { name: stepsLabel });
+  }
+
+  const list = pipeline.getByRole("list", { name: stepsLabel });
+  await list.waitFor();
+  await page.waitForFunction(
+    (label) => {
+      const steps = document.querySelector(`[aria-label="${label}"]`);
+      return steps?.parentElement?.parentElement?.style.height === "auto";
+    },
+    stepsLabel,
+    { timeout: 5000 },
+  );
+  return list;
+}
+
 async function verifyStudioDataset(page, scenario) {
   if (scenario.tag === "dataset-deep-link") {
     const direct = page.getByRole("region", { name: /Dataset run/ });
@@ -829,11 +972,13 @@ async function verifyStudioDataset(page, scenario) {
   if (scenario.tag === "hypothesis-locked") {
     await pipeline.getByRole("button", { name: "Hypothesis", exact: true }).click();
     await expectExpandedStage(workspace, "Hypothesis");
-    await pipeline.getByRole("list", { name: "Steps of the Hypothesis stage" }).waitFor();
+    await waitForStudioSteps(page, pipeline, "Hypothesis");
   }
-  if (scenario.tag === "dataset-accept")
-    await workspace.getByRole("dialog", { name: "Accept the data card" }).waitFor();
-  else await workspace.getByText(scenario.marker).locator("visible=true").first().waitFor();
+  if (scenario.tag === "dataset-accept") {
+    const accept = workspace.getByRole("dialog", { name: "Accept the data card" });
+    await accept.getByRole("region", { name: "Data card", exact: true }).waitFor();
+    await accept.getByText("Withheld", { exact: true }).first().waitFor();
+  } else await workspace.getByText(scenario.marker).locator("visible=true").first().waitFor();
   if (scenario.tag === "dataset-local-running") {
     const agent = workspace.locator("[data-dataset-agent]");
     await agent.waitFor();
@@ -848,9 +993,17 @@ async function verifyStudioDataset(page, scenario) {
   }
   if (scenario.tag === "dataset-cloud-running") {
     await workspace.getByText("Commute and Service Access Survey", { exact: true }).first().waitFor();
-    const track = pipeline.getByRole("list", { name: "Steps of the Dataset stage" });
-    if (await track.getByRole("button", { name: "Release", exact: true }).count())
+    const track = await waitForStudioSteps(page, pipeline, "Dataset");
+    if (await track.getAttribute("aria-haspopup")) {
+      await track.click();
+      const menu = page.getByRole("menu", { name: "Steps of the Dataset stage" });
+      await menu.waitFor();
+      if (await menu.getByRole("menuitemradio", { name: /Review the release/ }).count())
+        throw new Error("Cloud has a release step");
+      await page.keyboard.press("Escape");
+    } else if (await track.getByRole("button", { name: "Release", exact: true }).count()) {
       throw new Error("Cloud has a release step");
+    }
     if (await workspace.getByText("Running on your Local Node", { exact: true }).count())
       throw new Error("Cloud is labelled as a Local Node run");
   }
@@ -868,9 +1021,30 @@ async function captureDatasetHandoff(page, size, theme) {
   const workspace = page.getByRole("region", { name: /Research run/ });
   const capture = async (tag) => {
     const path = `${tag}-${size.name}-${theme}.png`;
+    await recordStudioHeight(workspace, tag, size, theme);
     await page.screenshot({ path: join(OUTPUT, path), animations: "disabled" });
     return path;
   };
+  const accept = workspace.getByRole("dialog", { name: "Accept the data card" });
+  const extra = [];
+  if (isDatasetCard) {
+    const toggle = accept.getByRole("button", { name: "Expand data card" });
+    await toggle.click();
+    await accept.getByText("Aggregates from the travel diary released by the Local Node.").waitFor();
+    extra.push(await capture("dataset-card-expanded"));
+    await accept.getByRole("button", { name: "Hide to look at the work" }).click();
+    await accept.waitFor({ state: "hidden" });
+    await workspace.getByText("Waiting for you: accept the data card", { exact: true }).waitFor();
+    await workspace.getByText("The data card does not record a split.", { exact: true }).scrollIntoViewIfNeeded();
+    await page.waitForTimeout(700);
+    extra.push(await capture("dataset-recorded-review"));
+    await workspace
+      .getByRole("region", { name: "Data card", exact: true })
+      .getByRole("heading")
+      .scrollIntoViewIfNeeded();
+    await workspace.getByRole("button", { name: "Answer", exact: true }).click();
+    await accept.getByRole("region", { name: "Data card", exact: true }).waitFor();
+  }
   await workspace
     .getByRole("dialog", { name: "Accept the data card" })
     .getByRole("button", { name: "Accept", exact: true })
@@ -880,12 +1054,12 @@ async function captureDatasetHandoff(page, size, theme) {
     .first()
     .waitFor();
   await workspace.getByRole("dialog", { name: "Accept the data card" }).waitFor({ state: "hidden" });
-  await expectExpandedStage(workspace, "Dataset");
+  await waitForStudioSteps(page, await expectExpandedStage(workspace, "Dataset"), "Dataset");
   const handoff = await capture("dataset-handoff");
 
   await workspace.getByRole("heading", { name: "Scope the question" }).scrollIntoViewIfNeeded();
   const pipeline = await expectExpandedStage(workspace, "Hypothesis");
-  await pipeline.getByRole("list", { name: "Steps of the Hypothesis stage" }).waitFor();
+  await waitForStudioSteps(page, pipeline, "Hypothesis");
   const scope = await capture("hypothesis-scope");
   await pipeline.getByRole("button", { name: "Dataset", exact: true, expanded: false }).click();
   await expectExpandedStage(workspace, "Dataset");
@@ -893,16 +1067,21 @@ async function captureDatasetHandoff(page, size, theme) {
   if ((await pipeline.getByRole("button", { name: "Hypothesis", exact: true }).getAttribute("aria-current")) !== "step")
     throw new Error("Hypothesis stopped being marked live during Dataset review");
   await workspace.getByRole("link", { name: "Open the Data card" }).waitFor();
-  const steps = pipeline.getByRole("list", { name: "Steps of the Dataset stage" });
-  const release = steps.getByRole("button", { name: "Release", exact: true });
-  await release.waitFor();
-  await page.waitForFunction(() => {
-    const list = document.querySelector('[aria-label="Steps of the Dataset stage"]');
-    const expanding = list?.parentElement?.parentElement;
-    return expanding?.style.height === "auto";
-  });
+  if (isDatasetCard) await workspace.getByRole("region", { name: "Data card", exact: true }).waitFor();
+  const steps = await waitForStudioSteps(page, pipeline, "Dataset");
   const review = await capture("dataset-finished-review");
-  await release.click();
+  if (await steps.getAttribute("aria-haspopup")) {
+    await steps.focus();
+    await page.keyboard.press("Enter");
+    const menu = page.getByRole("menu", { name: "Steps of the Dataset stage" });
+    await menu.getByRole("menuitemradio", { name: /Review the release/ }).click();
+    await menu.waitFor({ state: "hidden" });
+    const summary = await steps.textContent();
+    if (!summary.includes("Step 1 of") || !summary.includes("Release"))
+      throw new Error("The compact step did not update");
+  } else {
+    await steps.getByRole("button", { name: "Release", exact: true }).click();
+  }
   await workspace.getByText("Reviewed", { exact: true }).waitFor();
   let panel = workspace.locator("aside");
   if (size.width < 1024) {
@@ -914,7 +1093,7 @@ async function captureDatasetHandoff(page, size, theme) {
     .getByRole("tabpanel")
     .getByText(/Review round 1/)
     .waitFor();
-  return [handoff, scope, review];
+  return [...extra, handoff, scope, review];
 }
 
 async function capture() {
@@ -1218,7 +1397,22 @@ async function capture() {
                                   run: "review",
                                 },
                               ];
-        for (const item of isDatasetStudio ? studioRoutes : isDatasetLive ? datasetLiveRoutes : routes) {
+        const workRoutes = [
+          { tag: "hypothesis-mid-search", url: `${common}/experiments?run=${RUN_ID}`, run: "agent-work" },
+          { tag: "hypothesis-claim-scope", url: `${common}/experiments?run=${RUN_ID}`, run: "claim-scope" },
+        ];
+        const adminRoutes = [{ tag: "admin-integrations", url: "admin/providers" }];
+        const captureRoutes = isAdminKeys
+          ? adminRoutes
+          : isHypothesisWork
+            ? workRoutes
+            : isDatasetStudio
+              ? studioRoutes
+              : isDatasetLive
+                ? datasetLiveRoutes
+                : routes;
+        for (const item of captureRoutes) {
+          if (isDatasetCard && item.tag !== "dataset-accept") continue;
           if (ONLY && !ONLY.includes(item.tag)) continue;
           forceEmptyDatasets = isDs5 && item.empty === true;
           nodeOffline = item.offline === true;
@@ -1233,7 +1427,7 @@ async function capture() {
           for (let attempt = 0; attempt < 4; attempt += 1) {
             response = await page.goto(`${BASE_URL}/${item.url}`, {
               waitUntil: isRun1 ? "domcontentloaded" : "networkidle",
-              timeout: isDs4 || process.env.SCREENS_WEBPACK ? 240_000 : 60_000,
+              timeout: isDs4 || process.env.SCREENS_WEBPACK || APP_DIR !== ROOT ? 240_000 : 60_000,
             });
             if (response && response.status() < 400) break;
             await page.waitForTimeout(750 * (attempt + 1));
@@ -1262,7 +1456,7 @@ async function capture() {
               `${item.tag}: expected ${theme} theme, got mode=${themeApplied.mode}, dark=${themeApplied.darkClass}`,
             );
           }
-          if (!isDatasetLive && !isDatasetStudio)
+          if (!isDatasetLive && !isDatasetStudio && !isHypothesisWork && !isAdminKeys)
             await page
               .getByRole("heading", {
                 name: /Commute and Service Access Survey|Neighborhood Travel Diary|Datasets|Local Nodes|Version history/,
@@ -1282,7 +1476,47 @@ async function capture() {
             await page.getByRole("button", { name: "History" }).click();
             await page.getByRole("button", { name: "Show version 1 in the preview" }).waitFor({ timeout: 10_000 });
           }
-          if (item.run) {
+          if (isHypothesisWork) {
+            const workspace = page.getByRole("region", { name: /Research run/ });
+            const stepper = workspace.locator('[data-stage-steps="hypothesis"]');
+            await workspace
+              .getByRole("heading", { name: /^Search the literature/ })
+              .waitFor({ timeout: 20_000 })
+              .catch(async (error) => {
+                await page.screenshot({ path: join(OUTPUT, `debug-${size.name}-${theme}.png`) });
+                throw error;
+              });
+            await workspace
+              .getByText(/Searching the literature: Nightly sleep duration academic attainment/)
+              .locator("visible=true")
+              .first()
+              .waitFor();
+            if (item.run === "agent-work")
+              await workspace
+                .getByText(/A search source is temporarily rate limited/)
+                .locator("visible=true")
+                .first()
+                .waitFor();
+            const trigger = stepper.getByRole("button", { name: /Steps of the Hypothesis stage/ });
+            if (await trigger.isVisible()) {
+              await trigger.click();
+              await page.getByRole("menuitemradio", { name: /^Scope/ }).click();
+            } else {
+              await stepper.locator('[data-track="scope"] button').click();
+            }
+            if (item.run === "claim-scope") {
+              await workspace.getByText("Claim stated · review plan locked", { exact: true }).waitFor();
+              await workspace.getByText("Is longer sleep associated with higher grades?", { exact: true }).waitFor();
+              await workspace.getByRole("heading", { name: /^Search the literature/ }).waitFor({ state: "hidden" });
+              await workspace.getByText("Sub-question tree", { exact: true }).first().waitFor({
+                state: "hidden",
+                timeout: 6000,
+              });
+            } else {
+              await workspace.getByText("Not written yet.", { exact: true }).first().waitFor();
+              await workspace.getByRole("button", { name: /^Live:.*Search/ }).click();
+            }
+          } else if (item.run) {
             // The run opens in its workspace from `?run=`; wait for the message the state is about.
             await page
               .getByText(
@@ -1306,6 +1540,9 @@ async function capture() {
             }
           }
           if (isDatasetStudio) await verifyStudioDataset(page, item);
+          if (isDatasetStudio && item.tag === "dataset-local-running") {
+            await recordStudioHeight(page.getByRole("region", { name: /Research run/ }), item.tag, size, theme);
+          }
           if (isRun1) {
             if (item.tag === "dataset-local-cta") {
               await page.getByText("Use in a research run").first().waitFor({ timeout: 30_000 });
@@ -1435,15 +1672,48 @@ async function capture() {
             floatingBottomRight?.setAttribute("data-capture-hidden", "true");
           });
           const filename = `${item.tag}-${size.name}-${theme}.png`;
+          if (isAdminKeys) {
+            const card = page
+              .locator('[data-slot="card"]')
+              .filter({ hasText: "Keys the research engines use besides the models." });
+            const typesafe = card.getByRole("link", { name: "Manage your Typesafe key" });
+            await typesafe.waitFor();
+            await typesafe.focus();
+            if (!(await typesafe.evaluate((element) => element.matches(":focus-visible"))))
+              throw new Error("The key link did not receive visible keyboard focus");
+            await card.screenshot({ path: join(OUTPUT, filename), animations: "disabled" });
+            names.push(filename);
+            continue;
+          }
           await page.screenshot({
             path: join(OUTPUT, filename),
-            fullPage: !isDs4 && !isDs5 && !isE2e && !isDatasetStudio,
+            fullPage: !isDs4 && !isDs5 && !isE2e && !isDatasetStudio && !isHypothesisWork,
             animations: "disabled",
           });
           names.push(filename);
           if (verifyDatasetLive) await verifyDatasetRunControls(page, item.tag, size.width);
           if (isDatasetStudio && item.tag === "dataset-accept") {
             names.push(...(await captureDatasetHandoff(page, size, theme)));
+          }
+          if (isHypothesisWork && item.run === "agent-work") {
+            const workspace = page.getByRole("region", { name: /Research run/ });
+            let panel = workspace.locator("aside");
+            if (size.width < 1024) {
+              await workspace.getByRole("button", { name: "Steps and activity" }).click();
+              panel = page.getByRole("dialog", { name: "Steps and activity" });
+            }
+            await panel.getByRole("tab", { name: /Activity/ }).click();
+            await panel
+              .getByRole("tabpanel")
+              .getByText(/Searching the literature: Nightly sleep duration/)
+              .waitFor();
+            await panel
+              .getByRole("tabpanel")
+              .getByText(/A search source is temporarily rate limited/)
+              .waitFor();
+            const activity = `hypothesis-search-activity-${size.name}-${theme}.png`;
+            await page.screenshot({ path: join(OUTPUT, activity), animations: "disabled" });
+            names.push(activity);
           }
           if (isDs4 && item.tag.includes("remote")) {
             const selected = "dataset-remote-selected-column";
@@ -1487,7 +1757,7 @@ async function capture() {
           await context.close();
           continue;
         }
-        if (isDs4 || isDs6 || isDs7 || isDatasetLive || isDatasetStudio || ONLY) {
+        if (isDs4 || isDs6 || isDs7 || isDatasetLive || isDatasetStudio || isHypothesisWork || isAdminKeys || ONLY) {
           await context.close();
           continue;
         }
@@ -1546,24 +1816,31 @@ async function capture() {
   } finally {
     await browser.close();
   }
-  const expected = isDatasetStudio
-    ? 36
-    : isDatasetLive
-      ? 32
-      : isRun1
-        ? 12
-        : isE2e
-          ? 10
-          : isDs4
-            ? 18
-            : isDs5
-              ? 18
-              : isDs6
-                ? 28
-                : isDs7
-                  ? 24
-                  : 56;
+  const expected = isAdminKeys
+    ? 4
+    : isHypothesisWork
+      ? 12
+      : isDatasetCard
+        ? 24
+        : isDatasetStudio
+          ? 36
+          : isDatasetLive
+            ? 32
+            : isRun1
+              ? 12
+              : isE2e
+                ? 10
+                : isDs4
+                  ? 18
+                  : isDs5
+                    ? 18
+                    : isDs6
+                      ? 28
+                      : isDs7
+                        ? 24
+                        : 56;
   if (!ONLY && names.length !== expected) throw new Error(`Expected ${expected} screenshots, wrote ${names.length}`);
+  if (isDatasetStudio) await writeFile(join(OUTPUT, "chrome-heights.json"), JSON.stringify(studioHeights, null, 2));
   if (isDs4) {
     for (const size of sizes) {
       for (const theme of themes) {
@@ -1576,7 +1853,7 @@ async function capture() {
     }
   }
   console.log(`Captured ${names.length} route screenshots in ${OUTPUT}`);
-  for (const name of names) console.log(`- test-results/screens/${TAG}/${name}`);
+  for (const name of names) console.log(`- ${join(OUTPUT, name)}`);
 }
 
 const ownServer = !(await appAlreadyRunning());

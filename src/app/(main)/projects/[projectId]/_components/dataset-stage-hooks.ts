@@ -32,6 +32,30 @@ export function useDatasetOutputs(projectId: string, run: RunItem | undefined) {
   );
 }
 
+export function useDatasetReviewFindings(projectId: string, runId?: string, artifactId?: string) {
+  return useApiQuery(
+    [...projectKeys.run(projectId, runId ?? ""), "dataset-review", artifactId],
+    (signal) => fetchDatasetRuns.reviewFindings(projectId, runId ?? "", artifactId ?? "", signal),
+    { enabled: Boolean(runId && artifactId) },
+  );
+}
+
+export function useDatasetCard(projectId: string, runId?: string, artifactId?: string) {
+  return useApiQuery(
+    [...projectKeys.run(projectId, runId ?? ""), "dataset-card", artifactId],
+    (signal) => fetchDatasetRuns.card(projectId, runId ?? "", artifactId, signal),
+    { enabled: Boolean(runId) },
+  );
+}
+
+export function useDatasetBriefAvailability(projectId: string, runId?: string) {
+  return useApiQuery(
+    [...projectKeys.run(projectId, runId ?? ""), "dataset-brief-available"],
+    (signal) => fetchDatasetRuns.hasBrief(projectId, runId ?? "", signal),
+    { enabled: Boolean(runId) },
+  );
+}
+
 /** The run's consultations (what the PI asked the person), read while the run is open. */
 export function useRunConsultations(projectId: string, run: RunItem | undefined) {
   const query = useApiQuery(

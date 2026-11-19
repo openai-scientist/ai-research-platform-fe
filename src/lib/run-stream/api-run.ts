@@ -7,6 +7,7 @@ import { RunStatus } from "@/types/enums";
 import type { GateAnswer, RunCommands, RunEvent } from "./contract";
 import { RunPacer } from "./pacer";
 import { PipelineAdapter, type PipelineEnvelope, type PipelineRunInfo } from "./pipeline-adapter";
+import { loadPublishedHypotheses, type PublicationRef } from "./published-hypotheses";
 
 /** How a finished run ended, by its status. */
 const ENDED = new Map<RunStatus, "completed" | "failed" | "stopped">([
@@ -63,6 +64,8 @@ export class ApiRun implements RunCommands {
   private following = false;
   /** The last stored event read, so the stream can be picked up again after it. */
   private lastSeq = 0;
+  private readonly artifactRequest = new AbortController();
+  private readonly publications = new WeakSet<PublicationRef>();
 
   constructor(
     private readonly projectId: string,
@@ -102,16 +105,36 @@ export class ApiRun implements RunCommands {
         onEvents: (events, origin) => {
           this.lastSeq = events[events.length - 1]?.seq ?? this.lastSeq;
           this.receiveEnvelopes?.(events as unknown as PipelineEnvelope[], origin === "live");
+          const adapted = this.adapt(events);
           if (origin === "history") {
-            this.pacer.now(this.adapt(events));
-            return;
+            this.pacer.now(adapted);
+          } else {
+            this.following = true;
+            this.pacer.push(adapted);
           }
-          this.following = true;
-          this.pacer.push(this.adapt(events));
+          this.hydratePublication();
         },
         onEnded: () => void this.settle(),
         onSessionEnded: () => window.dispatchEvent(new Event("auth:expired")),
         onError: showError,
+      },
+    );
+  }
+
+  private hydratePublication() {
+    const adapter = this.adapter;
+    const ref = adapter?.publicationToLoad();
+    if (!adapter || !ref || this.publications.has(ref)) return;
+    this.publications.add(ref);
+    const { signal } = this.artifactRequest;
+    void loadPublishedHypotheses(this.projectId, this.runId, ref, signal).then(
+      (result) => {
+        if (!signal.aborted) this.pacer.now(adapter.applyPublication(ref, result));
+      },
+      (error) => {
+        if (signal.aborted) return;
+        this.pacer.now(adapter.applyPublication(ref));
+        showError(error);
       },
     );
   }
@@ -132,6 +155,7 @@ export class ApiRun implements RunCommands {
   }
 
   dispose() {
+    this.artifactRequest.abort();
     this.stop?.();
     this.stop = null;
     this.pacer.dispose();
@@ -167,10 +191,10 @@ export class ApiRun implements RunCommands {
     }
     if (route.to === "accept") {
       const dropped = answer.dropped ?? [];
+      const selected = route.hypothesisIds?.filter((id) => !dropped.includes(id));
+      if (selected && !selected.length) throw new Error("Select at least one hypothesis.");
       await fetchRuns.acceptStage(this.projectId, this.runId, route.stageRunId, {
-        selection: route.hypothesisIds
-          ? { hypothesis_ids: route.hypothesisIds.filter((id) => !dropped.includes(id)) }
-          : {},
+        selection: selected ? { hypothesis_ids: selected } : {},
         ...(note ? { note } : {}),
       });
       return;

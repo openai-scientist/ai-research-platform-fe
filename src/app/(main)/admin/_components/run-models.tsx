@@ -2,7 +2,7 @@
 
 import { useId, useState } from "react";
 
-import { Check, CircleAlert, KeyRound, PlugZap } from "lucide-react";
+import { Check, CircleAlert, ExternalLink, KeyRound, PlugZap } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -245,27 +245,38 @@ export function RunModelsSettings() {
   );
 }
 
-const INTEGRATIONS: { name: string; label: string; description: string; required?: boolean }[] = [
+const INTEGRATIONS: {
+  name: string;
+  label: string;
+  description: string;
+  required?: boolean;
+  /** Where an admin gets the key; opened in a new tab. */
+  keyUrl?: string;
+}[] = [
   {
     name: "typesafe",
     label: "Typesafe",
     description: "Decision provider of the experiment design stage. Accepting hypotheses into that stage needs it.",
     required: true,
+    keyUrl: "https://console.typesafe.ai/keys",
   },
   {
     name: "openalex",
     label: "OpenAlex",
     description: "Literature search. A key raises the daily request limit.",
+    keyUrl: "https://docs.openalex.org/how-to-use-the-api/rate-limits-and-authentication",
   },
   {
     name: "semantic_scholar",
     label: "Semantic Scholar",
     description: "Literature search. Without a key, the shared rate limit often turns searches away.",
+    keyUrl: "https://www.semanticscholar.org/product/api#api-key-form",
   },
   {
     name: "huggingface",
     label: "Hugging Face",
     description: "Datasets and models the experiment design stage may use.",
+    keyUrl: "https://huggingface.co/settings/tokens",
   },
 ];
 
@@ -274,12 +285,14 @@ function IntegrationRow({
   label,
   description,
   required,
+  keyUrl,
   saved,
 }: {
   readonly name: string;
   readonly label: string;
   readonly description: string;
   readonly required?: boolean;
+  readonly keyUrl?: string;
   readonly saved: IntegrationItem | undefined;
 }) {
   const id = useId();
@@ -318,6 +331,17 @@ function IntegrationRow({
           <KeyState saved={Boolean(saved)} required={required} />
         </div>
         <p className="text-muted-foreground text-sm">{description}</p>
+        {keyUrl && (
+          <a
+            href={keyUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex w-fit items-center gap-1 rounded-sm font-medium text-primary text-xs underline-offset-4 outline-none hover:underline focus-visible:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          >
+            {saved ? `Manage your ${label} key` : `Get a ${label} key`}
+            <ExternalLink aria-hidden className="size-3" />
+          </a>
+        )}
         {saved && (
           <p className="flex flex-wrap items-center gap-x-2 text-muted-foreground text-xs">
             {saved.updated_at && <span>Updated {timeAgo(saved.updated_at)}</span>}

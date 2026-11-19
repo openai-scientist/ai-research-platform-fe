@@ -88,6 +88,8 @@ function HypothesisPick({
   id,
   label,
   draft,
+  falsify,
+  fromArtifact,
   findings,
   picked,
   piLeavesOut,
@@ -96,12 +98,15 @@ function HypothesisPick({
   id: string;
   label: string;
   draft?: DraftState;
+  falsify?: string;
+  fromArtifact?: boolean;
   findings: ReviewFinding[];
   picked: boolean;
   piLeavesOut: boolean;
   onToggle(): void;
 }) {
   const h = draft?.hypothesis;
+  const falsifier = h?.falsify?.text ?? falsify;
   const novelty = draft?.novelty?.verdict ? NOVELTY[draft.novelty.verdict] : null;
   return (
     <motion.li layout>
@@ -123,7 +128,7 @@ function HypothesisPick({
             >
               {id}
             </b>
-            {!h && (
+            {!h && !fromArtifact && (
               <span className="inline-flex items-center gap-1 text-muted-foreground text-xs">
                 <Sparkles className="size-3" />
                 Kept by you at the last stop
@@ -141,10 +146,10 @@ function HypothesisPick({
           >
             <CitedText text={h?.statement ?? label} />
           </span>
-          {h?.falsify?.text && (
+          {falsifier && (
             <span className="line-clamp-2 text-muted-foreground text-xs leading-snug">
               <b className="font-medium text-foreground/70">Wrong if </b>
-              <CitedText text={h.falsify.text.replace(/^(the (claim|hypothesis) is )?wrong if:?\s*/i, "")} />
+              <CitedText text={falsifier.replace(/^(the (claim|hypothesis) is )?wrong if:?\s*/i, "")} />
             </span>
           )}
           {h && (
@@ -168,6 +173,7 @@ type AcceptReviewProps = {
   header: ReactNode;
   pending: boolean;
   onAnswer(answer: GateAnswer): void;
+  documentPreview?: ReactNode;
 };
 
 /** A finished stage with a selectable hypothesis set, or a simple accept for a stage with no selection. */
@@ -175,7 +181,7 @@ export function AcceptReview(props: AcceptReviewProps) {
   return props.gate.selection === undefined ? <StageAcceptReview {...props} /> : <HypothesisAcceptReview {...props} />;
 }
 
-function StageAcceptReview({ gate, header, pending, onAnswer }: AcceptReviewProps) {
+function StageAcceptReview({ gate, header, pending, onAnswer, documentPreview }: AcceptReviewProps) {
   const [note, setNote] = useState("");
   const option = gate.options.find((item) => item.id === "accept" && !item.disabled);
   const subject = gate.title.replace(/^Accept the /i, "");
@@ -192,6 +198,7 @@ function StageAcceptReview({ gate, header, pending, onAnswer }: AcceptReviewProp
     <>
       <div className="flex flex-col gap-4 overflow-y-auto px-5 pt-4.5 pb-5 sm:px-6">
         {header}
+        {documentPreview}
         <p className="text-muted-foreground text-sm">{gate.why}</p>
         {gate.summary.length > 0 && (
           <ul className="flex flex-col gap-1.5 text-sm">
@@ -242,7 +249,7 @@ function HypothesisAcceptReview({ gate, header, pending, onAnswer }: AcceptRevie
   const advice = gate.advice;
   const headline = !advice
     ? ""
-    : advice.action === "accept"
+    : advice.action === "accept" && selection.length
       ? piPick && piPick.length < selection.length
         ? `The PI recommends accepting ${piPick.length} of ${selection.length}`
         : `The PI recommends accepting ${selection.length === 1 ? "it" : `all ${selection.length}`}`
@@ -253,8 +260,7 @@ function HypothesisAcceptReview({ gate, header, pending, onAnswer }: AcceptRevie
       <div className="flex flex-col gap-4 overflow-y-auto px-5 pt-4.5 pb-5 sm:px-6">
         {header}
         <p className="text-muted-foreground text-sm">
-          The hypotheses and their argument map are published. Accepting ends the run with the ones you pick; the rest
-          stay on record.
+          Accepting ends the run with the hypotheses you pick. The rest stay on record.
         </p>
         {advice && (
           <PiAdviceCard
@@ -273,7 +279,7 @@ function HypothesisAcceptReview({ gate, header, pending, onAnswer }: AcceptRevie
         <div className="flex items-baseline justify-between gap-2">
           <h4 className="font-semibold text-sm">Take forward</h4>
           <span className="flex items-center gap-3 text-muted-foreground text-xs tabular-nums">
-            {picked.length} of {selection.length} picked
+            {selection.length > 0 && `${picked.length} of ${selection.length} picked`}
             {left.length > 0 && (
               <button
                 type="button"
@@ -285,6 +291,11 @@ function HypothesisAcceptReview({ gate, header, pending, onAnswer }: AcceptRevie
             )}
           </span>
         </div>
+        {!selection.length && (
+          <p className="text-muted-foreground text-sm" role="status">
+            {gate.selectionPending ? "Loading published hypotheses…" : "No published hypotheses to pick."}
+          </p>
+        )}
         <ul className="flex flex-col gap-2">
           {selection.map((item) => (
             <HypothesisPick
@@ -292,6 +303,8 @@ function HypothesisAcceptReview({ gate, header, pending, onAnswer }: AcceptRevie
               id={item.id}
               label={item.label}
               draft={round?.drafts[item.id]}
+              falsify={item.falsify}
+              fromArtifact={item.fromArtifact}
               findings={findingsOf(item.id)}
               picked={!left.includes(item.id)}
               piLeavesOut={Boolean(piLeft?.includes(item.id))}
@@ -316,7 +329,7 @@ function HypothesisAcceptReview({ gate, header, pending, onAnswer }: AcceptRevie
           disabled={pending || !picked.length}
         >
           <Check />
-          {pending ? "Accepting…" : `Accept ${picked.length}`}
+          {pending ? "Accepting…" : picked.length ? `Accept ${picked.length}` : "Accept"}
         </Button>
       </footer>
     </>

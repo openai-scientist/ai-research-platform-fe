@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "cn";
-import { Check, CircleCheck, Lock, PenLine } from "lucide-react";
+import { Check, ChevronRight, CircleCheck, Lock, PenLine } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 
 import type { StepView } from "@/lib/run-stream/dataset-run-model";
@@ -64,10 +64,82 @@ export function StageTrack({
   const isRunning = !state.completed && state.lifecycle !== "failed";
   const writingMine = HOST.runId === state.runId;
   const group = stages.find(({ id }) => id === expanded);
+  const stepsLabel = group ? `Steps of the ${group.label} stage` : "Research steps";
+  const steps =
+    expanded === DATASET_STAGE && dataset ? (
+      <DatasetRunTrack
+        inline
+        steps={dataset.steps}
+        ended={dataset.accepted || !isRunning}
+        viewKey={dataset.viewKey}
+        onView={dataset.onView}
+        liveFill={dataset.liveFill}
+      />
+    ) : (
+      <RunTrack
+        inline
+        label={stepsLabel}
+        currentKey={blockedForDataset ? null : live}
+        viewKey={viewKey}
+        onView={onView}
+        minimumWidth={0}
+        items={[
+          ...tracked.map((item) => {
+            const row = "round" in item ? item : undefined;
+            const stage = state.stages[item.key];
+            const past = !blockedForDataset && (stage?.status === "done" || (item.key === "done" && state.completed));
+            const active = item.key === live && isRunning && !blockedForDataset;
+            const fill = active
+              ? Math.max(4, ((stage?.doneStepIds.length ?? 0) / (stage?.plan.steps.length || 1)) * 100)
+              : 0;
+            return {
+              key: item.key,
+              label: (
+                <>
+                  {row?.round && (
+                    <em className="rounded bg-muted px-1 font-mono text-[10px] not-italic">R{row.round}</em>
+                  )}
+                  {item.key === "done" && <CircleCheck className="size-3" />}
+                  {STAGE_SHORT[item.stage]}
+                </>
+              ),
+              past,
+              live: active,
+              waiting: active && Boolean(state.gate),
+              fill: past ? 100 : fill,
+              available:
+                Boolean(stage) ||
+                blockedForDataset ||
+                (item.key === "done" && state.completed) ||
+                (liveIndex === -1 && item.key === "scope"),
+              gate: row?.has_gate,
+            };
+          }),
+          ...(expanded === "writing" && preview
+            ? [
+                {
+                  key: "write",
+                  label: (
+                    <>
+                      <PenLine className="size-3" />
+                      Write <span className="text-muted-foreground">Preview</span>
+                    </>
+                  ),
+                  past: writingMine && writing.done,
+                  live: writingMine && !writing.done && writing.lifecycle !== "failed",
+                  waiting: writingMine && (Boolean(writing.gate) || writing.lifecycle === "blocked"),
+                  fill: writingMine ? Math.max(4, writingProgress() * 100) : 0,
+                  available: true,
+                },
+              ]
+            : []),
+        ]}
+      />
+    );
 
   return (
-    <nav aria-label="Pipeline stages" className="min-w-0 shrink-0">
-      <ol className="flex gap-1 overflow-x-auto border-b px-2 py-2 sm:gap-1.5 sm:px-4 md:px-5">
+    <nav aria-label="Pipeline stages" className="h-12 min-w-0 shrink-0 overflow-x-clip border-b">
+      <ol className="flex h-full min-w-0 items-center gap-1 px-2 sm:gap-2 sm:px-4 md:px-5">
         {stages.map(({ id, label, short }, index) => {
           const items = plan.filter((step) => pipelineStageOf(state.plan, step.key) === id);
           const inView = id === expanded;
@@ -94,117 +166,56 @@ export function StageTrack({
                   items[0]?.key ??
                   "scope");
           return (
-            <li key={id} className="shrink-0">
+            <motion.li
+              key={id}
+              layout={reducedMotion ? false : "position"}
+              transition={{ layout: { duration: 0.24, ease: RUN_EASE } }}
+              className={cn("relative flex min-w-0 items-center", inView ? "flex-1 gap-1 sm:gap-2" : "shrink-0")}
+            >
               <button
                 type="button"
                 aria-label={label}
                 aria-expanded={inView}
                 aria-current={current ? "step" : undefined}
                 disabled={locked && !nextAfterDataset}
-                title={nextAfterDataset ? "Starts after the Dataset stage is accepted" : undefined}
+                title={nextAfterDataset ? "Starts after the Dataset stage is accepted" : label}
                 onClick={() => onView(target)}
                 className={cn(
-                  "inline-flex h-7 items-center gap-1 whitespace-nowrap rounded-md border px-1 font-medium text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring sm:px-1.5 md:gap-1.5 md:px-2",
+                  "inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-md border px-1 font-medium text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring sm:px-1.5 md:gap-1.5 md:px-2",
                   inView ? "border-foreground/20 bg-muted text-foreground" : "border-transparent text-muted-foreground",
                   locked && "border-foreground/20 border-dashed",
+                  done && !inView && "border-border bg-muted/40",
                   !locked && !inView && "hover:bg-muted",
                 )}
               >
-                <span className="hidden font-mono text-[10px] text-muted-foreground sm:inline">
+                <span className="font-mono text-[10px] text-muted-foreground">
                   {String(index + 1).padStart(2, "0")}
                 </span>
                 {done && <Check aria-label="Done" className="size-3 shrink-0 text-emerald-600" />}
                 {current && !locked && <PulseDot className="bg-sky-500" />}
                 {locked && <Lock aria-label="Locked" className="size-3 shrink-0" />}
-                <span className="sm:hidden">{short}</span>
-                <span className="hidden sm:inline">{label}</span>
+                <span className={cn("lg:hidden", !inView && "max-sm:hidden")}>{short}</span>
+                <span className="hidden lg:inline">{label}</span>
+                {inView && <ChevronRight aria-hidden className="size-3 text-muted-foreground max-sm:hidden" />}
               </button>
-            </li>
+              <AnimatePresence initial={false} mode="popLayout">
+                {inView && (
+                  <motion.div
+                    className="min-w-0 flex-1 overflow-hidden"
+                    data-stage-steps={id}
+                    initial={reducedMotion ? false : { clipPath: "inset(0 100% 0 0)", opacity: 0 }}
+                    animate={{ clipPath: "inset(0 0% 0 0)", opacity: 1 }}
+                    exit={reducedMotion ? undefined : { clipPath: "inset(0 100% 0 0)", opacity: 0 }}
+                    transition={{ duration: reducedMotion ? 0 : 0.24, ease: RUN_EASE }}
+                  >
+                    {steps}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </motion.li>
           );
         })}
       </ol>
-
-      <AnimatePresence mode="wait" initial={false}>
-        <motion.div
-          key={expanded}
-          initial={reducedMotion ? false : { height: 0, opacity: 0 }}
-          animate={{ height: "auto", opacity: 1 }}
-          exit={reducedMotion ? undefined : { height: 0, opacity: 0 }}
-          transition={{ duration: reducedMotion ? 0 : 0.24, ease: RUN_EASE }}
-          className="overflow-hidden"
-          aria-label={group ? `${group.label} steps` : undefined}
-        >
-          {expanded === DATASET_STAGE && dataset ? (
-            <DatasetRunTrack
-              steps={dataset.steps}
-              ended={dataset.accepted || !isRunning}
-              viewKey={dataset.viewKey}
-              onView={dataset.onView}
-              liveFill={dataset.liveFill}
-            />
-          ) : (
-            <RunTrack
-              label={group ? `Steps of the ${group.label} stage` : "Research steps"}
-              currentKey={blockedForDataset ? null : live}
-              viewKey={viewKey}
-              onView={onView}
-              minimumWidth={0}
-              items={[
-                ...tracked.map((item) => {
-                  const row = "round" in item ? item : undefined;
-                  const stage = state.stages[item.key];
-                  const past =
-                    !blockedForDataset && (stage?.status === "done" || (item.key === "done" && state.completed));
-                  const active = item.key === live && isRunning && !blockedForDataset;
-                  const fill = active
-                    ? Math.max(4, ((stage?.doneStepIds.length ?? 0) / (stage?.plan.steps.length || 1)) * 100)
-                    : 0;
-                  return {
-                    key: item.key,
-                    label: (
-                      <>
-                        {row?.round && (
-                          <em className="rounded bg-muted px-1 font-mono text-[10px] not-italic">R{row.round}</em>
-                        )}
-                        {item.key === "done" && <CircleCheck className="size-3" />}
-                        {STAGE_SHORT[item.stage]}
-                      </>
-                    ),
-                    past,
-                    live: active,
-                    waiting: active && Boolean(state.gate),
-                    fill: past ? 100 : fill,
-                    available:
-                      Boolean(stage) ||
-                      blockedForDataset ||
-                      (item.key === "done" && state.completed) ||
-                      (liveIndex === -1 && item.key === "scope"),
-                    gate: row?.has_gate,
-                  };
-                }),
-                ...(expanded === "writing" && preview
-                  ? [
-                      {
-                        key: "write",
-                        label: (
-                          <>
-                            <PenLine className="size-3" />
-                            Write <span className="text-muted-foreground">Preview</span>
-                          </>
-                        ),
-                        past: writingMine && writing.done,
-                        live: writingMine && !writing.done && writing.lifecycle !== "failed",
-                        waiting: writingMine && (Boolean(writing.gate) || writing.lifecycle === "blocked"),
-                        fill: writingMine ? Math.max(4, writingProgress() * 100) : 0,
-                        available: true,
-                      },
-                    ]
-                  : []),
-              ]}
-            />
-          )}
-        </motion.div>
-      </AnimatePresence>
     </nav>
   );
 }

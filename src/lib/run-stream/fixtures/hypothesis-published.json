@@ -1,0 +1,51 @@
+{
+  "stageRunId": "664c31e4-08a7-41eb-9243-7991792ed1b3",
+  "primaryId": "9779a2af-e4bf-4357-bddb-456a6b2d5981",
+  "set": {
+    "id": "hypothesis_set",
+    "version": 1,
+    "hypotheses": [
+      {
+        "id": "H1",
+        "statement": "Longer nightly sleep is associated with higher course grades.",
+        "claim_key": "nightly_sleep_hours:course_grade",
+        "claim_type": "association",
+        "primary": true,
+        "exposure": ["nightly_sleep_hours"],
+        "outcome": ["course_grade"],
+        "prediction": "> 0",
+        "falsification": "The association is zero or negative.",
+        "map_label": "gap-fill",
+        "mechanism": "Longer sleep may improve retention of new material.",
+        "evidence_trail": [{ "card_ids": ["EV1"], "cell": { "exposure": "sleep", "outcome": "attainment" } }]
+      }
+    ]
+  },
+  "primary": {
+    "hypotheses": [
+      {
+        "id": "H1",
+        "statement": "Longer nightly sleep is associated with higher course grades.",
+        "exposure": "nightly_sleep_hours",
+        "outcome": "course_grade",
+        "prediction": "> 0",
+        "estimand": "Association of sleep duration with course grade",
+        "falsify": { "text": "The association is zero or negative." },
+        "map_label": "gap-fill",
+        "evidence_refs": ["EV1"],
+        "variables": { "exposure": ["nightly_sleep_hours"], "outcome": ["course_grade"], "covariates": [] }
+      }
+    ],
+    "next_run_directions": []
+  },
+  "evidence": {
+    "cards": [
+      {
+        "card_id": "EV1",
+        "title": "Sleep duration and course performance",
+        "findings": "The study reported an association between sleep and course performance.",
+        "hypothesis_ids": ["H1"]
+      }
+    ]
+  }
+}

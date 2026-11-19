@@ -5,6 +5,8 @@
 // The client rebuilds everything it shows from these events with `applyRunEvent`, so a mock stream
 // and the real stream must emit exactly the same shapes.
 
+import type { ClaimScope } from "./claim-scope";
+
 /**
  * Screens of a run. `scope` to `hypothesize` cover Popper's pipeline stages 1 to 8:
  * scope = 1 topic init + 2 problem decompose, search = 3 search strategy + 4 literature collect,
@@ -524,7 +526,7 @@ export interface MapNode {
 }
 
 /**
- * The eleven relations, each read from `from` to `to`: evidence `supports` or `contradicts` a claim; a claim
+ * Each relation reads from `from` to `to`: evidence `supports` or `contradicts` a claim; a claim
  * `substantiates` a gap (only one that states a limitation) or `provides_rationale_for` a hypothesis; a gap
  * `motivates` a question; a question `decomposes_into` sub-questions; a hypothesis `proposes_answer_to` a question,
  * `addresses` a gap, `depends_on` an assumption and `informs` an expected contribution, which `targets` a gap.
@@ -540,7 +542,8 @@ export type MapRelation =
   | "depends_on"
   | "addresses"
   | "informs"
-  | "targets";
+  | "targets"
+  | "cites";
 
 /**
  * How far a relation can be trusted: `stated` by a record of the run, `derived` from other relations, or a judgement
@@ -647,7 +650,8 @@ export interface Gate {
   /** Held-back ideas the person may keep despite their objection (`hypotheses` gates). */
   keepable?: string[];
   /** Items the person picks from before confirming (`accept` gates). All start picked; unpicked ones are `dropped`. */
-  selection?: { id: string; label: string }[];
+  selection?: { id: string; label: string; falsify?: string; fromArtifact?: boolean }[];
+  selectionPending?: boolean;
   /** What the PI advises at this stop, when it was asked: `charter` and `accept` gates. */
   advice?: PiAdvice;
   /** What the independent reviewer found, which the person may send back to be fixed (`hypotheses` gates). */
@@ -788,6 +792,14 @@ interface EventBase<T extends string, P> {
   payload: P;
 }
 
+export type WorkCheck = {
+  key: string;
+  label: string;
+  state: "red" | "amber" | "green" | "needs_you" | "not_applicable";
+  status: string;
+  reason: string;
+};
+
 export type RunEvent =
   /**
    * `topic` is what the person typed; `domains` are the fields they kept. Sub-questions are derived in `scope`.
@@ -812,6 +824,10 @@ export type RunEvent =
     >
   /** Nothing has come from the engine of the open stage for a while. */
   | EventBase<"run.stalled", { minutes: number }>
+  | EventBase<
+      "run.activity",
+      { text: string; step_id?: string; live?: "replace" | "fallback"; check?: WorkCheck; note?: string }
+    >
   /** `paper_title` is absent when the run ends before the paper, such as right after hypotheses (stage 8). */
   | EventBase<"run.completed", { paper_title?: string }>
   | EventBase<"stage.started", { plan: StagePlan }>
@@ -840,6 +856,7 @@ export type RunEvent =
   // scope: stages 1 and 2
   | EventBase<"scope.profile", { domains: string[]; compute: ComputeProfile }>
   | EventBase<"scope.goal", { field: GoalField; label: string; value: string }>
+  | EventBase<"scope.claim", ClaimScope>
   | EventBase<"scope.estimate", { estimate: Estimate }>
   | EventBase<"scope.adjusted", { field: GoalField; from: string; to: string; reason: string }>
   /** The goal passed the PI's check and was saved; stage 2 may start. `at` is ISO 8601 UTC. */
@@ -929,6 +946,7 @@ export type RunEvent =
   | EventBase<"map.node", { node: MapNode }>
   | EventBase<"map.edge", { edge: MapEdge }>
   | EventBase<"canvas.piece", { piece: CanvasPiece }>
+  | EventBase<"map.published", { nodes: MapNode[]; edges: MapEdge[]; pieces: CanvasPiece[] }>
   // experiment: stage 9 onwards
   | EventBase<"plan.locked", { plan_id: string; hypotheses: Hypothesis[]; design: TestDesign }>
   | EventBase<"experiment.hypotheses", { hypotheses: Hypothesis[] }>

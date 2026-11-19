@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { fetchArtifacts, type RunArtifactItem } from "@/lib/api/services/fetch-artifacts";
 import { fetchRuns } from "@/lib/api/services/fetch-runs";
 import type { RunEventOrigin } from "@/lib/realtime/run-events";
 
 import { ApiRun } from "./api-run";
 import type { RunEvent } from "./contract";
+import published from "./fixtures/hypothesis-published.json";
 import { replayRunEvents } from "./reducer";
 
 type Handlers = { onEvents: (events: RunEvent[], origin: RunEventOrigin) => void };
@@ -133,4 +135,95 @@ describe("ApiRun", () => {
     expect(request).toHaveBeenCalledWith("project-1", "run-1", "stage-run-1", { selection: {} });
     run.dispose();
   });
+
+  it.each([true, false])(
+    "hydrates a bare hypothesis publication and posts the selected IDs (set: %s)",
+    async (hasSet) => {
+      const received: RunEvent[] = [];
+      const run = new ApiRun("project-1", "run-1", (events) => received.push(...events), {
+        topic: "Sleep and grades",
+        domains: [],
+        mode: "light",
+      });
+      const artifacts = [
+        { id: "dataset-output", stage_run_id: "dataset-stage", schema_id: "dataset.data_card/v1" },
+        { id: "another-set", stage_run_id: "old-stage", schema_id: "hypothesis.set/v1", version: 2 },
+        {
+          id: published.primaryId,
+          stage_run_id: published.stageRunId,
+          schema_id: "hypothesis.hypotheses/v2",
+          primary: true,
+        },
+        { id: "evidence", stage_run_id: published.stageRunId, schema_id: "hypothesis.evidence/v1" },
+        ...(hasSet
+          ? [{ id: "hypothesis-set", stage_run_id: published.stageRunId, schema_id: "hypothesis.set/v1" }]
+          : []),
+      ] as RunArtifactItem[];
+      vi.spyOn(fetchArtifacts, "getList").mockResolvedValue({
+        success: true,
+        message: "Listed",
+        data: artifacts,
+        meta: { request_id: "request-1", pagination: null },
+      });
+      const download = vi.spyOn(fetchArtifacts, "download").mockImplementation(async (_project, _run, id) => ({
+        filename: `${id}.json`,
+        contentType: "application/json",
+        blob: new Blob([
+          JSON.stringify(
+            id === "hypothesis-set" ? published.set : id === "evidence" ? published.evidence : published.primary,
+          ),
+        ]),
+      }));
+      const request = vi.spyOn(fetchRuns, "acceptStage").mockResolvedValue({
+        success: true,
+        message: "Accepted",
+        data: {},
+        meta: { request_id: "request-1", pagination: null },
+      });
+
+      run.start(true);
+      const stage = { stage_key: "hypothesis", stage_run_id: published.stageRunId };
+      subscription.handlers?.onEvents(
+        [
+          event(183, "run.published", {
+            stage_key: "dataset",
+            stage_run_id: "dataset-stage",
+            payload: { artifact_id: "dataset-output" },
+          }),
+          event(554, "run.published", { ...stage, payload: { artifact_id: published.primaryId } }),
+          event(555, "stage.status_changed", { ...stage, payload: { status: "COMPLETED" } }),
+        ],
+        "history",
+      );
+      expect(replayRunEvents("run-1", received).gate?.selectionPending).toBe(true);
+      await vi.waitFor(() => {
+        const state = replayRunEvents("run-1", received);
+        expect(state.gate).toMatchObject({
+          title: "Accept the hypotheses",
+          selection: [
+            {
+              id: "H1",
+              label: published.primary.hypotheses[0].statement,
+              falsify: published.primary.hypotheses[0].falsify.text,
+              fromArtifact: true,
+            },
+          ],
+        });
+        expect(state.stages.map.content).toMatchObject({
+          fromArtifacts: true,
+          nodes: [{ code: "H1" }, { code: "EV1" }],
+          edges: [{ from: "H:H1", to: "EV:EV1", relation: "cites" }],
+          pieces: expect.arrayContaining([expect.objectContaining({ id: "design", status: "filled" })]),
+        });
+      });
+      expect(download.mock.calls.map((call) => call[2]).sort()).toEqual(
+        ["evidence", hasSet ? "hypothesis-set" : published.primaryId].sort(),
+      );
+      expect(await run.answerGate(`accept-${published.stageRunId}`, { option_id: "accept" })).toBe(true);
+      expect(request).toHaveBeenCalledWith("project-1", "run-1", published.stageRunId, {
+        selection: { hypothesis_ids: ["H1"] },
+      });
+      run.dispose();
+    },
+  );
 });

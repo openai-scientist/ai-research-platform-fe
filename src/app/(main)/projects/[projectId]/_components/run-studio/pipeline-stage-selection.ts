@@ -59,3 +59,15 @@ export function selectPipelineStage({
     blockedForDataset: datasetFirst && !accepted,
   };
 }
+
+export function summarizeTrackStep<T extends { key: string }>(
+  items: readonly T[],
+  viewedKey: string | null,
+  currentKey?: string | null,
+) {
+  const viewed = items.findIndex((item) => item.key === viewedKey);
+  const current = items.findIndex((item) => item.key === currentKey);
+  const index = viewed >= 0 ? viewed : Math.max(0, current);
+  const item = items[index];
+  return item ? { item, position: index + 1, count: items.length } : null;
+}

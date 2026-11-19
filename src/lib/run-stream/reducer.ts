@@ -34,8 +34,9 @@ function pushFeed(
   text: string,
   kind: "event" | "decision",
   actor = event.actor,
+  note?: string,
 ) {
-  state.feed.push({ seq: event.seq, actor: actor ?? "code", text, kind });
+  state.feed.push({ seq: event.seq, actor: actor ?? "code", text, kind, ...(note ? { note } : {}) });
 }
 
 /** Folds one event into the run state. Events at or below the last applied `seq` are ignored, so replays are safe. */
@@ -85,6 +86,23 @@ export function applyRunEvent(previous: RunState, event: RunEvent): RunState {
       case "run.stalled":
         state.stalled = event.payload.minutes;
         break;
+      case "run.activity": {
+        const { text, live, step_id: step, check, note } = event.payload;
+        const key = event.stage_key;
+        const actor = event.actor ?? "code";
+        pushFeed(state, event, text, "event", actor, note);
+        if (!key) break;
+        if (note) state.workNotes[key] = note;
+        if (check && step) {
+          state.workChecks[key] ??= {};
+          const checks = state.workChecks[key];
+          checks[step] ??= {};
+          checks[step][check.key] = check;
+        }
+        if (key === state.currentStageKey && (live === "replace" || (live === "fallback" && !state.message)))
+          state.message = { id: `activity.${event.seq}`, actor, text, done: true };
+        break;
+      }
       case "run.completed":
         state.completed = true;
         state.lifecycle = "completed";
@@ -221,6 +239,11 @@ export function applyRunEvent(previous: RunState, event: RunEvent): RunState {
         const existing = c.goal.find((g) => g.field === field);
         if (existing) existing.value = value;
         else c.goal.push({ field, label, value });
+        break;
+      }
+      case "scope.claim": {
+        const c = content(state, event, "scope");
+        if (c) c.claimScope = event.payload;
         break;
       }
       case "scope.estimate":
@@ -471,6 +494,21 @@ export function applyRunEvent(previous: RunState, event: RunEvent): RunState {
       case "canvas.piece": {
         const m = content(state, event, "map");
         if (m) upsert(m.pieces, event.payload.piece);
+        break;
+      }
+      case "map.published": {
+        const m = content(state, event, "map");
+        if (!m) break;
+        const { nodes, edges, pieces } = event.payload;
+        if (!m.nodes.length && nodes.length) {
+          m.nodes = nodes;
+          m.fromArtifacts = true;
+          if (!m.edges.length) m.edges = edges;
+        }
+        if (!m.pieces.length && pieces.length) {
+          m.pieces = pieces;
+          m.fromArtifacts = true;
+        }
         break;
       }
 
@@ -748,6 +786,7 @@ export function applyRunEvent(previous: RunState, event: RunEvent): RunState {
           droppable?: string[];
           keepable?: string[];
           selection?: Gate["selection"];
+          selectionPending?: boolean;
           review?: Gate["review"];
           advice?: Gate["advice"];
         };
@@ -787,6 +826,7 @@ export function applyRunEvent(previous: RunState, event: RunEvent): RunState {
             // Ideas the debate set aside that the person may keep anyway (hypotheses gate).
             keepable: Array.isArray(raw.keepable) ? raw.keepable : [],
             ...(Array.isArray(raw.selection) ? { selection: raw.selection } : {}),
+            ...(raw.selectionPending ? { selectionPending: true } : {}),
             ...(raw.review ? { review: raw.review } : {}),
             ...(raw.advice ? { advice: raw.advice } : {}),
           };
