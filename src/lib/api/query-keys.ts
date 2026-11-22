@@ -73,6 +73,7 @@ export const writingBankKeys = {
   journal: (journalId: string) => ["admin", "writing-bank", "journal", journalId] as const,
   context: (journalId: string, contextId: string) =>
     ["admin", "writing-bank", "journal", journalId, "context", contextId] as const,
+  checks: () => ["admin", "writing-bank", "checks"] as const,
   library: (collection: string) => ["admin", "writing-bank", "library", collection] as const,
   entry: (collection: string, id: string) => ["admin", "writing-bank", "library", collection, id] as const,
 };

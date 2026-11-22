@@ -13,6 +13,7 @@ import { useAdminAccess } from "../../_components/use-admin-access";
 import { BankProblem, DetailSkeleton, errorCode, StaleNotice } from "./bank-states";
 import { CardSheet, type OpenCard } from "./card-sheet";
 import { CardsTab } from "./cards-tab";
+import { ClaimStrength } from "./claim-strength";
 import { contextCards } from "./context-cards-index";
 import { ContextOutline } from "./context-outline";
 import { BankReleaseNote, Fits, StyleChoices, VenueRequirements, WhenToUse } from "./context-overview";
@@ -21,8 +22,9 @@ import { DetailHeader, OfferSwitch } from "./detail-header";
 import { useWritingBankActions } from "./use-writing-bank-actions";
 import { DefaultBadge, EntryStatusBadge, ScopeBadge, ToneBadge } from "./writing-bank-badges";
 import { journalHref, verificationLabel } from "./writing-bank-format";
+import { WritingChecks } from "./writing-checks";
 
-type PageTab = "outline" | "cards" | "design" | "venue" | "style";
+type PageTab = "outline" | "cards" | "design" | "strength" | "checks" | "venue" | "style";
 
 export function ContextScreen({ journalId, contextId }: { readonly journalId: string; readonly contextId: string }) {
   const { enabled } = useAdminAccess();
@@ -140,6 +142,8 @@ export function ContextScreen({ journalId, contextId }: { readonly journalId: st
               <TabsTrigger value="outline">Outline</TabsTrigger>
               <TabsTrigger value="cards">Cards · {cardCount}</TabsTrigger>
               <TabsTrigger value="design">Design and reporting</TabsTrigger>
+              <TabsTrigger value="strength">Claim strength</TabsTrigger>
+              <TabsTrigger value="checks">Checks</TabsTrigger>
               <TabsTrigger value="venue">Venue requirements</TabsTrigger>
               <TabsTrigger value="style">Style</TabsTrigger>
             </TabsList>
@@ -163,6 +167,12 @@ export function ContextScreen({ journalId, contextId }: { readonly journalId: st
               contributionIds={summary.contributions.map((contribution) => contribution.id)}
               enabled={enabled}
             />
+          </TabsContent>
+          <TabsContent value="strength">
+            <ClaimStrength blueprint={blueprint} enabled={enabled} />
+          </TabsContent>
+          <TabsContent value="checks">
+            <WritingChecks blueprint={blueprint} enabled={enabled} onShowStrength={() => setTab("strength")} />
           </TabsContent>
           <TabsContent value="venue">
             <VenueRequirements journal={journal} blueprint={blueprint} />

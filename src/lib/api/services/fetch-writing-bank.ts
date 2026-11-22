@@ -363,6 +363,21 @@ export interface LibraryBankData {
   items: (Record<string, unknown> & { id: string })[];
 }
 
+/** One kind of convergence check the bank holds a writing plan to. */
+export interface BankCheck {
+  id: string;
+  severity: "error" | "warning";
+  step: string;
+  name: string;
+  holds: string;
+}
+
+export interface ChecksData {
+  release: BankRelease | null;
+  stale: boolean;
+  items: BankCheck[];
+}
+
 /** One bank entry in full, as its bank stores it, with its links. */
 export interface LibraryEntryData {
   release: BankRelease | null;
@@ -509,6 +524,10 @@ export const fetchWritingBank = {
       `${BASE}/default`,
       value ?? { journal_id: null, context_id: null },
     );
+    return response.data;
+  },
+  getChecks: async (signal?: AbortSignal): Promise<ApiResult<ChecksData>> => {
+    const response = await apiService.get<ApiResult<ChecksData>>(`${BASE}/checks`, undefined, { signal });
     return response.data;
   },
   getLibrary: async (collection: string, signal?: AbortSignal): Promise<ApiResult<LibraryBankData>> => {

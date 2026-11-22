@@ -49,6 +49,15 @@ export function useWritingBankContextQuery(journalId: string, contextId: string,
   );
 }
 
+/** The kinds of convergence check a writing plan is held to; they change only with the bank. */
+export function useWritingBankChecksQuery(enabled: boolean) {
+  return useApiQuery(writingBankKeys.checks(), async (signal) => (await fetchWritingBank.getChecks(signal)).data, {
+    enabled,
+    silentErrorCodes: EXPLAINED,
+    staleTime: CONTENT_STALE_MS,
+  });
+}
+
 /** Every entry of one bank; a release never changes, so the list is kept for long. */
 export function useWritingBankLibraryQuery(collection: string, enabled: boolean) {
   return useApiQuery(
