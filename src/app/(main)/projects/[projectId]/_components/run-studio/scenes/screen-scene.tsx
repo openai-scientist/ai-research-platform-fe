@@ -297,14 +297,19 @@ function ShortlistItem({
           )}
         </span>
         <span className="truncate text-muted-foreground text-xs" title={paper.title}>
-          {paper.title} · <i>{paper.venue}</i>, {paper.year}
+          {[paper.title, paper.venue, paper.year].filter(Boolean).join(" · ")}
         </span>
         <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <Score label="Relevance" value={paper.relevance} />
-          <Score label="Quality" value={paper.quality} />
-          <span className="ml-auto text-[11px] text-muted-foreground tabular-nums">
-            via {paper.source} · {paper.citations.toLocaleString("en-US")} citations
-          </span>
+          {paper.eligibilityScore !== undefined && (
+            <Score label="Eligibility confidence" value={paper.eligibilityScore} />
+          )}
+          {paper.relevance !== undefined && <Score label="Relevance" value={paper.relevance} />}
+          {paper.quality !== undefined && <Score label="Quality" value={paper.quality} />}
+          {paper.source && paper.citations !== undefined && (
+            <span className="ml-auto text-[11px] text-muted-foreground tabular-nums">
+              via {paper.source} · {paper.citations.toLocaleString("en-US")} citations
+            </span>
+          )}
         </span>
         <span className="text-xs">
           <span className="text-muted-foreground">Kept because </span>
@@ -336,10 +341,12 @@ function PendingPaper({ index, active }: { index: number; active: boolean }) {
 function RejectedItem({
   paper,
   live,
+  rapid,
   onHover,
 }: {
   paper: RejectedPaper;
   live: boolean;
+  rapid: boolean;
   onHover(id: string | null): void;
 }) {
   const word = paper.false_friend.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -377,8 +384,11 @@ function RejectedItem({
               <i>{paper.venue}</i> ·{" "}
             </>
           )}
-          {paper.reason}
+          {rapid ? paper.reason.replaceAll("_", " ") : paper.reason}
         </span>
+        {paper.eligibilityScore !== undefined && (
+          <Score label="Eligibility confidence" value={paper.eligibilityScore} />
+        )}
       </span>
     </motion.li>
   );
@@ -388,11 +398,13 @@ export function ScreenScene({
   data,
   live,
   step,
+  finished = false,
 }: {
   data: ScreenContent;
   live: boolean;
   /** The step running now, while the run is followed live. */
   step: string | null;
+  finished?: boolean;
 }) {
   const scene = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -443,6 +455,18 @@ export function ScreenScene({
   const placed = new Set([...data.kept, ...data.rejected].map((p) => p.id));
   const unplaced = data.points.filter((p) => p.relevance >= rMin && p.quality >= qMin && !placed.has(p.id)).length;
   const toScore = data.planned?.toScreen ?? data.criteria?.candidates ?? data.points.length;
+  const rapid = data.criteria?.protocolVersion !== undefined;
+  const review = data.reviewProgress;
+  let emptyShortlist = finished
+    ? "No shortlist was recorded for this screening pass."
+    : "Kept papers and their reasons appear here when screening reports them.";
+  if (rapid && review?.state === "completed") {
+    emptyShortlist = review.total
+      ? "No papers met the eligibility criteria in this screening pass."
+      : "No papers were selected for this screening pass.";
+  } else if (rapid && review?.state === "partial") {
+    emptyShortlist = "No papers were kept in the completed part of the screening pass.";
+  }
 
   let target: string | null = data.points.length ? "scatter" : null;
   const lastShown = shownRejections[shownRejections.length - 1];
@@ -470,12 +494,44 @@ export function ScreenScene({
               {rule}
             </motion.span>
           ))}
+          {data.criteria.exclusions?.map((rule) => (
+            <span
+              key={rule}
+              className="inline-flex items-center gap-1 rounded-md bg-card px-2 py-0.5 ring-1 ring-foreground/10"
+            >
+              <X className="size-3 text-rose-600" />
+              {rule}
+            </span>
+          ))}
         </motion.div>
       )}
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,1fr)]">
         <div className="flex min-w-0 flex-col gap-4">
           {/* The chart is drawn once the bars are known, so each score lands on the axes it is read against. */}
-          {data.points.length || data.criteria ? (
+          {rapid ? (
+            <Pane
+              title="Eligibility screening"
+              aside={review ? `${review.done} of ${review.total} selected papers screened` : undefined}
+            >
+              <p className="text-muted-foreground text-xs">
+                {review?.state === "partial"
+                  ? "Screening ended with some selected papers left unread."
+                  : review?.looking_up
+                    ? `Looking up abstracts for ${review.looking_up} papers.`
+                    : review?.state === "running"
+                      ? "Screening against the protocol."
+                      : review?.state === "completed"
+                        ? "Screening pass finished."
+                        : "Waiting for screening results."}
+                {review?.not_screened
+                  ? ` ${review.not_screened} records were set aside by the round or budget limit.`
+                  : ""}
+              </p>
+              <p className="mt-2 text-muted-foreground text-xs">
+                Each score is the final screener’s confidence that a paper meets the criteria.
+              </p>
+            </Pane>
+          ) : data.points.length || data.criteria ? (
             <Pane
               title="Relevance × quality"
               aside={
@@ -523,25 +579,31 @@ export function ScreenScene({
               </div>
             </Pane>
           ) : (
-            <Placeholder>Every paper gets a relevance and a quality score</Placeholder>
+            <Placeholder>
+              {finished
+                ? "No screening scores were recorded in this view."
+                : "Waiting for candidate papers and screening scores."}
+            </Placeholder>
           )}
           {rejections.length > 0 && (
             <Pane
-              title={wrongFieldOnly ? "Same words, wrong field" : "Rejected"}
+              title={!rapid && wrongFieldOnly ? "Same words, wrong field" : "Rejected"}
               aside={
-                wrongFieldOnly
-                  ? "cross-domain rejection"
-                  : [
-                      wrong.length && `${wrong.length} ${wrongLabel.toLowerCase()}`,
-                      low.length && `${low.length} below a bar`,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")
+                rapid
+                  ? `${rejections.length} excluded`
+                  : wrongFieldOnly
+                    ? "cross-domain rejection"
+                    : [
+                        wrong.length && `${wrong.length} ${wrongLabel.toLowerCase()}`,
+                        low.length && `${low.length} below a bar`,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")
               }
             >
               <ul className="flex flex-col gap-1.5">
                 {shownRejections.map((p) => (
-                  <RejectedItem key={p.id} paper={p} live={live} onHover={setHover} />
+                  <RejectedItem key={p.id} paper={p} live={live} rapid={rapid} onHover={setHover} />
                 ))}
               </ul>
               {rejections.length > REJECTED_SHOWN && (
@@ -552,7 +614,7 @@ export function ScreenScene({
             </Pane>
           )}
         </div>
-        <div ref={listRef} className="relative min-h-80">
+        <div ref={listRef} className={cn("relative", (data.kept.length > 0 || (!finished && live)) && "min-h-80")}>
           {data.kept.length ? (
             <Pane
               title="Shortlist"
@@ -585,23 +647,17 @@ export function ScreenScene({
           ) : (
             <Pane
               title="Shortlist"
-              aside="each kept with a reason"
-              className="flex flex-col xl:absolute xl:inset-0 [&>header]:shrink-0"
-              action={
-                <span className="rounded-full bg-background px-2 py-px font-mono font-semibold text-[11px] text-muted-foreground ring-1 ring-foreground/10">
-                  0
-                </span>
-              }
+              className={cn("flex flex-col [&>header]:shrink-0", !finished && live && "xl:absolute xl:inset-0")}
             >
-              <ol className="-mx-1 flex flex-col px-1">
-                {Array.from({ length: FRAME_ROWS }, (_, i) => (
-                  // biome-ignore lint/suspicious/noArrayIndexKey: empty rows have no ids
-                  <PendingPaper key={i} index={i} active={step === "shortlist"} />
-                ))}
-              </ol>
-              <p className="mt-3 text-center text-muted-foreground text-xs">
-                Papers that clear both bars are kept here
-              </p>
+              {!finished && live && (!rapid || review?.state === "running") && (
+                <ol aria-hidden="true" className="-mx-1 flex flex-col px-1">
+                  {Array.from({ length: FRAME_ROWS }, (_, i) => (
+                    // biome-ignore lint/suspicious/noArrayIndexKey: empty rows have no ids
+                    <PendingPaper key={i} index={i} active={step === "shortlist"} />
+                  ))}
+                </ol>
+              )}
+              <p className="text-muted-foreground text-sm">{emptyShortlist}</p>
             </Pane>
           )}
         </div>

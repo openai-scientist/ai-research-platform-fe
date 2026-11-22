@@ -22,7 +22,7 @@ export function ExperimentsSection({ project, canWrite }: WorkspaceProps) {
   const openWorkspace = useRunStudio((s) => s.openWorkspace);
   // `?run=` (from a notification or a link): the run opens in its workspace here.
   useEffect(() => {
-    if (!selectedRun) return;
+    if (!selectedRun || useRunStudio.getState().openRunId === selectedRun) return;
     let current = true;
     fetchRuns
       .getById(project.id, selectedRun)
@@ -30,7 +30,6 @@ export function ExperimentsSection({ project, canWrite }: WorkspaceProps) {
         if (!current) return;
         attachRun(project.id, run, isActiveRun(run.status));
         openWorkspace(run.id);
-        router.replace(`/projects/${encodeURIComponent(project.id)}/experiments`);
       })
       .catch((error: unknown) => {
         if (!current) return;
@@ -41,6 +40,5 @@ export function ExperimentsSection({ project, canWrite }: WorkspaceProps) {
       current = false;
     };
   }, [project.id, selectedRun, router, attachRun, openWorkspace]);
-  if (selectedRun) return null;
   return <RunStudio projectId={project.id} canWrite={canWrite} />;
 }

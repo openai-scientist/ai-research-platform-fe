@@ -156,10 +156,10 @@ export function LocalDataCard({
                 </tr>
               </thead>
               <tbody>
-                {card.variables.map((variable) => {
+                {card.variables.map((variable, index) => {
                   const alias = /^v\d+$/i.test(variable.name);
                   return (
-                    <tr key={variable.name} className="border-t align-top">
+                    <tr key={`${variable.name}:${index}`} className="border-t align-top">
                       <td className="px-3 py-3">
                         <div className="flex items-center gap-2">
                           <VariableTypeIcon type={variable.type} />
@@ -218,8 +218,8 @@ export function LocalDataCard({
           </div>
         </div>
         <div className="flex flex-col gap-3 md:hidden">
-          {card.variables.map((variable) => (
-            <article key={variable.name} className="flex flex-col gap-3 rounded-lg border p-3">
+          {card.variables.map((variable, index) => (
+            <article key={`${variable.name}:${index}`} className="flex flex-col gap-3 rounded-lg border p-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-2">
                   <VariableTypeIcon type={variable.type} />

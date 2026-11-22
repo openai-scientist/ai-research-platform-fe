@@ -103,7 +103,7 @@ describe("PipelineAdapter", () => {
     const screening = replay(agentWorkEvents.length);
     expect(screening.currentStageKey).toBe("screen");
     expect(screening.stages.screen.currentStepId).toBe("score");
-    expect(screening.message?.text).toBe("Screening papers: 0 records (turn 22)");
+    expect(screening.message?.text).toBe("Screening papers · automatically select top records (turn 22)");
     expect(screening.workChecks.screen.score.screening.state).toBe("needs_you");
   });
 

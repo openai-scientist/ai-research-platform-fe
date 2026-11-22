@@ -1,9 +1,9 @@
 "use client";
 
-import { type RefObject, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { type RefObject, useEffect, useRef, useState } from "react";
 
 import { cn } from "cn";
-import { motion } from "motion/react";
+import { motion, useReducedMotion } from "motion/react";
 import { type OrbState, ThinkingOrb } from "thinking-orbs";
 
 import type { AgentRole, Verdict } from "@/lib/run-stream/contract";
@@ -148,15 +148,20 @@ export function AgentCursor({
   container,
   target,
   version,
+  click = false,
+  showCode = false,
 }: {
   agent: AgentRole | null;
   container: RefObject<HTMLElement | null>;
   target: string | null;
   /** Bump to re-measure when the target moves without changing. */
   version?: unknown;
+  click?: boolean;
+  showCode?: boolean;
 }) {
+  const reducedMotion = useReducedMotion();
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
-  useLayoutEffect(() => {
+  useEffect(() => {
     void version;
     const host = container.current;
     const el = target && host ? host.querySelector<HTMLElement>(`[data-cursor="${CSS.escape(target)}"]`) : null;
@@ -168,7 +173,8 @@ export function AgentCursor({
       const a = el.getBoundingClientRect();
       const b = host.getBoundingClientRect();
       if (!a.width && !a.height) return;
-      setPos({ x: a.left - b.left + Math.min(a.width * 0.55, 90), y: a.top - b.top + Math.min(a.height * 0.6, 22) });
+      // The pointer rests on the item's top-left edge and the name sits above it, so neither covers the item's text.
+      setPos({ x: a.left - b.left + Math.min(a.width * 0.2, 28), y: a.top - b.top + 1 });
     };
     measure();
     const observer = new ResizeObserver(measure);
@@ -176,7 +182,7 @@ export function AgentCursor({
     return () => observer.disconnect();
   }, [container, target, version]);
 
-  if (!role || role === "code" || !pos) return null;
+  if (!role || (role === "code" && !showCode) || !pos) return null;
   const agent = AGENTS[role];
   return (
     <motion.div
@@ -186,6 +192,17 @@ export function AgentCursor({
       animate={{ x: pos.x, y: pos.y, opacity: 1 }}
       transition={{ type: "spring", stiffness: 140, damping: 20, mass: 0.8 }}
     >
+      {click && target && !reducedMotion && (
+        <motion.span
+          key={target}
+          aria-hidden="true"
+          data-cursor-ripple
+          className={cn("absolute -top-1 -left-1 size-5 rounded-full border-2 border-current", agent.text)}
+          initial={{ opacity: 0, scale: 0.45 }}
+          animate={{ opacity: [0, 0.75, 0], scale: [0.45, 0.72, 1.9] }}
+          transition={{ delay: 0.36, duration: 0.38, times: [0, 0.2, 1] }}
+        />
+      )}
       <svg aria-hidden="true" viewBox="0 0 18 18" className={cn("size-[18px] drop-shadow-sm", agent.text)}>
         <path
           d="M2.5 1.8 15.5 8.2 9.4 9.6 6.9 16z"
@@ -196,7 +213,7 @@ export function AgentCursor({
       </svg>
       <span
         className={cn(
-          "mt-3 -ml-1 whitespace-nowrap rounded-[2px_8px_8px_8px] px-1.5 py-1 font-semibold text-[11px] text-background leading-none shadow-sm",
+          "-mt-5 ml-2 whitespace-nowrap rounded-[8px_8px_8px_2px] px-1.5 py-1 font-semibold text-[11px] text-background leading-none shadow-sm",
           agent.solid,
         )}
       >

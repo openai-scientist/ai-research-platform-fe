@@ -6,6 +6,7 @@
 // and the real stream must emit exactly the same shapes.
 
 import type { ClaimScope } from "./claim-scope";
+import type { PublishedHypothesis } from "./published-hypotheses";
 
 /**
  * Screens of a run. `scope` to `hypothesize` cover Popper's pipeline stages 1 to 8:
@@ -227,6 +228,30 @@ export interface SearchStrategy {
   why: string;
 }
 
+export interface EligibilityDecision {
+  id: string;
+  title: string;
+  citation: string;
+  included: boolean;
+  score?: number;
+  reason?: string;
+  venue: string;
+  doi?: string;
+  year?: number;
+  title_only: boolean;
+  review_round: number;
+  protocol_version: number;
+}
+
+export interface ScreeningProgress {
+  done: number;
+  total: number;
+  looking_up?: number;
+  not_screened: number;
+  protocol_version: number;
+  state: "running" | "completed" | "partial";
+}
+
 export interface SearchQuery {
   id: string;
   strategy_id: string;
@@ -262,17 +287,18 @@ export interface ShortlistPaper {
   citation: string;
   title: string;
   venue: string;
-  year: number;
-  relevance: number;
-  quality: number;
+  year?: number;
+  relevance?: number;
+  quality?: number;
+  eligibilityScore?: number;
   /** Why it was kept. */
   reason: string;
   doi?: string;
   /** Kept for being foundational even though it is old. */
   seminal?: boolean;
   /** Where the kept record came from, and its citation count then. */
-  source: string;
-  citations: number;
+  source?: string;
+  citations?: number;
 }
 
 /** A paper that shares the words of the question but is about something else. */
@@ -283,6 +309,7 @@ export interface RejectedPaper {
   /** The shared word that made it match. Empty when the paper was set aside for another reason. */
   false_friend: string;
   reason: string;
+  eligibilityScore?: number;
   /** Why it is out: judged off-topic, ranked below the shortlist cut, or never scored. */
   decision?: "rejected" | "below_cutoff" | "unscored" | "prefiltered";
 }
@@ -630,12 +657,13 @@ export interface GateOption {
   confirm_label: string;
   recommended?: boolean;
   disabled?: boolean;
+  needsText?: boolean;
 }
 
 export interface Gate {
   id: string;
   kind: GateKind;
-  stageKey?: "dataset";
+  stageKey?: "dataset" | "experiment_design" | "execution";
   title: string;
   /** Why the run stopped here, in terms of the review mode. */
   why: string;
@@ -809,6 +837,9 @@ export type RunEvent =
       "run.started",
       { mode: ReviewMode; topic: string; domains: string[]; dataset?: DatasetRef; dataset_superseded?: true }
     >
+  | EventBase<"design.updated", import("./experiment-design").DesignPatch>
+  | EventBase<"execution.updated", import("./execution").ExecutionPatch>
+  | EventBase<"gate.answer_details", { id: string; text: string; note?: string }>
   | EventBase<"run.plan", { stages: PlannedStage[]; dataset_superseded?: true }>
   | EventBase<"dataset.superseded", { dataset_superseded: true; superseded_by_version?: number }>
   | EventBase<
@@ -826,11 +857,18 @@ export type RunEvent =
   | EventBase<"run.stalled", { minutes: number }>
   | EventBase<
       "run.activity",
-      { text: string; step_id?: string; live?: "replace" | "fallback"; check?: WorkCheck; note?: string }
+      {
+        text: string;
+        step_id?: string;
+        live?: "replace" | "fallback";
+        check?: WorkCheck;
+        note?: string;
+        queries?: string[];
+      }
     >
   /** `paper_title` is absent when the run ends before the paper, such as right after hypotheses (stage 8). */
   | EventBase<"run.completed", { paper_title?: string }>
-  | EventBase<"stage.started", { plan: StagePlan }>
+  | EventBase<"stage.started", { plan: StagePlan; preserve_content?: boolean }>
   | EventBase<"stage.completed", { summary: string }>
   | EventBase<"step.started", { step_id: string }>
   | EventBase<"step.completed", { step_id: string }>
@@ -875,11 +913,11 @@ export type RunEvent =
       }
     >
   // search: stages 3 and 4
-  | EventBase<"search.strategy", { strategy: SearchStrategy }>
+  | EventBase<"search.strategy", { strategy: SearchStrategy; review_round?: number }>
   | EventBase<"search.query", { query: SearchQuery }>
   | EventBase<"search.sources", { sources: LiteratureSource[]; delay_ms: number }>
-  | EventBase<"literature.request", { query_id: string; source_id: string }>
-  | EventBase<"literature.batch", { query_id: string; source_id: string; hits: number }>
+  | EventBase<"literature.request", { query_id: string; source_id: string; review_round?: number }>
+  | EventBase<"literature.batch", { query_id: string; source_id: string; hits: number; issue?: string }>
   /** A paper found in several sources. `kept` is the source whose record survives: DOI first, then most citations. */
   | EventBase<
       "literature.merged",
@@ -900,19 +938,35 @@ export type RunEvent =
         /** ISO 8601 UTC. */
         collected_at: string;
         /** What each source returned, keyed by source id. */
-        per_source?: Record<string, { requests: number; papers: number; errors?: string[] }>;
+        per_source?: Record<
+          string,
+          { requests?: number; papers?: number; errors?: string[]; unattributed_errors?: number }
+        >;
+        review_round?: number;
+        round_answered?: boolean;
+        round_hits?: number;
+        new_records?: number;
       }
     >
   // screen: stage 5
   | EventBase<
       "screen.criteria",
-      { rules: string[]; relevance_min: number; quality_min: number /** Papers to screen. */; candidates?: number }
+      {
+        rules: string[];
+        relevance_min?: number;
+        quality_min?: number;
+        candidates?: number;
+        protocol_version?: number;
+        exclusions?: string[];
+      }
     >
   /** How many candidates the scoring takes on, after those set aside before it. */
   | EventBase<"screen.planned", { to_screen: number; set_aside: number }>
   | EventBase<"screen.scored", { points: ScreenPoint[] }>
   | EventBase<"screen.rejected", { paper: RejectedPaper }>
   | EventBase<"screen.kept", { paper: ShortlistPaper }>
+  | EventBase<"screen.eligibility", EligibilityDecision>
+  | EventBase<"screen.review_progress", ScreeningProgress>
   // read: stage 6
   | EventBase<"card.extracted", { card: KnowledgeCard }>
   | EventBase<"estimate.checked", { check: EstimateCheck }>
@@ -923,10 +977,11 @@ export type RunEvent =
   | EventBase<"synthesis.gap", { gap: Gap }>
   /** The field at a glance, written once the clusters are set. */
   | EventBase<"synthesis.overview", { text: string }>
-  | EventBase<"synthesis.ranked", { ranking: Opportunity[] }>
+  | EventBase<"synthesis.ranked", { ranking: Opportunity[]; gaps?: Gap[] }>
   // hypothesize: stage 8
   | EventBase<"debate.turn", { turn: DebateTurn }>
   | EventBase<"hypothesis.drafted", { hypothesis: Hypothesis }>
+  | EventBase<"hypothesis.published", { hypotheses: PublishedHypothesis[] }>
   | EventBase<"hypothesis.checked", { hypothesis_id: string; novelty: NoveltyCheck; feasibility: FeasibilityCheck }>
   | EventBase<"hypothesis.selected", { hypothesis_id: string; override_note?: string }>
   | EventBase<"review.finding", { finding: ReviewFinding }>

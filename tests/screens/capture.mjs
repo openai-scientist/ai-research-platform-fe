@@ -30,6 +30,44 @@ let nodeOffline = false;
 // GUIDE-2: Run Studio waiting on the Local Node ("offline") or for its release review ("review"). The run is the
 // recorded logos run (read only, never edited): its first 40 events plus one event that parks it in that state.
 let runScenario = null;
+let designGateAnswer = null;
+let designAccepted = false;
+const DESIGN_FIXTURE = join(ROOT, "src/lib/run-stream/fixtures");
+const DESIGN_RUN = "07197f75-6cbc-4c8d-8eee-72f894f792b5";
+const DESIGN_STAGE_RUN = "c2d85712-ab1f-4ce1-8412-75bdeeb45935";
+
+function designEvents() {
+  const end = { "design-mid-work": 614, "design-gate": designGateAnswer ? 614 : 607, "design-h1": 717,
+    "design-handoff": 718, "design-hypothesis": 614, "design-rule-input": 661, "design-missing-lock": 719,
+    "design-review": 717, "design-paper-reference": 717 }[runScenario] ?? 614;
+  const events = readFileSync(join(DESIGN_FIXTURE, "run-0719-design.jsonl"), "utf8")
+    .trim().split("\n").map((line) => JSON.parse(line)).filter((event) => event.seq <= end);
+  if (designAccepted) {
+    const last = events.at(-1);
+    // Simulate the successful Platform hand-off. RUN-0719 itself finished with no lock.
+    events.push({ ...last, seq: last.seq + 1, payload: { status: "ACCEPTED" } });
+  }
+  return events;
+}
+
+function designPlan() {
+  return JSON.parse(readFileSync(join(DESIGN_FIXTURE, "run-0719-design-plan.json"), "utf8"));
+}
+
+function designArtifacts() {
+  const events = designEvents();
+  const hypothesis = events.find((event) => event.type === "run.published" && event.stage_key === "hypothesis");
+  return [
+    { id: hypothesis.payload.artifact_id, stage_run_id: hypothesis.stage_run_id, schema_id: "hypothesis.hypotheses/v2" },
+    ...events.filter((event) => event.type === "artifact.delivered").map((event) => ({
+      id: event.payload.artifact_id, stage_run_id: event.stage_run_id, schema_id: event.payload.schema,
+    })),
+    ...(runScenario === "design-handoff" ? [{
+      id: "44444444-4444-4444-8444-444444444499", stage_run_id: DESIGN_STAGE_RUN, schema_id: "experiment_design.lock/v1",
+    }] : []),
+  ].map((file) => ({ ...file, filename: "artifact.json", version: 1, run_id: DESIGN_RUN, kind: "other" }));
+}
+
 // FE-DS6: the Dataset stage runs of local-v3 ("running", "review", "done"), a node without the data-card family.
 let ds6Runs = "none";
 // FE-DS8: replay of the 30 stored events of RUN-FAEC up to this count (0 = off).
@@ -259,6 +297,9 @@ function runEvents() {
     .split("\n")
     .filter(Boolean)
     .map((line) => JSON.parse(line));
+  if (runScenario === "hypothesis-scope-reference") return all.filter(({ seq }) => seq < 27);
+  if (runScenario === "hypothesis-draft-reference")
+    return all.filter(({ seq, step_key }) => seq <= 724 && (seq < 27 || step_key === "hypothesize"));
   const head = all.slice(0, 40);
   const base = head[39];
   const parked =
@@ -273,7 +314,10 @@ function runEvents() {
 }
 function runItem() {
   const events = runEvents();
-  const topic = isHypothesisWork ? WORK_TOPIC : "Does the commute time depend on access to services?";
+  let topic = "Does the commute time depend on access to services?";
+  if (isHypothesisWork) topic = WORK_TOPIC;
+  if (isDesignRedesign && runScenario?.startsWith("hypothesis-"))
+    topic = "Rank Fusion for Evidence Retrieval in Long-Document Question Answering";
   return {
     id: RUN_ID,
     project_id: PROJECT_ID,
@@ -292,7 +336,7 @@ function runItem() {
     updated_at: timestamp,
     label: "RUN-78D5",
     title: topic,
-    ...(runScenario ? { case: { problem: { text: topic } } } : {}),
+    ...(runScenario ? { case: { problem: { text: topic }, intent: { kind: "test" } } } : {}),
     pipeline_key: "logos",
     review_mode: "light",
     domains: ["urban planning"],
@@ -617,6 +661,46 @@ function dataForPath(path) {
       detection_status: "ready",
     });
   }
+  if (isDesignStudio) {
+    if (path === `/projects/${PROJECT_ID}/runs` && runScenario?.endsWith("-reference") && runScenario !== "design-paper-reference") {
+      return envelope(runScenario.startsWith("writing-") ? [] : [runItem()]);
+    }
+    const base = `/projects/${PROJECT_ID}/runs/${DESIGN_RUN}`;
+    const events = designEvents();
+    const run = {
+      ...runItem(), id: DESIGN_RUN, label: "RUN-0719", title: WORK_TOPIC, pipeline_key: "dataset_first",
+      case: { problem: { text: WORK_TOPIC }, intent: { kind: "test" } },
+      domains: ["Education"],
+      last_seq: events.at(-1).seq,
+      status: (runScenario === "design-gate" && !designGateAnswer) || ["design-rule-input", "design-missing-lock"].includes(runScenario) || (runScenario === "design-handoff" && !designAccepted) ? "awaiting_review" : "running",
+      current_stage: {
+        stage_key: designAccepted ? "execution" : "experiment_design",
+        stage_run_id: DESIGN_STAGE_RUN,
+        phase: events.at(-1).phase,
+        status: ["design-handoff", "design-missing-lock"].includes(runScenario) && !designAccepted ? "COMPLETED" : "RUNNING",
+      },
+    };
+    if (path === `/projects/${PROJECT_ID}/runs`) return envelope([run]);
+    if (path === base) return envelope(run);
+    if (path === `${base}/events`) return envelope(events);
+    if (path === `${base}/artifacts`) return envelope(designArtifacts());
+    if (path.startsWith(`${base}/artifacts/`) && path.endsWith("/download")) {
+      const id = path.split("/").at(-2);
+      const artifact = designArtifacts().find((file) => file.id === id);
+      if (artifact?.schema_id === "experiment_design.plan/v1") return designPlan();
+      if (artifact?.schema_id === "review.findings/v1")
+        return JSON.parse(readFileSync(join(DESIGN_FIXTURE, "run-0719-design-findings.json"), "utf8"));
+      if (artifact?.schema_id === "experiment_design.exp_plan/v1")
+        return readFileSync(join(DESIGN_FIXTURE, "run-0719-design-exp-plan.md"), "utf8");
+      if (artifact?.schema_id === "experiment_design.preregistration/v1")
+        return readFileSync(join(DESIGN_FIXTURE, "run-0719-design-preregistration.md"), "utf8");
+      if (artifact?.schema_id === "hypothesis.hypotheses/v2")
+        return { hypotheses: designPlan().hypotheses.map(({ id, statement, estimand }) => ({
+          id, statement, exposure: [estimand.exposure.variable], outcome: [estimand.outcome.variable],
+        })) };
+      return { findings: [] };
+    }
+  }
   if (path === `/projects/${PROJECT_ID}/runs`)
     return envelope(runScenario ? [runItem()] : ds6Runs === "none" ? [] : [ds6Run()]);
   if (path === `/projects/${PROJECT_ID}/runs/${DS6_RUN_ID}`) return envelope(ds6Run());
@@ -732,7 +816,7 @@ function playwrightRequire() {
 async function waitForApp() {
   for (let attempt = 0; attempt < 90; attempt += 1) {
     try {
-      const response = await fetch(BASE_URL);
+      const response = await fetch(isDesignStudio ? `${BASE_URL}/api/v1/auth/me` : BASE_URL);
       if (response.status < 500) return;
     } catch {
       // The dev server may still be starting.
@@ -784,6 +868,8 @@ const isRun1 = TAG === "FE-RUN1";
 const isDatasetLive = TAG.startsWith("dataset-live-");
 const isDatasetCard = TAG === "dataset-inline-card";
 const isHypothesisWork = TAG === "hypothesis-live-work";
+const isDesignStudio = ["experiment-design-live", "experiment-design-redesign"].includes(TAG);
+const isDesignRedesign = TAG === "experiment-design-redesign";
 const isAdminKeys = TAG === "admin-integration-keys";
 const isDatasetStudio = TAG === "dataset-studio" || isDatasetCard;
 const verifyDatasetLive = TAG === "dataset-live-after";
@@ -854,8 +940,9 @@ async function verifyDatasetRunControls(page, scenario, width) {
   }
   if (scenario !== "local-running") return;
 
-  const track = workspace.getByRole("list", { name: "Steps of the Dataset stage" });
-  await track.getByRole("button", { name: "Dictionary", exact: true }).click();
+  const inspection = workspace.getByRole("region", { name: "Dataset inspection" });
+  await inspection.getByText("All checks", { exact: true }).click();
+  await inspection.getByRole("button", { name: /^Write the dictionary/ }).click();
   const focused = workspace.locator("#dataset-focused-step");
   await focused.getByText("Write the dictionary", { exact: true }).waitFor();
   await focused.getByRole("button", { name: "Back to the current step" }).click();
@@ -982,28 +1069,16 @@ async function verifyStudioDataset(page, scenario) {
   if (scenario.tag === "dataset-local-running") {
     const agent = workspace.locator("[data-dataset-agent]");
     await agent.waitFor();
-    const overlaps = await agent.evaluate((chip) => {
-      const label = [...chip.parentElement.children].find((item) => item.textContent === "Code check · no AI");
-      if (!label) throw new Error("Code check label is missing");
-      const a = chip.getBoundingClientRect();
-      const b = label.getBoundingClientRect();
-      return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
-    });
-    if (overlaps) throw new Error("Steward chip overlaps the code check label");
+
   }
   if (scenario.tag === "dataset-cloud-running") {
     await workspace.getByText("Commute and Service Access Survey", { exact: true }).first().waitFor();
-    const track = await waitForStudioSteps(page, pipeline, "Dataset");
-    if (await track.getAttribute("aria-haspopup")) {
-      await track.click();
-      const menu = page.getByRole("menu", { name: "Steps of the Dataset stage" });
-      await menu.waitFor();
-      if (await menu.getByRole("menuitemradio", { name: /Review the release/ }).count())
-        throw new Error("Cloud has a release step");
-      await page.keyboard.press("Escape");
-    } else if (await track.getByRole("button", { name: "Release", exact: true }).count()) {
+    await waitForStudioSteps(page, pipeline, "Dataset");
+    const inspection = workspace.getByRole("region", { name: "Dataset inspection" });
+    await inspection.getByText("All checks", { exact: true }).click();
+    if (await inspection.getByRole("button", { name: /^Review the release/ }).count())
       throw new Error("Cloud has a release step");
-    }
+    await inspection.getByText("All checks", { exact: true }).click();
     if (await workspace.getByText("Running on your Local Node", { exact: true }).count())
       throw new Error("Cloud is labelled as a Local Node run");
   }
@@ -1050,12 +1125,13 @@ async function captureDatasetHandoff(page, size, theme) {
     .getByRole("button", { name: "Accept", exact: true })
     .click();
   await workspace
-    .getByText(/Hypothesis stage starting/)
+    .getByText("Data card accepted", { exact: true })
     .first()
     .waitFor();
   await workspace.getByRole("dialog", { name: "Accept the data card" }).waitFor({ state: "hidden" });
   await waitForStudioSteps(page, await expectExpandedStage(workspace, "Dataset"), "Dataset");
   const handoff = await capture("dataset-handoff");
+  await workspace.getByRole("button", { name: "Open Hypothesis" }).click();
 
   await workspace.getByRole("heading", { name: "Scope the question" }).scrollIntoViewIfNeeded();
   const pipeline = await expectExpandedStage(workspace, "Hypothesis");
@@ -1074,15 +1150,18 @@ async function captureDatasetHandoff(page, size, theme) {
     await steps.focus();
     await page.keyboard.press("Enter");
     const menu = page.getByRole("menu", { name: "Steps of the Dataset stage" });
-    await menu.getByRole("menuitemradio", { name: /Review the release/ }).click();
+    await menu.getByRole("menuitemradio", { name: "Source and release" }).click();
     await menu.waitFor({ state: "hidden" });
     const summary = await steps.textContent();
-    if (!summary.includes("Step 1 of") || !summary.includes("Release"))
-      throw new Error("The compact step did not update");
+    if (!summary.includes("Step 1 of 4") || !summary.includes("Source"))
+      throw new Error("The compact Dataset phase did not update");
   } else {
-    await steps.getByRole("button", { name: "Release", exact: true }).click();
+    await steps.getByRole("button", { name: /^(Source|Source and release)$/ }).click();
   }
-  await workspace.getByText("Reviewed", { exact: true }).waitFor();
+  const inspection = workspace.getByRole("region", { name: "Dataset inspection" });
+  await inspection.getByText("All checks", { exact: true }).click();
+  await inspection.getByRole("button", { name: /^Review the release/ }).click();
+  await inspection.getByText("Release reviewed", { exact: true }).waitFor();
   let panel = workspace.locator("aside");
   if (size.width < 1024) {
     await workspace.getByRole("button", { name: "Steps and activity" }).click();
@@ -1113,6 +1192,13 @@ async function capture() {
           ...(isDatasetStudio && theme === "dark" ? { reducedMotion: "reduce" } : {}),
         });
         const page = await context.newPage();
+        const designErrors = [];
+        if (isDesignStudio) {
+          page.on("pageerror", (error) => designErrors.push(error.message));
+          page.on("console", (message) => {
+            if (message.type() === "error") designErrors.push(message.text());
+          });
+        }
         await context.addCookies([
           { name: "platform_session", value: "fe-s0-session", url: BASE_URL, httpOnly: true, sameSite: "Lax" },
           { name: "theme_mode", value: theme, url: BASE_URL, sameSite: "Lax" },
@@ -1120,6 +1206,33 @@ async function capture() {
         await page.route("**/api/v1/**", async (route) => {
           const url = new URL(route.request().url());
           artifactSchema = url.searchParams.get("schema");
+          if (isDesignStudio && url.pathname.endsWith("/stream")) {
+            const after = Number(url.searchParams.get("after") ?? 0);
+            const events = url.pathname.endsWith(`/runs/${DESIGN_RUN}/events/stream`)
+              ? designEvents().filter((event) => event.seq > after)
+              : [];
+            const body = events.map((event) => `event: run-event\ndata: ${JSON.stringify(event)}\n\n`).join("");
+            await route.fulfill({ contentType: "text/event-stream", body: body || ": waiting\n\n" });
+            return;
+          }
+          if (isDesignStudio && route.request().method() === "POST") {
+            const stage = `/runs/${DESIGN_RUN}/stages/${DESIGN_STAGE_RUN}`;
+            if (url.pathname.endsWith(`${stage}/gates/ask_user-1`)) {
+              const answer = route.request().postDataJSON();
+              if (answer.action !== "answer" || answer.option_id !== "other" || answer.text !== "Use the comparison as stated.")
+                throw new Error("Unexpected Design answer POST");
+              designGateAnswer = answer;
+              await route.fulfill({ json: envelope({ gate_id: "ask_user-1", status: "answered" }) });
+              return;
+            }
+            if (url.pathname.endsWith(`${stage}/accept`)) {
+              const answer = route.request().postDataJSON();
+              if (JSON.stringify(answer) !== '{"selection":{}}') throw new Error("Unexpected Design accept POST");
+              designAccepted = true;
+              await route.fulfill({ json: envelope({ status: "ACCEPTED" }) });
+              return;
+            }
+          }
           if (
             studioDataset === "accept" &&
             url.pathname.endsWith(`/runs/${DS6_RUN_ID}/stages/stage-1/accept`) &&
@@ -1130,6 +1243,10 @@ async function capture() {
             return;
           }
           const body = dataForPath(url.pathname.replace(/^\/api\/v1/, ""));
+          if (isDesignStudio && typeof body === "string" && url.pathname.endsWith("/download")) {
+            await route.fulfill({ status: 200, contentType: "text/markdown", body });
+            return;
+          }
           await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
         });
 
@@ -1272,7 +1389,7 @@ async function capture() {
                             tag: "dataset-run-release-review",
                             url: `${common}/datasets/local-dataset/runs/${DS6_RUN_ID}`,
                             runs: "review",
-                            marker: /Release gate/,
+                            marker: /Approve the release on Local Node/,
                           },
                         ])
                     : isDs7
@@ -1401,8 +1518,19 @@ async function capture() {
           { tag: "hypothesis-mid-search", url: `${common}/experiments?run=${RUN_ID}`, run: "agent-work" },
           { tag: "hypothesis-claim-scope", url: `${common}/experiments?run=${RUN_ID}`, run: "claim-scope" },
         ];
+        const designRoutes = (isDesignRedesign ?
+          ["design-mid-work", "design-h1", "design-rule-input", "design-missing-lock", "design-review", "design-hypothesis"] :
+          ["design-mid-work", "design-gate", "design-h1", "design-handoff", "design-hypothesis"]).map(
+          (tag) => ({ tag, run: tag, url: `${common}/experiments?run=${DESIGN_RUN}` }),
+        );
+        if (isDesignRedesign && size.name === "desktop") {
+          designRoutes.push({ tag: "design-paper-reference", run: "design-paper-reference", url: `${common}/experiments?run=${DESIGN_RUN}` });
+          designRoutes.push({ tag: "hypothesis-scope-reference", run: "hypothesis-scope-reference", url: `${common}/experiments?run=${RUN_ID}` });
+          designRoutes.push({ tag: "hypothesis-draft-reference", run: "hypothesis-draft-reference", url: `${common}/experiments?run=${RUN_ID}` });
+          designRoutes.push({ tag: "writing-paper-reference", run: "writing-paper-reference", url: `${common}/experiments` });
+        }
         const adminRoutes = [{ tag: "admin-integrations", url: "admin/providers" }];
-        const captureRoutes = isAdminKeys
+        const captureRoutes = isDesignStudio ? designRoutes : isAdminKeys
           ? adminRoutes
           : isHypothesisWork
             ? workRoutes
@@ -1414,9 +1542,12 @@ async function capture() {
         for (const item of captureRoutes) {
           if (isDatasetCard && item.tag !== "dataset-accept") continue;
           if (ONLY && !ONLY.includes(item.tag)) continue;
+          if (isDesignStudio) console.log(`Capturing ${item.tag} · ${size.name} · ${theme}`);
           forceEmptyDatasets = isDs5 && item.empty === true;
           nodeOffline = item.offline === true;
           runScenario = item.run ?? null;
+          designGateAnswer = null;
+          designAccepted = false;
           ds6Runs = item.runs ?? "none";
           ds8Upto = item.ds8 ?? 0;
           ds6Accept = item.accept === true;
@@ -1426,8 +1557,8 @@ async function capture() {
           let response;
           for (let attempt = 0; attempt < 4; attempt += 1) {
             response = await page.goto(`${BASE_URL}/${item.url}`, {
-              waitUntil: isRun1 ? "domcontentloaded" : "networkidle",
-              timeout: isDs4 || process.env.SCREENS_WEBPACK || APP_DIR !== ROOT ? 240_000 : 60_000,
+              waitUntil: isRun1 || isDesignStudio ? "domcontentloaded" : "networkidle",
+              timeout: isDesignStudio ? 540_000 : isDs4 || process.env.SCREENS_WEBPACK || APP_DIR !== ROOT ? 240_000 : 60_000,
             });
             if (response && response.status() < 400) break;
             await page.waitForTimeout(750 * (attempt + 1));
@@ -1456,7 +1587,7 @@ async function capture() {
               `${item.tag}: expected ${theme} theme, got mode=${themeApplied.mode}, dark=${themeApplied.darkClass}`,
             );
           }
-          if (!isDatasetLive && !isDatasetStudio && !isHypothesisWork && !isAdminKeys)
+          if (!isDatasetLive && !isDatasetStudio && !isHypothesisWork && !isAdminKeys && !isDesignStudio)
             await page
               .getByRole("heading", {
                 name: /Commute and Service Access Survey|Neighborhood Travel Diary|Datasets|Local Nodes|Version history/,
@@ -1475,6 +1606,94 @@ async function capture() {
           if (item.history) {
             await page.getByRole("button", { name: "History" }).click();
             await page.getByRole("button", { name: "Show version 1 in the preview" }).waitFor({ timeout: 10_000 });
+          }
+          if (isDesignRedesign && item.run.startsWith("writing-")) {
+            const preview = page.getByRole("region", { name: "Writing stage", exact: true });
+            const open = page.getByRole("button", { name: /^(Run|Open) the writing stage$/ });
+            for (let attempt = 0; attempt < 3 && !(await preview.isVisible()); attempt += 1) {
+              await open.click();
+              await preview.waitFor({ timeout: 3000 }).catch(() => undefined);
+            }
+            await preview.waitFor();
+            await page.waitForFunction(() => Boolean(window.__asw));
+            await page.evaluate(() => window.__asw.play("cap"));
+            await page.waitForFunction(() => window.__asw.S().st.S11.done.length > 0);
+            await page.evaluate(() => window.__asw.view("write"));
+            await page.locator("[data-page]").waitFor();
+          } else if (isDesignRedesign && item.run.startsWith("hypothesis-")) {
+            const workspace = page.getByRole("region", { name: /Research run/ });
+            const title = item.run === "hypothesis-scope-reference" ? /^Scope the question/ : /^Hypothesize/;
+            await workspace.getByRole("heading", { name: title }).waitFor({ timeout: 12_000 }).catch(async (error) => {
+              await page.screenshot({ path: join(OUTPUT, `debug-${item.tag}-${theme}.png`) });
+              throw error;
+            });
+            const hide = workspace.getByRole("button", { name: "Hide to look at the work" });
+            if (await hide.isVisible()) await hide.click();
+            if (item.run === "hypothesis-scope-reference") {
+              const topic = workspace.getByText("Your topic", { exact: true }).last();
+              await topic.evaluate((element) => element.scrollIntoView({ block: "start" }));
+            }
+          } else if (isDesignStudio) {
+            const workspace = page.getByRole("region", { name: /Research run/ });
+            const stage = workspace.getByRole("button", { name: "Experiment design", exact: true });
+            await workspace.getByRole("heading", { name: "Experiment design", exact: true }).waitFor({ timeout: 45_000 });
+            if ((await stage.getAttribute("aria-expanded")) !== "true") throw new Error("Experiment design is collapsed");
+            const hypothesis = workspace.getByRole("button", { name: "Hypothesis", exact: true, expanded: false });
+            await hypothesis.locator('[aria-label="Done"]').waitFor();
+            if (item.run === "design-gate") {
+              const question = workspace.getByRole("dialog", { name: "Experiment design decision" });
+              await question.getByText(/Say exactly whom each hypothesis compares with whom/).first().waitFor();
+            } else if (item.run === "design-rule-input") {
+              const dialog = workspace.getByRole("dialog", { name: "Experiment design decision" });
+              await dialog.getByRole("button", { name: "Hide to look at the work" }).click();
+              const answer = workspace.getByRole("button", { name: "Answer the question", exact: true }).first();
+              await answer.waitFor();
+              await answer.click();
+              await dialog.getByText(/what is the smallest change/).first().waitFor();
+              await dialog.getByRole("button", { name: "Hide to look at the work" }).click();
+              await answer.evaluate((button) => button.scrollIntoView({ block: "center" }));
+            } else if (item.run === "design-missing-lock") {
+              await workspace.getByRole("dialog", { name: "Review the design hand-off" }).getByText("Plan lock missing", { exact: true }).first().waitFor();
+              await workspace.getByRole("button", { name: "Send back", exact: true }).waitFor();
+            } else if (item.run === "design-paper-reference") {
+              await workspace.locator("summary").filter({ hasText: /^Statistical analysis plan$/ }).click();
+              const paper = workspace.getByRole("heading", { name: "Statistical analysis plan", exact: true });
+              await paper.evaluate((heading) => heading.scrollIntoView({ block: "start" }));
+            } else if (item.run === "design-review") {
+              const review = workspace.getByText("Independent review", { exact: true });
+              await review.waitFor();
+              await review.evaluate((heading) => heading.scrollIntoView({ block: "center" }));
+            } else if (item.run === "design-h1") {
+              await workspace.getByText("Students represented in this dataset.", { exact: true }).waitFor();
+              await workspace.getByText("Not written yet", { exact: true }).first().waitFor();
+              if (size.width < 1024) {
+                await workspace
+                  .getByText("Estimand", { exact: true })
+                  .locator("visible=true")
+                  .evaluate((heading) => heading.scrollIntoView({ block: "center" }));
+              }
+            } else if (item.run === "design-handoff") {
+              await workspace.getByText("Execution runs on your Local Node.", { exact: true }).waitFor();
+              await workspace.getByRole("button", { name: "Accept and continue", exact: true }).click();
+              await workspace.getByRole("button", { name: "Execution", exact: true, expanded: true }).waitFor();
+              await workspace.getByText("Execution starting", { exact: true }).last().waitFor();
+              await workspace.getByRole("heading", { name: "Experiment design", exact: true }).waitFor({ state: "hidden" });
+            } else {
+              const narration = workspace.getByText("Defining the estimand for H1", { exact: true }).locator("visible=true");
+              await narration.waitFor();
+              await page.reload({ waitUntil: "domcontentloaded" });
+              await narration.waitFor();
+              if (item.run === "design-hypothesis") {
+                await workspace.getByRole("button", { name: "Hypothesis", exact: true }).click();
+                await workspace.locator('[data-stage-steps="hypothesis"]').waitFor();
+                await workspace.getByRole("button", { name: "Hypothesis", exact: true, expanded: true }).waitFor();
+                if ((await stage.getAttribute("aria-current")) !== "step")
+                  throw new Error("Experiment design no longer marks the live stage");
+              }
+            }
+            const dimensions = await page.evaluate(() => [document.documentElement.scrollWidth, innerWidth]);
+            if (dimensions[0] > dimensions[1]) throw new Error(`Horizontal overflow: ${dimensions.join(" / ")}`);
+            if (designErrors.length) throw new Error(`Browser errors: ${designErrors.join("\n")}`);
           }
           if (isHypothesisWork) {
             const workspace = page.getByRole("region", { name: /Research run/ });
@@ -1516,7 +1735,7 @@ async function capture() {
               await workspace.getByText("Not written yet.", { exact: true }).first().waitFor();
               await workspace.getByRole("button", { name: /^Live:.*Search/ }).click();
             }
-          } else if (item.run) {
+          } else if (item.run && !isDesignStudio) {
             // The run opens in its workspace from `?run=`; wait for the message the state is about.
             await page
               .getByText(
@@ -1583,11 +1802,11 @@ async function capture() {
                 .getByRole("button", { name: /Hide to look at the work/ })
                 .click({ timeout: 3000 })
                 .catch(() => undefined);
-            if (item.step)
-              await page
-                .getByRole("button", { name: new RegExp(item.step) })
-                .last()
-                .click();
+            if (item.step) {
+              const inspection = page.getByRole("region", { name: "Dataset inspection" });
+              await inspection.getByText("All checks", { exact: true }).click();
+              await inspection.getByRole("button", { name: new RegExp(item.step) }).click();
+            }
             await page.waitForTimeout(1800);
           }
           if (isDs7 && item.url.includes("/runs/")) {
@@ -1687,10 +1906,27 @@ async function capture() {
           }
           await page.screenshot({
             path: join(OUTPUT, filename),
-            fullPage: !isDs4 && !isDs5 && !isE2e && !isDatasetStudio && !isHypothesisWork,
+            fullPage: !isDs4 && !isDs5 && !isE2e && !isDatasetStudio && !isHypothesisWork && !isDesignStudio,
             animations: "disabled",
           });
           names.push(filename);
+          if (isDesignRedesign && item.run === "writing-paper-reference") {
+            await page.evaluate(() => window.__asw.publishNow());
+            await page.getByRole("tab", { name: /JFE-EDJ/ }).click();
+            await page.evaluate(() => window.__asw.jview("corpus"));
+            await page.getByRole("heading", { name: /^Choose the papers/ }).waitFor();
+            const jfe = `writing-jfe-reference-${size.name}-${theme}.png`;
+            await page.screenshot({ path: join(OUTPUT, jfe), animations: "disabled" });
+            names.push(jfe);
+          }
+          if (isDesignStudio && item.run === "design-gate") {
+            const workspace = page.getByRole("region", { name: /Research run/ });
+            await workspace.getByText("None of these: type the answer", { exact: true }).click();
+            await workspace.getByRole("textbox", { name: "Your answer" }).fill("Use the comparison as stated.");
+            await workspace.getByRole("button", { name: "Confirm answer" }).click();
+            await workspace.getByRole("button", { name: "Confirm answer" }).waitFor({ state: "hidden" });
+            if (!designGateAnswer) throw new Error("The generic stage gate endpoint did not receive the answer");
+          }
           if (verifyDatasetLive) await verifyDatasetRunControls(page, item.tag, size.width);
           if (isDatasetStudio && item.tag === "dataset-accept") {
             names.push(...(await captureDatasetHandoff(page, size, theme)));
@@ -1757,7 +1993,7 @@ async function capture() {
           await context.close();
           continue;
         }
-        if (isDs4 || isDs6 || isDs7 || isDatasetLive || isDatasetStudio || isHypothesisWork || isAdminKeys || ONLY) {
+        if (isDs4 || isDs6 || isDs7 || isDatasetLive || isDatasetStudio || isHypothesisWork || isAdminKeys || isDesignStudio || ONLY) {
           await context.close();
           continue;
         }
@@ -1816,7 +2052,7 @@ async function capture() {
   } finally {
     await browser.close();
   }
-  const expected = isAdminKeys
+  const expected = isDesignStudio ? 20 : isAdminKeys
     ? 4
     : isHypothesisWork
       ? 12

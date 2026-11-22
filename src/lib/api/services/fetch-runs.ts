@@ -70,7 +70,13 @@ export interface RunItem {
   tokens_used?: number;
   token_budget?: number;
   /** A pipeline run's open stage. */
-  current_stage?: { stage_run_id: string; stage_key: string; status: string; phase?: string | null } | null;
+  current_stage?: {
+    stage_run_id: string;
+    stage_key: string;
+    status: string;
+    phase?: string | null;
+    waiting_input?: boolean;
+  } | null;
   /** Whether the Platform repairs the run by itself, or needs someone to act. */
   recovery?: RunRecovery | null;
 }
@@ -117,6 +123,12 @@ export interface AcceptStageRequest {
 
 export type RunListResponse = ApiResult<RunItem[]>;
 export type RunDetailResponse = ApiResult<RunItem>;
+export interface LocalNodeReview {
+  job_id: string;
+  dataset_version_id: string;
+  stage_run_id: string;
+  review_state: "pending" | "resolved";
+}
 /** Stored run events in `seq` order. Each one is checked by the run event reader before use. */
 export type RunEventsResponse = ApiResult<unknown[]>;
 export type GateAnswerResponse = ApiResult<{ gate_id: string; resolved_seq: number }>;
@@ -140,6 +152,14 @@ export const fetchRuns = {
   },
   getById: async (projectId: string, runId: string, signal?: AbortSignal): Promise<RunDetailResponse> => {
     const response = await apiService.get<RunDetailResponse>(runPath(projectId, runId), undefined, { signal });
+    return response.data;
+  },
+  getLocalNodeReviews: async (projectId: string, runId: string, stageRunId: string, signal?: AbortSignal) => {
+    const response = await apiService.get<ApiResult<LocalNodeReview[]>>(
+      `${runPath(projectId, runId)}/local-node-reviews`,
+      { stage_run_id: stageRunId },
+      { signal },
+    );
     return response.data;
   },
   create: async (projectId: string, data: CreateRunRequest): Promise<RunDetailResponse> => {
@@ -218,6 +238,13 @@ export const fetchRuns = {
     const response = await apiService.post<ApiResult<unknown>>(
       `${runPath(projectId, runId)}/stages/${encodeURIComponent(stageRunId)}/accept`,
       body,
+    );
+    return response.data;
+  },
+  sendStageBack: async (projectId: string, runId: string, stageRunId: string, target: string, note?: string) => {
+    const response = await apiService.post<ApiResult<unknown>>(
+      `${runPath(projectId, runId)}/stages/${encodeURIComponent(stageRunId)}/send-back`,
+      { target_stage_key: target, ...(note ? { note } : {}) },
     );
     return response.data;
   },

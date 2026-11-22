@@ -221,10 +221,12 @@ export function VariableMatrix({
   variables,
   rows,
   compact = false,
+  formatName,
 }: {
   variables: DataCardVariable[];
   rows: number;
   compact?: boolean;
+  formatName?: (name: string) => string;
 }) {
   const [open, setOpen] = useState<string | null>(null);
   const compactGrid = "grid-cols-[minmax(0,1.15fr)_3.5rem_4rem_minmax(0,1fr)]";
@@ -254,18 +256,14 @@ export function VariableMatrix({
           </>
         )}
       </div>
-      <ul
-        aria-label="Variables"
-        tabIndex={compact ? 0 : undefined}
-        className={cn("divide-y", compact && "max-h-60 overflow-y-auto focus-visible:outline-ring")}
-      >
-        {variables.map((v) => {
+      <ul aria-label="Variables" className="divide-y">
+        {variables.map((v, index) => {
           const role = ROLE[roleKind(v)];
           const level = variableLevel(v);
           const isOpen = open === v.name;
           const top = v.flags.includes("top_coded");
           return (
-            <li key={v.name} data-cursor={`col:${v.name}`}>
+            <li key={`${v.name}:${index}`} data-cursor={`col:${v.name}`}>
               <button
                 type="button"
                 aria-expanded={isOpen}
@@ -282,8 +280,11 @@ export function VariableMatrix({
                     <ColumnKindIcon kind={kindOf(v.type)} className="size-4 shrink-0 text-muted-foreground" />
                   )}
                   <span className="flex min-w-0 flex-col">
-                    <span className={compact ? "wrap-anywhere text-xs" : "truncate"} title={v.name}>
-                      {v.name}
+                    <span
+                      className={compact ? "wrap-anywhere text-xs" : "truncate"}
+                      title={formatName?.(v.name) ?? v.name}
+                    >
+                      {formatName?.(v.name) ?? v.name}
                     </span>
                     {compact && <span className="font-normal text-muted-foreground text-xs capitalize">{v.type}</span>}
                   </span>
@@ -364,16 +365,22 @@ export function VariableMatrix({
 }
 
 /** Which variables explain which: inputs flow into the target; keys and unassigned variables stand apart. */
-export function RoleDiagram({ variables }: { variables: DataCardVariable[] }) {
+export function RoleDiagram({
+  variables,
+  formatName,
+}: {
+  variables: DataCardVariable[];
+  formatName?: (name: string) => string;
+}) {
   const by = (k: RoleKind) => variables.filter((v) => roleKind(v) === k);
   const target = by("target");
   const inputs = by("input");
   const keys = by("key");
   const rest = [...by("none"), ...by("other")];
   if (!target.length && !inputs.length) return null;
-  const pill = (name: string, cls: string) => (
-    <span key={name} className={cn("rounded-md px-2 py-1 font-mono text-xs", cls)}>
-      {name}
+  const pill = (name: string, cls: string, index: number) => (
+    <span key={`${name}:${index}`} className={cn("rounded-md px-2 py-1 font-mono text-xs", cls)}>
+      {formatName?.(name) ?? name}
     </span>
   );
   return (
@@ -382,7 +389,7 @@ export function RoleDiagram({ variables }: { variables: DataCardVariable[] }) {
         <p className="mb-1.5 text-muted-foreground text-xs">Inputs · explain</p>
         <div className="flex flex-wrap gap-1.5">
           {inputs.length ? (
-            inputs.map((v) => pill(v.name, "bg-sky-500/15"))
+            inputs.map((v, i) => pill(v.name, "bg-sky-500/15", i))
           ) : (
             <span className="text-muted-foreground text-xs">None assigned</span>
           )}
@@ -396,7 +403,7 @@ export function RoleDiagram({ variables }: { variables: DataCardVariable[] }) {
         <p className="mb-1.5 text-muted-foreground text-xs">Target · outcome</p>
         <div className="flex flex-wrap gap-1.5">
           {target.length ? (
-            target.map((v) => pill(v.name, "bg-primary text-primary-foreground"))
+            target.map((v, i) => pill(v.name, "bg-primary text-primary-foreground", i))
           ) : (
             <span className="text-muted-foreground text-xs">None assigned</span>
           )}
@@ -408,13 +415,13 @@ export function RoleDiagram({ variables }: { variables: DataCardVariable[] }) {
             <p className="flex flex-wrap items-center gap-1.5">
               <KeyRound className="size-3.5 text-violet-600" aria-hidden="true" />
               <span className="text-muted-foreground">Keys, used to join, not analysed:</span>
-              {keys.map((v) => pill(v.name, "bg-violet-500/15"))}
+              {keys.map((v, i) => pill(v.name, "bg-violet-500/15", i))}
             </p>
           )}
           {rest.length > 0 && (
             <p className="flex flex-wrap items-center gap-1.5">
               <span className="text-muted-foreground">No role yet:</span>
-              {rest.map((v) => pill(v.name, "bg-muted"))}
+              {rest.map((v, i) => pill(v.name, "bg-muted", i))}
             </p>
           )}
         </div>

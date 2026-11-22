@@ -106,7 +106,7 @@ function useRevision(round: number, ready: boolean) {
       };
     },
     {
-      enabled: ready,
+      enabled: ready && Boolean(projectId),
       // Both go up with the review of the rewritten set; until then, look again, less often the longer it takes.
       refetchInterval: (query) =>
         query.state.data || query.state.error ? false : Math.min(30_000, 5000 * (1 + query.state.dataUpdateCount)),

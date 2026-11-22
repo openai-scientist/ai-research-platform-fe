@@ -1,0 +1,411 @@
+{
+  "design_diagnosis": {
+    "hypotheses": {},
+    "releases": []
+  },
+  "external_validation": null,
+  "family_structure": {
+    "alpha": 0.05,
+    "gatekeeping": "none",
+    "order": [
+      "H1"
+    ],
+    "primary": "H1",
+    "rule": "Every hypothesis of the family, the primary included, is tested with the Holm correction at the same alpha, so no hypothesis waits for another and the order of the family does not change a verdict. Equivalence inside a margin is shown by two one-sided tests at alpha, and their p values are adjusted by the Holm correction over the hypotheses that have a margin. These are two families, each held at alpha, so a plan that mixes both kinds of claim can reach twice alpha for any false claim across them. The primary hypothesis is the one reported first. The design diagnosis measures the power of every hypothesis at alpha divided by the number of hypotheses, the level of the worst Holm step.",
+    "secondary_correction": "holm",
+    "secondary_power_alpha": 0.05
+  },
+  "figure_slots": [
+    {
+      "chart_key": "flow_diagram",
+      "data_source": "population counts at each filter of the programs",
+      "hypothesis_id": null,
+      "id": "F1",
+      "placement": "main",
+      "question": "How many rows remain after each filter of the programs?",
+      "standard": "STROBE statement, item 13 (von Elm et al., Lancet 2007)",
+      "strobe_item": "13"
+    },
+    {
+      "chart_key": "estimate_interval",
+      "data_source": "bundle:H1-main",
+      "hypothesis_id": "H1",
+      "id": "F2",
+      "placement": "main",
+      "question": "What is the estimated difference in exam_score for a one-unit change in sleep_hours_night, with its interval?",
+      "standard": "Krzywinski and Altman, Error bars, Nature Methods 2013",
+      "strobe_item": null
+    },
+    {
+      "chart_key": "design_diagnosis",
+      "data_source": "plan:design_diagnosis",
+      "hypothesis_id": null,
+      "id": "F3",
+      "placement": "supplement",
+      "question": "How much power and calibration does each program have on the twin?",
+      "standard": "Morris, White and Crowther, Using simulation studies to evaluate statistical methods, Statistics in Medicine 2019",
+      "strobe_item": null
+    }
+  ],
+  "hypotheses": [
+    {
+      "added_covariates": {},
+      "claim_key": "sleep|exam|>0",
+      "claim_type": "association",
+      "contribution_type": "conflict_resolution",
+      "covariate_notes": [
+        "Code could not screen the columns related to sleep_hours_night (The data host could not compute the release (unsupported). Start the runner on the machine that holds the file (logos-runner run), then run the diagnosis again.), so the plan has no default covariates for this hypothesis.",
+        "H1: whether caffeine_cups_day, exercise_min_week, housing, screen_hours_day, stress_score, study_hours_week, study_year relate to sleep_hours_night was not tested (The data host could not compute the release (unsupported). Start the runner on the machine that holds the file (logos-runner run), then run the diagnosis again.), so the plan cannot say that they do not confound the estimate, and the claim stays an association."
+      ],
+      "dag": null,
+      "decision_rule": {},
+      "estimand": {
+        "effect_measure": "linear_coefficient",
+        "exposure": {
+          "contrast": "per unit",
+          "variable": "sleep_hours_night"
+        },
+        "intercurrent": {
+          "note": "The dataset records no post-exposure intercurrent events; exam score is analyzed as recorded.",
+          "strategy": "no_event_recorded"
+        },
+        "outcome": {
+          "transform": null,
+          "variable": "exam_score"
+        },
+        "population": "Students represented in the dataset with observed sleep hours, exam score, and prespecified adjustment variables.",
+        "summary_measure": "Adjusted linear-regression slope in exam-score points per additional hour of nightly sleep, conditional on weekly study hours, stress score, and study year."
+      },
+      "id": "H1",
+      "interpretation": [],
+      "label": null,
+      "label_reason": "",
+      "outcome_requirements": [],
+      "population_limitations": [
+        {
+          "column": "student_id",
+          "requirement": "Students in the dataset"
+        }
+      ],
+      "prior_art_summary": {
+        "designs": [
+          "case_control",
+          "cohort",
+          "cross_sectional",
+          "other",
+          "quasi_experimental"
+        ],
+        "measures": [
+          "Attainment 8 score difference (β)",
+          "Bayesian regression mean",
+          "F statistic",
+          "GPA (group means)",
+          "Pearson correlation",
+          "Pearson correlation coefficient",
+          "Regression R-squared",
+          "R²",
+          "academic performance score difference (not quantified)",
+          "academic score (no effect estimate reported)",
+          "adjusted mean exam score (%)",
+          "association",
+          "association (p-value reported)",
+          "association with increased risk",
+          "association with peak academic performance",
+          "chi-square statistic",
+          "cognitive performance score (group means)",
+          "correlation",
+          "correlation coefficient (β)",
+          "cross-lagged prediction",
+          "difference in Grade Point Average (GPA)",
+          "difference in average number of sleeping hours by university grade",
+          "effect on academic achievement",
+          "exam performance",
+          "exam score",
+          "exam score comparison",
+          "group comparison",
+          "hours of sleep per night",
+          "increased likelihood",
+          "linear correlation",
+          "mean sleeping hours in excellent group",
+          "mean weekly sleep duration",
+          "odds of poor GPA",
+          "odds ratio",
+          "percentage reporting decline in academic performance due to sleep deprivation",
+          "project performance comparison",
+          "regression association",
+          "regression coefficient",
+          "regression coefficient (B)",
+          "regression coefficient (β)",
+          "regression effect",
+          "relationship"
+        ],
+        "population_differs": 15,
+        "studies": 68
+      },
+      "prior_knowledge": {
+        "reason": "the researcher was not asked, or did not reply",
+        "status": "not_recorded",
+        "text": ""
+      },
+      "program": {
+        "alpha": 0.05,
+        "baselines": [],
+        "compute_budget": null,
+        "controls": [],
+        "covariates": [],
+        "datasets": [
+          "primary"
+        ],
+        "event_level": null,
+        "experiment_id": "H1-main",
+        "exposure": [
+          "sleep_hours_night"
+        ],
+        "fallbacks": [],
+        "family": "linear_regression",
+        "hypothesis_ids": [
+          "H1"
+        ],
+        "method": null,
+        "method_version": 3,
+        "metric": null,
+        "metrics": [],
+        "missing_data": "complete_case",
+        "outcome": [
+          "exam_score"
+        ],
+        "plan_section": "Hypothesis H1",
+        "population": [],
+        "reference_level": null,
+        "role": "primary",
+        "rows": "all",
+        "seeds": null,
+        "sesoi": null,
+        "sesoi_source": null,
+        "transforms": [],
+        "type": "analysis"
+      },
+      "protocol": {
+        "population": "Students represented in this dataset.",
+        "summary": "Positive association between nightly sleep hours and exam score, summarized as an adjusted linear-regression slope in exam-score points per additional hour.",
+        "variables": "Continuous nightly sleep hours and exam score; weekly study hours, stress score, and study year are prespecified context/adjustment factors in the claim."
+      },
+      "role": "primary",
+      "sensitivity_requests": [
+        {
+          "anomaly_id": null,
+          "column": "sleep_hours_night",
+          "distance": null,
+          "id": "mnar:sleep_hours_night",
+          "kind": "missing_not_at_random",
+          "reason": "sleep_hours_night has empty cells and the table cannot show whether they are empty because of the value they would hold",
+          "value": null
+        },
+        {
+          "anomaly_id": null,
+          "column": "exam_score",
+          "distance": null,
+          "id": "mnar:exam_score",
+          "kind": "missing_not_at_random",
+          "reason": "exam_score has empty cells and the table cannot show whether they are empty because of the value they would hold",
+          "value": null
+        }
+      ],
+      "statement": "Among students in this dataset, higher continuous nightly sleep hours are positively associated with exam scores, conditional on weekly study hours, stress score, and study year.",
+      "tail_choices": {},
+      "waived_covariates": {}
+    }
+  ],
+  "id": "analysis-plan",
+  "if_then": [
+    {
+      "branch": "fallback_family",
+      "measure": "a program does not converge or its data separate",
+      "rule": "The fallback family that the program declares runs instead of its family.",
+      "signal": "non_convergence",
+      "status": "registered",
+      "threshold": null
+    },
+    {
+      "branch": "merge_levels",
+      "measure": "rows of a level of the exposure or of a categorical covariate",
+      "rule": "Every level of the exposure or of a categorical covariate with fewer rows than the threshold is merged with the other such levels into one level. When one level is that small, it is merged with the smallest other level. A merge that would leave fewer than two levels, or that would merge the reference level or the event level of the program, is not applied and is recorded as a deviation.",
+      "signal": "sparse_level",
+      "status": "registered",
+      "threshold": 10
+    },
+    {
+      "branch": "spline_robustness",
+      "measure": "a curved relation of the exposure and the outcome",
+      "reason": "No code measures a curved relation without reading the outcome with the exposure, and the registry has no spline family, so the branch is deferred.",
+      "rule": "The main analysis stays as it is; a spline analysis is registered as a robustness analysis.",
+      "signal": "non_linearity",
+      "status": "deferred",
+      "threshold": null
+    },
+    {
+      "branch": "rerun_power_then_send_back",
+      "measure": "the share by which the analysed rows differ from the planned rows",
+      "power_floor": 0.8,
+      "rule": "The power of the design is computed again at the analysed rows. When it is below the power floor and the run is still blind, the stage goes back to the experiment design.",
+      "signal": "row_count_drift",
+      "status": "registered",
+      "threshold": 0.2
+    },
+    {
+      "branch": "multiple_imputation",
+      "measure": "the share of rows with a missing value in the variables of a program",
+      "reason": "The multiple imputation branch is deferred; the run records the signal.",
+      "rule": "A multiple imputation analysis of the missing data is registered.",
+      "signal": "missing_data",
+      "status": "deferred",
+      "threshold": 0.2
+    },
+    {
+      "branch": "freedman_lane",
+      "measure": "the main program of a hypothesis is a linear regression with at least one covariate (a fact of the plan; no row is read)",
+      "rule": "The main analysis stays as it is; a Freedman-Lane permutation test of the exposure coefficient (residuals of the model without the exposure permuted, the t of the exposure compared) is computed as a robustness analysis. It changes no verdict.",
+      "signal": "linear_with_covariates",
+      "status": "registered",
+      "threshold": null
+    },
+    {
+      "branch": "merge_covariate_levels_refit",
+      "measure": "a fit separates on the levels of a categorical covariate",
+      "rule": "When a fit separates, every level of a categorical covariate with fewer rows than the threshold is merged with the other such levels into one level, and the program's family is fitted again. When one level is that small, it is merged with the smallest other level. The first level is the reference of the model and is not merged. A merge that would leave fewer than two levels is not applied. When the fit still does not compute, the declared fallback family runs.",
+      "signal": "separation",
+      "status": "registered",
+      "threshold": 10
+    }
+  ],
+  "not_studied": [
+    {
+      "reason": "These are adjustment variables, not exposure hypotheses in this review; the question's sleep-to-exam relationship is studied by H1.",
+      "target": "study_year"
+    },
+    {
+      "reason": "These are adjustment variables, not exposure hypotheses in this review; the question's sleep-to-exam relationship is studied by H1.",
+      "target": "study_hours_week"
+    },
+    {
+      "reason": "These are adjustment variables, not exposure hypotheses in this review; the question's sleep-to-exam relationship is studied by H1.",
+      "target": "stress_score"
+    }
+  ],
+  "pinned": {
+    "dataset-snapshot": "24193ac8e9780e8d62c73d5f1f69ca5d721c82a84f8c8affbf942265e49d5497",
+    "hypothesis-set": "cee336600241a7e682abcde2e16647a1a0965afb709ef56ac517a93365b25f0d"
+  },
+  "robustness": {
+    "H1": {
+      "claim_ceiling": "association",
+      "forks": [
+        {
+          "change": "Use Spearman rank association instead of the linear slope to assess sensitivity to nonlinearity and outliers.",
+          "name": "rank_sensitivity",
+          "program": {
+            "alpha": 0.05,
+            "baselines": [],
+            "compute_budget": null,
+            "controls": [],
+            "covariates": [],
+            "datasets": [
+              "primary"
+            ],
+            "event_level": null,
+            "experiment_id": "H1-fork-1",
+            "exposure": [
+              "sleep_hours_night"
+            ],
+            "fallbacks": [],
+            "family": "spearman",
+            "hypothesis_ids": [
+              "H1"
+            ],
+            "method": null,
+            "metric": null,
+            "metrics": [],
+            "missing_data": "complete_case",
+            "outcome": [
+              "exam_score"
+            ],
+            "plan_section": "Hypothesis H1 robustness",
+            "population": [],
+            "reference_level": null,
+            "role": "exploratory",
+            "rows": "all",
+            "seeds": null,
+            "sesoi": null,
+            "sesoi_source": null,
+            "transforms": [],
+            "type": "analysis"
+          }
+        },
+        {
+          "change": "Comparison added by code: every dictionary column that may adjust is a covariate; a wide set may hold a mediator or a collider.",
+          "comparison": "adjustment_set",
+          "name": "wide_adjustment",
+          "program": {
+            "alpha": 0.05,
+            "baselines": [],
+            "compute_budget": null,
+            "controls": [],
+            "covariates": [
+              "study_year",
+              "housing",
+              "study_hours_week",
+              "screen_hours_day",
+              "exercise_min_week",
+              "caffeine_cups_day",
+              "stress_score"
+            ],
+            "datasets": [
+              "primary"
+            ],
+            "event_level": null,
+            "experiment_id": "H1-fork-wide_adjustment",
+            "exposure": [
+              "sleep_hours_night"
+            ],
+            "fallbacks": [],
+            "family": "linear_regression",
+            "hypothesis_ids": [
+              "H1"
+            ],
+            "method": null,
+            "method_version": 3,
+            "metric": null,
+            "metrics": [],
+            "missing_data": "complete_case",
+            "outcome": [
+              "exam_score"
+            ],
+            "plan_section": "Hypothesis H1 robustness",
+            "population": [],
+            "reference_level": null,
+            "role": "exploratory",
+            "rows": "all",
+            "seeds": null,
+            "sesoi": null,
+            "sesoi_source": null,
+            "transforms": [],
+            "type": "analysis"
+          }
+        }
+      ],
+      "missing_data": {
+        "anomaly_ids": [],
+        "mechanism_note": "Complete-case analysis may be biased if missing sleep hours or exam scores depend on their unobserved values or student characteristics; missingness can select a nonrepresentative subset.",
+        "strategy": "complete_case"
+      },
+      "negative_control": {
+        "none_reason": "No eligible negative-control column can be verified: the exposure screen has no result for candidate columns."
+      },
+      "sensitivity": null,
+      "timing_confirmed": false,
+      "timing_source": "not_confirmed"
+    }
+  },
+  "set_aside": [],
+  "version": 1
+}

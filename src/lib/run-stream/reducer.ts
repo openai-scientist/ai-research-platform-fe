@@ -36,7 +36,14 @@ function pushFeed(
   actor = event.actor,
   note?: string,
 ) {
-  state.feed.push({ seq: event.seq, actor: actor ?? "code", text, kind, ...(note ? { note } : {}) });
+  state.feed.push({
+    seq: event.seq,
+    actor: actor ?? "code",
+    text,
+    kind,
+    stageKey: event.stage_key,
+    ...(note ? { note } : {}),
+  });
 }
 
 /** Folds one event into the run state. Events at or below the last applied `seq` are ignored, so replays are safe. */
@@ -91,6 +98,9 @@ export function applyRunEvent(previous: RunState, event: RunEvent): RunState {
         const key = event.stage_key;
         const actor = event.actor ?? "code";
         pushFeed(state, event, text, "event", actor, note);
+        const item = state.feed[state.feed.length - 1];
+        if (!check) item.work = true;
+        if (event.payload.queries) item.queries = event.payload.queries;
         if (!key) break;
         if (note) state.workNotes[key] = note;
         if (check && step) {
@@ -106,6 +116,7 @@ export function applyRunEvent(previous: RunState, event: RunEvent): RunState {
       case "run.completed":
         state.completed = true;
         state.lifecycle = "completed";
+        state.gate = null;
         delete state.pauseReason;
         delete state.failureCode;
         state.paperTitle = event.payload.paper_title;
@@ -113,7 +124,12 @@ export function applyRunEvent(previous: RunState, event: RunEvent): RunState {
         if (event.payload.paper_title) state.currentStageKey = "done";
         break;
       case "stage.started": {
-        const { plan } = event.payload;
+        const { plan, preserve_content } = event.payload;
+        if (plan.key === "experiment_design") {
+          state.completed = false;
+          delete state.workChecks[plan.key];
+          delete state.workNotes[plan.key];
+        }
         if (!state.stages[plan.key]) state.stageOrder.push(plan.key);
         state.stages[plan.key] = {
           plan,
@@ -121,7 +137,7 @@ export function applyRunEvent(previous: RunState, event: RunEvent): RunState {
           currentStepId: null,
           doneStepIds: [],
           skills: [],
-          content: emptyContent(plan),
+          content: (preserve_content && state.stages[plan.key]?.content) || emptyContent(plan),
           startedAt: event.ts,
         };
         state.currentStageKey = plan.key;
@@ -282,7 +298,10 @@ export function applyRunEvent(previous: RunState, event: RunEvent): RunState {
       // ---------- search ----------
       case "search.strategy": {
         const c = content(state, event, "search");
-        if (c) upsert(c.strategies, event.payload.strategy);
+        if (c) {
+          upsert(c.strategies, event.payload.strategy);
+          c.reviewRound = event.payload.review_round;
+        }
         break;
       }
       case "search.query": {
@@ -308,7 +327,11 @@ export function applyRunEvent(previous: RunState, event: RunEvent): RunState {
       }
       case "literature.batch": {
         const c = content(state, event, "search");
-        if (c) c.cells[`${event.payload.query_id}:${event.payload.source_id}`] = event.payload.hits;
+        if (!c) break;
+        const key = `${event.payload.query_id}:${event.payload.source_id}`;
+        c.cells[key] = event.payload.hits;
+        if (event.payload.issue) c.cellIssues[key] = event.payload.issue;
+        else delete c.cellIssues[key];
         break;
       }
       case "literature.merged": {
@@ -339,6 +362,8 @@ export function applyRunEvent(previous: RunState, event: RunEvent): RunState {
           relevanceMin: event.payload.relevance_min,
           qualityMin: event.payload.quality_min,
           candidates: event.payload.candidates,
+          protocolVersion: event.payload.protocol_version,
+          exclusions: event.payload.exclusions,
         };
         break;
       }
@@ -355,11 +380,16 @@ export function applyRunEvent(previous: RunState, event: RunEvent): RunState {
           if (Array.isArray(payload.points)) {
             const known = new Set(c.points.map((p) => p.id));
             c.points.push(...payload.points.filter((p) => !known.has(p.id)));
-          } else if (payload.paper_id && !c.points.some((p) => p.id === payload.paper_id)) {
+          } else if (
+            payload.paper_id &&
+            (payload.score ?? payload.relevance) !== undefined &&
+            payload.quality !== undefined &&
+            !c.points.some((p) => p.id === payload.paper_id)
+          ) {
             c.points.push({
               id: payload.paper_id,
-              relevance: payload.score ?? payload.relevance ?? 8.0,
-              quality: payload.quality ?? 8.0,
+              relevance: (payload.score ?? payload.relevance) as number,
+              quality: payload.quality,
             });
           }
         }
@@ -373,6 +403,33 @@ export function applyRunEvent(previous: RunState, event: RunEvent): RunState {
       case "screen.kept": {
         const c = content(state, event, "screen");
         if (c) upsert(c.kept, event.payload.paper);
+        break;
+      }
+      case "screen.eligibility": {
+        const c = content(state, event, "screen");
+        if (!c) break;
+        const p = event.payload;
+        const common = { id: p.id, title: p.title, venue: p.venue, eligibilityScore: p.score };
+        if (p.included) {
+          c.rejected = c.rejected.filter((paper) => paper.id !== p.id);
+          upsert(c.kept, {
+            ...common,
+            citation: p.citation,
+            doi: p.doi,
+            year: p.year,
+            reason: "met the eligibility criteria",
+          });
+        } else {
+          c.kept = c.kept.filter((paper) => paper.id !== p.id);
+          upsert(c.rejected, { ...common, false_friend: "", reason: p.reason ?? "excluded" });
+          const read = latest(state, "read");
+          if (read) read.cards = read.cards.filter((card) => card.paper_id !== p.id);
+        }
+        break;
+      }
+      case "screen.review_progress": {
+        const c = content(state, event, "screen");
+        if (c) c.reviewProgress = event.payload;
         break;
       }
 
@@ -418,7 +475,10 @@ export function applyRunEvent(previous: RunState, event: RunEvent): RunState {
       }
       case "synthesis.ranked": {
         const c = content(state, event, "synthesize");
-        if (c) c.ranking = event.payload.ranking;
+        if (c) {
+          c.ranking = event.payload.ranking;
+          if (event.payload.gaps) c.gaps = event.payload.gaps;
+        }
         break;
       }
 
@@ -436,6 +496,11 @@ export function applyRunEvent(previous: RunState, event: RunEvent): RunState {
         if (!known) h.order.push(hypothesis.id);
         // A hypothesis sent again (relabelled) keeps whether it was picked and its novelty check.
         h.drafts[hypothesis.id] = { ...known, hypothesis, selected: known?.selected ?? false };
+        break;
+      }
+      case "hypothesis.published": {
+        const h = content(state, event, "hypothesize");
+        if (h) h.published = event.payload.hypotheses;
         break;
       }
       case "hypothesis.checked": {
@@ -508,6 +573,67 @@ export function applyRunEvent(previous: RunState, event: RunEvent): RunState {
         if (!m.pieces.length && pieces.length) {
           m.pieces = pieces;
           m.fromArtifacts = true;
+        }
+        break;
+      }
+
+      case "execution.updated": {
+        const stage = content(state, event, "interpret");
+        if (!stage) break;
+        stage.execution ??= { artifacts: {}, checks: {}, progress: {} };
+        const execution = stage.execution;
+        const { artifact, check, progress, accepted } = event.payload;
+        if (artifact) execution.artifacts[artifact.schema] = artifact.id;
+        if (check) execution.checks[check.key] = check;
+        if (progress) execution.progress[progress.step] = progress.text;
+        if (accepted !== undefined) execution.accepted = accepted;
+        break;
+      }
+      case "design.updated": {
+        const stage = content(state, event, "experiment");
+        if (!stage) break;
+        stage.liveDesign ??= { hypotheses: {}, artifacts: {}, findings: [], notices: {} };
+        const design = stage.liveDesign;
+        const { hypotheses, artifact, publication, notice, blocked, accepted, tokens } = event.payload;
+        for (const row of hypotheses ?? []) {
+          const previous = design.hypotheses[row.id];
+          design.hypotheses[row.id] = {
+            ...previous,
+            ...Object.fromEntries(Object.entries(row).filter(([, value]) => value !== undefined)),
+            ...(row.assumptions ? { assumptions: { ...previous?.assumptions, ...row.assumptions } } : {}),
+            id: row.id,
+          };
+        }
+        if (artifact) design.artifacts[artifact.schema] = artifact;
+        if (publication) {
+          for (const row of publication.hypotheses) {
+            const previous = design.hypotheses[row.id];
+            design.hypotheses[row.id] = {
+              ...row,
+              statement: row.statement ?? previous?.statement,
+              inputExposure: previous?.inputExposure,
+              inputOutcome: previous?.inputOutcome,
+              forecast: row.forecast ?? previous?.forecast,
+            };
+          }
+          for (const file of publication.artifacts) design.artifacts[file.schema] = file;
+          design.findings = publication.findings;
+          design.documents = publication.documents;
+        }
+        if (notice) design.notices[notice.id] = notice;
+        if (blocked !== undefined) design.blocked = blocked;
+        if (accepted) design.accepted = true;
+        if (tokens !== undefined) design.tokens = tokens;
+        break;
+      }
+      case "gate.answer_details": {
+        const { id, text, note } = event.payload;
+        for (const entries of [state.decisions, state.feed]) {
+          const item = entries.find((entry) => entry.kind === "decision" && entry.gateId === id);
+          if (item) {
+            item.text = text;
+            if (note) item.note = note;
+          }
         }
         break;
       }
@@ -780,6 +906,7 @@ export function applyRunEvent(previous: RunState, event: RunEvent): RunState {
             confirm_label?: string;
             recommended?: boolean;
             disabled?: boolean;
+            needsText?: boolean;
           }[];
           stop_index?: number;
           stop_total?: number;
@@ -802,10 +929,13 @@ export function applyRunEvent(previous: RunState, event: RunEvent): RunState {
               recommended: true,
             },
           ];
+          const gateStage =
+            payload.gate?.stageKey ??
+            (event.stage_key === "dataset" || event.stage_key === "experiment_design" ? event.stage_key : undefined);
           state.gate = {
             id: payload.gate?.id ?? payload.gate_id ?? "gate-1",
             kind: raw.kind ?? "screen",
-            ...(event.stage_key === "dataset" ? { stageKey: "dataset" as const } : {}),
+            ...(gateStage ? { stageKey: gateStage } : {}),
             title: raw.title ?? "Review Paper Shortlist",
             why: raw.why ?? "Screening complete. Shortlist prepared for human review.",
             summary: Array.isArray(raw.summary)
@@ -819,6 +949,7 @@ export function applyRunEvent(previous: RunState, event: RunEvent): RunState {
               confirm_label: opt.confirm_label ?? opt.label ?? "Confirm",
               recommended: Boolean(opt.recommended ?? opt.id === "approve"),
               disabled: Boolean(opt.disabled),
+              ...(opt.needsText ? { needsText: true } : {}),
             })),
             stop_index: raw.stop_index ?? 1,
             stop_total: raw.stop_total ?? 1,

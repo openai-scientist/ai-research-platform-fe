@@ -1,4 +1,4 @@
-import { readToolArgs } from "./hypothesis-work";
+import { readActionArgs, readToolArgs } from "./hypothesis-work";
 
 export const CLAIM_FIELDS = {
   topic: "Topic",
@@ -69,15 +69,19 @@ export function updateClaimScope(
   }
 
   if (!current) return;
-  if (type === "hypothesis.agent.tool" && payload.tool === "write_protocol" && payload.ok === true) {
-    const args = readToolArgs(payload.args);
+  const draftAction =
+    type === "hypothesis.action" && payload.action === "hypothesis.draft_protocol" && payload.outcome === "done";
+  const draftTool = type === "hypothesis.agent.tool" && payload.tool === "write_protocol" && payload.ok === true;
+  if (draftAction || draftTool) {
+    const args = draftAction ? readActionArgs(payload.proposal) : readToolArgs(payload.args);
+    const previous = draftTool && current.protocol.status === "drafted" ? current.protocol : undefined;
     const protocol: ReviewPlan = {
       status: "drafted",
-      question: string(args.question),
-      sources: list(args.sources),
-      inclusion: list(args.inclusion),
-      exclusion: list(args.exclusion),
-      yearMin: typeof args.year_min === "number" && args.year_min > 0 ? args.year_min : undefined,
+      question: string(args.question) ?? previous?.question,
+      sources: list(args.sources) ?? previous?.sources,
+      inclusion: list(args.inclusion) ?? previous?.inclusion,
+      exclusion: list(args.exclusion) ?? previous?.exclusion,
+      yearMin: typeof args.year_min === "number" && args.year_min > 0 ? args.year_min : previous?.yearMin,
     };
     return { ...current, protocol };
   }

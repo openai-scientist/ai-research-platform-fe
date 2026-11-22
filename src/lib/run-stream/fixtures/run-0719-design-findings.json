@@ -1,0 +1,66 @@
+{
+  "findings": [
+    {
+      "anchor": "plan.hypotheses.0.program.covariates",
+      "category": "estimand",
+      "computed_fact": null,
+      "evidence": "[hypotheses.0.program.covariates] []",
+      "failure_scenario": "The stated estimand and hypothesis are conditional on weekly study hours, stress score, and study year, but the executable primary program includes no covariates. The reported slope therefore does not implement the specified conditional estimand.",
+      "fix": "Populate the primary program covariates with the prespecified adjustment variables, or revise the hypothesis, estimand, and summary to an unadjusted association.",
+      "severity": "major",
+      "verification": "plausible"
+    },
+    {
+      "anchor": "plan.hypotheses.0.decision_rule",
+      "category": "decision_rule",
+      "computed_fact": null,
+      "evidence": "[hypotheses.0.decision_rule] {}",
+      "failure_scenario": "There is no decision rule for determining whether the primary positive association supports or fails the hypothesis, so a later stage cannot apply a prespecified direction, threshold, or evidentiary criterion.",
+      "fix": "Specify the decision rule, including the one-sided direction, multiplicity-adjusted alpha, and how the result is compared with the prespecified SESOI.",
+      "severity": "major",
+      "verification": "plausible"
+    },
+    {
+      "anchor": "plan.hypotheses.0.program.sesoi",
+      "category": "decision_rule",
+      "computed_fact": null,
+      "evidence": "[hypotheses.0.program.sesoi] null",
+      "failure_scenario": "The confirmatory-looking primary analysis has no smallest effect size of interest. A statistically positive slope could consequently be treated as meaningful regardless of its magnitude, and there is no basis for the planned decision rule.",
+      "fix": "Specify an SESOI in exam-score points per additional sleep hour, with its direction and source, or explicitly label the analysis exploratory and state that no practical-significance decision will be made.",
+      "severity": "major",
+      "verification": "plausible"
+    },
+    {
+      "anchor": "plan.hypotheses.0.program.role",
+      "category": "power",
+      "computed_fact": null,
+      "evidence": "[hypotheses.0.program.role] primary",
+      "failure_scenario": "The primary program is designated as primary, but the output gives no power assumptions (effect size/SESOI, variance, sample size, or target power) for it. A reader cannot tell whether the primary label denotes a confirmatory analysis with an adequate design.",
+      "fix": "State the power assumptions for the primary analysis, including the target effect/SESOI, outcome and exposure variability or correlation, usable sample size, alpha after family adjustment, and target power.",
+      "severity": "major",
+      "verification": "plausible"
+    },
+    {
+      "anchor": "plan.robustness.H1.forks.0.program.role",
+      "category": "power",
+      "computed_fact": null,
+      "evidence": "[robustness.H1.forks.0.program.role] exploratory",
+      "failure_scenario": "The Spearman robustness program is labeled exploratory, but no power or precision assumptions are stated for that label. Its ability to detect the relevant association cannot be interpreted.",
+      "fix": "State the exploratory power/precision assumptions (or explicitly state that no power claim is made), including the anticipated rank association, usable sample size, alpha, and detectable effect.",
+      "severity": "major",
+      "verification": "plausible"
+    },
+    {
+      "anchor": "plan.robustness.H1.forks.1.program.role",
+      "category": "power",
+      "computed_fact": null,
+      "evidence": "[robustness.H1.forks.1.program.role] exploratory",
+      "failure_scenario": "The wide-adjustment robustness program is labeled exploratory, but no power or precision assumptions are stated, despite its potentially much smaller complete-case sample and larger adjustment set.",
+      "fix": "State the exploratory power/precision assumptions for this fork, accounting for the wide adjustment set and anticipated usable sample, or explicitly disclaim power claims.",
+      "severity": "major",
+      "verification": "plausible"
+    }
+  ],
+  "known_risks": [],
+  "rounds": 1
+}

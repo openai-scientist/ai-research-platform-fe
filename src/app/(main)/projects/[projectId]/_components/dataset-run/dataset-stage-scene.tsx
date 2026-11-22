@@ -1,29 +1,36 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { type ReactNode, useEffect, useRef } from "react";
 
 import { ArrowRight, CircleCheck, HardDrive } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
 import { useDatasetDetailQuery, useDatasetVersionsQuery } from "@/hooks/use-datasets-query";
 import { useLocalNodesQuery } from "@/hooks/use-local-nodes-query";
-import { BRIEF_SCHEMA, DATA_CARD_SCHEMA } from "@/lib/api/services/fetch-dataset-runs";
+import { useRunLocalNodeReview } from "@/hooks/use-runs-query";
+import { BRIEF_SCHEMA, DATA_CARD_SCHEMA, type DataCardVariable } from "@/lib/api/services/fetch-dataset-runs";
 import { isLocalVersion } from "@/lib/api/services/fetch-datasets";
-import type { RunItem } from "@/lib/api/services/fetch-runs";
+import { type RunItem, runTitle } from "@/lib/api/services/fetch-runs";
 import {
   charterPending,
   DATASET_CAST,
   type DatasetRunModel,
   outcomePending,
+  RELEASE_KEY,
   stepViews,
 } from "@/lib/run-stream/dataset-run-model";
 import type { RunDisplayStatus } from "@/lib/run-stream/selectors";
 
 import { useDatasetBriefAvailability, useDatasetCard, useDatasetReviewFindings } from "../dataset-stage-hooks";
+import { DATASET_STEPS, DatasetLiveCard } from "../run-studio/live-run/live-run-card";
 import { Pane } from "../run-studio/scenes/scene-ui";
 import { StageHeading, StageLineage } from "../run-studio/stage-heading";
 import { DatasetCardPreview } from "./dataset-card-preview";
-import { ReleaseCard } from "./dataset-run-gate";
 import { DatasetRunScene } from "./dataset-run-scene";
+import type { DatasetWorkFacts } from "./dataset-work-scene";
+
+/** Only the release hand-off runs on the Node; the PI, Steward and Reviewer work in Logos on released summaries. */
+const runsOnNode = (step: { key: string }) => step.key === RELEASE_KEY;
 
 const STAGE_STATUS = {
   running: "active",
@@ -42,6 +49,14 @@ export function useDatasetStagePresentation(
   status: RunDisplayStatus,
   acceptGateOpen = false,
 ) {
+  const stageRunId = run?.current_stage?.stage_key === "dataset" ? run.current_stage.stage_run_id : model?.stageRunId;
+  const streamedReview = stageRunId ? model?.localNodeReviews?.[stageRunId] : undefined;
+  const bootstrapReview = useRunLocalNodeReview(
+    projectId,
+    run,
+    streamedReview === undefined && run?.current_stage?.stage_key === "dataset",
+    false,
+  );
   const dataset = useDatasetDetailQuery(projectId, datasetId).data?.data;
   const versions = useDatasetVersionsQuery(projectId, datasetId).data?.data;
   const latest = dataset?.latest_version ?? undefined;
@@ -51,7 +66,7 @@ export function useDatasetStagePresentation(
     : latest;
   const local = isLocalVersion(version);
   const nodes = useLocalNodesQuery(local ? projectId : "").data?.data;
-  const node = nodes?.find((n) => n.id === version?.runner_id) ?? nodes?.[0];
+  const node = nodes?.find((n) => n.id === version?.runner_id);
   const cardExpected = Boolean(
     status === "completed" ||
       acceptGateOpen ||
@@ -71,19 +86,16 @@ export function useDatasetStagePresentation(
 
   const ended = status === "completed" || status === "failed" || status === "stopped";
   const waitingForAccept = !ended && (acceptGateOpen || model.readyToAccept === true || outcomePending(model));
-  const nodePending = nodes?.some((n) => n.pending_reviews > 0 && (!version?.runner_id || n.id === version.runner_id));
-  const releaseWait = Boolean(
-    local &&
-      !ended &&
-      !model.published &&
-      !model.accepted &&
-      (model.releaseWait || (!model.gate && status === "running" && nodePending)),
-  );
+  const releasePending = streamedReview ?? (bootstrapReview || model.releaseWait);
+  const releaseWait = releasePending && !ended && !model.published && !model.accepted;
   const shownModel =
     releaseWait === model.releaseWait && !acceptGateOpen
       ? model
       : { ...model, releaseWait, readyToAccept: acceptGateOpen || model.readyToAccept };
-  const steps = stepViews(shownModel, { local, ended: status === "completed" ? "done" : ended ? "failed" : null });
+  const steps = stepViews(shownModel, {
+    local: local || releaseWait,
+    ended: status === "completed" ? "done" : ended ? "failed" : null,
+  });
   const waiting =
     status === "waiting" || shownModel.releaseWait || model.gate !== null || charterPending(model) || waitingForAccept;
   const writes = [
@@ -100,7 +112,7 @@ export function useDatasetStagePresentation(
     steps,
     status,
     ended,
-    local,
+    local: local || releaseWait,
     version,
     node,
     name: dataset?.name ?? "Dataset",
@@ -115,7 +127,11 @@ export function useDatasetStagePresentation(
   } as const;
 }
 
-type DatasetStage = NonNullable<ReturnType<typeof useDatasetStagePresentation>>;
+export type DatasetStage = NonNullable<ReturnType<typeof useDatasetStagePresentation>> & {
+  partialProfile?: boolean;
+  profileVariables?: DataCardVariable[];
+  workFacts?: DatasetWorkFacts;
+};
 
 export function DatasetStageCard({
   stage,
@@ -124,15 +140,19 @@ export function DatasetStageCard({
   runId,
 }: {
   stage: Pick<DatasetStage, "card" | "cardLoading" | "model" | "version">;
-  projectId: string;
-  datasetId: string;
+  projectId?: string;
+  datasetId?: string;
   runId?: string;
 }) {
   return (
     <DatasetCardPreview
       card={stage.card}
       loading={stage.cardLoading}
-      href={runId && datasetId ? `/projects/${projectId}/datasets/${datasetId}?view=card&run=${runId}` : undefined}
+      href={
+        runId && projectId && datasetId
+          ? `/projects/${projectId}/datasets/${datasetId}?view=card&run=${runId}`
+          : undefined
+      }
       fitness={stage.model.items.fitness}
       localNotes={stage.version?.local_card?.report.gaps}
     />
@@ -143,29 +163,49 @@ export function DatasetStageScene({
   projectId,
   datasetId,
   run,
+  runId,
+  question,
   stage,
   focusKey,
   onView,
   studio = false,
   handoff = false,
+  onContinueHandoff,
+  hypothesisDemo = false,
   cardInGate = false,
+  releaseAction,
 }: {
-  projectId: string;
-  datasetId: string;
+  projectId?: string;
+  datasetId?: string;
   run?: RunItem;
+  runId?: string;
+  question?: string | null;
   stage: DatasetStage;
   focusKey: string | null;
   onView(key: string | null): void;
   studio?: boolean;
   handoff?: boolean;
+  onContinueHandoff?: () => void;
+  hypothesisDemo?: boolean;
   cardInGate?: boolean;
+  releaseAction?: ReactNode;
 }) {
-  const { model, steps, status, ended, local, version, node, name, stageStatus, writes, variables, card } = stage;
+  const { model, steps, status, local, version, node, name, stageStatus, writes, variables, card } = stage;
   const accepted = status === "completed";
+  const current = steps.find((step) => step.state === "now" || step.state === "asking");
+  const viewingDisclosure = (focusKey ?? current?.key) === "disclosure";
+  const viewingMockReview = Boolean(stage.workFacts?.cardReview && (focusKey ?? current?.key ?? "review") === "review");
+  const workFacts: DatasetWorkFacts = {
+    ...stage.workFacts,
+    question: question ?? (run ? runTitle(run) : undefined) ?? stage.workFacts?.question,
+    unit: card?.unit_of_observation ?? stage.workFacts?.unit,
+    split: card?.split ?? stage.workFacts?.split,
+    caveats: card?.caveats ?? stage.workFacts?.caveats,
+  };
   const outcome =
-    !cardInGate && stage.cardExpected ? (
+    !cardInGate && !viewingMockReview && stage.cardExpected ? (
       <Pane title={accepted ? "Dataset stage accepted" : "Data card ready for review"}>
-        <DatasetStageCard stage={stage} projectId={projectId} datasetId={datasetId} runId={run?.id} />
+        <DatasetStageCard stage={stage} projectId={projectId} datasetId={datasetId} runId={runId ?? run?.id} />
       </Pane>
     ) : null;
   const scene = useRef<HTMLDivElement>(null);
@@ -177,6 +217,15 @@ export function DatasetStageScene({
       behavior: reducedMotion ? "instant" : "smooth",
     });
   }, [focusKey]);
+  const shownStep = steps.find((step) => step.key === focusKey) ?? current;
+  const liveRunId = runId ?? run?.id;
+  const liveCard = Boolean(
+    projectId &&
+      liveRunId &&
+      (status === "running" || status === "waiting") &&
+      shownStep &&
+      (DATASET_STEPS as readonly string[]).includes(shownStep.key),
+  );
   return (
     <div ref={scene} className="flex flex-col gap-4">
       <StageHeading
@@ -191,45 +240,80 @@ export function DatasetStageScene({
         <StageLineage reads={[version ? `${name} · v${version.version_number}` : name]} writes={writes} />
       </StageHeading>
       {handoff && (
-        <Pane
-          title={
-            <span className="flex flex-wrap items-center gap-2">
-              <CircleCheck className="size-4 text-emerald-600" />
-              Data card accepted
-              <ArrowRight className="size-4 text-muted-foreground" />
-              Hypothesis stage starting
-            </span>
-          }
-        >
-          <p role="status" className="text-muted-foreground text-sm">
-            Hypothesis starts from the accepted data card{card?.title && <> · {card.title}</>}.
-          </p>
-        </Pane>
+        <section aria-label="Data card accepted" className="grid gap-2 border-y py-3">
+          <h3 className="flex flex-wrap items-center gap-2 font-semibold text-sm">
+            <CircleCheck className="size-4 text-emerald-600" />
+            Data card accepted
+          </h3>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p role="status" className="max-w-prose text-muted-foreground text-sm">
+              {hypothesisDemo ? (
+                "Hypothesis replays a recorded information retrieval study in this workspace."
+              ) : (
+                <>
+                  Hypothesis uses the accepted Data card
+                  {card?.title && (
+                    <>
+                      {" "}
+                      for <b>{card.title}</b>
+                    </>
+                  )}
+                  , including its recorded limits.
+                </>
+              )}
+            </p>
+            {onContinueHandoff && (
+              <Button type="button" size="sm" onClick={onContinueHandoff}>
+                Open Hypothesis <ArrowRight data-icon="inline-end" />
+              </Button>
+            )}
+          </div>
+        </section>
       )}
-      {model.gate === null && !ended && model.releaseWait && !model.published && <ReleaseCard />}
-      {studio && local && stageStatus === "active" && (
+      {studio && local && stageStatus === "active" && current && !focusKey && (
         <p className="flex items-center gap-2 text-muted-foreground text-sm">
           <HardDrive className="size-4" />
-          Running on your Local Node
+          {runsOnNode(current) ? "Running on your Local Node" : "Running in Logos, from what the Node released"}
         </p>
       )}
-      {studio && !handoff && outcome}
-      <DatasetRunScene
-        steps={steps}
-        model={model}
-        dataset={{ name }}
-        version={version}
-        local={local}
-        focusKey={focusKey}
-        live={status === "running"}
-        onView={onView}
-        variables={variables}
-        node={node}
-        showLocalProgress={local && stageStatus === "active"}
-        findings={stage.findings}
-        waitingForAccept={stage.waitingForAccept}
-      />
-      {!studio && outcome}
+      {/* A recorded step opens above the card, so its evidence is on the first screen. */}
+      {studio && !viewingDisclosure && !focusKey && outcome}
+      {liveCard && shownStep ? (
+        <DatasetLiveCard
+          projectId={projectId}
+          runId={liveRunId}
+          stepKey={current?.key ?? shownStep.key}
+          focusKey={focusKey && shownStep !== current ? shownStep.key : null}
+          onBack={() => onView(null)}
+          live
+        />
+      ) : (
+        <DatasetRunScene
+          steps={steps}
+          model={model}
+          dataset={{ name }}
+          version={version}
+          local={local}
+          focusKey={focusKey}
+          live={status === "running"}
+          onView={onView}
+          variables={variables}
+          node={node}
+          showLocalProgress={local && stageStatus === "active"}
+          findings={stage.findings}
+          waitingForAccept={stage.waitingForAccept}
+          releaseAction={releaseAction}
+          partialProfile={stage.partialProfile}
+          profileVariables={stage.profileVariables}
+          workFacts={workFacts}
+          cardPreview={
+            (viewingDisclosure || viewingMockReview) && !cardInGate && card ? (
+              <DatasetStageCard stage={stage} projectId={projectId} datasetId={datasetId} runId={runId ?? run?.id} />
+            ) : undefined
+          }
+        />
+      )}
+      {(!studio || focusKey) && !viewingDisclosure && outcome}
     </div>
   );
 }

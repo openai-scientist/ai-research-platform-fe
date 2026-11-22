@@ -38,7 +38,8 @@ import { AGENTS } from "../run-meta";
 import { useReveal, useWorkspace } from "../workspace-context";
 import { DebateBoard, FLAW, SEVERITY, STANCE, STANCE_ORDER } from "./debate-board";
 import { threadsOf, VERDICT_THREAD } from "./debate-positions";
-import { bySeverity, FINDING_SEVERITY, findingTarget } from "./findings";
+import { findingTarget } from "./findings";
+import { ReviewFindings } from "./review-findings";
 import { RevisionPanel } from "./revision-panel";
 import { Bone, Pane, Placeholder, SceneNote, Strike } from "./scene-ui";
 
@@ -637,72 +638,11 @@ function SettlesBadge({ tension: t, delay }: { tension: Tension; delay: number |
 }
 
 /** Characters a second the newest finding is typed at. */
-const FINDING_SPEED = 220;
 
 /**
  * What the independent reviewer found in one hypothesis, worst first. While live, the finding that just came in is
  * typed out and its suggestion follows.
  */
-function Findings({ findings, newest }: { findings: ReviewFinding[]; newest?: string }) {
-  const typed = useRef<HTMLLIElement>(null);
-  const live = Boolean(newest && findings.some((f) => f.finding_id === newest));
-  // The finding being typed is brought into view, as the cursor goes to it.
-  useReveal(typed, newest, live);
-  return (
-    <div className="flex flex-col gap-2 border-t pt-2.5 text-xs">
-      <span className="flex items-center gap-2">
-        <AgentAvatar agent="reviewer" size="sm" />
-        <b className={cn("font-semibold", AGENTS.reviewer.text)}>Independent review</b>
-        <span className="text-muted-foreground">
-          {findings.length} {findings.length === 1 ? "finding" : "findings"}
-        </span>
-      </span>
-      <ul className="flex flex-col gap-2">
-        {[...findings].sort(bySeverity).map((f) => {
-          const tone = FINDING_SEVERITY[f.severity] ?? FINDING_SEVERITY.minor;
-          const { field } = findingTarget(f.locator);
-          const typing = f.finding_id === newest;
-          return (
-            <motion.li
-              key={f.finding_id}
-              ref={typing ? typed : undefined}
-              data-cursor={`finding:${f.finding_id}`}
-              layout="position"
-              initial={typing ? { opacity: 0, x: -6 } : false}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.3 }}
-              className={cn("flex flex-col gap-0.5 border-l-2 pl-2.5", tone.bar)}
-            >
-              <span className="flex flex-wrap items-baseline gap-x-1.5 text-[11px]">
-                <b className={cn("font-semibold", tone.text)}>{tone.label}</b>
-                {field && <span className="text-foreground/80">· {field}</span>}
-                <span className="text-muted-foreground">
-                  · {f.category.replaceAll("_", " ")}
-                  {f.kind === "needs_evidence" ? " · needs a source" : ""}
-                </span>
-              </span>
-              <p className="leading-snug">
-                <CitedText text={f.issue} live={typing} speed={FINDING_SPEED} />
-              </p>
-              {f.suggestion && (
-                <motion.p
-                  initial={typing ? { opacity: 0 } : false}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: typing ? f.issue.length / FINDING_SPEED : 0, duration: 0.3 }}
-                  className="flex gap-1.5 text-muted-foreground leading-snug"
-                >
-                  <ArrowRight className="mt-0.5 size-3 shrink-0" />
-                  <CitedText text={f.suggestion} />
-                </motion.p>
-              )}
-            </motion.li>
-          );
-        })}
-      </ul>
-    </div>
-  );
-}
-
 function HypothesisCard({
   draft,
   findings,
@@ -940,7 +880,7 @@ function HypothesisCard({
         )}
         {findings.length > 0 && (
           <div className="min-w-0 pt-3">
-            <Findings findings={findings} newest={newestFinding} />
+            <ReviewFindings findings={findings} newest={newestFinding} />
           </div>
         )}
       </div>
@@ -983,6 +923,7 @@ export function HypothesizeScene({
   const keepable = editing && state.gate?.kind === "hypotheses" ? (state.gate.keepable ?? []) : [];
   const notes = decisions.filter((d) => d.stageKey === stageKey);
   const drafts = data.order.map((id) => data.drafts[id]);
+  const published = drafts.length ? [] : (data.published ?? []);
   const set = drafts.filter((d) => d.selected);
   const settled = new Set(drafts.flatMap((d) => d.hypothesis.tension_ids ?? []));
   // Open only once every hypothesis is written: a tension is not open while the next one may still settle it.
@@ -1053,8 +994,7 @@ export function HypothesizeScene({
           ready={!live || step === "hypotheses_gate" || findings.length > 0}
         />
       )}
-      {/* The three lanes stand from the start; the turns fill in below them. */}
-      {data.turns.length || !drafts.length ? (
+      {data.turns.length > 0 || (live && step === "debate" && !drafts.length && !data.published) ? (
         <Pane title="Debate" aside={debateAside(data.turns, threads.filter((t) => t.id !== VERDICT_THREAD).length)}>
           <div className="mb-4 grid gap-2 sm:grid-cols-3">
             {LANES.map((lane) => {
@@ -1183,11 +1123,41 @@ export function HypothesizeScene({
             </div>
           </MotionConfig>
         </Pane>
-      ) : (
-        <Placeholder>Three perspectives debate the gaps first</Placeholder>
-      )}
+      ) : !drafts.length && (data.published || !live) ? (
+        <p className="text-muted-foreground text-sm">No debate transcript was published for this round.</p>
+      ) : null}
 
       <div ref={draftsRef} className="flex flex-col gap-3">
+        {published.length > 0 && (
+          <Pane title="Published hypotheses">
+            <ul className="divide-y">
+              {published.map((hypothesis) => (
+                <li key={hypothesis.id} className="space-y-2 py-3 first:pt-0 last:pb-0">
+                  <p className="wrap-anywhere text-sm">
+                    <strong className="mr-2 font-mono">{hypothesis.id}</strong>
+                    {hypothesis.statement}
+                  </p>
+                  <dl className="space-y-1 wrap-anywhere text-muted-foreground text-sm">
+                    {[
+                      ["Exposure", hypothesis.exposure],
+                      ["Outcome", hypothesis.outcome],
+                      ["Prediction", hypothesis.prediction],
+                      ["Mechanism", hypothesis.mechanism],
+                      ["What would falsify it", hypothesis.falsify],
+                    ].map(([label, value]) =>
+                      value ? (
+                        <div key={label}>
+                          <dt className="mr-2 inline font-medium text-foreground">{label}</dt>
+                          <dd className="inline">{value}</dd>
+                        </div>
+                      ) : null,
+                    )}
+                  </dl>
+                </li>
+              ))}
+            </ul>
+          </Pane>
+        )}
         {drafts.length > 0 && (
           <div className="flex flex-wrap items-center gap-2 text-sm">
             <b className="font-semibold">Hypotheses{round > 1 ? ` · round ${round}` : ""}</b>
@@ -1292,7 +1262,7 @@ export function HypothesizeScene({
             />
           ))}
         </div>
-        {!drafts.length && data.turns.length > 0 && (
+        {!drafts.length && !data.published && data.turns.length > 0 && (
           <Placeholder>What survives the debate is written as a hypothesis</Placeholder>
         )}
         {data.asides.length > 0 && (

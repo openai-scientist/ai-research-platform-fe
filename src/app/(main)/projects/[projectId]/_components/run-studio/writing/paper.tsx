@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 
 import { Caret } from "../run-bits";
+import { PaperSurface } from "../scenes/paper-surface";
 import { ALLOC, COMMENTS, DATA_AV, DISCLOSURE, EDITS, PLANX, REVIEWERS } from "./data/core";
 import { PAPER_TITLE, PARAS, type Para, REFS } from "./data/paper";
 import {
@@ -431,10 +432,7 @@ export function PaperPage({ comments = false }: { comments?: boolean }) {
     );
   };
   return (
-    <article
-      data-page
-      className="relative min-w-0 rounded-xl bg-card px-5 pt-7 pb-10 font-serif text-[15.5px] text-card-foreground leading-[1.72] ring-1 ring-foreground/10 sm:px-12 sm:pt-10"
-    >
+    <PaperSurface>
       <header className="mb-6 border-b pb-5 font-sans">
         <p className="flex flex-wrap items-center justify-between gap-2 text-muted-foreground text-xs">
           <span>Education Data Journal (example) · Research article</span>
@@ -480,7 +478,7 @@ export function PaperPage({ comments = false }: { comments?: boolean }) {
           </ol>
         </section>
       ) : null}
-    </article>
+    </PaperSurface>
   );
 }
 

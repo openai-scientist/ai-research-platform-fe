@@ -14,6 +14,7 @@ import type { DatasetRunModel } from "@/lib/run-stream/dataset-run-model";
 
 import { groupIssues, privacyChips, privacyNotes } from "../dataset-review-state";
 import { IssueCards, PrivacyChips, RoleDiagram, VariableMatrix } from "../dataset-review-visuals";
+import { displayFieldName } from "./dataset-field-name";
 
 const number = (value: number) => value.toLocaleString("en-US");
 
@@ -66,7 +67,12 @@ export function DatasetCardPreview({
           </CollapsibleTrigger>
         </div>
         {expanded && card.description && <p className="wrap-anywhere text-sm">{card.description}</p>}
-        <VariableMatrix variables={card.variables} rows={card.n_rows} compact={!expanded} />
+        <VariableMatrix
+          formatName={displayFieldName}
+          variables={card.variables}
+          rows={card.n_rows}
+          compact={!expanded}
+        />
         <dl className="grid gap-2 text-xs sm:grid-cols-2">
           <div className="grid content-start gap-1">
             <dt className="font-medium">Split</dt>
@@ -100,11 +106,10 @@ export function DatasetCardPreview({
             <p className="wrap-anywhere text-muted-foreground text-xs">
               {card.split.method === "random_rows"
                 ? "Random rows"
-                : `By unit · ${card.split.unit_column ?? "Column not recorded"}`}
-              {" · "}Seed {card.split.seed}
+                : `By unit · ${card.split.unit_column ? displayFieldName(card.split.unit_column) : "Column not recorded"}`}
             </p>
           )}
-          <RoleDiagram variables={card.variables} />
+          <RoleDiagram formatName={displayFieldName} variables={card.variables} />
           {issues.length > 0 && <IssueCards groups={issues} />}
           {chips.length > 0 && <PrivacyChips chips={chips} />}
           {notes.length > 0 && (

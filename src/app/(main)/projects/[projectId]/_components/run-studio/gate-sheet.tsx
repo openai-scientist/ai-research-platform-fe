@@ -82,6 +82,12 @@ function GatePromptSectionLine({
 }
 
 /** A review stop: why the run stopped, what is ready, what each choice leads to. */
+/** Where a stop sits. A question from a stage engine has no fixed total: more may follow. */
+function stopLabel(gate: Gate) {
+  if (gate.kind !== "decision" || gate.stop_total > 1) return `Stop ${gate.stop_index} of ${gate.stop_total}`;
+  return gate.stageKey === "experiment_design" ? "Question before the lock" : "Question";
+}
+
 export function GateSheet({
   gate,
   mode,
@@ -91,6 +97,7 @@ export function GateSheet({
   onAnswer,
   onStartDrop,
   pending = false,
+  readOnly = false,
   documentPreview,
 }: {
   gate: Gate;
@@ -102,6 +109,7 @@ export function GateSheet({
   onStartDrop(): void;
   /** The answer is on its way; it can't be sent twice. */
   pending?: boolean;
+  readOnly?: boolean;
   documentPreview?: ReactNode;
 }) {
   const preferred = gate.options.find((o) => o.recommended && !o.disabled) ?? gate.options.find((o) => !o.disabled);
@@ -130,7 +138,7 @@ export function GateSheet({
   const prompt = parseGatePrompt(gate.why);
 
   const confirm = () => {
-    if (!option || option.disabled) return;
+    if (!option || option.disabled || (option.needsText && !note.trim())) return;
     if ((gate.kind === "hypotheses" || gate.kind === "screen") && option.id === "drop") {
       onStartDrop();
       return;
@@ -157,10 +165,40 @@ export function GateSheet({
 
   // The charter and the accept are documents to read before answering: they get a wider sheet of their own.
   const document = gate.kind === "charter" || gate.kind === "accept";
+  if (readOnly)
+    return (
+      <GateFrame
+        title={gate.title}
+        badge="Awaiting a decision"
+        minimizedLabel="Awaiting a decision"
+        reopenLabel="View"
+        minimized={minimized}
+        onMinimize={onMinimize}
+        wide={document}
+      >
+        {(header) => (
+          <div className="flex flex-col gap-3 overflow-y-auto p-5 text-sm">
+            {header}
+            {gate.why && <p className="whitespace-pre-line">{gate.why}</p>}
+            {gate.summary.map((line) => (
+              <p key={line}>{line}</p>
+            ))}
+            {documentPreview}
+            {gate.options.length > 0 && (
+              <ul className="grid gap-1">
+                {gate.options.map((choice) => (
+                  <li key={choice.id}>{choice.label}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+      </GateFrame>
+    );
   return (
     <GateFrame
       title={gate.title}
-      detail={`Stop ${gate.stop_index} of ${gate.stop_total} · ${MODES[mode].label} mode`}
+      detail={`${stopLabel(gate)} · ${MODES[mode].label} mode`}
       minimized={minimized}
       onMinimize={onMinimize}
       wide={document}
@@ -176,6 +214,12 @@ export function GateSheet({
             onAnswer={onAnswer}
             documentPreview={documentPreview}
           />
+        ) : gate.kind === "decision" && pending ? (
+          <div className="flex flex-col gap-2 px-5 pt-4.5 pb-5 text-sm">
+            {header}
+            <p className="font-medium">Preparing the next question</p>
+            <p className="text-muted-foreground">Your answer was sent. The agents are working out what to ask next.</p>
+          </div>
         ) : (
           <>
             <div className="flex flex-col gap-3.5 overflow-y-auto px-5 pt-4.5 pb-4">
@@ -378,13 +422,18 @@ export function GateSheet({
               <Input
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
-                placeholder="Optional: a note for the agents, kept with your decision"
-                aria-label="Note for the agents"
+                placeholder={
+                  option?.needsText ? "Type your answer" : "Optional: a note for the agents, kept with your decision"
+                }
+                aria-label={option?.needsText ? "Your answer" : "Note for the agents"}
               />
             </div>
             <div className="flex items-center gap-3 border-t bg-popover px-5 py-3.5">
               <span className="flex-1 text-muted-foreground text-xs">Nothing runs until you confirm.</span>
-              <Button onClick={confirm} disabled={!option || option.disabled || pending}>
+              <Button
+                onClick={confirm}
+                disabled={!option || option.disabled || pending || (option.needsText && !note.trim())}
+              >
                 {pending
                   ? "Sending…"
                   : gate.selection

@@ -8,13 +8,17 @@ import { AnimatePresence, motion } from "motion/react";
 
 import { Button } from "@/components/ui/button";
 import type { AgentRole } from "@/lib/run-stream/contract";
+import { DESIGN_LOCK, DESIGN_STAGE } from "@/lib/run-stream/experiment-design";
 import type { RunState } from "@/lib/run-stream/run-state";
 import { GATE_TITLE, inSentence, nextStop } from "@/lib/run-stream/selectors";
 
 import { AgentStrip, RunAsidePanel, StageRules, StageSteps, WaitingForYou } from "./aside-ui";
+import { LiveNextStop, LiveNow, LiveRules, LiveSubsteps, useLivePanel } from "./live-run/live-panel";
 import { ReleaseReviewIcon, RunFailureMessage } from "./local-node-status";
+import { currentMilestone, stagePosition } from "./pipeline-stage-selection";
 import { AgentAvatar, Caret, TypedLine, WorkOrb } from "./run-bits";
 import { AGENTS, RULE_IDS, RULES, TEAM } from "./run-meta";
+import { designChecklist, designRuleQuestion } from "./scenes/experiment-design-view";
 
 /** Without news for this long, the card says the step is still going. */
 const QUIET_MS = 3000;
@@ -82,7 +86,11 @@ export function NowCard({
         <p className="text-muted-foreground text-sm">
           {state.paperTitle
             ? "The paper is published. Use the stages above to look back at any part of the run."
-            : "The hypotheses are picked. Experiments are switched off for now; use the stages above to look back."}
+            : stage?.plan.key === DESIGN_STAGE
+              ? `${stage.summary ?? "Design complete"}. Use the stages above to inspect the design record.`
+              : stage?.plan.key === "execution" && stage.summary
+                ? stage.summary
+                : "The hypotheses are picked. Experiments are switched off for now; use the stages above to look back."}
         </p>
       </div>
     );
@@ -178,15 +186,24 @@ export function NowCard({
   );
 }
 
-function Steps({ state }: { state: RunState }) {
+function Steps({ state, datasetFirst, compact }: { state: RunState; datasetFirst: boolean; compact?: boolean }) {
   const stage = state.currentStageKey ? state.stages[state.currentStageKey] : undefined;
   if (!stage || state.completed) return null;
-  const index = state.plan.findIndex((item) => item.key === stage.plan.key) + 1;
+  const { index, total } = stagePosition(
+    state.plan,
+    stage.plan.key,
+    datasetFirst,
+    currentMilestone(stage.plan, stage.currentStepId),
+  );
+  const design = stage.content.stage === "experiment" ? stage.content.liveDesign : undefined;
+  const question = designRuleQuestion(state.gate);
+  const missingLock = design?.blocked?.includes(DESIGN_LOCK);
   return (
     <StageSteps
-      count={"Stage " + index + " of " + state.plan.length}
+      count={`Stage ${index + 1} of ${total}`}
       steps={stage.plan.steps.map((step) => {
         const now = stage.currentStepId === step.id && state.lifecycle !== "failed";
+        const recorded = Object.values(state.workChecks[stage.plan.key]?.[step.id] ?? {});
         return {
           id: step.id,
           title: step.title,
@@ -195,8 +212,13 @@ function Steps({ state }: { state: RunState }) {
           artifact: step.gate ? undefined : step.artifact,
           done: stage.doneStepIds.includes(step.id),
           now,
-          asking: now && Boolean(step.gate && state.gate),
-          checks: Object.values(state.workChecks[stage.plan.key]?.[step.id] ?? {}),
+          asking: now && Boolean(state.gate && (step.gate || state.gate.stageKey === stage.plan.key)),
+          // The live card draws the step; the column only lists it.
+          checks: compact
+            ? undefined
+            : stage.plan.key === DESIGN_STAGE && step.id === "design_work"
+              ? designChecklist(recorded, missingLock ? "send_back" : question ? "answer" : undefined)
+              : recorded,
         };
       })}
     />
@@ -220,7 +242,7 @@ function NextStop({ state }: { state: RunState }) {
       <span>
         <b className="block font-semibold text-[13px]">
           {next
-            ? `Next stop for you: ${inSentence(GATE_TITLE[next.gate])}`
+            ? `Next stop for you: ${inSentence(next.stage.key === "experiment_design" && next.gate === "accept" ? "Accept the analysis plan" : GATE_TITLE[next.gate])}`
             : state.mode === "auto"
               ? "Popper won't stop for you"
               : "No more stops"}
@@ -290,16 +312,40 @@ export function RunAside({
   holding,
   onContinue,
   typing,
+  datasetFirst = false,
 }: {
   state: RunState;
   holding: boolean;
   onContinue(): void;
   typing?: boolean;
+  datasetFirst?: boolean;
 }) {
   const stage = state.currentStageKey ? state.stages[state.currentStageKey] : undefined;
   const step = stage?.plan.steps.find((s) => s.id === stage.currentStepId);
   const ended = state.completed || state.lifecycle === "failed";
   const active = ended || state.gate ? null : (state.message?.actor ?? step?.actor ?? null);
+  // While the live card of the stage is on screen, the column is the compact model the card publishes.
+  const published = useLivePanel(stage?.plan.key);
+  const entry = published && !ended && !holding ? published : undefined;
+  if (entry)
+    return (
+      <RunAsidePanel
+        team={<AgentStrip cast={TEAM} active={active === "code" ? null : active} />}
+        activityCount={state.feed.length}
+        activity={<Activity state={state} />}
+      >
+        <LiveNow entry={entry} />
+        <Steps state={state} datasetFirst={datasetFirst} compact />
+        <LiveSubsteps panel={entry.panel} />
+        <LiveNextStop
+          panel={entry.panel}
+          waiting={
+            state.gate ? <WaitingForYou>{state.gate.title}. Nothing runs until you answer.</WaitingForYou> : undefined
+          }
+        />
+        <LiveRules panel={entry.panel} title={`Rules the ${entry.stage.replace(/ stage$/, "")} stage never bends`} />
+      </RunAsidePanel>
+    );
   return (
     <RunAsidePanel
       team={<AgentStrip cast={TEAM} active={active === "code" ? null : active} />}
@@ -307,7 +353,7 @@ export function RunAside({
       activity={<Activity state={state} />}
     >
       <NowCard state={state} holding={holding} onContinue={onContinue} typing={typing} />
-      <Steps state={state} />
+      <Steps state={state} datasetFirst={datasetFirst} />
       <NextStop state={state} />
       <StageRules
         title="Rules Popper never bends"

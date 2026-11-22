@@ -611,7 +611,7 @@ export function RunStudio({ projectId, canWrite }: { projectId: string; canWrite
         />
       )}
       {!session && <RunStats />}
-      {SHOW_WRITING_PREVIEW && <WritingPreviewRow />}
+      {process.env.NODE_ENV === "development" && SHOW_WRITING_PREVIEW && <WritingPreviewRow />}
       <PastRuns projectId={projectId} hide={session?.runId} />
       <StartRunDialog
         open={dialog}

@@ -126,7 +126,7 @@ export function useConsultations(options?: ApiQueryOptions<Consultations>) {
   return useApiQuery(
     [...projectKeys.run(session.projectId, session.runId), "pi", "consultations"],
     (signal) => fetchRuns.getConsultations(session.projectId, session.runId, signal),
-    options,
+    { ...options, enabled: Boolean(session.projectId) && options?.enabled !== false },
   );
 }
 

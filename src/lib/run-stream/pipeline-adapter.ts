@@ -7,6 +7,7 @@
 import { type ClaimScope, claimScopeSummary, updateClaimScope } from "./claim-scope";
 import type {
   AgentRole,
+  EligibilityDecision,
   Gate,
   GateAnswer,
   GateKind,
@@ -20,6 +21,19 @@ import type {
   StagePlan,
   StagePlanStep,
 } from "./contract";
+import { EXECUTION_STAGE, executionArtifacts, executionCheckStep, executionSteps } from "./execution";
+import {
+  DESIGN_LOCK,
+  DESIGN_STAGE,
+  type DesignPublication,
+  designAgent,
+  designArtifact,
+  designCheck,
+  designLabel,
+  designRecord,
+  designText,
+  designTool,
+} from "./experiment-design";
 import { hypothesisWork } from "./hypothesis-work";
 import { type PublicationRef, type PublishedHypotheses, publishedMap } from "./published-hypotheses";
 
@@ -45,11 +59,12 @@ export type GateRoute =
       to: "gate";
       stageRunId: string;
       kind: "question" | "artifact_review";
+      engineGateId?: string;
       /** For a hypotheses gate: the set under review, and the reviewer's findings as the engine sent them. */
       artifactId?: string;
       findings?: Record<string, unknown>[];
     }
-  | { to: "accept"; stageRunId: string; hypothesisIds?: string[] }
+  | { to: "accept"; stageRunId: string; hypothesisIds?: string[]; stageKey?: typeof DESIGN_STAGE }
   /** The PI's charter: endorse its draft, or write it yourself; `retry` asks the PI again after it failed. */
   | { to: "charter"; consultationId: string };
 
@@ -57,6 +72,25 @@ type Step = Omit<StagePlanStep, "id">;
 
 // The steps the run studio shows for the engine's work, plus the independent review and the accept.
 const STEPS: Record<string, Step> = {
+  design_work: {
+    title: "Repair the contract items",
+    actor: "methodologist",
+    artifact: "Analysis plan",
+    explain: "Define the estimands, study protocols, models and decision rules for the accepted hypotheses.",
+  },
+  design_review: {
+    title: "Review and hand off",
+    actor: "reviewer",
+    artifact: "Pre-registration",
+    explain: "Check the plan, record open findings and publish the design.",
+  },
+  design_accept: {
+    title: "Accept the analysis plan",
+    actor: "pi",
+    gate: "accept",
+    explain: "Pass the analysis plan and its lock to Execution.",
+  },
+  ...Object.fromEntries(executionSteps.map(({ id, ...step }) => [id, step])),
   charter: {
     title: "Draft the plan",
     actor: "pi",
@@ -91,34 +125,34 @@ const STEPS: Record<string, Step> = {
     actor: "librarian",
     pipeline_stage: 3,
     artifact: "Search plan",
-    explain: "Search strategies and queries, each tied to sub-questions.",
+    explain: "Search queries for the research question.",
   },
   collect: {
     title: "Collect candidates",
     actor: "librarian",
     pipeline_stage: 4,
     artifact: "Candidate list",
-    explain: "Every query goes to every configured source; duplicates are merged.",
+    explain: "Send queries to configured sources and collect the unique records.",
   },
   score: {
-    title: "Score every paper",
+    title: "Screen candidate papers",
     actor: "librarian",
     pipeline_stage: 5,
     artifact: "Screened scores",
-    explain: "Relevance and quality scores from 0 to 1.",
+    explain: "Apply the screening criteria to the selected papers.",
   },
   reject: {
-    title: "Reject wrong-field matches",
+    title: "Record exclusions",
     actor: "librarian",
     pipeline_stage: 5,
-    explain: "Papers that share words but not the field are excluded with a reason.",
+    explain: "Record why a screened paper was excluded.",
   },
   shortlist: {
     title: "Keep the shortlist",
     actor: "librarian",
     pipeline_stage: 5,
     artifact: "Shortlist",
-    explain: "What clears both bars is kept with a one-line reason.",
+    explain: "Keep the papers that meet the review criteria.",
   },
   screen_gate: {
     title: "Human check: shortlist",
@@ -278,8 +312,7 @@ const SCREENS: Screen[] = [
     title: "Screen the papers",
     pipeline: [5],
     cast: ["librarian", "pi"],
-    purpose:
-      "Every candidate is scored for relevance and quality; only papers that clear both bars are kept and every decision carries a reason.",
+    purpose: "Apply the eligibility criteria to the selected papers and record why papers are included or excluded.",
     reads: ["Candidate list", "Sub-question tree"],
     steps: ["score", "reject", "shortlist", "screen_gate"],
   },
@@ -327,6 +360,28 @@ const SCREENS: Screen[] = [
   },
 ];
 
+const DESIGN: Screen = {
+  key: DESIGN_STAGE,
+  stage: "experiment",
+  title: "Experiment design",
+  pipeline: [],
+  cast: ["methodologist", "reviewer"],
+  purpose: "Turn the accepted hypotheses into a study protocol and analysis plan before looking at results.",
+  reads: ["Accepted hypotheses", "Dataset snapshot"],
+  steps: ["design_work", "design_review", "design_accept"],
+};
+
+const EXECUTION: Screen = {
+  key: EXECUTION_STAGE,
+  stage: "interpret",
+  title: "Execution",
+  pipeline: [],
+  cast: ["code", "reviewer", "pi"],
+  purpose: "Run the analyses registered in the accepted experiment design.",
+  reads: ["Analysis plan", "Plan lock", "Dataset snapshot"],
+  steps: executionSteps.map(({ id }) => id),
+};
+
 /**
  * The engine's steps (`step_key`) and the screen each one starts. `verify` checks novelty (the hypotheses screen) and
  * then draws the argument map (the map screen), so its content picks the screen instead.
@@ -352,6 +407,7 @@ const CONTENT = new Set([
   "search.strategy",
   "search.query",
   "search.sources",
+  "literature.request",
   "literature.batch",
   "literature.merged",
   "literature.collected",
@@ -359,6 +415,8 @@ const CONTENT = new Set([
   "screen.scored",
   "screen.rejected",
   "screen.kept",
+  "screen.eligibility",
+  "screen.review_progress",
   "card.extracted",
   "synthesis.cluster",
   "synthesis.set_aside",
@@ -447,10 +505,13 @@ const OPENS: Record<string, string> = {
   "problem.subquestion": "decompose",
   "topic.evaluated": "evaluate",
   "search.strategy": "strategy",
+  "literature.request": "collect",
   "literature.batch": "collect",
   "screen.criteria": "score",
   "screen.scored": "score",
   "screen.kept": "shortlist",
+  "screen.eligibility": "score",
+  "screen.review_progress": "score",
   "card.extracted": "extract",
   "synthesis.cluster": "cluster",
   "synthesis.overview": "overview",
@@ -631,6 +692,7 @@ export interface PipelineRunInfo {
   domains: string[];
   mode: ReviewMode;
   datasetFirst?: boolean;
+  continuesToDesign?: boolean;
 }
 
 /** One content item as it was shown: the scenes' event and who said it. */
@@ -660,7 +722,16 @@ export class PipelineAdapter {
     engineKind: "question" | "artifact_review" | null;
     stageKey?: string;
     stageRunId?: string;
+    engineGateId?: string;
+    options?: Gate["options"];
   } | null = null;
+  private designStageRun?: string;
+  private executionStageRun?: string;
+  private designPublication?: PublicationRef;
+  private designBlocked?: string;
+  private designIds: string[] = [];
+  private designAsked?: string;
+  private designGateHistory = new Map<string, string>();
   private decision: Record<string, unknown> | null = null;
   private failed = false;
   private completed = false;
@@ -700,6 +771,16 @@ export class PipelineAdapter {
 
   constructor(private readonly run: PipelineRunInfo) {}
 
+  designToLoad() {
+    return this.designPublication;
+  }
+
+  applyDesign(ref: PublicationRef, publication: DesignPublication): RunEvent[] {
+    this.out = [];
+    if (ref === this.designPublication) this.emit("design.updated", { publication }, undefined, DESIGN_STAGE);
+    return this.out;
+  }
+
   publicationToLoad(): PublicationRef | undefined {
     return this.pendingPublication;
   }
@@ -710,8 +791,22 @@ export class PipelineAdapter {
     this.pendingPublication = undefined;
     if (publication) {
       this.publishedDetails = publication;
+      this.emit("hypothesis.published", { hypotheses: publication.hypotheses }, undefined, this.keyOf("hypothesize"));
       const question = this.claimScope?.protocol.question ?? this.claimScope?.claim?.question;
       this.emit("map.published", publishedMap(publication, question), undefined, "map");
+      if (this.screen?.key === DESIGN_STAGE && !this.designPublication) {
+        const hypotheses = publication.hypotheses.filter(
+          (h) => !this.designIds.length || this.designIds.includes(h.id),
+        );
+        this.emit("design.updated", {
+          hypotheses: hypotheses.map(({ id, statement, exposure, outcome }) => ({
+            id,
+            statement,
+            inputExposure: exposure,
+            inputOutcome: outcome,
+          })),
+        });
+      }
     }
     if (this.gate?.kind === "accept" && this.gate.stageRunId === ref.stageRunId)
       this.emit("gate.opened", { gate: this.acceptGate(this.gate.id) }, "pi", "map");
@@ -744,14 +839,18 @@ export class PipelineAdapter {
       return {
         to: "accept",
         stageRunId,
+        ...(this.gate.stageKey === DESIGN_STAGE ? { stageKey: DESIGN_STAGE } : {}),
         ...(this.isHypothesisStage(this.gate.stageKey) ? { hypothesisIds: this.final() } : {}),
       };
     if (!this.gate.engineKind) return null;
-    if (this.gate.engineKind === "question") return { to: "gate", stageRunId, kind: "question" };
+    const engineGateId = this.gate.engineGateId;
+    if (this.gate.engineKind === "question")
+      return { to: "gate", stageRunId, kind: "question", ...(engineGateId ? { engineGateId } : {}) };
     return {
       to: "gate",
       stageRunId,
       kind: "artifact_review",
+      ...(engineGateId ? { engineGateId } : {}),
       ...(this.review.artifactId ? { artifactId: this.review.artifactId } : {}),
       findings: [...this.review.raw],
     };
@@ -761,37 +860,47 @@ export class PipelineAdapter {
   acknowledgeGate(gateId: string, answer: GateAnswer): RunEvent[] {
     this.out = [];
     const gate = this.gate?.id === gateId ? this.gate : null;
-    if (gate) {
-      if (gate.kind !== "decision") this.closeStep();
-      this.gate = null;
-      this.decision = null;
-    }
-    const kind = gate?.kind ?? "decision";
-    const summary = this.answered(
-      kind,
-      answer.option_id,
-      answer.dropped ?? [],
-      answer.findings?.length ?? 0,
-      answer.kept?.length ?? 0,
+    if (!gate) return this.out;
+    if (gate.kind !== "decision") this.closeStep();
+    const kind = gate.kind;
+    const summary =
+      gate.stageKey === DESIGN_STAGE
+        ? this.designAnswer(gate.options?.find((option) => option.id === answer.option_id)?.label)
+        : this.answered(
+            kind,
+            answer.option_id,
+            answer.dropped ?? [],
+            answer.findings?.length ?? 0,
+            answer.kept?.length ?? 0,
+          );
+    this.emit(
+      "gate.resolved",
+      { gate_id: gateId, answer, summary },
+      "pi",
+      gate.stageKey === "dataset" ? "dataset" : undefined,
     );
-    this.emit("gate.resolved", { gate_id: gateId, answer, summary }, "pi");
+    this.gate = null;
+    this.decision = null;
+    this.emit("run.status", { status: "running" });
     return this.out;
   }
 
   /** The screens of the run: one per round of hypotheses. */
   private screens(): Screen[] {
-    return SCREENS.flatMap((screen) => {
-      if (screen.stage === "scope" && this.datasetAccepted) {
-        return [{ ...screen, reads: ["Accepted data card", ...(screen.reads ?? [])] }];
-      }
-      if (screen.stage !== "hypothesize") return [screen];
-      return Array.from({ length: this.round }, (_, i) => ({
-        ...screen,
-        key: `r${i + 1}-hypothesize`,
-        // Rounds are only told apart once there is more than one.
-        ...(this.round > 1 ? { round: i + 1, round_kind: this.roundKinds[i] ?? "revise" } : {}),
-      }));
-    });
+    return [...SCREENS, ...(this.run.continuesToDesign || this.designStageRun ? [DESIGN, EXECUTION] : [])].flatMap(
+      (screen) => {
+        if (screen.stage === "scope" && this.datasetAccepted) {
+          return [{ ...screen, reads: ["Accepted data card", ...(screen.reads ?? [])] }];
+        }
+        if (screen.stage !== "hypothesize") return [screen];
+        return Array.from({ length: this.round }, (_, i) => ({
+          ...screen,
+          key: `r${i + 1}-hypothesize`,
+          // Rounds are only told apart once there is more than one.
+          ...(this.round > 1 ? { round: i + 1, round_kind: this.roundKinds[i] ?? "revise" } : {}),
+        }));
+      },
+    );
   }
 
   /** The key of the screen of this kind the run is on now: the hypotheses have one per round. */
@@ -860,6 +969,14 @@ export class PipelineAdapter {
       }
       return this.out;
     }
+    if (envelope.stage_key === DESIGN_STAGE || envelope.type.startsWith(DESIGN_STAGE + ".")) {
+      this.convertDesign(envelope);
+      return this.out;
+    }
+    if (envelope.stage_key === EXECUTION_STAGE) {
+      if (this.screens().includes(EXECUTION)) this.convertExecution(envelope);
+      return this.out;
+    }
     if (this.sent && (envelope.phase === "revising" || envelope.step_key === "critique")) this.revise();
     const base = envelope.step_key ? SCREEN_OF[envelope.step_key] : undefined;
     if (base && envelope.stage_key !== "dataset" && envelope.type !== "decision.recorded") this.goTo(this.keyOf(base));
@@ -891,6 +1008,268 @@ export class PipelineAdapter {
     return this.out;
   }
 
+  private convertExecution(envelope: PipelineEnvelope) {
+    const { type, payload, phase, stage_run_id: stageRunId, step_key: engineStep } = envelope;
+    if (this.screen?.key !== EXECUTION_STAGE && stageRunId && stageRunId === this.executionStageRun) return;
+    if (this.screen?.key !== EXECUTION_STAGE) {
+      this.goTo(EXECUTION_STAGE);
+      this.openStep("execution_verify");
+    } else if (stageRunId && this.executionStageRun && this.executionStageRun !== stageRunId) {
+      this.reached = -1;
+      this.step = null;
+      this.emit("stage.started", { plan: stagePlan(EXECUTION) });
+      this.openStep("execution_verify");
+    }
+    this.executionStageRun = stageRunId ?? this.executionStageRun;
+
+    if (type === "artifact.delivered") {
+      const schema = designText(payload.schema);
+      const id = designText(payload.artifact_id);
+      if (schema && id && Object.hasOwn(executionArtifacts, schema)) {
+        this.openStep("execution_deliver");
+        this.emit("execution.updated", { artifact: { schema, id } });
+      }
+    } else if (type === "execution.item") {
+      const key = designText(payload.key);
+      const state = designText(payload.state);
+      const step = key && executionCheckStep(key);
+      if (key && state && step) {
+        // The first contract scan reports unmet downstream items before that work begins.
+        if (state === "green") this.openStep(step);
+        this.emit("execution.updated", { check: { key, state, reason: designText(payload.reason) } });
+      }
+    } else if (type === "execution.progress" && (payload.phase === "sealed" || payload.phase === "rerun")) {
+      this.openStep("execution_run");
+      if (envelope.summary) {
+        this.emit("execution.updated", { progress: { step: "execution_run", text: envelope.summary } });
+        this.say(envelope.summary, "code");
+      }
+    } else if (type === "run.published" || (type === "stage.status_changed" && payload.status === "COMPLETED")) {
+      this.openStep("execution_readout");
+    } else if (engineStep === "review" || phase === "reviewing") {
+      this.openStep("execution_check");
+    }
+    if (type === "stage.status_changed" && payload.status === "ACCEPTED") {
+      this.openStep("execution_readout");
+      this.emit("execution.updated", { accepted: true });
+      this.emit("stage.completed", { summary: this.summary(EXECUTION_STAGE) });
+    }
+    if (type === "run.gate_closed") {
+      this.closeGate(this.executionGateId(String(payload.gate_id ?? "")), String(payload.action ?? ""));
+      return;
+    }
+    this.lifecycle(type, payload, phase);
+  }
+
+  private executionGateId(id: string) {
+    return `${EXECUTION_STAGE}:${this.executionStageRun ?? "stage"}:${id}`;
+  }
+
+  private convertDesign(envelope: PipelineEnvelope) {
+    const { type, payload, phase, step_key: step, stage_run_id: stageRunId } = envelope;
+    if (this.screen?.key === EXECUTION_STAGE && (!stageRunId || this.designStageRun === stageRunId)) return;
+    if (stageRunId && this.designStageRun !== stageRunId) {
+      const first = !this.designStageRun;
+      this.designStageRun = stageRunId;
+      this.designPublication = undefined;
+      this.designBlocked = undefined;
+      this.advice = {};
+      if (first && !this.run.continuesToDesign) this.emit("run.plan", { stages: this.screens().map(planned) });
+      if (this.screen?.key === DESIGN_STAGE) {
+        if (this.gate?.stageKey === DESIGN_STAGE) {
+          this.emit(
+            "gate.resolved",
+            {
+              gate_id: this.gate.id,
+              answer: { option_id: "send_back", note: this.decision?.note },
+              summary: "Sent the design back for another pass.",
+            },
+            "pi",
+          );
+          this.gate = null;
+          this.decision = null;
+          this.emit("run.status", { status: "running" });
+        }
+        this.reached = -1;
+        this.step = null;
+        this.emit("stage.started", { plan: stagePlan(DESIGN) });
+        this.emit("design.updated", {
+          hypotheses: this.designIds.map((id) => ({ id, statement: this.drafts().get(id) })),
+        });
+      }
+    }
+    if (this.screen?.key !== DESIGN_STAGE) {
+      // A fresh Design stage after an Execution send-back has its own artifacts and review.
+      if (this.screen?.key === EXECUTION_STAGE) this.enter(DESIGN_STAGE);
+      else this.goTo(DESIGN_STAGE);
+      this.completed = false;
+      this.emit("run.status", { status: "running" });
+      const drafts = this.drafts();
+      const hypotheses = (this.designIds.length ? this.designIds : this.final()).map((id) => {
+        const published = this.publishedDetails?.hypotheses.find((hypothesis) => hypothesis.id === id);
+        return {
+          id,
+          statement: published?.statement ?? drafts.get(id),
+          inputExposure: published?.exposure,
+          inputOutcome: published?.outcome,
+        };
+      });
+      this.emit("design.updated", { hypotheses });
+    }
+
+    if (step === "review" || phase === "reviewing") this.openStep("design_review");
+    else if (step === "work" || phase === "drafting" || type.startsWith(DESIGN_STAGE + "."))
+      this.openStep("design_work");
+
+    if (type.startsWith(DESIGN_STAGE + ".")) {
+      this.designActivity(type.slice(DESIGN_STAGE.length + 1), payload);
+      return;
+    }
+
+    switch (type) {
+      case "run.cost": {
+        const usage = designRecord(designRecord(payload.usage).stage);
+        const tokens = [usage.input_tokens, usage.output_tokens].reduce<number>(
+          (total, value) => total + (typeof value === "number" ? value : 0),
+          0,
+        );
+        if (tokens) this.emit("design.updated", { tokens });
+        break;
+      }
+      case "run.published":
+        if (stageRunId) this.designPublication = { stageRunId, primaryId: designText(payload.artifact_id) };
+        break;
+      case "artifact.delivered": {
+        const artifact = designArtifact(payload.artifact_id, payload.schema);
+        if (artifact) this.emit("design.updated", { artifact });
+        break;
+      }
+      case "stage.status_changed":
+        if (payload.status === "COMPLETED" || payload.status === "ACCEPTED") {
+          this.designPublication ??= stageRunId ? { stageRunId } : undefined;
+          this.openStep("design_accept");
+        }
+        this.stageStatus(String(payload.status ?? ""), payload.reason);
+        if (payload.status === "ACCEPTED") {
+          this.emit("design.updated", { accepted: true, blocked: "" });
+          this.emit("stage.completed", { summary: this.summary(DESIGN_STAGE) });
+        }
+        break;
+      case "run.gate_closed":
+        this.closeGate(this.designGateId(String(payload.gate_id ?? "")), String(payload.action ?? ""));
+        break;
+      case "attention.required":
+        if (payload.reason === "next_stage_input_missing") {
+          this.designBlocked = designText(payload.text) ?? "Execution needs additional outputs from this stage.";
+          this.emit("design.updated", { blocked: this.designBlocked });
+          if (this.gate?.kind === "accept") this.emit("gate.opened", { gate: this.acceptGate(this.gate.id) }, "pi");
+        }
+        break;
+      case "review.completed":
+        if (payload.passed === false)
+          this.designLine("The independent review flagged issues in the design.", "reviewer");
+        break;
+      default:
+        this.lifecycle(type, payload, phase);
+    }
+  }
+
+  private designGateId(id: string) {
+    return `${DESIGN_STAGE}:${this.designStageRun ?? "stage"}:${id}`;
+  }
+
+  private designAnswer(label?: string) {
+    return label ? `Decided: ${label}` : "Answered the design question.";
+  }
+
+  private designLine(text: string, actor: AgentRole = "methodologist", live = true) {
+    this.emit("run.activity", { text, step_id: this.step, ...(live && !this.gate ? { live: "replace" } : {}) }, actor);
+  }
+
+  private designActivity(kind: string, payload: Record<string, unknown>) {
+    const actor = this.step === "design_review" ? "reviewer" : "methodologist";
+    switch (kind) {
+      case "item": {
+        const check = designCheck(payload);
+        if (check)
+          this.emit(
+            "run.activity",
+            { text: `${check.label} · ${check.status}`, step_id: "design_work", check, note: check.reason },
+            actor,
+          );
+        break;
+      }
+      case "agent.tool": {
+        const work = designTool(payload);
+        this.designLine(work.failed ? `${work.text} · Needs another attempt` : work.text, actor);
+        if (work.hypotheses.length) this.emit("design.updated", { hypotheses: work.hypotheses });
+        break;
+      }
+      case "agent.turn":
+        // The turn follows its tools. Keep the last specific tool in the Now card.
+        this.designLine(designAgent(payload), actor, !Array.isArray(payload.tools) || payload.tools.length === 0);
+        break;
+      case "agent.done":
+        this.designLine(`${designAgent(payload)} · Finished this pass`, actor, false);
+        break;
+      case "action": {
+        const action = designText(payload.action)?.split(".").at(-1);
+        if (action)
+          this.designLine(
+            `${designLabel(action)} · ${designLabel(String(payload.outcome ?? "recorded"))}`,
+            actor,
+            false,
+          );
+        break;
+      }
+      case "span":
+        this.designLine(designLabel(String(payload.name ?? "Design check")), "code", false);
+        break;
+      case "inbox_item": {
+        const id = designText(payload.id);
+        const question = designText(payload.question);
+        if (id && question && payload.kind !== "ask_user")
+          this.emit("design.updated", {
+            notice: { id, question, why: designText(payload.why), needsInput: payload.kind === "needs_you" },
+          });
+        break;
+      }
+      case "ask_user":
+        this.designAsked = designText(payload.question);
+        this.designLine("Preparing a question for you", actor, false);
+        break;
+      case "ask_user_answered": {
+        const question = designText(payload.question);
+        const id = question ? this.designGateHistory.get(question) : undefined;
+        if (id)
+          this.emit("gate.answer_details", {
+            id,
+            text: this.designAnswer(designText(payload.label)),
+            note: designText(payload.text),
+          });
+        else this.designLine(`Question answered · ${designText(payload.label) ?? "Answer recorded"}`, actor, false);
+        break;
+      }
+      case "decision": {
+        const choices = Object.entries(designRecord(payload.choice)).map(([key, value]) => `${key}: ${String(value)}`);
+        const source = payload.source === "typesafe" ? "TypeSafe" : designLabel(String(payload.source ?? "engine"));
+        this.designLine(
+          `${source} decision · ${choices.join(", ") || designLabel(String(payload.name ?? "Design check"))}`,
+          "code",
+          false,
+        );
+        break;
+      }
+      case "review": {
+        const findings = Number(payload.findings ?? 0);
+        this.designLine(`Reviewed the plan · ${plural(findings, "finding")}`, "reviewer");
+        break;
+      }
+      default:
+        if (this.at?.summary) this.designLine(this.at.summary, actor, false);
+    }
+  }
+
   private emit(type: RunEvent["type"], payload: unknown, actor?: AgentRole, stageKey?: string) {
     const at = this.at as PipelineEnvelope;
     this.seq += 1;
@@ -912,15 +1291,21 @@ export class PipelineAdapter {
     if (key === this.screen?.key) return;
     const order = this.screens().map((s) => s.key);
     if (this.screen && order.indexOf(key) < order.indexOf(this.screen.key) && !this.again(key)) return;
-    this.enter(key);
+    const resumeScreen =
+      key === "screen" && this.items("screen.criteria").some((item) => item.protocol_version !== undefined);
+    this.enter(key, resumeScreen);
   }
 
   /** The run goes back to a screen only when that work starts over: a new search after the shortlist. */
   private again(key: string) {
-    return key === "search" && this.screen?.key === "screen";
+    return (
+      key === "search" &&
+      this.screen?.key === "screen" &&
+      !this.items("search.strategy").some((item) => item.review_round !== undefined)
+    );
   }
 
-  private enter(key: string) {
+  private enter(key: string, preserveContent = false) {
     const next = this.screens().find((s) => s.key === key);
     if (!next) return;
     if (this.screen) {
@@ -928,10 +1313,11 @@ export class PipelineAdapter {
       this.emit("stage.completed", { summary: this.summary(this.screen.key) });
     }
     // What its scopes showed before belongs to the earlier pass; the engine sends the new pass.
-    for (const scope of [...this.shown.keys()]) if (SCOPE_SCREEN[scope] === next.stage) this.shown.delete(scope);
+    if (!preserveContent)
+      for (const scope of [...this.shown.keys()]) if (SCOPE_SCREEN[scope] === next.stage) this.shown.delete(scope);
     this.screen = next;
     this.reached = -1;
-    this.emit("stage.started", { plan: stagePlan(next) });
+    this.emit("stage.started", { plan: stagePlan(next), ...(preserveContent ? { preserve_content: true } : {}) });
   }
 
   /** Starts a step of this screen, unless the run is already past it. */
@@ -982,6 +1368,8 @@ export class PipelineAdapter {
 
   private activity(kind: string, payload: Record<string, unknown>) {
     if (CONTENT.has(kind)) this.content(kind, payload);
+    else if (kind === "screen_progress" && payload.state && payload.protocol_version)
+      this.content("screen.review_progress", { ...payload, scope: "stage-05", key: "review_progress" });
     else if (kind === RESET) this.reset(String(payload.scope ?? ""));
     else if (kind === "progress") this.progress(payload);
     else if (kind === "review.finding") this.finding(payload);
@@ -992,7 +1380,7 @@ export class PipelineAdapter {
   private work(kind: string, payload: Record<string, unknown>) {
     const work = hypothesisWork(kind, payload);
     if (!work) return;
-    const { text, target, check, note } = work;
+    const { text, target, check, note, queries } = work;
     const key = target ? this.keyOf(target.stage) : this.screen?.key;
     if (!check && !this.gate) {
       if (target && key && this.at?.step_key === "work") {
@@ -1012,7 +1400,7 @@ export class PipelineAdapter {
           : "fallback"
         : undefined;
     const actor = step ? STEPS[step]?.actor : undefined;
-    this.emit("run.activity", { text, step_id: step, live, check, note }, actor, stageKey);
+    this.emit("run.activity", { text, step_id: step, live, check, note, queries }, actor, stageKey);
   }
 
   /** The reviewer asks whether the papers a hypothesis cites back it, one hypothesis at a time. */
@@ -1027,7 +1415,9 @@ export class PipelineAdapter {
   private content(kind: string, payload: Record<string, unknown>) {
     const scope = String(payload.scope ?? "");
     const stage = SCOPE_SCREEN[scope];
-    if (stage) this.goTo(this.keyOf(stage));
+    if (kind === "search.strategy" && payload.review_round !== undefined && this.screen?.key === "screen")
+      this.enter("search", true);
+    else if (stage) this.goTo(this.keyOf(stage));
     const target = stage ? this.keyOf(stage) : this.screen?.key;
     const actor = this.actorOf(kind, payload);
     const items = this.shown.get(scope) ?? new Map<string, Shown>();
@@ -1146,6 +1536,7 @@ export class PipelineAdapter {
   }
 
   private stepOf(kind: string, payload: Record<string, unknown>) {
+    if (kind === "screen.review_progress" && payload.state === "completed") return "shortlist";
     if (kind === "map.node") return MAP_STEP[String((payload.node as { type?: string } | undefined)?.type)];
     if (kind === "map.edge") return MAP_STEP[String((payload.edge as { relation?: string } | undefined)?.relation)];
     return OPENS[kind];
@@ -1358,6 +1749,63 @@ export class PipelineAdapter {
   private openGate(payload: Record<string, unknown>) {
     const engineKind = payload.kind === "artifact_review" ? "artifact_review" : "question";
     const id = String(payload.gate_id ?? "");
+    if (!id) return;
+    const stageKey = this.at?.stage_key ?? undefined;
+    if (stageKey === DESIGN_STAGE || stageKey === EXECUTION_STAGE || stageKey === "dataset") {
+      const key =
+        stageKey === DESIGN_STAGE
+          ? this.designGateId(id)
+          : stageKey === EXECUTION_STAGE
+            ? this.executionGateId(id)
+            : id;
+      const title =
+        stageKey === DESIGN_STAGE
+          ? "Experiment design decision"
+          : stageKey === EXECUTION_STAGE
+            ? "Execution decision"
+            : "Dataset decision";
+      const gate = this.questionGate(
+        key,
+        {
+          ...payload,
+          header: designText(payload.header) ?? title,
+          prompt: designText(payload.prompt) ?? (stageKey === DESIGN_STAGE ? this.designAsked : undefined),
+        },
+        true,
+      );
+      gate.stageKey = stageKey;
+      if (engineKind === "artifact_review") {
+        gate.options = [
+          {
+            id: "approve",
+            label: "Approve the review",
+            description: "",
+            leads_to: "The stage continues",
+            confirm_label: "Approve",
+            recommended: true,
+          },
+        ];
+      }
+      if (stageKey === DESIGN_STAGE) {
+        for (const question of [this.designAsked, gate.why]) {
+          if (question) this.designGateHistory.set(question, key);
+        }
+        this.designAsked = undefined;
+      }
+      this.gate = {
+        id: key,
+        engineGateId: id,
+        kind: "decision",
+        engineKind,
+        stageRunId: this.stageRun ?? undefined,
+        stageKey,
+        options: gate.options,
+      };
+      this.decision = null;
+      this.emit("run.status", { status: "awaiting_review" });
+      this.emit("gate.opened", { gate }, "pi");
+      return;
+    }
     const selection = payload.selection as { valid_ids?: unknown } | undefined;
     const currentStep = payload.step_key ?? this.at?.step_key ?? this.step;
     const isScreenGate =
@@ -1396,7 +1844,7 @@ export class PipelineAdapter {
     this.emit("gate.opened", { gate }, "pi");
   }
 
-  private questionGate(id: string, payload: Record<string, unknown>): Gate {
+  private questionGate(id: string, payload: Record<string, unknown>, design = false): Gate {
     const defaultOptionId = payload.default_option_id;
     const rawOptions = Array.isArray(payload.options) ? payload.options : [];
     const options = rawOptions.flatMap((raw): Gate["options"] => {
@@ -1411,6 +1859,7 @@ export class PipelineAdapter {
           leads_to: "The stage continues with your answer.",
           confirm_label: "Confirm answer",
           recommended: option.option_id === defaultOptionId,
+          ...(design && option.option_id === "other" ? { needsText: true } : {}),
         },
       ];
     });
@@ -1444,9 +1893,17 @@ export class PipelineAdapter {
       ...(params.kept?.length ? { kept: params.kept } : {}),
       ...(decision.text ? { note: String(decision.text) } : {}),
     };
-    const summary = this.answered(gate.kind, option, dropped, this.sent?.length ?? 0, params.kept?.length ?? 0);
+    const summary =
+      gate.stageKey === DESIGN_STAGE
+        ? this.designAnswer(gate.options?.find((choice) => choice.id === option)?.label)
+        : this.answered(gate.kind, option, dropped, this.sent?.length ?? 0, params.kept?.length ?? 0);
     this.emit("gate.resolved", { gate_id: gateId, answer, summary }, "pi");
-    if (!(this.claimScope && gate.kind === "decision" && this.screen?.key === "scope")) this.closeStep();
+    if (
+      gate.stageKey !== DESIGN_STAGE &&
+      gate.stageKey !== EXECUTION_STAGE &&
+      !(this.claimScope && gate.kind === "decision" && this.screen?.key === "scope")
+    )
+      this.closeStep();
     this.gate = null;
     this.decision = null;
     this.emit("run.status", { status: "running" });
@@ -1483,6 +1940,10 @@ export class PipelineAdapter {
       const acceptedStageKey = this.gate?.stageKey ?? stageKey;
       if (acceptedStageKey === "dataset") this.datasetAccepted = true;
       const hypothesisStage = this.isHypothesisStage(acceptedStageKey);
+      if (hypothesisStage) {
+        const selection = (this.decision?.selection as { hypothesis_ids?: string[] } | undefined)?.hypothesis_ids;
+        this.designIds = selection ?? this.final();
+      }
       if (this.gate?.kind === "accept") {
         let answer: GateAnswer = { option_id: "accept" };
         let summary: string;
@@ -1505,8 +1966,10 @@ export class PipelineAdapter {
       this.closeStep();
       if (hypothesisStage) {
         if (this.screen) this.emit("stage.completed", { summary: this.summary(this.screen.key) });
-        this.completed = true;
-        this.emit("run.completed", {});
+        if (!this.run.continuesToDesign) {
+          this.completed = true;
+          this.emit("run.completed", {});
+        } else this.emit("run.status", { status: "running" });
       } else this.emit("run.status", { status: "running" });
     } else if (status === "FAILED") this.fail("The stage stopped before it finished.");
     else if (status === "STOPPED")
@@ -1555,7 +2018,12 @@ export class PipelineAdapter {
   }
 
   private kept() {
-    return this.items<{ paper: { id: string } }>("screen.kept").map((p) => p.paper.id);
+    return [
+      ...this.items<{ paper: { id: string } }>("screen.kept").map((p) => p.paper.id),
+      ...this.items<EligibilityDecision>("screen.eligibility")
+        .filter((p) => p.included)
+        .map((p) => p.id),
+    ];
   }
 
   private excluded() {
@@ -1683,20 +2151,56 @@ export class PipelineAdapter {
 
   private acceptGate(id: string): Gate {
     const stageKey = this.gate?.stageKey ?? this.at?.stage_key ?? undefined;
-    if (!this.isHypothesisStage(stageKey)) {
-      const subject = this.acceptSubject(stageKey);
+    if (stageKey === DESIGN_STAGE) {
       return {
         id,
         kind: "accept",
+        stageKey,
+        title: this.designBlocked ? "Review the design hand-off" : "Accept the analysis plan",
+        why: this.designBlocked?.includes(DESIGN_LOCK) ? "" : (this.designBlocked ?? ""),
+        summary: [],
+        options: this.designBlocked
+          ? [
+              {
+                id: "send_back",
+                label: "Send the design back",
+                description: "Return to Experiment design to produce what Execution needs.",
+                leads_to: "Experiment design runs again",
+                confirm_label: "Send back",
+              },
+            ]
+          : [
+              {
+                id: "accept",
+                label: "Accept and continue to Execution",
+                description: "Pass the registered analyses and decision rules to Execution.",
+                leads_to: "Execution can begin",
+                confirm_label: "Accept and continue",
+                recommended: true,
+              },
+            ],
+        stop_index: 1,
+        stop_total: 1,
+      };
+    }
+    if (!this.isHypothesisStage(stageKey)) {
+      const subject = this.acceptSubject(stageKey);
+      const execution = stageKey === EXECUTION_STAGE;
+      return {
+        id,
+        kind: "accept",
+        ...(stageKey === "dataset" || execution ? { stageKey } : {}),
         title: `Accept the ${subject}`,
-        why: `The ${subject} is published and ready for the next stage. Accept it to continue the run.`,
-        summary: [`The ${subject} is ready to pass to the next stage.`],
+        why: execution
+          ? "Read the published results before recording your acceptance."
+          : `The ${subject} is published and ready for the next stage. Accept it to continue the run.`,
+        summary: execution ? [] : [`The ${subject} is ready to pass to the next stage.`],
         options: [
           {
             id: "accept",
             label: `Accept the ${subject}`,
-            description: `Use this published ${subject} in the next stage.`,
-            leads_to: "The next stage can begin",
+            description: execution ? "" : `Use this published ${subject} in the next stage.`,
+            leads_to: execution ? "Acceptance recorded" : "The next stage can begin",
             confirm_label: "Accept",
             recommended: true,
           },
@@ -1714,7 +2218,9 @@ export class PipelineAdapter {
       id,
       kind: "accept",
       title: "Accept the hypotheses",
-      why: "The hypotheses and their map are published. Accepting closes the run with the ones you pick.",
+      why: this.run.continuesToDesign
+        ? "The published hypotheses you pick go forward to Experiment design."
+        : "The hypotheses and their map are published. Accepting closes the run with the ones you pick.",
       summary: [
         `${plural(set.length, "hypothesis", "hypotheses")} published with the argument map and research canvas`,
         "Uncheck any you do not want to take forward",
@@ -1723,8 +2229,10 @@ export class PipelineAdapter {
         {
           id: "accept",
           label: "Accept the picked hypotheses",
-          description: "They become this run's result.",
-          leads_to: "The run is complete",
+          description: this.run.continuesToDesign
+            ? "Design the analyses for the hypotheses you pick."
+            : "They become this run's result.",
+          leads_to: this.run.continuesToDesign ? "Experiment design starts" : "The run is complete",
           confirm_label: "Accept",
           recommended: true,
         },
@@ -1752,6 +2260,8 @@ export class PipelineAdapter {
 
   private acceptSubject(stageKey?: string) {
     if (stageKey === "dataset") return "data card";
+    if (stageKey === DESIGN_STAGE) return "analysis plan";
+    if (stageKey === EXECUTION_STAGE) return "execution results";
     if (this.isHypothesisStage(stageKey)) return "hypotheses";
     const label = stageKey?.replace(/[_-]+/g, " ").trim();
     return label || "stage";
@@ -1788,19 +2298,35 @@ export class PipelineAdapter {
         return score ? `Topic scored ${score.overall} of 10 before any search.` : null;
       }
       case "strategy":
+        if (this.items("search.strategy").some((item) => item.review_round !== undefined))
+          return `${plural(count("search.strategy"), "search round")} with ${plural(count("search.query"), "query", "queries")}.`;
         return count("search.query")
           ? `${plural(count("search.strategy"), "strategy", "strategies")}, ${plural(count("search.query"), "query", "queries")}.`
           : null;
       case "collect": {
-        const c = this.items<{ raw: number; unique: number; duplicates: number }>("literature.collected")[0];
+        const c = this.items<{
+          raw: number;
+          unique: number;
+          duplicates: number;
+          review_round?: number;
+          round_answered?: boolean;
+        }>("literature.collected")[0];
+        if (c?.review_round !== undefined)
+          return c.round_answered
+            ? `${c.raw} hits across the search · ${c.unique} unique papers.`
+            : `No provider answered search round ${c.review_round} successfully.`;
         return c ? `${c.raw} hits, ${c.unique} unique papers, ${c.duplicates} duplicates merged.` : null;
       }
       case "score": {
+        const review = this.items<{ done: number; total: number; state: string }>("screen.review_progress")[0];
+        if (review) return `${review.done} of ${review.total} selected papers screened.`;
         const scored = this.items<{ points: unknown[] }>("screen.scored").reduce((a, p) => a + p.points.length, 0);
         return scored ? `${plural(scored, "paper")} scored for relevance and quality.` : null;
       }
-      case "shortlist":
-        return count("screen.kept") ? `${plural(count("screen.kept"), "paper")} kept, each with a reason.` : null;
+      case "shortlist": {
+        const kept = this.kept().length;
+        return kept ? `${plural(kept, "paper")} kept, each with a reason.` : null;
+      }
       case "extract":
         return count("card.extracted") ? `${plural(count("card.extracted"), "knowledge card")} written.` : null;
       case "cluster":
@@ -1836,6 +2362,8 @@ export class PipelineAdapter {
   private summary(key: string) {
     const count = (kind: string) => this.items(kind).length;
     switch (key) {
+      case DESIGN_STAGE:
+        return "Analysis plan accepted for Execution.";
       case "scope": {
         if (this.claimScope && !count("scope.goal") && !count("problem.subquestion") && !count("topic.evaluated"))
           return claimScopeSummary(this.claimScope);
@@ -1847,19 +2375,41 @@ export class PipelineAdapter {
         ].join(" • ");
       }
       case "search": {
-        const c = this.items<{ raw: number; unique: number; duplicates: number }>("literature.collected")[0];
-        return c ? `${c.raw} hits • ${c.unique} unique papers • ${c.duplicates} duplicates merged` : "Search finished";
+        const c = this.items<{
+          raw: number;
+          unique: number;
+          duplicates: number;
+          review_round?: number;
+          round_answered?: boolean;
+        }>("literature.collected")[0];
+        if (c?.review_round !== undefined)
+          return c.round_answered
+            ? `${c.raw} hits • ${c.unique} unique papers`
+            : `No provider answered search round ${c.review_round} successfully`;
+        return c
+          ? `${c.raw} hits • ${c.unique} unique papers • ${c.duplicates} duplicates merged`
+          : "Candidate totals were not published";
       }
       case "screen": {
         const kept = this.kept().length;
+        const eligibility = this.items<EligibilityDecision>("screen.eligibility");
+        const progress = this.items<{ not_screened: number }>("screen.review_progress")[0];
+        if (progress)
+          return `${eligibility.length} screened • ${kept} kept • ${eligibility.length - kept} excluded${progress.not_screened ? ` • ${progress.not_screened} left unscreened` : ""}`;
         const excluded = Object.values(this.excluded()).reduce((a, b) => a + b, 0);
-        const candidates = this.items<{ candidates?: number }>("screen.criteria")[0]?.candidates ?? kept + excluded;
+        const recordedCandidates = this.items<{ candidates?: number }>("screen.criteria")[0]?.candidates;
+        if (recordedCandidates === undefined && kept + excluded === 0)
+          return count("screen.scored") ? "Screening scores recorded" : "No screening results recorded";
+        const candidates = recordedCandidates ?? kept + excluded;
         return `${candidates} candidates • ${kept} kept • ${candidates - kept} excluded`;
       }
       case "read":
         return plural(count("card.extracted"), "knowledge card");
-      case "synthesize":
+      case "synthesize": {
+        const ranked = this.items<{ gaps?: unknown[] }>("synthesis.ranked")[0]?.gaps;
+        if (ranked) return ranked.length ? `${plural(ranked.length, "ranked gap")} shown` : "No gaps ranked";
         return `${plural(count("synthesis.cluster"), "group")} • ${plural(count("synthesis.tension"), "tension")} • ${plural(count("synthesis.gap"), "gap")}`;
+      }
       case "map": {
         const pieces = this.items<{ piece: { status?: string } }>("canvas.piece");
         const filled = pieces.filter((p) => p.piece.status === "filled").length;

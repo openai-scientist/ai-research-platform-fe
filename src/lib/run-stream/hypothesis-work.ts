@@ -1,4 +1,16 @@
 import type { WorkCheck } from "./contract";
+import type { StageContent } from "./run-state";
+
+export function incompleteRapidReview(content: StageContent): boolean {
+  if (content.stage === "search" && content.reviewRound !== undefined) {
+    return content.collected?.review_round !== content.reviewRound || content.collected?.round_answered !== true;
+  }
+  return (
+    content.stage === "screen" &&
+    content.criteria?.protocolVersion !== undefined &&
+    content.reviewProgress?.state !== "completed"
+  );
+}
 
 type Target = { stage: string; step: string };
 type Work = {
@@ -7,6 +19,7 @@ type Work = {
   live?: boolean;
   check?: WorkCheck;
   note?: string;
+  queries?: string[];
 };
 
 const protocol = { stage: "scope", step: "charter" };
@@ -80,6 +93,13 @@ export function readToolArgs(value: unknown): Record<string, unknown> {
   return {};
 }
 
+/** Actions record a bounded preview prefixed by the action name. */
+export function readActionArgs(value: unknown): Record<string, unknown> {
+  if (typeof value !== "string") return readToolArgs(value);
+  const start = value.indexOf("{");
+  return start < 0 ? {} : readToolArgs(value.slice(start));
+}
+
 function plain(value: unknown, limit = 240) {
   if (typeof value !== "string") return "";
   const text = value.replace(/\s+/g, " ").trim();
@@ -128,21 +148,24 @@ export function hypothesisWork(kind: string, payload: Record<string, unknown>): 
     );
     if (!name) return;
     const known = actions.get(name);
-    const args = readToolArgs(payload.args);
+    const args = kind === "action" ? readActionArgs(payload.proposal) : readToolArgs(payload.args);
     const queries = Array.isArray(args.queries)
       ? args.queries
           .map((q) => plain(q, 105))
           .filter(Boolean)
-          .slice(0, 2)
+          .slice(0, 12)
       : [];
     const records = Array.isArray(args.record_ids) ? args.record_ids.length : null;
     const detail =
       known?.target === search && queries.length
-        ? `: ${queries.join(" · ")}`
+        ? `: ${queries.slice(0, 2).join(" · ")}`
         : known?.target === screen && records !== null
-          ? `: ${records} ${records === 1 ? "record" : "records"}`
+          ? records === 0
+            ? " · automatically select top records"
+            : `: ${records} ${records === 1 ? "record" : "records"}`
           : "";
     const note = known?.target === search ? searchNote(payload) : undefined;
+    const refusal = payload.outcome === "refused" ? plain(payload.reason) : "";
     const text =
       (payload.ok === false || payload.outcome === "refused") && known?.target === protocol
         ? "Could not finish the review plan yet"
@@ -150,10 +173,11 @@ export function hypothesisWork(kind: string, payload: Record<string, unknown>): 
           ? "Review plan ready to lock"
           : (known?.text ?? labelOf(name));
     return {
-      text: `${text}${detail}${turnOf(payload.turn)}`,
+      text: refusal ? `${text}${detail} — ${refusal}` : `${text}${detail}${turnOf(payload.turn)}`,
       target: known?.target,
       live: kind === "agent.tool" || Boolean(known),
       note,
+      queries: known?.target === search && queries.length ? queries : undefined,
     };
   }
 

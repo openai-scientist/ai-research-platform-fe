@@ -15,7 +15,7 @@ export const WORKSPACE_SECTIONS: Record<string, { title: string; description: st
   },
   experiments: {
     title: "Research flow",
-    description: "Start a research run from a topic and follow it stage by stage, up to the hypotheses.",
+    description: "Start a research run from a topic and follow its progress in Run Studio.",
   },
   members: {
     title: "Members",

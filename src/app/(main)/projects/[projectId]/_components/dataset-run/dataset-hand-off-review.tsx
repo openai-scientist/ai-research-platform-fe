@@ -48,9 +48,9 @@ export function DatasetHandOffReview({
         </p>
       )}
       {findings && findings.findings.length > 0 && (
-        <ul aria-label="Reviewer findings" className="grid gap-2">
+        <ul aria-label="Reviewer findings" className="divide-y border-y">
           {findings.findings.map((finding) => (
-            <li key={finding.finding_id} className="grid gap-1 rounded-md border p-2.5">
+            <li key={finding.finding_id} className="grid gap-1 py-2.5">
               <span className="font-medium text-muted-foreground text-xs">
                 {FINDING_SEVERITY[finding.severity]?.label ?? finding.severity}
                 {finding.open === false && " · Resolved"}

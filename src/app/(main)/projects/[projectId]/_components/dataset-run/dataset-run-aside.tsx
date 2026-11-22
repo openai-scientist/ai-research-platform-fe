@@ -15,15 +15,18 @@ import {
   datasetStepArtifact,
   nextStopFor,
   outcomePending,
+  RELEASE_KEY,
   type StepView,
 } from "@/lib/run-stream/dataset-run-model";
 import type { RunDisplayStatus } from "@/lib/run-stream/selectors";
 
 import { AgentStrip, RunAsidePanel, StageRules, StageSteps, WaitingForYou } from "../run-studio/aside-ui";
+import { LiveNextStop, LiveNow, LiveRules, LiveSubsteps, useLivePanel } from "../run-studio/live-run/live-panel";
 import { ReleaseReviewIcon, RunFailureMessage } from "../run-studio/local-node-status";
 import { AgentAvatar, Caret, TypedLine, WorkOrb } from "../run-studio/run-bits";
 import { AGENTS } from "../run-studio/run-meta";
 import { useElapsed } from "./dataset-run-scene";
+import { datasetPhaseFor } from "./dataset-run-track";
 
 export interface AsideProps {
   model: DatasetRunModel;
@@ -32,6 +35,8 @@ export interface AsideProps {
   local: boolean;
   /** Type out narration that arrives as whole lines. */
   typing?: boolean;
+  focusKey?: string | null;
+  onView?: (key: string | null) => void;
 }
 
 const nameOf = (actor: DatasetAgent) => (actor === "you" ? "You" : AGENTS[actor].name);
@@ -53,7 +58,7 @@ export function DatasetNowCard({
 
   if (status === "completed")
     return (
-      <div className="flex flex-col gap-2 rounded-xl bg-card p-3.5 ring-1 ring-foreground/10">
+      <div className="flex flex-col gap-2 pb-2">
         <span className="text-muted-foreground text-xs">Finished</span>
         <h3 className="font-semibold text-[15px]">Dataset stage complete</h3>
         <p className="text-muted-foreground text-sm">
@@ -63,7 +68,7 @@ export function DatasetNowCard({
     );
   if (status === "failed" || status === "stopped")
     return (
-      <div className="flex flex-col gap-2 rounded-xl bg-card p-3.5 ring-1 ring-foreground/10">
+      <div className="flex flex-col gap-2 pb-2">
         <span className="text-muted-foreground text-xs">Stopped</span>
         <h3 className="font-semibold text-[15px]">
           {model.failure?.code === "LOCAL_NODE_CAPABILITY" ? "Local Node update needed" : "The stage stopped"}
@@ -79,7 +84,7 @@ export function DatasetNowCard({
     );
 
   return (
-    <div className="flex flex-col gap-2 rounded-xl bg-card p-3.5 shadow-xs ring-1 ring-foreground/10">
+    <div className="flex flex-col gap-2 pb-2">
       <div className="flex justify-between gap-2 text-muted-foreground text-xs">
         <b className="font-medium text-foreground">Dataset stage</b>
         <span>{current ? `Step ${index + 1} of ${steps.length}` : `${done} of ${steps.length} done`}</span>
@@ -137,12 +142,14 @@ function NextStop({ steps, status, local, model }: Pick<AsideProps, "steps" | "s
   const next = nextStopFor(steps, local);
   if (model.gate) {
     const [question] = model.gate.prompt.split(/\r?\n/, 1);
-    return <WaitingForYou>{question.replace(/^Decision:\s*/i, "")}</WaitingForYou>;
+    return <WaitingForYou flat>{question.replace(/^Decision:\s*/i, "")}</WaitingForYou>;
   }
+  if (steps.some(({ key, state }) => key === "question_map" && state === "asking"))
+    return <WaitingForYou flat>Confirm the population for the research question.</WaitingForYou>;
   if ((model.releaseWait || model.readyToAccept === true || outcomePending(model) || charterPending(model)) && next)
-    return <WaitingForYou>{next.detail} Nothing runs until you answer.</WaitingForYou>;
+    return <WaitingForYou flat>{next.detail} Nothing runs until you answer.</WaitingForYou>;
   return (
-    <div className="grid grid-cols-[auto_1fr] gap-2.5 rounded-xl border border-dashed p-3 text-xs">
+    <div className="grid grid-cols-[auto_1fr] gap-2.5 border-t pt-3 text-xs">
       <span className="grid size-7 place-items-center rounded-lg bg-amber-500/15 text-amber-800 dark:text-amber-300">
         <Flag className="size-3.5" />
       </span>
@@ -195,14 +202,15 @@ function Activity({ model }: { model: DatasetRunModel }) {
   );
 }
 
-export function DatasetRunAside({ model, steps, status, local, typing }: AsideProps) {
+export function DatasetRunAside({ model, steps, status, local, typing, focusKey, onView }: AsideProps) {
   const waiting =
     !isEnded(status) &&
     (model.gate !== null ||
       model.releaseWait ||
       model.readyToAccept === true ||
       outcomePending(model) ||
-      charterPending(model));
+      charterPending(model) ||
+      steps.some((step) => step.state === "asking"));
   const check = (key: string): "pass" | "hit" | undefined => {
     const state = model.items[key]?.state;
     if (state === "green") return "pass";
@@ -215,24 +223,41 @@ export function DatasetRunAside({ model, steps, status, local, typing }: AsidePr
     ...(local ? [{ id: "release", text: "Rows stay on the Local Node.", state: "pass" as const }] : []),
   ];
   const active = isEnded(status) ? null : activeAgent(model, status === "paused");
+  const current =
+    steps.find((step) => step.state === "asking" || step.state === "now") ??
+    steps.find((step) => step.state !== "done");
+  const phase = datasetPhaseFor(focusKey ?? current?.key ?? steps.at(-1)?.key);
+  const phaseSteps = phase ? steps.filter(({ key }) => phase.steps.includes(key)) : steps;
+  // While the live card of the stage is on screen, the column is the compact model the card publishes.
+  const published = useLivePanel("dataset");
+  const entry = published && !isEnded(status) ? published : undefined;
   return (
     <RunAsidePanel
       team={<AgentStrip cast={DATASET_CAST} active={active === "you" ? null : active} />}
       activityCount={model.feed.length}
       activity={<Activity model={model} />}
     >
-      <DatasetNowCard model={model} steps={steps} status={status} typing={typing} />
+      {entry ? (
+        <LiveNow entry={entry} />
+      ) : (
+        <DatasetNowCard model={model} steps={steps} status={status} typing={typing} />
+      )}
       {waiting && <NextStop steps={steps} status={status} local={local} model={model} />}
       <StageSteps
-        count={`${steps.filter((step) => step.state === "done").length} of ${steps.length}`}
-        steps={steps.map((step) => ({
+        title={phase?.title}
+        selected={focusKey}
+        onSelect={onView && ((step) => onView(step === current?.key ? null : step))}
+        count={`${phaseSteps.filter((step) => step.state === "done").length} of ${phaseSteps.length}`}
+        steps={phaseSteps.map((step) => ({
           id: step.key,
           title: step.title,
           gate: step.gate || step.state === "asking",
           actor:
             step.gate || step.state === "asking"
               ? step.state === "done"
-                ? "You decided"
+                ? step.key === RELEASE_KEY && !model.releaseAsked
+                  ? "Sent automatically under your release policy"
+                  : "You decided"
                 : "You decide · the stage waits"
               : nameOf(step.actor),
           artifact: datasetStepArtifact(step.key),
@@ -241,8 +266,14 @@ export function DatasetRunAside({ model, steps, status, local, typing }: AsidePr
           asking: !isEnded(status) && step.state === "asking",
         }))}
       />
-      {!waiting && <NextStop steps={steps} status={status} local={local} model={model} />}
-      <StageRules title="Rules the Dataset stage never bends" rules={rules} />
+      {entry && <LiveSubsteps panel={entry.panel} />}
+      {entry && !waiting && <LiveNextStop panel={entry.panel} />}
+      {!entry && !waiting && <NextStop steps={steps} status={status} local={local} model={model} />}
+      {entry ? (
+        <LiveRules panel={entry.panel} title="Rules the Dataset stage never bends" />
+      ) : (
+        <StageRules flat title="Rules the Dataset stage never bends" rules={rules} />
+      )}
     </RunAsidePanel>
   );
 }

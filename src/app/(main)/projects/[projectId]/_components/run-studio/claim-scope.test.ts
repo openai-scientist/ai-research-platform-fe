@@ -25,7 +25,7 @@ function fixture(name: string): PipelineEnvelope[] {
     }));
 }
 
-function render(events: PipelineEnvelope[]) {
+function render(events: PipelineEnvelope[], stageKey = "scope") {
   const adapter = new PipelineAdapter({ topic: "Student sleep habits", mode: "light", domains: [] });
   const state = replayRunEvents(
     "run-1",
@@ -49,7 +49,8 @@ function render(events: PipelineEnvelope[]) {
       },
       createElement(StageScreen, {
         state,
-        stageKey: "scope",
+        projectId: "project",
+        stageKey,
         runLabel: "RUN-0719",
         live: false,
         scroller: { current: null },
@@ -99,4 +100,54 @@ it("keeps the research goal and sub-question tree for a run that emits them", ()
   expect(html).toContain("Research goal");
   expect(html).toContain("Sub-question tree");
   expect(html).not.toContain("Research claim");
+});
+
+it("recovers the question when the tool preview is shorter than the successful action", () => {
+  const events = fixture("hypothesis-claim-scope");
+  const changed = events
+    .flatMap((event) =>
+      event.type === "hypothesis.agent.tool" && event.payload.tool === "write_protocol"
+        ? [
+            {
+              ...event,
+              type: "hypothesis.action",
+              payload: {
+                action: "hypothesis.draft_protocol",
+                outcome: "done",
+                proposal:
+                  'hypothesis.draft_protocol {"question":"Does sleep predict better grades?","peco":{"population":"...',
+              },
+            },
+            { ...event, payload: { ...event.payload, args: '{"question":"Does sleep...' } },
+          ]
+        : [event],
+    )
+    .map((event, index) => ({ ...event, seq: index + 1 }));
+  const { html } = render(changed);
+  expect(html).toContain("Your research question");
+  expect(html).toContain("Does sleep predict better grades?");
+});
+
+it("shows recorded searches and the refusal in a stage with no candidate results", () => {
+  const events = fixture("hypothesis-claim-scope");
+  const last = events.at(-1)!;
+  const work = {
+    ...last,
+    stage_key: "hypothesis",
+    step_key: "work",
+    phase: "drafting",
+    type: "hypothesis.action",
+    payload: {
+      action: "hypothesis.search",
+      outcome: "refused",
+      proposal: 'hypothesis.search {"queries":["guided instruction","self-paced practice"]}',
+      reason: "These queries already ran in an earlier round.",
+    },
+  };
+  const { html, state } = render([...events, { ...work, seq: last.seq + 1 }], "search");
+  expect(html).toContain("Last recorded search queries");
+  expect(html).toContain("guided instruction");
+  expect(html).toContain("self-paced practice");
+  expect(html).toContain("These queries already ran in an earlier round.");
+  expect(state.stages.search.content).not.toHaveProperty("collected");
 });

@@ -1,6 +1,8 @@
-import type { PlannedStage, RunStage } from "@/lib/run-stream/contract";
+import type { PlannedStage, RunStage, StagePlan } from "@/lib/run-stream/contract";
 
 export const DATASET_STAGE = "dataset";
+/** The view key of a Writing stage run the Platform has started, which this page does not draw yet. */
+export const WRITING_RUN = "writing-run";
 
 export const PIPELINE_STAGES = [
   { id: DATASET_STAGE, label: "Dataset", short: "Dataset" },
@@ -33,6 +35,61 @@ export function pipelineStageOf(plan: Plan, key: string | null): PipelineStage |
   const step = plan.find((item) => item.key === key);
   if (step) return STAGE_GROUP[step.stage];
   if (key === "scope" || key === "write" || key === "done") return STAGE_GROUP[key];
+}
+
+const HYPOTHESIS_LABELS: Readonly<Record<number, string>> = {
+  1: "Scope",
+  2: "Sub-questions",
+  3: "Search plan",
+  4: "Search",
+  5: "Screen",
+  6: "Read",
+  7: "Synthesize",
+  8: "Hypothesize",
+  9: "Map",
+};
+
+/** Repeated hypothesis rounds share the original workflow milestone. */
+export function hypothesisMilestones(plan: readonly PlannedStage[]) {
+  const milestones = new Map<number, PlannedStage[]>();
+  for (const stage of plan) {
+    if (STAGE_GROUP[stage.stage] !== "hypothesis") continue;
+    for (const number of stage.pipeline ?? []) {
+      if (!HYPOTHESIS_LABELS[number]) continue;
+      const screens = milestones.get(number) ?? [];
+      screens.push(stage);
+      milestones.set(number, screens);
+    }
+  }
+  return [...milestones]
+    .sort(([a], [b]) => a - b)
+    .map(([number, screens]) => ({
+      number,
+      label: HYPOTHESIS_LABELS[number],
+      screens,
+    }));
+}
+
+export function currentMilestone(stage: Pick<StagePlan, "pipeline" | "steps">, stepId: string | null, viewed?: number) {
+  const numbers = stage.pipeline ?? [];
+  if (viewed !== undefined && numbers.includes(viewed)) return viewed;
+  const active = stage.steps.find((step) => step.id === stepId)?.pipeline_stage;
+  return active !== undefined && numbers.includes(active) ? active : numbers[0];
+}
+
+export function stagePosition(plan: readonly PlannedStage[], key: string, datasetFirst: boolean, milestone?: number) {
+  if (key === "experiment_design" || key === "execution") {
+    const stages = datasetFirst ? PIPELINE_STAGES : PIPELINE_STAGES.slice(1);
+    return { index: stages.findIndex(({ id }) => id === key), total: stages.length };
+  }
+  if (pipelineStageOf(plan, key) === "hypothesis") {
+    const milestones = hypothesisMilestones(plan);
+    const numbers = plan.find((step) => step.key === key)?.pipeline;
+    const number = milestone ?? numbers?.[0];
+    if (number !== undefined && numbers?.includes(number) && milestones.length > 0)
+      return { index: number - 1, total: milestones.at(-1)!.number };
+  }
+  return { index: plan.findIndex((step) => step.key === key), total: plan.length };
 }
 
 export function selectPipelineStage({

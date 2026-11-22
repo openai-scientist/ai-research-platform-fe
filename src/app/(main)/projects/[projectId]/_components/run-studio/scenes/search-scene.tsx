@@ -56,9 +56,9 @@ const titleOf = (title: string) =>
   /^[a-z0-9]+(_[a-z0-9]+)+$/.test(title) ? `${title[0].toUpperCase()}${title.slice(1).replaceAll("_", " ")}` : title;
 
 /** Why a source returned less than it was asked for, from the errors the engine kept. */
-function sourceTrouble(name: string, stats?: { requests: number; errors?: string[] }) {
+function sourceTrouble(name: string, stats?: { requests?: number; errors?: string[] }) {
   const failed = stats?.errors?.length ?? 0;
-  if (!stats || !failed) return null;
+  if (stats?.requests === undefined || !failed) return null;
   const limited = stats.errors?.some((e) => /429|rate.?limit/i.test(e));
   const of = failed >= stats.requests ? `all ${stats.requests}` : `${failed} of ${stats.requests}`;
   return limited
@@ -86,17 +86,7 @@ function keptWhy(m: Merged) {
   return tied ? "tied on citations, so the longer abstract" : "the most citations";
 }
 
-export function SearchScene({
-  data,
-  live,
-  activity,
-  notice,
-}: {
-  data: SearchContent;
-  live: boolean;
-  activity?: string;
-  notice?: string;
-}) {
+export function SearchScene({ data, live, notice }: { data: SearchContent; live: boolean; notice?: string }) {
   const scene = useRef<HTMLDivElement>(null);
   const collectRef = useRef<HTMLDivElement>(null);
   const mergeRef = useRef<HTMLDivElement>(null);
@@ -105,9 +95,18 @@ export function SearchScene({
   useReveal(collectRef, sent.length > 0, live);
   useReveal(mergeRef, data.merged.length + (data.collected ? 1 : 0), live);
 
-  const total = data.queries.length * data.sources.length;
+  const rapid = data.reviewRound !== undefined;
+  const pendingRound = rapid && data.reviewRound !== data.collected?.review_round;
+  const summary = data.collected;
+  const hasResult = (key: string) => {
+    const hits = data.cells[key];
+    return hits != null && (!data.cellIssues[key] || hits > 0);
+  };
+  const hasResults = !rapid || sent.some(hasResult);
+  const total = rapid ? sent.length : data.queries.length * data.sources.length;
   // The grid counts the plan's queries as they run; the final total also has the extra queries.
-  const raw = data.collected?.raw ?? Object.values(data.cells).reduce<number>((a, v) => a + (v ?? 0), 0);
+  const rawSoFar = Object.values(data.cells).reduce<number>((a, v) => a + (v ?? 0), 0);
+  const raw = pendingRound ? rawSoFar : (summary?.raw ?? rawSoFar);
   const extra = data.collected?.expansion;
   // Duplicates that were another source's record of a listed paper; the engine counts the rest.
   const mergedRecords = data.merged.reduce((n, m) => n + m.records.length - 1, 0);
@@ -119,16 +118,34 @@ export function SearchScene({
     [...records].sort((a, b) => order.indexOf(a.source) - order.indexOf(b.source));
   const bySource = (sourceId: string) => data.queries.reduce((a, q) => a + (data.cells[`${q.id}:${sourceId}`] ?? 0), 0);
   // The planner usually gives three angles; it may give more.
-  const angles = Math.max(3, data.strategies.length);
+  const angles = rapid ? data.strategies.length : Math.max(3, data.strategies.length);
   const trouble = data.sources
-    .map((s) => sourceTrouble(s.name, data.collected?.per_source?.[s.id]))
+    .map((s) => {
+      const stats = summary?.per_source?.[s.id];
+      const unattributed = stats?.unattributed_errors;
+      return rapid && unattributed
+        ? `${s.name} reported ${unattributed} additional provider issues.`
+        : sourceTrouble(s.name, stats);
+    })
     .filter((t): t is string => Boolean(t));
-  const merging = data.merged.length > 0 || Boolean(data.collected);
+  const merging = data.merged.length > 0 || Boolean(summary && hasResults);
   // A shortlist you rejected sends the run back here; the new search replaces the old one on this screen.
   const again = (useContext(WorkspaceContext)?.state.decisions ?? []).filter(
     (d) => d.gateKind === "screen" && d.option === "reject",
   );
   const lastAgain = again.at(-1);
+
+  let roundStatus: string | undefined;
+  if (rapid && summary) {
+    if (pendingRound) {
+      roundStatus = `Waiting for search round ${data.reviewRound}. The latest recorded results are from round ${summary.review_round}.`;
+    } else if (summary.round_answered) {
+      roundStatus = `Round ${summary.review_round} returned ${summary.round_hits} hits and added ${summary.new_records} unique records.`;
+    } else {
+      roundStatus = `No provider answered round ${summary.review_round} successfully.`;
+      if (summary.round_hits) roundStatus += ` The round returned ${summary.round_hits} cached hits.`;
+    }
+  }
 
   let target: string | null = data.queries.length ? `query:${data.queries[data.queries.length - 1].id}` : null;
   if (lastCell) target = `cell:${lastCell}`;
@@ -137,13 +154,7 @@ export function SearchScene({
 
   return (
     <div ref={scene} className="relative flex flex-col gap-4">
-      {activity && !data.sources.length && (
-        <Pane title="Collecting candidates">
-          <p className="text-sm">{activity}</p>
-          <p className="mt-1 text-muted-foreground text-xs">Candidate counts appear as the search reports them.</p>
-        </Pane>
-      )}
-      {notice && <p className="rounded-lg bg-muted/60 px-3 py-2 text-muted-foreground text-xs">{notice}</p>}
+      {notice && !rapid && <p className="rounded-lg bg-muted/60 px-3 py-2 text-muted-foreground text-xs">{notice}</p>}
       {lastAgain && (
         <p className="flex items-start gap-2 rounded-lg bg-muted/60 px-3 py-2 text-muted-foreground text-xs">
           <RotateCcw className="mt-px size-3.5 shrink-0" />
@@ -177,7 +188,7 @@ export function SearchScene({
                 </b>
                 <b className="min-w-0 text-pretty font-semibold leading-5">{titleOf(strategy.title)}</b>
                 <span className="ml-auto shrink-0 whitespace-nowrap text-[11px] text-muted-foreground leading-5">
-                  angle {si + 1} of {angles}
+                  {!rapid && `angle ${si + 1} of ${angles}`}
                 </span>
               </header>
               <p className="-mt-1 text-muted-foreground text-xs">{strategy.why}</p>
@@ -196,13 +207,13 @@ export function SearchScene({
                       speed={70}
                       className="min-w-0 flex-1 truncate font-mono text-xs"
                     />
-                    <WordMeter words={q.text.split(" ").length} />
+                    {!rapid && <WordMeter words={q.text.split(" ").length} />}
                   </motion.li>
                 ))}
               </ul>
               <span className="mt-auto flex items-center gap-1.5 border-t pt-2 text-[11px] text-muted-foreground">
                 {queries.length} {queries.length === 1 ? "query" : "queries"}
-                {queries.length > 0 && queries.every((q) => q.text.split(" ").length <= 6) && (
+                {!rapid && queries.length > 0 && queries.every((q) => q.text.split(" ").length <= 6) && (
                   <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-300">
                     <Check className="size-3" />
                     all short enough
@@ -219,9 +230,6 @@ export function SearchScene({
               Angle {data.strategies.length + i + 1} of {angles}
             </Placeholder>
           ))}
-        {!data.strategies.length && !activity && (
-          <Placeholder className="lg:col-span-3">Search angles are planned first</Placeholder>
-        )}
       </div>
 
       <div className={cn("grid gap-4", merging && "xl:grid-cols-[minmax(0,1.5fr)_minmax(300px,1fr)]")}>
@@ -229,7 +237,11 @@ export function SearchScene({
           {data.sources.length ? (
             <Pane
               title="Collecting"
-              aside={`${(data.delayMs / 1000).toFixed(1)} s between requests, to respect each source · ${sent.length} of ${total} sent`}
+              aside={
+                rapid
+                  ? `${Object.values(data.cells).filter((value) => value !== null).length} of ${total} requests settled`
+                  : `${(data.delayMs / 1000).toFixed(1)} s between requests, to respect each source · ${sent.length} of ${total} sent`
+              }
               className={data.collected ? undefined : "flex-1"}
             >
               <div className="mb-3 flex h-2.5 items-center gap-1" aria-hidden>
@@ -283,13 +295,26 @@ export function SearchScene({
                           {data.sources.map((s, i) => {
                             const v = row[i];
                             const key = `${q.id}:${s.id}`;
+                            const issue = data.cellIssues[key];
                             return (
                               <td key={s.id} data-cursor={`cell:${key}`} className="px-0.5 py-0.5 text-right">
                                 {v === undefined ? (
-                                  <span className="block px-2 py-1 text-muted-foreground/40">·</span>
+                                  <span
+                                    title={rapid ? "No request scheduled" : undefined}
+                                    className="block px-2 py-1 text-muted-foreground/40"
+                                  >
+                                    ·
+                                  </span>
                                 ) : v === null ? (
-                                  <span className="flex justify-end px-2 py-1.5">
+                                  <span className="flex justify-end px-2 py-1.5" title="Waiting for the provider">
                                     <PulseDot className={SOURCE_TONE[s.id]} />
+                                  </span>
+                                ) : issue ? (
+                                  <span
+                                    title={issue}
+                                    className="whitespace-nowrap px-2 py-1 text-amber-700 text-xs dark:text-amber-300"
+                                  >
+                                    {v > 0 ? `${v} cached` : issue}
                                   </span>
                                 ) : (
                                   <motion.span
@@ -308,7 +333,7 @@ export function SearchScene({
                             );
                           })}
                           <td className="py-1 pl-2 text-right font-mono font-semibold text-xs tabular-nums">
-                            {row.some((v) => v !== undefined) ? sum : ""}
+                            {data.sources.some((s) => hasResult(`${q.id}:${s.id}`)) ? sum : ""}
                           </td>
                         </tr>
                       );
@@ -319,11 +344,13 @@ export function SearchScene({
                       <td className="pt-2 pr-3 font-medium font-sans text-muted-foreground">All queries</td>
                       {data.sources.map((s) => (
                         <td key={s.id} className="px-2.5 pt-2 text-right tabular-nums">
-                          <AnimatedNumber value={bySource(s.id)} duration={400} />
+                          {data.queries.some((q) => hasResult(`${q.id}:${s.id}`)) && (
+                            <AnimatedNumber value={bySource(s.id)} duration={400} />
+                          )}
                         </td>
                       ))}
                       <td className="pt-2 pl-2 text-right tabular-nums">
-                        <AnimatedNumber value={raw} duration={400} />
+                        {hasResults && <AnimatedNumber value={raw} duration={400} />}
                       </td>
                     </tr>
                   </tfoot>
@@ -336,14 +363,14 @@ export function SearchScene({
               ))}
             </Pane>
           ) : (
-            !activity && <Placeholder>Each query then goes to every source</Placeholder>
+            data.strategies.length > 0 && <Placeholder>Each query then goes to every source</Placeholder>
           )}
           {data.collected && (
-            <Pane title="Saved for the next stages" className="flex-1">
+            <Pane title={rapid ? "Search results" : "Saved for the next stages"} className="flex-1">
               <div data-cursor="files" className="flex flex-col gap-1.5">
                 <span className="text-muted-foreground text-xs">
-                  {data.collected.duplicates} duplicates merged. Collected at {utcTime(data.collected.collected_at)},
-                  with each paper's source, ID and citation count.
+                  {roundStatus ??
+                    `${data.collected.duplicates} duplicates merged. Collected at ${utcTime(data.collected.collected_at)}, with each paper's source, ID and citation count.`}
                 </span>
                 {data.collected.files.map((f, i) => (
                   <motion.span
@@ -367,14 +394,21 @@ export function SearchScene({
             cards on the left keep their own height. */}
         <div ref={mergeRef} className={cn("relative min-w-0 flex-col", merging ? "flex" : "hidden")}>
           {merging && (
-            <Pane title="Merging duplicates" className="flex flex-1 flex-col xl:absolute xl:inset-0">
+            <Pane
+              title={rapid ? "Hits and unique papers" : "Merging duplicates"}
+              className="flex flex-1 flex-col xl:absolute xl:inset-0"
+            >
               <p className="-mt-2 mb-3 text-muted-foreground text-xs">
-                Same DOI, arXiv ID or title. Keeps the record with the most citations, then the longer abstract; the
-                others fill its gaps, such as a missing DOI.
+                {rapid
+                  ? `${summary?.duplicates ?? 0} hits were not retained as additional unique records across completed rounds.`
+                  : "Same DOI, arXiv ID or title. Keeps the record with the most citations, then the longer abstract; the others fill its gaps, such as a missing DOI."}
               </p>
               <div className="mb-3 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 text-center">
                 <span className="rounded-lg bg-muted/70 px-2 py-2">
-                  <AnimatedNumber value={raw} className="block font-mono font-semibold text-xl tabular-nums" />
+                  <AnimatedNumber
+                    value={rapid ? (summary?.raw ?? raw) : raw}
+                    className="block font-mono font-semibold text-xl tabular-nums"
+                  />
                   <span className="text-muted-foreground text-xs">hits</span>
                 </span>
                 <ArrowRight className="size-4 text-muted-foreground" />

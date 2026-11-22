@@ -59,6 +59,17 @@ export function isStudioRun(run: RunItem) {
   return run.pipeline_key === "dataset_first" || Boolean(run.case?.problem);
 }
 
+function syncWorkspaceUrl(session: RunSession | undefined, open: boolean) {
+  if (!session || typeof window === "undefined") return;
+  const url = new URL(window.location.href);
+  if (url.pathname !== `/projects/${encodeURIComponent(session.projectId)}/experiments`) return;
+  const selected = url.searchParams.get("run");
+  if (open && selected !== session.runId) url.searchParams.set("run", session.runId);
+  else if (!open && selected === session.runId) url.searchParams.delete("run");
+  else return;
+  window.history.replaceState(null, "", url);
+}
+
 const labelOf = (runId: string) => `RUN-${runId.slice(0, 4).toUpperCase()}`;
 
 export function createRunRequest(mode: ReviewMode, input: RunInput, datasetVersionId?: string): CreateRunRequest {
@@ -204,7 +215,15 @@ export const useRunStudio = create<RunStudioState>()((set, get) => {
         (events, live) => {
           for (const event of events) receive(event, live);
         },
-        pipeline ? { topic: runTitle(run) ?? "", domains: run.domains ?? [], mode, datasetFirst } : undefined,
+        pipeline
+          ? {
+              topic: runTitle(run) ?? "",
+              domains: run.domains ?? [],
+              mode,
+              datasetFirst,
+              continuesToDesign: datasetFirst,
+            }
+          : undefined,
         datasetFirst ? (events, live) => receiveDataset(run.id, events, live) : undefined,
       );
       track(
@@ -252,9 +271,12 @@ export const useRunStudio = create<RunStudioState>()((set, get) => {
     },
     openWorkspace(runId, from) {
       set({ openRunId: runId, openFrom: from ? from.getBoundingClientRect() : null });
+      syncWorkspaceUrl(get().sessions[runId], true);
     },
     closeWorkspace() {
+      const { openRunId, sessions } = get();
       set({ openRunId: null });
+      syncWorkspaceUrl(openRunId ? sessions[openRunId] : undefined, false);
     },
   };
 });

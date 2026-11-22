@@ -122,6 +122,7 @@ export function RunTrack({
   onView,
   label,
   minimumWidth = 620,
+  minimumItemWidth = 104,
   inline = false,
 }: {
   items: TrackItem[];
@@ -130,6 +131,7 @@ export function RunTrack({
   onView(key: string): void;
   label: string;
   minimumWidth?: number;
+  minimumItemWidth?: number;
   inline?: boolean;
 }) {
   const scroller = useRef<HTMLDivElement>(null);
@@ -163,7 +165,7 @@ export function RunTrack({
         <ol
           aria-label={label}
           className={cn("flex gap-1.5", inline && "w-max min-w-full px-1 pt-1 pb-2")}
-          style={inline ? undefined : { minWidth: Math.max(minimumWidth, items.length * 104) }}
+          style={inline ? undefined : { minWidth: Math.max(minimumWidth, items.length * minimumItemWidth) }}
         >
           {items.map((item) => {
             const { key, label, past, live, waiting, available, gate } = item;

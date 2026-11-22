@@ -35,6 +35,19 @@ const item = (key: string, state: string, reason = "") =>
   ev("dataset.item", { key, state, reason, spent_tokens: 0 }, { summary: `${key}: ${state}`, actor: "dataset" });
 
 describe("dataset run model", () => {
+  it("replays durable review state without clearing it on unrelated work or decisions for older stages", () => {
+    const held = ev("dataset.local_node_review", { pending: true }, { stage_run_id: "current" });
+    const work = ev("dataset.item", { key: "sources", state: "green" }, { stage_run_id: "current" });
+    const old = ev("dataset.local_node_review", { pending: false }, { stage_run_id: "old" });
+    const resolved = ev("dataset.local_node_review", { pending: false }, { stage_run_id: "current" });
+    const pending = foldDatasetEvents([held, work, old]);
+    expect(pending.stageRunId).toBe("current");
+    expect(pending.localNodeReviews).toEqual({ current: true, old: false });
+    const throughReconnect = foldDatasetEvents([resolved], pending);
+    expect(throughReconnect.localNodeReviews).toEqual({ current: false, old: false });
+    expect(foldDatasetEvents([held, work, old, resolved]).localNodeReviews).toEqual(throughReconnect.localNodeReviews);
+  });
+
   it("folds engine items into steps and finds the open one", () => {
     seq = 0;
     const model = foldDatasetEvents([
@@ -236,10 +249,15 @@ describe("the PI's plan (charter) of a real run", () => {
     expect(activeAgent(model, false)).toBeNull();
   });
 
-  it("is waiting but not yet ready before the PI answers", () => {
+  it("shows PI work before its recommendation rather than a researcher stop", () => {
     const model = foldDatasetEvents(events.slice(0, 2));
-    expect(charterPending(model)).toBe(true);
-    expect(stepViews(model, { local: false, ended: null })[0]).toMatchObject({ key: "charter", state: "now" });
+    expect(charterPending(model)).toBe(false);
+    expect(activeAgent(model, false)).toBe("pi");
+    expect(stepViews(model, { local: false, ended: null })[0]).toMatchObject({
+      key: "charter",
+      title: "Drafting the research plan",
+      state: "now",
+    });
   });
 
   it("is done once the plan is endorsed", () => {

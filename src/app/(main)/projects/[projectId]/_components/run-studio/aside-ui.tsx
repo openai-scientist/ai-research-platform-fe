@@ -79,12 +79,24 @@ type StageStepRow = {
   checks?: WorkCheck[];
 };
 
-export function StageSteps({ steps, count }: { steps: StageStepRow[]; count: string }) {
+export function StageSteps({
+  steps,
+  count,
+  title = "Steps in this stage",
+  selected,
+  onSelect,
+}: {
+  steps: StageStepRow[];
+  count: string;
+  title?: string;
+  selected?: string | null;
+  onSelect?: (id: string) => void;
+}) {
   const reducedMotion = useReducedMotion();
   return (
     <div className="flex flex-col gap-2">
       <p className="flex justify-between font-medium text-muted-foreground text-xs">
-        <span>Steps in this stage</span>
+        <span>{title}</span>
         <span>{count}</span>
       </p>
       <ol className="flex flex-col">
@@ -122,11 +134,29 @@ export function StageSteps({ steps, count }: { steps: StageStepRow[]; count: str
                 )}
               </span>
               <span className="min-w-0">
-                <b
-                  className={cn("block font-medium text-[13px]", !done && !now && "font-normal text-muted-foreground")}
-                >
-                  {step.title}
-                </b>
+                {onSelect ? (
+                  <button
+                    type="button"
+                    aria-current={selected === step.id ? "true" : undefined}
+                    onClick={() => onSelect(step.id)}
+                    className={cn(
+                      "block cursor-pointer rounded-sm text-left font-medium text-[13px] underline-offset-3 hover:underline focus-visible:outline-2 focus-visible:outline-ring",
+                      !done && !now && "font-normal text-muted-foreground",
+                      selected === step.id && "underline",
+                    )}
+                  >
+                    {step.title}
+                  </button>
+                ) : (
+                  <b
+                    className={cn(
+                      "block font-medium text-[13px]",
+                      !done && !now && "font-normal text-muted-foreground",
+                    )}
+                  >
+                    {step.title}
+                  </b>
+                )}
                 <small
                   className={cn(
                     "text-[11.5px]",
@@ -141,31 +171,7 @@ export function StageSteps({ steps, count }: { steps: StageStepRow[]; count: str
                     </span>
                   )}
                 </small>
-                {Boolean(step.checks?.length) && (
-                  <ul aria-label="Checklist" className="mt-1.5 grid gap-1.5">
-                    {step.checks?.map(({ key, label, state, status, reason }) => (
-                      <li
-                        key={key}
-                        className="flex items-start gap-1.5 text-[11px] text-muted-foreground leading-normal"
-                      >
-                        <span
-                          className={cn(
-                            "mt-1 size-1.5 shrink-0 rounded-full",
-                            state === "green" && "bg-emerald-600",
-                            (state === "amber" || state === "needs_you") && "bg-amber-500",
-                            state === "red" && "bg-destructive",
-                            state === "not_applicable" && "bg-muted-foreground",
-                          )}
-                          aria-hidden
-                        />
-                        <span>
-                          <span className="font-medium text-foreground">{label}</span> · {status}
-                          {reason && <span className="block">{reason}</span>}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
+                {Boolean(step.checks?.length) && <WorkChecklist checks={step.checks ?? []} className="mt-1.5" />}
               </span>
             </li>
           );
@@ -175,17 +181,49 @@ export function StageSteps({ steps, count }: { steps: StageStepRow[]; count: str
   );
 }
 
+export function WorkChecklist({ checks, className }: { checks: WorkCheck[]; className?: string }) {
+  return (
+    <ul aria-label="Checklist" className={cn("grid gap-1.5", className)}>
+      {checks.map(({ key, label, state, status, reason }) => (
+        <li key={key} className="flex items-start gap-1.5 text-[11px] text-muted-foreground leading-normal">
+          <span
+            className={cn(
+              "mt-1 size-1.5 shrink-0 rounded-full",
+              state === "green" && "bg-emerald-600",
+              (state === "amber" || state === "needs_you") && "bg-amber-500",
+              state === "red" && "bg-destructive",
+              state === "not_applicable" && "bg-muted-foreground",
+            )}
+            aria-hidden
+          />
+          <span>
+            <span className="font-medium text-foreground">{label}</span> · {status}
+            {reason && <span className="block">{reason}</span>}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export function StageRules({
   title,
   rules,
+  flat = false,
 }: {
   title: string;
   rules: { id: string; text: string; state?: "pass" | "hit" }[];
+  flat?: boolean;
 }) {
   const checked = rules.filter((rule) => rule.state).length;
   return (
-    <Collapsible className="rounded-xl bg-card ring-1 ring-foreground/10">
-      <CollapsibleTrigger className="group flex w-full items-center gap-2 px-3 py-2.5 text-left font-medium text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring">
+    <Collapsible className={flat ? "border-t" : "rounded-xl bg-card ring-1 ring-foreground/10"}>
+      <CollapsibleTrigger
+        className={cn(
+          "group flex w-full items-center gap-2 py-2.5 text-left font-medium text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          !flat && "px-3",
+        )}
+      >
         <ChevronRight className="size-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-90" />
         {title}
         <span className="ml-auto font-mono text-[11px] text-muted-foreground">
@@ -193,7 +231,7 @@ export function StageRules({
         </span>
       </CollapsibleTrigger>
       <CollapsibleContent>
-        <ul className="flex flex-col gap-1.5 px-3 pb-3 text-xs">
+        <ul className={cn("flex flex-col gap-1.5 pb-3 text-xs", !flat && "px-3")}>
           {rules.map(({ id, text, state: s }) => {
             return (
               <li
@@ -222,9 +260,14 @@ export function StageRules({
   );
 }
 
-export function WaitingForYou({ children }: { children: ReactNode }) {
+export function WaitingForYou({ children, flat = false }: { children: ReactNode; flat?: boolean }) {
   return (
-    <div className="grid grid-cols-[auto_1fr] gap-2.5 rounded-xl border border-amber-500/50 bg-amber-500/10 p-3 text-xs">
+    <div
+      className={cn(
+        "grid grid-cols-[auto_1fr] gap-2.5 border-amber-500/50 bg-amber-500/10 px-3 py-2.5 text-xs",
+        flat ? "border-y" : "rounded-xl border",
+      )}
+    >
       <span className="grid size-7 place-items-center rounded-lg bg-amber-500/20 text-amber-800 dark:text-amber-300">
         <Flag className="size-3.5" />
       </span>

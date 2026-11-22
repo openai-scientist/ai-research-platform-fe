@@ -10,7 +10,7 @@ import type { PipelineEnvelope } from "@/lib/run-stream/pipeline-adapter";
 
 export const RELEASE_WAIT = "Waiting for release review on the Local Node.";
 
-export type DatasetAgent = "steward" | "reviewer" | "code" | "you";
+export type DatasetAgent = "steward" | "reviewer" | "code" | "pi" | "you";
 
 export const DATASET_CAST = ["steward", "reviewer", "pi"] as const;
 
@@ -155,6 +155,10 @@ export interface DatasetRunModel {
   /** The stage run the gate answers go to (from the envelope). */
   stageRunId?: string;
   releaseWait: boolean;
+  /** The run waited for your release decision at some point; when it never did, the Node sent the release itself. */
+  releaseAsked?: boolean;
+  /** Durable Local Node review state, by Dataset stage run (including resolved with false). */
+  localNodeReviews?: Record<string, boolean>;
   /** Schemas the run delivered, such as `dataset.data_card/v1`. */
   delivered: string[];
   dataCardArtifactId?: string;
@@ -213,6 +217,20 @@ function gateOptions(payload: Record<string, unknown>): Pick<GateView, "options"
   return { ...(options.length ? { options } : {}), ...(recommended ? { recommended } : {}) };
 }
 
+/** Span and timing names from the engine's trace ("derive screening: 34 ms", "fanout search[13]"): never shown as work. */
+export const isTraceText = (text: string) =>
+  /\b\d+(\.\d+)?\s*ms\b/i.test(text) || /\b[a-z_]+\[\d+\]/i.test(text) || /\bfan-?out\b/i.test(text);
+
+/** What the step being worked on does, in words; used in place of trace text. */
+function humanStepLine(model: DatasetRunModel): string | undefined {
+  const key = model.cursor?.startsWith("item:")
+    ? model.cursor.slice(5)
+    : model.progress
+      ? PROGRESS_STEP[model.progress.task]
+      : undefined;
+  return STEP_DEFS.find((def) => def.key === key)?.explain;
+}
+
 /** Folds one stored event of a Dataset run into the model. A replayed event (`seq` not above the last) is ignored. */
 export function applyDatasetEvent(previous: DatasetRunModel, event: PipelineEnvelope): DatasetRunModel {
   if (event.seq <= previous.lastSeq) return previous;
@@ -221,8 +239,14 @@ export function applyDatasetEvent(previous: DatasetRunModel, event: PipelineEnve
   model.startedAt ??= event.ts;
   const { type, payload } = event;
   const stageRun = event.stage_run_id ?? str(payload.stage_run_id);
+  if (type === "dataset.local_node_review") {
+    if (event.stage_key === "dataset" && stageRun && typeof payload.pending === "boolean")
+      model.localNodeReviews = { ...model.localNodeReviews, [stageRun]: payload.pending };
+    return model;
+  }
   if (stageRun) model.stageRunId = stageRun;
-  const summary = event.summary?.trim() || undefined;
+  const rawSummary = event.summary?.trim() || undefined;
+  const summary = rawSummary && isTraceText(rawSummary) ? humanStepLine(model) : rawSummary;
   const say = (actor: DatasetAgent, text: string | undefined, kind: FeedItem["kind"] = "event") => {
     if (!text) return;
     model.feed = [...model.feed, { seq: event.seq, actor, text, kind }].slice(-FEED_LIMIT);
@@ -235,6 +259,7 @@ export function applyDatasetEvent(previous: DatasetRunModel, event: PipelineEnve
     const kind = type.slice("dataset.".length);
     if (summary === RELEASE_WAIT || str(payload.text) === RELEASE_WAIT || str(payload.message) === RELEASE_WAIT) {
       model.releaseWait = true;
+      model.releaseAsked = true;
       say("code", RELEASE_WAIT);
       return model;
     }
@@ -348,8 +373,11 @@ export function applyDatasetEvent(previous: DatasetRunModel, event: PipelineEnve
         model.outcome = { consultationId: str(payload.consultation_id), decided: false };
       break;
     case "attention.required":
+      if (payload.kind === "charter" && payload.reason === "pi_failed" && model.charter)
+        model.charter = { ...model.charter, ready: true };
       if (payload.kind === "stage_outcome" && !model.outcome) model.outcome = { decided: false };
       break;
+    case "pi.charter_skipped":
     case "pi.charter_settled":
       if (model.charter) model.charter = { ...model.charter, ready: true, settled: true };
       break;
@@ -427,10 +455,18 @@ export interface StepOptions {
 
 /** The engine's tools that only the person can drive: the question map and the source attributes. */
 const WAITS_FOR_YOU = /map_question|set_source_attributes/;
+const PROGRESS_STEP: Readonly<Record<string, string>> = {
+  reading: "sources",
+  quality: "profile_quality",
+  describing: "dictionary",
+  recipe: "cleaning_recipe",
+  complete: "split",
+  checks: "data_checks",
+};
 
 /** The PI's plan waits for you to endorse it, and the run has not started its work. */
 export const charterPending = (model: DatasetRunModel) =>
-  model.charter?.authority === "researcher" && !model.charter.settled;
+  model.charter?.authority === "researcher" && model.charter.ready && !model.charter.settled;
 
 export const PLAN_KEY = "charter";
 export const PLAN_DEF: DatasetStepDef = {
@@ -459,7 +495,11 @@ export function stepViews(model: DatasetRunModel, { local, ended }: StepOptions)
     if (item?.state === "not_applicable") return false;
     return !def.optional || Boolean(item);
   });
-  const open = defs.find((def) => ["red", "needs_you"].includes(model.items[def.key]?.state ?? ""));
+  const firstOpen = defs.find((def) => ["red", "needs_you"].includes(model.items[def.key]?.state ?? ""));
+  const progressKey = model.progress ? PROGRESS_STEP[model.progress.task] : undefined;
+  const computing = defs.find((def) => def.key === progressKey && model.items[def.key]?.state !== "green");
+  const followsProgress = !model.gate && (!firstOpen || model.items[firstOpen.key]?.state !== "needs_you");
+  const open = (followsProgress ? computing : undefined) ?? firstOpen;
   const reviewing = model.engineStep === "review" || Boolean(model.review ?? model.reviewResult);
   const views: StepView[] = defs.map((def) => {
     const item = model.items[def.key];
@@ -486,9 +526,17 @@ export function stepViews(model: DatasetRunModel, { local, ended }: StepOptions)
     ? [
         {
           ...PLAN_DEF,
-          actor: "you",
-          gate: true,
-          state: model.charter.settled || ended === "done" ? "done" : model.charter.ready ? "asking" : "now",
+          title: model.charter.settled || model.charter.ready ? PLAN_DEF.title : "Drafting the research plan",
+          actor: charterPending(model) ? "you" : "pi",
+          gate: model.charter.authority === "researcher",
+          state:
+            model.charter.settled || ended === "done"
+              ? "done"
+              : ended
+                ? "todo"
+                : charterPending(model)
+                  ? "asking"
+                  : "now",
         },
       ]
     : [];
@@ -504,8 +552,8 @@ export function stepViews(model: DatasetRunModel, { local, ended }: StepOptions)
 
 /** The agent whose work is shown now, or null when nobody works (the run waits, paused, or ended). */
 export function activeAgent(model: DatasetRunModel, waiting: boolean): DatasetAgent | null {
-  if (charterPending(model)) return null;
   if (waiting || model.gate || model.releaseWait || model.published) return null;
+  if (model.charter && !model.charter.settled) return model.charter.ready ? null : "pi";
   if (model.engineStep === "review" || (model.review && model.phase === "reviewing")) return "reviewer";
   return model.engineStep === "work" || Object.keys(model.items).length ? "steward" : null;
 }

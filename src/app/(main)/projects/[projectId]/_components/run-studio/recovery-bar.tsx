@@ -210,6 +210,8 @@ export function RecoveryBar({ session }: { session: RunSession }) {
   if (!session.pipeline || !run || state.gate) return null;
   const canWrite = Boolean(access?.canWrite);
   const capability = state.failureCode === "LOCAL_NODE_CAPABILITY";
+  // A stage the Local Node could not finish: the message that says what to do is the one the side panel shows too.
+  const nodeFailure = !capability && /local node/i.test(state.failure ?? "");
   // Only a run that still holds the project can be abandoned: one in progress, or stopped on its budget.
   const holds = isActiveRun(run.status) || run.status === RunStatus.BudgetExceeded;
   const abandon = access?.canManage && holds ? <AbandonRun run={run} label={label} /> : null;
@@ -243,8 +245,10 @@ export function RecoveryBar({ session }: { session: RunSession }) {
       <Bar
         icon={capability ? TriangleAlert : OctagonAlert}
         tone={capability ? "amber" : "rose"}
-        title={capability ? "Update the Local Node" : "The stage stopped"}
-        text={capability ? (state.failure ?? recovery.reason) : recovery.reason}
+        title={
+          capability ? "Update the Local Node" : nodeFailure ? "The Local Node could not finish" : "The stage stopped"
+        }
+        text={capability || nodeFailure ? (state.failure ?? recovery.reason) : recovery.reason}
       >
         {abandon}
         {canWrite && (

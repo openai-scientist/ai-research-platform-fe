@@ -1,36 +1,80 @@
 "use client";
 
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 
-import { Clock, Info } from "lucide-react";
+import { Check, ChevronRight, Clock3, HardDrive, Info, ShieldCheck } from "lucide-react";
 
+import { Badge } from "@/components/ui/badge";
 import { useApiQuery } from "@/hooks/use-api";
 import { projectKeys } from "@/lib/api/query-keys";
 import { datasetRunKeys, fetchDatasetRuns } from "@/lib/api/services/fetch-dataset-runs";
+import type { LocalNodeItem } from "@/lib/api/services/fetch-local-nodes";
 import { fetchRuns } from "@/lib/api/services/fetch-runs";
-import { type DatasetRunModel, type GateView, RELEASE_WAIT } from "@/lib/run-stream/dataset-run-model";
+import type { DatasetRunModel, GateView } from "@/lib/run-stream/dataset-run-model";
 
 import { hasChosenQuestion } from "../dataset-review-state";
 import { GateFrame } from "../run-studio/gate-frame";
 import { parseGatePrompt } from "../run-studio/gate-prompt";
-import { Pane } from "../run-studio/scenes/scene-ui";
 
-/** The wait for a release on the Local Node, which is answered in that app, not here. */
-export function ReleaseCard() {
-  return (
-    <Pane
-      title={
-        <span className="flex items-center gap-2">
-          <Clock className="size-4 shrink-0 text-amber-600" />
-          {RELEASE_WAIT.replace(/\.$/, "")}
+/** The local approval belongs to the device. This surface shows where the run is stopped. */
+export function DatasetReleaseStatus({
+  state,
+  node,
+  action,
+  next = "After you approve the summary, the run checks the source and profiles each column.",
+}: {
+  state: "pending" | "reviewed" | "upcoming";
+  node?: LocalNodeItem;
+  action?: ReactNode;
+  next?: string;
+}) {
+  if (state !== "pending") {
+    const reviewed = state === "reviewed";
+    const Icon = reviewed ? Check : Clock3;
+    return (
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+        <Icon aria-hidden="true" className={reviewed ? "size-4 text-emerald-600" : "size-4 text-muted-foreground"} />
+        <span className="font-medium">{reviewed ? "Release reviewed" : "Release review pending"}</span>
+        <span className="text-muted-foreground text-xs">
+          {reviewed
+            ? "Only the approved summary is available to the run."
+            : "A request appears on the device when the summary is ready."}
         </span>
-      }
-      className="bg-amber-500/10 ring-amber-500/50"
-    >
-      <p className="text-muted-foreground text-sm">
-        Open the Local Node app and go to Releases to review what would leave your computer. Rows never do.
-      </p>
-    </Pane>
+      </div>
+    );
+  }
+
+  return (
+    <section aria-label="Local Node approval" className="bg-amber-500/8">
+      <div className="flex flex-wrap items-start gap-3 px-3.5 py-3.5 sm:px-4">
+        <span className="grid size-9 shrink-0 place-items-center rounded-md bg-amber-500/15 text-amber-800 dark:text-amber-300">
+          <ShieldCheck aria-hidden="true" className="size-[18px]" />
+        </span>
+        <div className="min-w-0 flex-1 basis-48">
+          <Badge
+            variant="outline"
+            className="mb-1.5 border-amber-500/35 bg-amber-500/10 text-amber-900 dark:text-amber-200"
+          >
+            <span className="size-1.5 rounded-full bg-current" aria-hidden="true" />
+            Waiting for your approval
+          </Badge>
+          <h3 className="font-semibold text-base">Approve the release on Local Node</h3>
+          <p className="mt-1 text-muted-foreground text-sm">{next}</p>
+        </div>
+      </div>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-amber-500/25 border-t px-3.5 py-2.5 sm:px-4">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-1.5 text-sm">
+            <HardDrive aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
+            <span className="wrap-anywhere font-medium">{node?.name ?? "Local Node app"}</span>
+            <ChevronRight aria-hidden="true" className="size-3 shrink-0 text-muted-foreground" />
+            <span className="font-medium">Releases</span>
+          </div>
+          <p className="mt-1 text-muted-foreground text-xs">Raw rows stay on your device.</p>
+        </div>
+        {action}
+      </div>
+    </section>
   );
 }
 

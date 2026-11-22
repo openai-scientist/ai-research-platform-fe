@@ -7,6 +7,8 @@ import type { DataCardBody } from "@/lib/api/services/fetch-dataset-runs";
 import { foldDatasetEvents, stepViews } from "@/lib/run-stream/dataset-run-model";
 import type { PipelineEnvelope } from "@/lib/run-stream/pipeline-adapter";
 
+import { DatasetColumnEvidence } from "./dataset-column-evidence";
+import { DatasetDictionary } from "./dataset-dictionary";
 import { DatasetRunScene } from "./dataset-run-scene";
 import { DatasetStageCard } from "./dataset-stage-scene";
 
@@ -45,6 +47,55 @@ const card: DataCardBody = {
 };
 
 describe("Dataset stage results in Run Studio", () => {
+  it("renders a dedicated live PI work state before the charter is ready", () => {
+    const drafting = foldDatasetEvents([
+      event(1, "pi.consultation_requested", { kind: "charter", authority: "researcher" }),
+      event(2, "attention.required", { kind: "charter", reason: "researcher_decision" }),
+    ]);
+    const html = renderToStaticMarkup(
+      createElement(DatasetRunScene, {
+        model: drafting,
+        steps: stepViews(drafting, { local: true, ended: null }),
+        dataset: { name: "Travel observations" },
+        version: undefined,
+        local: true,
+        live: true,
+        focusKey: null,
+        onView: () => undefined,
+      }),
+    );
+    expect(html).toContain("Drafting the research plan");
+    expect(html).toContain("The PI is drafting the scope, aims and success criteria");
+  });
+
+  it("follows recorded quality and definition work before there is a completed item", () => {
+    const quality = foldDatasetEvents([event(1, "dataset.progress", { task: "quality", state: "running" })]);
+    expect(stepViews(quality, { local: true, ended: null }).find((step) => step.state === "now")?.key).toBe(
+      "profile_quality",
+    );
+    const dictionary = foldDatasetEvents(
+      [event(2, "dataset.progress", { task: "describing", state: "running" })],
+      quality,
+    );
+    expect(stepViews(dictionary, { local: true, ended: null }).find((step) => step.state === "now")?.key).toBe(
+      "dictionary",
+    );
+  });
+
+  it("lists all ten columns in both evidence and dictionary without a nested dictionary scroll", () => {
+    const columns = Array.from({ length: 10 }, (_, index) => `source_${index + 1}`);
+    const evidence = renderToStaticMarkup(
+      createElement(DatasetColumnEvidence, { columnNames: columns, agent: null, local: true }),
+    );
+    const dictionary = renderToStaticMarkup(
+      createElement(DatasetDictionary, { columns, variables: [], agent: null, live: false }),
+    );
+    expect(evidence).toContain("source_10");
+    expect(evidence).not.toContain("more columns");
+    expect(dictionary).toContain("source_10");
+    expect(dictionary).not.toContain("overflow-y-auto");
+  });
+
   it("renders the run artifact's data card inline, with withheld values and a secondary page link", () => {
     expect(model.dataCardArtifactId).toBe("card-1");
     const html = renderToStaticMarkup(

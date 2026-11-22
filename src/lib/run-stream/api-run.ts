@@ -5,6 +5,7 @@ import { subscribeRunEvents } from "@/lib/realtime/run-events";
 import { RunStatus } from "@/types/enums";
 
 import type { GateAnswer, RunCommands, RunEvent } from "./contract";
+import { DESIGN_STAGE, loadPublishedDesign } from "./experiment-design";
 import { RunPacer } from "./pacer";
 import { PipelineAdapter, type PipelineEnvelope, type PipelineRunInfo } from "./pipeline-adapter";
 import { loadPublishedHypotheses, type PublicationRef } from "./published-hypotheses";
@@ -113,6 +114,7 @@ export class ApiRun implements RunCommands {
             this.pacer.push(adapted);
           }
           this.hydratePublication();
+          this.hydrateDesign();
         },
         onEnded: () => void this.settle(),
         onSessionEnded: () => window.dispatchEvent(new Event("auth:expired")),
@@ -135,6 +137,22 @@ export class ApiRun implements RunCommands {
         if (signal.aborted) return;
         this.pacer.now(adapter.applyPublication(ref));
         showError(error);
+      },
+    );
+  }
+
+  private hydrateDesign() {
+    const adapter = this.adapter;
+    const ref = adapter?.designToLoad();
+    if (!adapter || !ref || this.publications.has(ref)) return;
+    this.publications.add(ref);
+    const { signal } = this.artifactRequest;
+    void loadPublishedDesign(this.projectId, this.runId, ref, signal).then(
+      (publication) => {
+        if (!signal.aborted) this.pacer.now(adapter.applyDesign(ref, publication));
+      },
+      (error) => {
+        if (!signal.aborted) showError(error);
       },
     );
   }
@@ -190,6 +208,10 @@ export class ApiRun implements RunCommands {
       return;
     }
     if (route.to === "accept") {
+      if (route.stageKey === DESIGN_STAGE && answer.option_id === "send_back") {
+        await fetchRuns.sendStageBack(this.projectId, this.runId, route.stageRunId, DESIGN_STAGE, note);
+        return;
+      }
       const dropped = answer.dropped ?? [];
       const selected = route.hypothesisIds?.filter((id) => !dropped.includes(id));
       if (selected && !selected.length) throw new Error("Select at least one hypothesis.");
@@ -200,7 +222,7 @@ export class ApiRun implements RunCommands {
       return;
     }
     if (route.kind === "artifact_review" && answer.option_id === "revise") {
-      await fetchRuns.answerStageGate(this.projectId, this.runId, route.stageRunId, gateId, {
+      await fetchRuns.answerStageGate(this.projectId, this.runId, route.stageRunId, route.engineGateId ?? gateId, {
         action: "comment",
         findings: revisionFindings(answer, route.findings ?? [], route.artifactId),
         ...(note ? { text: note } : {}),
@@ -211,7 +233,7 @@ export class ApiRun implements RunCommands {
       ...(answer.dropped?.length ? { dropped: answer.dropped } : {}),
       ...(answer.kept?.length ? { kept: answer.kept } : {}),
     };
-    await fetchRuns.answerStageGate(this.projectId, this.runId, route.stageRunId, gateId, {
+    await fetchRuns.answerStageGate(this.projectId, this.runId, route.stageRunId, route.engineGateId ?? gateId, {
       ...(route.kind === "artifact_review"
         ? { action: "approve" as const }
         : { action: "answer" as const, option_id: answer.option_id }),

@@ -8,11 +8,17 @@ import { motion } from "motion/react";
 
 import { claimScopeSummary } from "@/lib/run-stream/claim-scope";
 import type { Figure, KnowledgeCard, PlannedStage } from "@/lib/run-stream/contract";
+import { incompleteRapidReview } from "@/lib/run-stream/hypothesis-work";
 import type { RunState, ScopeContent, StageState } from "@/lib/run-stream/run-state";
 import { liveStageKey } from "@/lib/run-stream/selectors";
 
 import { AnimatedNumber } from "./animated-number";
+import { DesignLiveCard, ExecutionLiveCard } from "./live-run/live-run-card";
+import { currentMilestone, stagePosition } from "./pipeline-stage-selection";
+import { ExecutionResults } from "./results-report/results-entry";
 import { ClaimScopeScene } from "./scenes/claim-scope-scene";
+import { ExecutionScene } from "./scenes/execution-scene";
+import { ExperimentDesignScene } from "./scenes/experiment-design-scene";
 import { ExperimentScene } from "./scenes/experiment-scene";
 import { HypothesizeScene } from "./scenes/hypothesize-scene";
 import { InterpretScene } from "./scenes/interpret-scene";
@@ -30,6 +36,27 @@ import { StageHeading, StageLineage } from "./stage-heading";
 
 const set = (content: Extract<StageState["content"], { stage: "hypothesize" }>) =>
   Object.values(content.drafts).filter((d) => d.selected);
+
+function hasWorkWithoutOutputs(content: StageState["content"]) {
+  switch (content.stage) {
+    case "scope":
+      return !content.goal.length && !content.subQuestions.length && !content.evaluation;
+    case "search":
+      return !content.strategies.length && !content.sources.length && !content.collected;
+    case "screen":
+      return !content.points.length && !content.kept.length && !content.rejected.length;
+    case "read":
+      return !content.cards.length;
+    case "synthesize":
+      return !content.clusters.length && !content.gaps.length && !content.tensions.length && !content.overview;
+    case "hypothesize":
+      return !content.published?.length && !content.order.length && !content.turns.length;
+    case "map":
+      return !content.nodes.length && !content.pieces.length;
+    default:
+      return false;
+  }
+}
 
 /** Hypotheses left out, at the review stop or when the run was accepted, from the last round of hypotheses. */
 function dropped(state: RunState) {
@@ -59,13 +86,23 @@ function RunEnd({ state, count }: { state: RunState; count: number }) {
   const screen = content("screen", "screen");
   const read = content("read", "read");
   const synth = content("synthesize", "synthesize");
+  const searchCounts =
+    search?.collected &&
+    (search.collected.review_round === undefined ||
+      Object.entries(search.cells).some(([key, hits]) => hits != null && (!search.cellIssues[key] || hits > 0)))
+      ? search.collected
+      : undefined;
   const trail = [
     { label: "Sub-questions", value: scope?.subQuestions.length ?? 0, from: "your topic" },
-    { label: "Papers found", value: search?.collected?.unique ?? 0, from: `${search?.collected?.raw ?? 0} hits` },
+    {
+      label: "Papers found",
+      value: searchCounts?.unique ?? null,
+      from: searchCounts ? `${searchCounts.raw} hits` : "No search results reported",
+    },
     {
       label: "Kept to read",
-      value: (screen?.kept.length ?? 0) - (screen?.dropped.length ?? 0),
-      from: "relevance × quality",
+      value: screen ? screen.kept.length - screen.dropped.length : null,
+      from: screen?.criteria?.protocolVersion !== undefined ? "eligibility screening" : "screening",
     },
     { label: "Knowledge cards", value: read?.cards.length ?? 0, from: "one per paper" },
     { label: "Gaps", value: synth?.gaps.length ?? 0, from: "from the limitations" },
@@ -101,7 +138,14 @@ function RunEnd({ state, count }: { state: RunState; count: number }) {
             )}
           >
             <span className="font-mono text-[10.5px] text-muted-foreground">{String(i + 1).padStart(2, "0")}</span>
-            <CountUp value={step.value} delay={0.5 + i * 0.18} />
+            {step.value === null ? (
+              <span className="font-semibold text-2xl">
+                <span aria-hidden="true">—</span>
+                <span className="sr-only">Unavailable</span>
+              </span>
+            ) : (
+              <CountUp value={step.value} delay={0.5 + i * 0.18} />
+            )}
             <span className="font-medium text-sm">{step.label}</span>
             <span className="text-muted-foreground text-xs">{step.from}</span>
             {i < trail.length - 1 && (
@@ -142,19 +186,28 @@ function StageHeader({
     round_kind: planned?.round_kind ?? stage.plan.round_kind,
   };
   const done = stage.status === "done";
+  const incomplete = done && incompleteRapidReview(stage.content);
   const claim = stage.content.stage === "scope" ? claimOnly(stage.content) : undefined;
   const map = stage.content.stage === "map" && stage.content.fromArtifacts ? stage.content : undefined;
+  const published = stage.content.stage === "hypothesize" ? stage.content.published : undefined;
   const artifactSummary = map
     ? `${map.nodes.length} ${map.nodes.length === 1 ? "entity" : "entities"} · ${map.edges.length} ${map.edges.length === 1 ? "relation" : "relations"} · ${map.pieces.length} of 9 canvas pieces recorded`
-    : undefined;
+    : published
+      ? `${published.length} ${published.length === 1 ? "hypothesis" : "hypotheses"} published`
+      : undefined;
   const summary = claim ? claimScopeSummary(claim) : (artifactSummary ?? stage.summary);
+  const sparse = hasWorkWithoutOutputs(stage.content);
   const writes = stage.plan.steps.flatMap((step) =>
     step.artifact
       ? [
           {
             id: step.id,
             label: step.artifact,
-            done: stage.doneStepIds.includes(step.id),
+            done:
+              !sparse &&
+              !(stage.content.stage === "hypothesize" && step.id === "debate" && !stage.content.turns.length) &&
+              (!incomplete || step.id === "strategy") &&
+              stage.doneStepIds.includes(step.id),
             active: stage.currentStepId === step.id,
           },
         ]
@@ -168,7 +221,7 @@ function StageHeader({
       pipeline={plan.pipeline}
       purpose={claim ? "Decide whether to state a claim and lock the plan for the literature review." : plan.purpose}
       cast={plan.cast}
-      status={done ? "done" : ended ? "ended" : "active"}
+      status={done && !incomplete ? "done" : ended || incomplete ? "ended" : "active"}
       titleExtra={
         showRound && plan.round ? (
           <span className="rounded-md bg-muted px-1.5 py-0.5 font-medium font-mono text-[11.5px] text-muted-foreground">
@@ -208,6 +261,11 @@ function StageHeader({
   );
 }
 
+/** The Execution step on show: the one opened, else the live one, else the last once the stage is done (Readout). */
+function executionStep(stage: StageState, focus: string | null | undefined) {
+  return focus ?? stage.currentStepId ?? stage.plan.steps.at(-1)?.id;
+}
+
 export function StageScreen({
   state,
   stageKey,
@@ -216,11 +274,37 @@ export function StageScreen({
   scroller,
   onOpenReport,
   onClose,
+  projectId,
+  local = false,
+  datasetFirst = false,
+  hypothesisMilestone,
+  designPreview,
+  executionPreview,
+  executionFocus,
+  designFocus,
+  onLiveStep,
+  onDesign,
+  onExecution,
+  onShowGate,
 }: {
   state: RunState;
   stageKey: string;
   runLabel: string;
   live: boolean;
+  projectId: string;
+  local?: boolean;
+  datasetFirst?: boolean;
+  hypothesisMilestone?: number;
+  designPreview?: React.ReactNode;
+  executionPreview?: React.ReactNode;
+  executionFocus?: string | null;
+  /** A finished Experiment design step opened again. */
+  designFocus?: string | null;
+  /** Drops the opened step and returns to the live one. */
+  onLiveStep?(): void;
+  onDesign?(): void;
+  onExecution?(): void;
+  onShowGate?(): void;
   scroller: RefObject<HTMLElement | null>;
   onOpenReport(): void;
   onClose(): void;
@@ -261,12 +345,18 @@ export function StageScreen({
 
   const stage = state.stages[stageKey];
   if (!stage) return null;
-  const index = state.plan.findIndex((s) => s.key === stageKey);
+  const { index, total } = stagePosition(
+    state.plan,
+    stageKey,
+    datasetFirst,
+    currentMilestone(stage.plan, stage.currentStepId, hypothesisMilestone),
+  );
   const { content } = stage;
   const notes = state.decisions.filter((d) => d.stageKey === stageKey);
   // The step running now; frames waiting on it pulse, the others stay still.
   const step = live ? stage.currentStepId : null;
 
+  // The live card stays while the stage runs, also at a stop that waits for the person: the gate sheet sits over it.
   let scene: React.ReactNode = null;
   const decisionNotes = notes.map((n) => (
     <SceneNote key={n.seq} actor={n.actor} title="Your decision" text={n.text} note={n.note} />
@@ -284,21 +374,11 @@ export function StageScreen({
       </>
     );
   }
-  if (content.stage === "search")
-    scene = (
-      <SearchScene
-        data={content}
-        live={live}
-        activity={
-          live && step === "collect" && state.message?.id.startsWith("activity.") ? state.message.text : undefined
-        }
-        notice={state.workNotes[stageKey]}
-      />
-    );
+  if (content.stage === "search") scene = <SearchScene data={content} live={live} notice={state.workNotes[stageKey]} />;
   if (content.stage === "screen")
     scene = (
       <>
-        <ScreenScene data={content} live={live} step={step} />
+        <ScreenScene data={content} live={live} step={step} finished={stage.status === "done"} />
         {decisionNotes}
       </>
     );
@@ -333,17 +413,84 @@ export function StageScreen({
         {decisionNotes}
       </>
     );
-  if (content.stage === "experiment") scene = <ExperimentScene data={content} live={live} />;
+  if (content.stage === "experiment") {
+    scene =
+      stageKey === "experiment_design" ? (
+        <>
+          {designPreview ??
+            (live ? (
+              <DesignLiveCard
+                projectId={projectId}
+                runId={state.runId}
+                stepKey={stage.currentStepId}
+                focusKey={designFocus}
+                onBack={onLiveStep}
+                live={state.lifecycle === "running"}
+              />
+            ) : (
+              <ExperimentDesignScene
+                design={content.liveDesign}
+                projectId={projectId}
+                runId={state.runId}
+                local={local}
+                checks={Object.values(state.workChecks[stageKey]?.design_work ?? {})}
+                step={stage.currentStepId}
+                gate={state.gate?.stageKey === stageKey ? state.gate : null}
+                onShowGate={onShowGate}
+                onExecution={onExecution}
+              />
+            ))}
+          {!designPreview && decisionNotes}
+        </>
+      ) : (
+        <ExperimentScene data={content} live={live} />
+      );
+  }
   if (content.stage === "interpret")
-    scene = (
-      <InterpretScene
-        data={content}
-        round={stage.plan.round ?? 1}
-        stageKey={stageKey}
-        decisions={state.decisions}
-        live={live}
-      />
-    );
+    scene =
+      stageKey === "execution" ? (
+        <ExecutionResults
+          projectId={projectId}
+          runId={state.runId}
+          delivered={
+            !executionPreview &&
+            (state.completed || stage.status === "done" || stage.doneStepIds.includes("execution_deliver"))
+          }
+        >
+          {executionPreview ??
+            (live && executionStep(stage, executionFocus) !== "execution_readout" ? (
+              <ExecutionLiveCard
+                projectId={projectId}
+                runId={state.runId}
+                stepKey={stage.currentStepId}
+                focusKey={executionFocus}
+                onBack={onLiveStep}
+                live={state.lifecycle === "running"}
+              />
+            ) : (
+              <>
+                <ExecutionScene
+                  execution={content.execution}
+                  projectId={projectId}
+                  runId={state.runId}
+                  step={
+                    executionFocus ?? (executionStep(stage, null) === "execution_readout" ? "execution_readout" : step)
+                  }
+                  onDesign={onDesign}
+                />
+                {decisionNotes}
+              </>
+            ))}
+        </ExecutionResults>
+      ) : (
+        <InterpretScene
+          data={content}
+          round={stage.plan.round ?? 1}
+          stageKey={stageKey}
+          decisions={state.decisions}
+          live={live}
+        />
+      );
   if (content.stage === "report")
     scene = (
       <>
@@ -367,12 +514,14 @@ export function StageScreen({
       <StageHeader
         stage={stage}
         index={index}
-        total={state.plan.length}
+        total={total}
         showRound={state.plan.filter((s) => s.stage === "hypothesize").length > 1}
         planned={state.plan.find((s) => s.key === stageKey)}
         ended={state.lifecycle === "failed"}
       />
-      {endsHere && content.stage === "hypothesize" && <RunEnd state={state} count={set(content).length} />}
+      {endsHere && content.stage === "hypothesize" && (
+        <RunEnd state={state} count={content.published?.length ?? set(content).length} />
+      )}
       {endsHere && content.stage === "map" && (
         <RunEnd state={state} count={content.nodes.filter((n) => n.type === "hypothesis").length - dropped(state)} />
       )}

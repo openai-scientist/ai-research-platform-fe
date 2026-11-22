@@ -13,6 +13,24 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
+## Run Studio mock
+
+Set `DATASET_STAGE_MOCK=1` in `.env.development.local` and start the development server.
+Open [Run Studio mock](http://localhost:3000/dev/dataset-stage) to enter at the Local Node release.
+After simulated approval, the preview shows the Dataset checks and their results as they arrive.
+Accept the Data card and open **Hypothesis** from the stage bar to replay the existing Logos recording in the same workspace.
+The recording uses a separate research topic. Use the **Dataset** tab to revisit the accepted Data card.
+After you accept the Hypothesis selection, Experiment design builds a mock analysis plan for the hypotheses you kept.
+Use **Skip step** to advance. The demo pauses to confirm estimands, choose an evidence strategy and set a practical threshold.
+The final decision records an exploratory plan or a conditional confirmatory commitment in the demo. Production approvals and Core Lock are separate.
+Protocol, Robustness and Diagnose show the paired analysis, exploratory checks and a synthetic twin rehearsal.
+Design and Execution link each accepted claim back to its conditions, cited evidence cards and independent review from the Hypothesis recording.
+Execution distinguishes a recorded program result, statistical verdict and claim assessment from the synthetic scoring example.
+Once Design is recorded, **Open Execution rehearsal** to follow Verify, Prepare, Run, Check, Seal, Deliver and Readout.
+The active agent points to the evidence it is working on. Open completed steps from the stage bar or use **Replay Execution**
+to watch the synthetic analysis again.
+**Restart demo** returns to the Local Node release. The mock is available only in development with the flag enabled.
+
 ## Google Sheets and Drive source picker
 
 Google connections use Google Picker to select a spreadsheet or folder. Configure

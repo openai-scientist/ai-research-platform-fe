@@ -40,6 +40,7 @@ import type {
   RuleId,
   RunLifecycle,
   ScopeRisk,
+  ScreeningProgress,
   ScreenPoint,
   SearchNode,
   SearchQuery,
@@ -56,6 +57,7 @@ import type {
   Verdict,
   WorkCheck,
 } from "./contract";
+import type { PublishedHypothesis } from "./published-hypotheses";
 
 export interface DataContent {
   stage: "data";
@@ -101,6 +103,8 @@ export interface SearchContent {
   delayMs: number;
   /** Hits per `${queryId}:${sourceId}`; null while the request is out. */
   cells: Record<string, number | null>;
+  cellIssues: Record<string, string>;
+  reviewRound?: number;
   requests: number;
   merged: { title: string; records: SourceRecord[]; kept: string; kept_record?: string }[];
   collected?: {
@@ -111,13 +115,28 @@ export interface SearchContent {
     repeats?: number | null;
     files: { name: string; detail: string }[];
     collected_at: string;
-    per_source?: Record<string, { requests: number; papers: number; errors?: string[] }>;
+    per_source?: Record<
+      string,
+      { requests?: number; papers?: number; errors?: string[]; unattributed_errors?: number }
+    >;
+    review_round?: number;
+    round_answered?: boolean;
+    round_hits?: number;
+    new_records?: number;
   };
 }
 
 export interface ScreenContent {
   stage: "screen";
-  criteria?: { rules: string[]; relevanceMin: number; qualityMin: number; candidates?: number };
+  criteria?: {
+    rules: string[];
+    relevanceMin?: number;
+    qualityMin?: number;
+    candidates?: number;
+    protocolVersion?: number;
+    exclusions?: string[];
+  };
+  reviewProgress?: ScreeningProgress;
   /** Candidates the scoring takes on, and those set aside before it. */
   planned?: { toScreen: number; setAside: number };
   points: ScreenPoint[];
@@ -164,6 +183,7 @@ export interface HypothesizeContent {
   turns: DebateTurn[];
   drafts: Record<string, DraftState>;
   order: string[];
+  published?: PublishedHypothesis[];
   asides: { id: string; kind?: "held_back" | "not_used"; statement: string; reason: string }[];
   dropped: string[];
   /** What the independent reviewer reported on the set. */
@@ -196,6 +216,7 @@ export interface ExperimentContent {
   planId?: string;
   plan: Hypothesis[];
   design?: TestDesign;
+  liveDesign?: import("./experiment-design").DesignContent;
 }
 
 export interface EvidenceRow {
@@ -210,6 +231,7 @@ export interface EvidenceRow {
 export interface InterpretContent {
   stage: "interpret";
   rows: EvidenceRow[];
+  execution?: import("./execution").ExecutionContent;
   recommendation?: { recommendation: Decision; rationale: string; goBacksUsed: number; goBacksAllowed: number };
   decision?: { decision: Decision; by: "pi" | "you"; note?: string };
 }
@@ -285,6 +307,10 @@ export interface FeedItem {
   kind: "message" | "event" | "decision";
   /** Stage the item happened in. */
   stageKey?: string;
+  /** Search queries fully recorded in a literature action or tool call. */
+  queries?: string[];
+  /** Set for actual stage work events, excluding general narration and decisions. */
+  work?: true;
   /** A decision comment or additional context for an activity. */
   note?: string;
   /** The review stop a decision answered. */
@@ -363,6 +389,7 @@ export function emptyContent(plan: StagePlan): StageContent {
         sources: [],
         delayMs: 0,
         cells: {},
+        cellIssues: {},
         requests: 0,
         merged: [],
       };
