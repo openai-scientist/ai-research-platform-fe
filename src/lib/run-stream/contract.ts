@@ -663,7 +663,8 @@ export interface GateOption {
 export interface Gate {
   id: string;
   kind: GateKind;
-  stageKey?: "dataset" | "experiment_design" | "execution";
+  /** The stage that opened the stop; set for stops that belong to one stage, such as dataset, design, execution, writing. */
+  stageKey?: string;
   title: string;
   /** Why the run stopped here, in terms of the review mode. */
   why: string;

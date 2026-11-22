@@ -104,6 +104,26 @@ export interface RunRecovery {
     | null;
 }
 
+/** `redo` starts the target stage again; `revise` changes its last published result where findings point. */
+export type SendBackMode = "revise" | "redo";
+
+/** A stage run of a research run (Logos `StageItem`); the fields the Web reads. */
+export interface StageRunItem {
+  stage_run_id: string;
+  stage_key: string;
+  status: string;
+  iteration: number;
+  created_at: string;
+  finished_at?: string | null;
+}
+
+/** What a send-back or rerun answers: the stage run it left and the one it started. */
+export interface StageStarted {
+  stage_run_id: string;
+  status: string;
+  new_stage_run_id: string | null;
+}
+
 /** An answer to a gate a pipeline stage opened. */
 export interface StageGateAnswer {
   action: "answer" | "approve" | "comment";
@@ -241,11 +261,25 @@ export const fetchRuns = {
     );
     return response.data;
   },
-  sendStageBack: async (projectId: string, runId: string, stageRunId: string, target: string, note?: string) => {
-    const response = await apiService.post<ApiResult<unknown>>(
+  sendStageBack: async (
+    projectId: string,
+    runId: string,
+    stageRunId: string,
+    target: string,
+    note?: string,
+    mode?: SendBackMode,
+  ) => {
+    const response = await apiService.post<ApiResult<StageStarted>>(
       `${runPath(projectId, runId)}/stages/${encodeURIComponent(stageRunId)}/send-back`,
-      { target_stage_key: target, ...(note ? { note } : {}) },
+      { target_stage_key: target, ...(note ? { note } : {}), ...(mode ? { mode } : {}) },
     );
+    return response.data;
+  },
+  /** The stage runs of a run, oldest first (Logos `StageItem`). */
+  listStages: async (projectId: string, runId: string, signal?: AbortSignal): Promise<ApiResult<StageRunItem[]>> => {
+    const response = await apiService.get<ApiResult<StageRunItem[]>>(`${runPath(projectId, runId)}/stages`, undefined, {
+      signal,
+    });
     return response.data;
   },
   getConsultations: async (

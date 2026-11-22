@@ -19,6 +19,7 @@ import {
 } from "@/lib/run-stream/execution";
 import { designLabel } from "@/lib/run-stream/experiment-design";
 
+import { RedoExecutionAction } from "../redo-execution";
 import { ExecutionLayers } from "./execution-layers";
 import { Pane } from "./scene-ui";
 
@@ -75,6 +76,7 @@ export function ExecutionScene({
           </Button>
         )}
       </Pane>
+      <RedoExecutionAction projectId={projectId} runId={runId} />
       {artifacts.length > 0 && (
         <Pane title="Published evidence">
           <ul className="flex flex-wrap gap-2">

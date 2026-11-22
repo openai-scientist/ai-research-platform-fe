@@ -1007,3 +1007,39 @@ describe("PipelineAdapter", () => {
     });
   });
 });
+
+describe("a review gate belongs to the stage that opened it", () => {
+  it("shows the Writing gate, not the hypotheses one, when Writing opens a review after the hypotheses were accepted", () => {
+    const at = until("run.gate_opened", 2);
+    const hypothesesGate = envelopes[at - 1];
+    const adapter = new PipelineAdapter(info);
+    const head = convert(envelopes.slice(0, at), adapter);
+    const first = replayRunEvents("run-1", head);
+    expect(first.gate).toMatchObject({ kind: "hypotheses", title: "Approve the revised hypotheses" });
+    const list = [
+      appended(hypothesesGate, "decision.recorded", { action: "approve", gate_id: "hypotheses-2" }),
+      appended(hypothesesGate, "run.gate_closed", { gate_id: "hypotheses-2", action: "approve", actor: "user" }),
+      appended(
+        hypothesesGate,
+        "run.gate_opened",
+        {
+          gate_id: "lock_claims-2",
+          kind: "artifact_review",
+          step_key: "evaluate",
+          header: "",
+          prompt: "Lock the claims",
+          artifact_ids: ["a-writing"],
+        },
+        { stage_key: "writing", stage_run_id: "writing-stage", step_key: "evaluate" },
+      ),
+    ];
+    const state = replayRunEvents("run-1", [...head, ...convert(list, adapter)]);
+    expect(state.gate).toMatchObject({
+      id: "lock_claims-2",
+      kind: "decision",
+      stageKey: "writing",
+      title: "Writing decision",
+    });
+    expect(state.gate?.title).not.toMatch(/hypotheses/i);
+  });
+});

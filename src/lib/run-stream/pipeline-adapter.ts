@@ -1751,7 +1751,9 @@ export class PipelineAdapter {
     const id = String(payload.gate_id ?? "");
     if (!id) return;
     const stageKey = this.at?.stage_key ?? undefined;
-    if (stageKey === DESIGN_STAGE || stageKey === EXECUTION_STAGE || stageKey === "dataset") {
+    // A review gate belongs to the stage that opened it: only the Hypothesis stage's is "Approve the hypotheses".
+    const otherStage = engineKind === "artifact_review" && !!stageKey && !this.isHypothesisStage(stageKey);
+    if (stageKey === DESIGN_STAGE || stageKey === EXECUTION_STAGE || stageKey === "dataset" || otherStage) {
       const key =
         stageKey === DESIGN_STAGE
           ? this.designGateId(id)
@@ -1763,7 +1765,9 @@ export class PipelineAdapter {
           ? "Experiment design decision"
           : stageKey === EXECUTION_STAGE
             ? "Execution decision"
-            : "Dataset decision";
+            : stageKey === "dataset"
+              ? "Dataset decision"
+              : `${designLabel(stageKey ?? "stage")} decision`;
       const gate = this.questionGate(
         key,
         {
