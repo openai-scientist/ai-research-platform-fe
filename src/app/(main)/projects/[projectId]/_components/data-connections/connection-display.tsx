@@ -1,11 +1,12 @@
 import Image from "next/image";
 
 import { cn } from "cn";
+import { Database } from "lucide-react";
 import { siGooglebigquery, siInfluxdb, siPostgresql, siPrometheus } from "simple-icons";
 
 import {
   type ConnectionItem,
-  type ConnectionKind,
+  type ConnectionProviderId,
   type ConnectionSource,
   isTimeSeriesConnection,
 } from "@/lib/api/services/fetch-data-connections";
@@ -19,6 +20,16 @@ const databaseBadgeColor = "border-sky-500/20 bg-sky-500/10 text-sky-700 dark:te
 const timeSeriesBadgeColor = "border-violet-500/20 bg-violet-500/10 text-violet-700 dark:text-violet-300";
 
 export const CONNECTION_PROVIDERS = {
+  // The card a member picks to connect a relational server; the engine is chosen in the form.
+  database: {
+    label: "Database",
+    description: "Connect PostgreSQL, Supabase, MySQL or MariaDB.",
+    category: "Database",
+    icon: null,
+    viewBox: "0 0 24 24",
+    color: "text-sky-600",
+    badgeColor: databaseBadgeColor,
+  },
   prometheus: {
     label: "Prometheus",
     description: "Read metrics and counters from a public Prometheus server.",
@@ -93,7 +104,7 @@ export const CONNECTION_PROVIDERS = {
     badgeColor: "border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300",
   },
 } satisfies Record<
-  ConnectionKind,
+  ConnectionProviderId,
   {
     label: string;
     description: string;
@@ -105,7 +116,8 @@ export const CONNECTION_PROVIDERS = {
   }
 >;
 
-export function ConnectionLogo({ kind }: { kind: ConnectionKind }) {
+export function ConnectionLogo({ kind }: { kind: ConnectionProviderId }) {
+  if (kind === "database") return <Database className="size-8 shrink-0 text-sky-600" aria-hidden="true" />;
   if (kind === "google" || kind === "google_drive" || kind === "google_sheets") {
     return (
       <Image

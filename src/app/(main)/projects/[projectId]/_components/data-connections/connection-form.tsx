@@ -17,6 +17,7 @@ import {
   type ConnectionKind,
   type ConnectionSsl,
   type CreateConnectionRequest,
+  type DatabaseEngine,
   isGoogleConnection,
   isTimeSeriesConnection,
 } from "@/lib/api/services/fetch-data-connections";
@@ -25,8 +26,14 @@ import { createTimeSeriesConnection } from "./time-series-connection";
 
 const CONNECTION_INPUT_CLASSNAME = "h-11 bg-background md:h-10";
 
+export const DATABASE_ENGINES: { value: DatabaseEngine; label: string }[] = [
+  { value: "postgres", label: "PostgreSQL" },
+  { value: "mysql", label: "MySQL or MariaDB" },
+];
+
 export interface ConnectionDraft {
   name: string;
+  engine: DatabaseEngine;
   host: string;
   port: string;
   database: string;
@@ -41,8 +48,10 @@ export interface ConnectionDraft {
 }
 export const EMPTY_CONNECTION_DRAFT: ConnectionDraft = {
   name: "",
+  engine: "postgres",
   host: "",
-  port: "5432",
+  // The port is asked for, never guessed from the engine: a wrong guess fails as a timeout.
+  port: "",
   database: "",
   username: "",
   password: "",
@@ -96,16 +105,18 @@ export function createConnectionInput(kind: ConnectionKind, draft: ConnectionDra
   }
   const portText = draft.port.trim();
   const port = Number(portText);
-  if (portText && (!/^\d+$/.test(portText) || !Number.isInteger(port) || port < 1 || port > 65_535)) {
+  if (!portText) throw new Error("Enter the port the server listens on, such as 5432 or 3306.");
+  if (!/^\d+$/.test(portText) || !Number.isInteger(port) || port < 1 || port > 65_535) {
     throw new Error("Port must be a whole number between 1 and 65,535.");
   }
   if (draft.password.length > 1024) throw new Error("Password must contain at most 1,024 characters.");
   return {
     name,
-    kind,
+    kind: "database",
     config: {
+      engine: draft.engine,
       host: draft.host.trim(),
-      ...(portText ? { port } : {}),
+      port,
       database: draft.database.trim(),
       username: draft.username.trim(),
       ssl: draft.ssl,
@@ -116,10 +127,12 @@ export function createConnectionInput(kind: ConnectionKind, draft: ConnectionDra
 
 export function ConnectionGuidance({
   kind,
+  engine,
   ssl,
   compact = false,
 }: {
   kind: ConnectionKind;
+  engine: DatabaseEngine;
   ssl: ConnectionSsl;
   compact?: boolean;
 }) {
@@ -180,7 +193,7 @@ export function ConnectionGuidance({
             <p>Run these commands as your database administrator. Replace mydb and the password first.</p>
             <pre className="mt-2 max-w-full overflow-auto rounded-lg bg-muted p-3 font-mono text-xs">
               <code>
-                {kind === "postgres"
+                {engine === "postgres"
                   ? "CREATE ROLE platform_reader LOGIN PASSWORD '...';\nGRANT CONNECT ON DATABASE mydb TO platform_reader;\nGRANT USAGE ON SCHEMA public TO platform_reader;\nGRANT SELECT ON ALL TABLES IN SCHEMA public TO platform_reader;\nALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO platform_reader;"
                   : "CREATE USER 'platform_reader'@'%' IDENTIFIED BY '...';\nGRANT SELECT ON mydb.* TO 'platform_reader'@'%';"}
               </code>
@@ -302,8 +315,33 @@ export function ConnectionForm({
       )}
       {!isTimeSeriesConnection(kind) && kind !== "bigquery" && (
         <>
+          <Field>
+            <FieldLabel htmlFor="connection-engine">
+              Engine <span className="text-destructive">*</span>
+            </FieldLabel>
+            <Select
+              value={draft.engine}
+              disabled={disabled}
+              onValueChange={(value) => {
+                if (value === "postgres" || value === "mysql") update("engine", value);
+              }}
+            >
+              <SelectTrigger id="connection-engine" className={cn("w-full", CONNECTION_INPUT_CLASSNAME)}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  {DATABASE_ENGINES.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          </Field>
           {input("host", "Host", true)}
-          {input("port", "Port", false, "number")}
+          {input("port", "Port", true, "number")}
           {input("database", "Database", true)}
           {input("username", "Username", true)}
           {input("password", "Password", false, "password")}
@@ -333,7 +371,9 @@ export function ConnectionForm({
         </>
       )}
       <FieldDescription className={cn(kind !== "bigquery" && "md:col-span-2")}>
-        Connecting tests these credentials and saves the connection only when successful.
+        {!isTimeSeriesConnection(kind) && kind !== "bigquery"
+          ? "Enter the port your server listens on — usually 5432 for PostgreSQL and 3306 for MySQL. Connecting tests these credentials and saves the connection only when successful."
+          : "Connecting tests these credentials and saves the connection only when successful."}
       </FieldDescription>
     </FieldGroup>
   );

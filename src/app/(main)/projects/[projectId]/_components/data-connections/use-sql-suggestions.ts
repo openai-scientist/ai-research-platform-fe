@@ -74,7 +74,7 @@ export function useSqlSuggestions(flow: ConnectionFlowState, context: SqlComplet
                 kind: "schema",
                 label: name,
                 detail: "Schema",
-                insert: `${sqlIdentifier(name, flow.kind)}.`,
+                insert: `${sqlIdentifier(name, flow.dialect)}.`,
               });
           const localProject = path.length < 2 || path[0] === connection.config.project_id;
           if (schema && flow.schemas.includes(schema) && localProject) {
@@ -87,10 +87,10 @@ export function useSqlSuggestions(flow: ConnectionFlowState, context: SqlComplet
                 label: table.name,
                 detail: `${schema} · ${table.type}`,
                 insert: context.quotedPath
-                  ? sqlTableIdentifier(context.qualifier, table.name, flow.kind)
+                  ? sqlTableIdentifier(context.qualifier, table.name, flow.dialect)
                   : context.qualifier
-                    ? sqlIdentifier(table.name, flow.kind)
-                    : sqlTableIdentifier(schema, table.name, flow.kind),
+                    ? sqlIdentifier(table.name, flow.dialect)
+                    : sqlTableIdentifier(schema, table.name, flow.dialect),
               });
           }
         } else {
@@ -142,8 +142,8 @@ export function useSqlSuggestions(flow: ConnectionFlowState, context: SqlComplet
                 detail: `${ref.alias} · ${column.type}`,
                 insert:
                   context.qualifier || targets.length === 1
-                    ? sqlIdentifier(column.name, flow.kind)
-                    : `${"aliasQuoted" in ref && ref.aliasQuoted ? sqlIdentifier(ref.alias, flow.kind) : ref.alias}.${sqlIdentifier(column.name, flow.kind)}`,
+                    ? sqlIdentifier(column.name, flow.dialect)
+                    : `${"aliasQuoted" in ref && ref.aliasQuoted ? sqlIdentifier(ref.alias, flow.dialect) : ref.alias}.${sqlIdentifier(column.name, flow.dialect)}`,
               });
           }
         }
@@ -169,7 +169,7 @@ export function useSqlSuggestions(flow: ConnectionFlowState, context: SqlComplet
     flow.disabled,
     seedSchema,
     flow.schemas,
-    flow.kind,
+    flow.dialect,
     flow.schema,
     flow.table,
     flow.columns,

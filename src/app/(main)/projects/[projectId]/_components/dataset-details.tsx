@@ -29,7 +29,12 @@ import { showConnectionError, useAllDataConnections, useDatasetsByConnection } f
 import { useDatasetDetailQuery, useUpdateDatasetMutation } from "@/hooks/use-datasets-query";
 import { adminKeys, connectionKeys, projectKeys } from "@/lib/api/query-keys";
 import { fetchDataConnections, isGoogleConnection } from "@/lib/api/services/fetch-data-connections";
-import { type DatasetItem, type DatasetVersionItem, fetchDatasets } from "@/lib/api/services/fetch-datasets";
+import {
+  connectionOrigin,
+  type DatasetItem,
+  type DatasetVersionItem,
+  fetchDatasets,
+} from "@/lib/api/services/fetch-datasets";
 
 import { DatasetConnectionActions, DatasetConnectionSource } from "./data-connections/dataset-connection-source";
 import { timeAgo } from "./dataset-format";
@@ -146,7 +151,7 @@ export function DatasetDetails({
   // The source of the last dataset imported from it can go with it, for whoever may delete the source.
   const connections = useAllDataConnections(canWrite ? project.id : "");
   const byConnection = useDatasetsByConnection(canWrite ? project.id : "");
-  const sourceId = latest?.source?.connection_id;
+  const sourceId = connectionOrigin(latest)?.connection_id;
   const source = connections.data?.find((connection) => connection.id === sourceId);
   const lastFromSource =
     source &&

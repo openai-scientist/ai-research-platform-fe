@@ -12,6 +12,7 @@ import { Progress } from "@/components/ui/progress";
 import { useAllDataConnections } from "@/hooks/use-data-connections";
 import { useDatasetFileTypes } from "@/hooks/use-dataset-file-types";
 import { adminKeys, projectKeys } from "@/lib/api/query-keys";
+import { connectionProvider } from "@/lib/api/services/fetch-data-connections";
 import { type DatasetUploadOutcome, fetchDatasets } from "@/lib/api/services/fetch-datasets";
 import { datasetFileAccept, datasetFileRejection } from "@/lib/dataset-file";
 
@@ -288,7 +289,7 @@ export function DatasetUpload({
                   key={connection.id}
                   className="grid size-5 place-items-center rounded-full bg-background ring-2 ring-background [&_img]:size-3.5 [&_svg]:size-3.5"
                 >
-                  <ConnectionLogo kind={connection.kind} />
+                  <ConnectionLogo kind={connectionProvider(connection)} />
                 </span>
               ))}
             </span>

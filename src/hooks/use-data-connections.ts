@@ -13,7 +13,7 @@ import {
   type ConnectionListParams,
   fetchDataConnections,
 } from "@/lib/api/services/fetch-data-connections";
-import { type DatasetItem, fetchDatasets } from "@/lib/api/services/fetch-datasets";
+import { connectionOrigin, type DatasetItem, fetchDatasets } from "@/lib/api/services/fetch-datasets";
 import { ApiError } from "@/types/api";
 
 import { useInfinityScroll } from "./use-infinity-scroll";
@@ -129,7 +129,7 @@ export function useDatasetsByConnection(projectId: string) {
       const datasets = await collectPages((params) => fetchDatasets.getList(projectId, params, signal));
       const byConnection = new Map<string, DatasetItem[]>();
       for (const dataset of datasets) {
-        const id = dataset.latest_version?.source?.connection_id;
+        const id = connectionOrigin(dataset.latest_version)?.connection_id;
         if (id) byConnection.set(id, [...(byConnection.get(id) ?? []), dataset]);
       }
       return byConnection;

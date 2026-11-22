@@ -8,12 +8,28 @@ import type { ListParams } from "../types";
 /** `google` is a member's Google account, kept for them to pick spreadsheets and folders with. */
 export type GoogleConnectionKind = "google" | "google_sheets" | "google_drive";
 export type TimeSeriesConnectionKind = "prometheus" | "influxdb";
-export type ConnectionKind = "postgres" | "mysql" | "bigquery" | GoogleConnectionKind | TimeSeriesConnectionKind;
-export function isTimeSeriesConnection(kind: ConnectionKind): kind is TimeSeriesConnectionKind {
+/** PostgreSQL and MySQL are one kind; the engine inside the config picks the driver. */
+export type DatabaseEngine = "postgres" | "mysql";
+export type ConnectionKind = "database" | "bigquery" | GoogleConnectionKind | TimeSeriesConnectionKind;
+/** What a card shows. A saved database connection shows its engine, not the kind it travels as. */
+export type ConnectionProviderId = ConnectionKind | DatabaseEngine;
+/** Identifier quoting differs per engine, so it follows the engine rather than the kind. */
+export type SqlDialect = DatabaseEngine | "bigquery";
+export function isTimeSeriesConnection(kind: ConnectionProviderId): kind is TimeSeriesConnectionKind {
   return kind === "prometheus" || kind === "influxdb";
 }
-export function isGoogleConnection(kind: ConnectionKind): kind is GoogleConnectionKind {
+export function isGoogleConnection(kind: ConnectionProviderId): kind is GoogleConnectionKind {
   return kind === "google" || kind === "google_sheets" || kind === "google_drive";
+}
+export function databaseEngine(connection: Pick<ConnectionItem, "kind" | "config">): DatabaseEngine | null {
+  if (connection.kind !== "database") return null;
+  return connection.config.engine === "mysql" ? "mysql" : "postgres";
+}
+export function connectionProvider(connection: Pick<ConnectionItem, "kind" | "config">): ConnectionProviderId {
+  return databaseEngine(connection) ?? connection.kind;
+}
+export function sqlDialect(connection: Pick<ConnectionItem, "kind" | "config">): SqlDialect {
+  return connection.kind === "bigquery" ? "bigquery" : (databaseEngine(connection) ?? "postgres");
 }
 export type ConnectionSsl = "require" | "verify-full" | "disable";
 export type TimeSeriesBucket = "1m" | "5m" | "15m" | "1h" | "6h" | "1d" | "1w";
@@ -66,8 +82,16 @@ export interface ConnectionItem {
 export type CreateConnectionRequest =
   | {
       name: string;
-      kind: "postgres" | "mysql";
-      config: { host: string; port?: number; database: string; username: string; ssl?: ConnectionSsl };
+      kind: "database";
+      // The port is asked for, never guessed from the engine: a server on its own port is common.
+      config: {
+        engine: DatabaseEngine;
+        host: string;
+        port: number;
+        database: string;
+        username: string;
+        ssl?: ConnectionSsl;
+      };
       secret: { password?: string };
     }
   | {
