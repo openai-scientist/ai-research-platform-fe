@@ -24,7 +24,7 @@ export const DROPOUT: StudyRecord = {
   values: {
     "A.1": "You · team of 2",
     "A.2": "CC BY 4.0, as the data (Realinho et al., 2022)",
-    "A.3": "rrp/v2 · 28 files hashed",
+    "A.3": "rrp/v2 · experiment package ERP-25CD v1, 36 outside files by sha256",
     "B.1": "Reading notes on 12 papers",
     "B.2": "Scopus + ERIC + arXiv · 2009–Sep 2026 · 3 queries · 168 hits · 12 read",
     "B.3":
@@ -59,10 +59,9 @@ export const DROPOUT: StudyRecord = {
     "E.3":
       "Second-semester results and three undated columns left out · adding the undated ones changes recall by +0.002",
     "F.1": "20 JSONL traces with config, seed, split hash and a score per student",
-    "F.2": "results.csv · 40 rows, each linked to its traces",
+    "F.2": "ERP-25CD · 60 observations, 8 comparisons, 25 descriptives, each linked to its runs",
     "G.1": "A1 → H1 · A2 → H2 · A3 → H4",
-    "G.2":
-      "A4 · recall by course, rows 28–38 · A5 · dropouts with no first-semester evaluation, row 27, not in the plan",
+    "G.2": "A4 · recall by course, 11 courses · A5 · dropouts with no first-semester evaluation, not in the plan",
     "G.3": "Recall at 20% flagged: about as many students as advisers can contact · AUROC and Brier as secondary",
     "G.4": "95% paired-bootstrap intervals · means over 5 seeds · no p-values",
     "H.1":
@@ -75,7 +74,7 @@ export const DROPOUT: StudyRecord = {
     "K.1": "21 entries · 16 DOIs, 5 stable links",
     "K.2": "12 notes · 41 quoted spans",
     "K.3": "15 full text · 6 abstract only",
-    "L.1": "Figures 1–3 linked to results.csv",
+    "L.1": "Figures 1–3 carry their data in the package",
     "M.1": "Education data journal (example) · research article",
     "N.1": "A code assistant wrote run_all.py, the team reviewed it · no AI-made data",
   },

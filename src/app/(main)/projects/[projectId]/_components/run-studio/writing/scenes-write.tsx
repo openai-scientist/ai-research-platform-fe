@@ -287,13 +287,21 @@ function Sections() {
     </RailTable>
   );
 }
+/* A number cites one record of the package; a record of a group (A4-171) counts toward the group's row (A4) when the
+   group has no row of its own. */
+const LISTED = new Set(EVSRC.map(([id]) => id));
+const usedOf = (id: string) =>
+  Object.entries(S.pp.used).reduce(
+    (n, [k, v]) => n + (k === id || (k.startsWith(`${id}-`) && !LISTED.has(k)) ? v : 0),
+    0,
+  );
 function Ledger() {
   return (
     <>
-      <Note>Every number in the draft is copied from one of these rows of results.csv. None is typed.</Note>
-      <RailTable head={[["Row", "w-20"], ["Holds"], ["Used", "w-12 text-right"]]}>
+      <Note>Every number in the draft is copied from one of these records of the package. None is typed.</Note>
+      <RailTable head={[["Record", "w-24"], ["Holds"], ["Used", "w-12 text-right"]]}>
         {EVSRC.map(([id, detail]) => {
-          const used = S.pp.used[id] ?? 0;
+          const used = usedOf(id);
           return (
             <TableRow key={id} data-source={id} className={cn(!used && "text-muted-foreground")}>
               <TableCell className={cn(RC, "font-mono")}>{id}</TableCell>

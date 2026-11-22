@@ -6,11 +6,14 @@
 
 import { type ComponentType, type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
 
+import { AnimatePresence, motion } from "motion/react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -20,17 +23,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 import { Caret, PulseDot } from "../run-bits";
-import {
-  AgentsSheet,
-  ContractView,
-  openSheet,
-  RecoveryBar,
-  ScenarioSheet,
-  ScenarioStrip,
-  ScreenIncidents,
-  ScreenTabs,
-} from "./cases-ui";
-import { SCN } from "./data/cases";
+import { AgentsSheet, openSheet, RecoveryBar, ScreenIncidents } from "./cases-ui";
 import {
   ASW_RULES,
   BLOCKS,
@@ -63,6 +56,7 @@ import {
   stageRange,
 } from "./data/meta";
 import {
+  DEFS,
   emit,
   HOST,
   J,
@@ -82,6 +76,22 @@ import {
 } from "./engine";
 import { JAside, JBody, jSetView, RunSwitch, runTone } from "./jfe-shell";
 import { AgentAvatar, Bump, cn, DEV, enter, Icon, M, pad2, quiet, SceneNote, WorkOrb } from "./lib";
+import {
+  LiveCheckpoints,
+  LiveNextStop,
+  LiveSteps,
+  LiveStopSheet,
+  LiveTeam,
+  LiveTrack,
+  liveIdle,
+  liveScreen,
+  liveScreenNo,
+} from "./live/chrome";
+import { SCREEN_COPY } from "./live/copy";
+import { outlineSections } from "./live/draft-data";
+import { heading } from "./live/outline-data";
+import { has, LIVE, OBJECT_NAME, SECTION_OF_STAGE, sectionFile } from "./live/run";
+import { LIVE_SCREENS, LSTAGE } from "./live/stages";
 import {
   EvidenceScene,
   HandoffScene,
@@ -145,7 +155,6 @@ function Toolbar() {
         : S.lifecycle;
   const moving = life === "running" || life === "waiting";
   const ended = TRACK === "asw" && (S.done || S.lifecycle === "failed");
-  const scn = SCN[S.scn];
   return (
     <div className="flex min-h-12 flex-wrap items-center gap-x-2.5 gap-y-1.5 border-b px-3 py-2 md:flex-nowrap md:pr-4">
       <RunSwitch />
@@ -162,23 +171,6 @@ function Toolbar() {
         <span className="max-2xl:hidden">Preview · example record</span>
       </span>
       <div className="ml-auto flex min-w-0 items-center gap-2 max-sm:gap-1.5 max-md:w-full max-md:justify-between">
-        {DEV && (
-          <Button
-            type="button"
-            onClick={() => openSheet("scn")}
-            title="Development only: play the happy path or one unhappy case"
-            variant="outline"
-            size="sm"
-            className={cn(
-              "min-w-0 max-w-[220px] shrink max-sm:max-w-[150px]",
-              S.scn !== "happy" && "border-amber-500/60 bg-amber-500/8",
-            )}
-          >
-            <Icon n={S.scn === "happy" ? "check" : "alert"} />
-            <span className="truncate">{S.scn === "happy" ? "Happy path" : `${scn.code} · ${scn.t}`}</span>
-            <Icon n="down" className="opacity-60" />
-          </Button>
-        )}
         <Button
           type="button"
           onClick={() => openSheet("team")}
@@ -395,6 +387,7 @@ function StageTrack() {
 
 /* ---------- stage header ---------- */
 function Lineage({ scr }: { scr: ScreenDef }) {
+  if (LIVE.on) return <LiveLineage scr={scr} />;
   const reads = [...new Set(scr.stages.flatMap((id) => LINEAGE[id].reads))];
   const writes = scr.stages.flatMap((id) => LINEAGE[id].writes.map(([name, step]) => ({ sid: id, name, step })));
   return (
@@ -442,6 +435,88 @@ function Lineage({ scr }: { scr: ScreenDef }) {
     </div>
   );
 }
+/** A live stage writes files: each chip turns green when the run has published it. */
+function LiveLineage({ scr }: { scr: ScreenDef }) {
+  // A draft is the step's work in progress, shown while it streams; the screen writes the file it becomes.
+  // A section the paper's outline does not have is not written: its stage writes nothing.
+  const outlined = (id: string) =>
+    !SECTION_OF_STAGE[id] || outlineSections().some((s) => s.id === SECTION_OF_STAGE[id]);
+  const writes = scr.stages
+    .filter(outlined)
+    .flatMap(
+      (id) => LSTAGE[id]?.outs.filter((name) => !name.endsWith("Draft.json")).map((name) => ({ sid: id, name })) ?? [],
+    );
+  const own = new Set(writes.map((w) => w.name));
+  const builds = [...new Set(scr.stages.flatMap((id) => LSTAGE[id]?.needs ?? []))].filter((n) => !own.has(n));
+  const at = LIVE_SCREENS.findIndex((x) => x.key === scr.key);
+  const next = LIVE_SCREENS[at + 1];
+  const usedBy = next
+    ? (SCREEN_COPY[next.key]?.name ?? next.short)
+    : LIVE.draft
+      ? "The read-back and the review, next"
+      : "The writers, sentence by sentence";
+  return (
+    <div className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1.5 text-xs">
+      {builds.length > 0 && (
+        <>
+          <span className="text-muted-foreground">Builds on</span>
+          {builds.map((name) => (
+            <span key={name} className="inline-flex h-6 items-center rounded-md bg-muted px-2 text-muted-foreground">
+              {OBJECT_NAME[name] ?? name}
+            </span>
+          ))}
+          <Icon n="arrow" className="size-3 text-muted-foreground" />
+        </>
+      )}
+      <span className="text-muted-foreground">Writes</span>
+      {writes.map(({ sid, name }) => {
+        // A section's file goes by the section it holds: every section stage writes one of the same name.
+        const sec = SECTION_OF_STAGE[sid];
+        const made =
+          name === "Section.json" && sec ? Boolean(sectionFile(name, sec)) : has(name as Parameters<typeof has>[0]);
+        const making = !made && S.st[sid].status === "running";
+        return (
+          <button
+            type="button"
+            key={`${sid}:${name}`}
+            disabled={!made}
+            title={made ? "Show where this screen shows it" : "Not written yet"}
+            onClick={() =>
+              document.querySelector(`[data-out~="${name}"]`)?.scrollIntoView({ behavior: "smooth", block: "start" })
+            }
+            className={cn(
+              "relative inline-flex h-6 items-center gap-1 overflow-hidden rounded-md border px-2 transition-colors duration-500 enabled:hover:bg-emerald-500/15 disabled:cursor-default",
+              made
+                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300"
+                : "border-foreground/20 border-dashed text-muted-foreground",
+              making && "border-sky-500/50 border-solid text-foreground",
+            )}
+          >
+            {making && (
+              <span
+                aria-hidden
+                className="shimmer absolute inset-y-0 left-0 w-1/2 bg-gradient-to-r from-transparent via-sky-500/15 to-transparent"
+              />
+            )}
+            {made ? (
+              <M as="span" in="pop">
+                <Icon n="check" className="size-3" />
+              </M>
+            ) : (
+              <Icon n="file" className="size-3" />
+            )}
+            <span className="relative">
+              {name === "Section.json" && sec ? heading(sec) : (OBJECT_NAME[name] ?? name)}
+            </span>
+          </button>
+        );
+      })}
+      <Icon n="arrow" className="size-3 text-muted-foreground" />
+      <span className="text-muted-foreground">Used by</span>
+      <span className="font-medium">{usedBy}</span>
+    </div>
+  );
+}
 function StagePill({
   failed,
   blocked,
@@ -486,10 +561,52 @@ function StagePill({
     </Badge>
   );
 }
-function StageHeader({ scr }: { scr: ScreenDef }) {
+/** What a stage does, why the paper needs it and on what method, one line each; the full account of the stage opens
+ * from the info mark beside its method. */
+function StageAbout({ copy, lead }: { copy: (typeof SCREEN_COPY)[string]; lead: string }) {
+  const rows: [string, ReactNode][] = [
+    ["What it does", copy.what],
+    ["Why", copy.why],
+    [
+      "Method",
+      <span key="m" className="inline-flex flex-wrap items-baseline gap-x-1.5">
+        <span className="text-muted-foreground">{copy.method}</span>
+        <HoverCard openDelay={120} closeDelay={60}>
+          <HoverCardTrigger asChild>
+            <button
+              type="button"
+              aria-label="How this stage works, in full"
+              className="inline-flex translate-y-0.5 items-center text-muted-foreground hover:text-foreground"
+            >
+              <Icon n="info" className="size-3.5" />
+            </button>
+          </HoverCardTrigger>
+          <HoverCardContent side="bottom" align="start" className="w-96 text-pretty text-[13px] leading-snug">
+            {lead}
+          </HoverCardContent>
+        </HoverCard>
+      </span>,
+    ],
+  ];
+  return (
+    <dl className="mt-2 grid max-w-[78ch] grid-cols-[6.5rem_minmax(0,1fr)] gap-x-3 gap-y-1 text-[13.5px] leading-snug">
+      {rows.map(([k, v]) => (
+        <div key={k} className="contents">
+          <dt className="font-medium text-muted-foreground text-xs leading-5">{k}</dt>
+          <dd className="text-pretty">{v}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+/** A screen's header. `compact`: one line, for a screen whose own page says the rest (the paper as one document). */
+function StageHeader({ scr, compact = false }: { scr: ScreenDef; compact?: boolean }) {
   const idx = screenIndex(scr.key);
   const sts = scr.stages.map((id) => S.st[id]);
-  const waiting = Boolean(S.gate && scr.stages.includes(STOP_STAGE[S.gate.id]));
+  const waiting = LIVE.on
+    ? Boolean(LIVE.stop && scr.stages.includes(LIVE.stop.stage))
+    : Boolean(S.gate && scr.stages.includes(STOP_STAGE[S.gate.id]));
   const done = sts.every((s) => s.status === "done") && !waiting;
   const failed = sts.some((s) => s.status === "failed");
   const runningSid =
@@ -497,41 +614,71 @@ function StageHeader({ scr }: { scr: ScreenDef }) {
     scr.stages[scr.stages.length - 1];
   const blocked = S.lifecycle === "blocked" && scr.key === S.live;
   const round = Math.max(...sts.map((s) => s.round));
-  const cast = [...new Set(scr.stages.flatMap((id) => STAGE[id].steps.flatMap((s) => (s.a ? [s.a] : []))))];
+  const cast = [...new Set(scr.stages.flatMap((id) => DEFS.stage(id).steps.flatMap((s) => (s.a ? [s.a] : []))))];
   return (
-    <header className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-3.5 gap-y-2 border-b pb-3.5 sm:grid-cols-[auto_minmax(0,1fr)_auto]">
+    <header
+      className={cn(
+        "grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-3.5 gap-y-2 border-b pb-3.5 sm:grid-cols-[auto_minmax(0,1fr)_auto]",
+        compact && "items-center pb-2.5",
+      )}
+    >
       <span className="pt-1 font-mono text-muted-foreground text-xs">
-        {pad2(idx + 1)}/{pad2(SCREENS.length)}
+        {LIVE.on ? liveScreenNo(scr.key) : `${pad2(idx + 1)}/${pad2(SCREENS.length)}`}
       </span>
       <div className="min-w-0">
         <h2 className="flex flex-wrap items-center gap-2 text-balance font-semibold text-lg tracking-tight">
           {scr.title}
-          <Badge
-            title="Writing stages this screen covers"
-            variant="outline"
-            className="font-mono text-muted-foreground"
-          >
-            {stageRange(scr)}
-          </Badge>
+          {LIVE.on ? (
+            <span className="font-normal text-muted-foreground text-sm">{SCREEN_COPY[scr.key]?.tech}</span>
+          ) : (
+            <Badge
+              title="Writing stages this screen covers"
+              variant="outline"
+              className="font-mono text-muted-foreground"
+            >
+              {stageRange(scr)}
+            </Badge>
+          )}
           {round > 1 && (
             <Badge variant="secondary" className="font-mono">
               Round {round} · argued again
             </Badge>
           )}
         </h2>
-        <p className="mt-1 max-w-[68ch] text-muted-foreground text-sm">{STAGE[runningSid].lead}</p>
-        <Lineage scr={scr} />
-        {sts.map(
-          (s, i) =>
-            s.status === "done" &&
-            s.summary && (
-              <M as="p" key={scr.stages[i]} in="up4" className="mt-2 flex items-center gap-2 font-medium text-sm">
-                <Icon n="circleCheck" className="size-3.5 text-emerald-600" />
-                <span className="font-mono font-normal text-[11px] text-muted-foreground">{scr.stages[i]}</span>
-                {s.summary}
-              </M>
-            ),
+        {LIVE.on && !compact && SCREEN_COPY[scr.key]?.what ? (
+          <>
+            <StageAbout copy={SCREEN_COPY[scr.key]} lead={DEFS.stage(runningSid).lead} />
+            <Lineage scr={scr} />
+          </>
+        ) : (
+          <>
+            {LIVE.on && !compact && SCREEN_COPY[scr.key] && (
+              <p className="mt-1 max-w-[68ch] text-pretty text-sm">
+                <b className="font-medium">Why your paper needs this.</b> {SCREEN_COPY[scr.key].why}
+              </p>
+            )}
+            {!compact && (
+              <>
+                <p className="mt-1 max-w-[68ch] text-muted-foreground text-sm">{DEFS.stage(runningSid).lead}</p>
+                <Lineage scr={scr} />
+              </>
+            )}
+          </>
         )}
+        {!compact &&
+          sts.map(
+            (s, i) =>
+              s.status === "done" &&
+              s.summary && (
+                <M as="p" key={scr.stages[i]} in="up4" className="mt-2 flex items-center gap-2 font-medium text-sm">
+                  <Icon n="circleCheck" className="size-3.5 text-emerald-600" />
+                  {!LIVE.on && (
+                    <span className="font-mono font-normal text-[11px] text-muted-foreground">{scr.stages[i]}</span>
+                  )}
+                  {s.summary}
+                </M>
+              ),
+          )}
       </div>
       <div className="col-start-2 flex items-center gap-3 sm:col-start-3 sm:pt-0.5">
         <div className="flex pl-2">
@@ -615,6 +762,24 @@ function Team() {
   );
 }
 export function NowCard({ compact }: { compact?: boolean }) {
+  if (S.done && LIVE.on)
+    return (
+      <div className="flex flex-col gap-2 rounded-xl bg-card p-3.5 ring-1 ring-foreground/10">
+        <span className="text-muted-foreground text-xs">Finished</span>
+        <h3 className="font-semibold text-[15px]">
+          {LIVE.draft ? "The first draft is published" : "The paper outline is published"}
+        </h3>
+        {!compact && (
+          <p className="text-muted-foreground text-sm">
+            {LIVE.draft
+              ? "Every section is written from its paragraph plans, the title and abstract from the finished text. It is not read back yet. Open "
+              : "Every section, paragraph and sentence is planned and tied to its statements. Open "}
+            <b className="font-medium text-foreground">{LIVE.draft ? "Draft" : "Outline"}</b> in the track to read it,
+            or any stage to look back.
+          </p>
+        )}
+      </div>
+    );
   if (S.done)
     return (
       <div className="flex flex-col gap-2 rounded-xl bg-card p-3.5 ring-1 ring-foreground/10">
@@ -651,7 +816,7 @@ export function NowCard({ compact }: { compact?: boolean }) {
             d.tone === "rose" ? "text-rose-700 dark:text-rose-300" : "text-amber-800 dark:text-amber-300",
           )}
         >
-          Unhappy case · {SCN[S.inc.key]?.code} · {S.inc.sid}
+          Incident · {S.inc.sid}
         </span>
         <h3 className="font-semibold text-[15px]">{d.title}</h3>
         {!compact && (
@@ -673,7 +838,7 @@ export function NowCard({ compact }: { compact?: boolean }) {
     );
   const sid = S.stage;
   const st = S.st[sid];
-  const steps = STAGE[sid].steps;
+  const steps = DEFS.stage(sid).steps;
   const step = steps.find((s) => s.id === st.cur);
   const index = step ? steps.indexOf(step) : -1;
   const speaker = S.msg?.actor;
@@ -682,11 +847,18 @@ export function NowCard({ compact }: { compact?: boolean }) {
     <div className="flex flex-col gap-2 rounded-xl bg-card p-3.5 shadow-xs ring-1 ring-foreground/10">
       <div className="flex justify-between gap-2 text-muted-foreground text-xs">
         <b className="truncate font-medium text-foreground">
-          <span className="font-mono font-normal text-muted-foreground">{sid}</span> · {STAGE[sid].name}
+          {!LIVE.on && <span className="font-mono font-normal text-muted-foreground">{sid} · </span>}
+          {DEFS.stage(sid).name}
           {st.round > 1 ? ` · Round ${st.round}` : ""}
         </b>
         <span className="whitespace-nowrap">
-          {S.paused ? "Paused" : step ? `Step ${index + 1} of ${steps.length}` : `${steps.length} steps`}
+          {S.paused
+            ? "Paused"
+            : LIVE.on
+              ? LSTAGE[sid]?.short
+              : step
+                ? `Step ${index + 1} of ${steps.length}`
+                : `${steps.length} steps`}
         </span>
       </div>
       <div className={cn("grid items-start gap-x-3", moving && "grid-cols-[auto_minmax(0,1fr)]")}>
@@ -706,7 +878,11 @@ export function NowCard({ compact }: { compact?: boolean }) {
             // On a phone the card sits above the stage: one line, so a longer step name never moves the page.
             className={cn("font-semibold text-[15px] tracking-tight", compact && "truncate")}
           >
-            {S.jr.waiting ? "Waiting for the journal profile" : (step?.t ?? STAGE[sid].title)}
+            {LIVE.stop
+              ? LIVE.stop.prompt
+              : S.jr.waiting
+                ? "Waiting for the journal profile"
+                : (step?.t ?? DEFS.stage(sid).title)}
           </M>
           {!compact && (
             <p className="mt-1 min-h-5 text-sm leading-relaxed">
@@ -716,7 +892,7 @@ export function NowCard({ compact }: { compact?: boolean }) {
                   {!S.msg.done && <Caret />}
                 </>
               ) : (
-                <span className="text-muted-foreground">{ONE[sid]}</span>
+                <span className="text-muted-foreground">{LIVE.on ? liveIdle(sid) : ONE[sid]}</span>
               )}
             </p>
           )}
@@ -992,7 +1168,7 @@ function Aside() {
   const [tab, setTab] = useState("now");
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <Team />
+      {LIVE.on ? <LiveTeam /> : <Team />}
       <Tabs value={tab} onValueChange={setTab} className="min-h-0 flex-1 gap-0">
         <TabsList variant="line" className="w-full justify-start border-b px-3">
           <TabsTrigger value="now" className="flex-none">
@@ -1011,9 +1187,19 @@ function Aside() {
         <TabsContent value="now" className="min-h-0 overflow-y-auto">
           <div className="flex flex-col gap-3.5 p-3.5">
             <NowCard />
-            <Steps />
-            <NextStop />
-            <Rules />
+            {LIVE.on ? (
+              <>
+                <LiveSteps />
+                <LiveNextStop />
+                <LiveCheckpoints />
+              </>
+            ) : (
+              <>
+                <Steps />
+                <NextStop />
+                <Rules />
+              </>
+            )}
           </div>
         </TabsContent>
         <TabsContent value="activity" className="min-h-0 overflow-y-auto p-3.5">
@@ -1351,7 +1537,70 @@ const SCENES: Record<string, ComponentType<{ live: boolean }>> = {
   review: ReviewScene,
   signoff: SignoffScene,
 };
+const DECIDER = { you: "You", pi: "The PI", auto: "The run" } as const;
+/** The decisions taken at this step, one quiet line each, as the research flow records them: who, what was asked, what
+ * was chosen. */
+function Decided({ notes }: { notes: typeof LIVE.answers }) {
+  return (
+    <ul aria-label="Decided here" className="flex max-w-3xl flex-col gap-1.5">
+      {notes.map((n) => (
+        <M as="li" key={n.seq} in="fade" className="flex items-start gap-2 text-muted-foreground text-sm">
+          <Icon n="circleCheck" className="mt-0.5 size-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+          <p className="min-w-0 text-pretty">
+            <span className="font-medium text-foreground">{DECIDER[n.by]}</span>
+            {n.by === "auto" && " took the recommendation"}
+            {" · "}
+            {!n.whole && `${n.question} → `}
+            <span className="text-foreground/80">{n.answer}</span>
+          </p>
+        </M>
+      ))}
+    </ul>
+  );
+}
+/** The decisions taken at this step in one line that opens to the list: for a screen that is mostly its page. */
+function DecidedFolded({ notes }: { notes: typeof LIVE.answers }) {
+  const last = notes[notes.length - 1];
+  return (
+    <Collapsible className="max-w-3xl text-sm">
+      <CollapsibleTrigger className="group flex max-w-full items-center gap-2 rounded-md text-left text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
+        <Icon n="circleCheck" className="size-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+        <span className="shrink-0 font-medium text-foreground">
+          {notes.length} {notes.length === 1 ? "decision" : "decisions"}
+        </span>
+        <span className="min-w-0 truncate">
+          · last: <span className="text-foreground/80">{last.answer}</span>
+        </span>
+        <Icon n="down" className="size-3.5 shrink-0 transition-transform group-data-[state=open]:rotate-180" />
+      </CollapsibleTrigger>
+      <CollapsibleContent className="pt-2 pl-6">
+        <Decided notes={notes} />
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+function LiveScreenView({ k }: { k: string }) {
+  const live = liveScreen(k);
+  if (!live) return null;
+  const scr: ScreenDef = {
+    key: live.key,
+    title: live.title,
+    short: live.short,
+    block: live.block,
+    stages: live.stages.map((s) => s.id),
+  };
+  const Scene = live.Scene;
+  const notes = LIVE.answers.filter((a) => scr.stages.includes(a.stage));
+  return (
+    <div className={cn("flex flex-col", live.compact ? "gap-3" : "gap-5")}>
+      <StageHeader scr={scr} compact={live.compact} />
+      {notes.length > 0 && (live.compact ? <DecidedFolded notes={notes} /> : <Decided notes={notes} />)}
+      <Scene key={k} live={k === S.live && !S.view && !S.done} />
+    </div>
+  );
+}
 function Screen({ k }: { k: string }) {
+  if (LIVE.on) return <LiveScreenView k={k} />;
   const scr = SCREENS.find((s) => s.key === k);
   if (k === "paper" || !scr)
     return (
@@ -1372,34 +1621,29 @@ function Screen({ k }: { k: string }) {
         <FinalPaper />
       </div>
     );
-  const live = k === S.live && !S.view && !S.done && S.tab === "run";
+  const live = k === S.live && !S.view && !S.done;
   const Scene = SCENES[k];
   const notes = S.decisions.filter((d) => scr.stages.includes(d.stage));
   return (
     <div className="flex flex-col gap-5">
       <StageHeader scr={scr} />
-      <ScreenTabs scr={scr} />
-      {S.tab === "contract" ? (
-        <ContractView scr={scr} />
-      ) : (
-        <>
-          <ScreenIncidents scr={scr} />
-          <Scene key={k} live={live} />
-          {notes.map((n) => (
-            <SceneNote
-              key={n.seq}
-              actor={n.actor}
-              text={n.auto ? `${n.text.replace(/\.$/, "")} (skipped ahead)` : n.text}
-              note={n.note}
-            />
-          ))}
-        </>
-      )}
+      <ScreenIncidents scr={scr} />
+      <Scene key={k} live={live} />
+      {notes.map((n) => (
+        <SceneNote
+          key={n.seq}
+          actor={n.actor}
+          text={n.auto ? `${n.text.replace(/\.$/, "")} (skipped ahead)` : n.text}
+          note={n.note}
+        />
+      ))}
     </div>
   );
 }
 const screenName = (key: string) =>
-  key === "paper" ? "The paper" : (SCREENS.find((s) => s.key === key)?.short ?? key);
+  key === "paper"
+    ? "The paper"
+    : ((LIVE.on ? liveScreen(key)?.short : SCREENS.find((s) => s.key === key)?.short) ?? key);
 
 /** The scrolling column the scenes sit in. A wheel or a swipe stops the view following the agents for a moment. */
 function Scroller({ children }: { children: ReactNode }) {
@@ -1428,15 +1672,35 @@ function DetailsButton() {
     </Button>
   );
 }
+/** The screen in view, sliding in from the side it lies on in the track, as the research flow moves between stages. */
+function ScreenSwap({ k }: { k: string }) {
+  const at = (key: string) => (LIVE.on ? LIVE_SCREENS.findIndex((x) => x.key === key) : screenIndex(key));
+  const last = useRef({ k, dir: 1 });
+  if (last.current.k !== k) last.current = { k, dir: at(k) >= at(last.current.k) ? 1 : -1 };
+  const dir = last.current.dir;
+  return (
+    <AnimatePresence mode="popLayout" initial={false} custom={dir}>
+      <motion.div
+        key={k}
+        custom={dir}
+        initial={{ opacity: 0, x: dir * 32 }}
+        animate={{ opacity: 1, x: 0 }}
+        exit={{ opacity: 0, x: dir * -24 }}
+        transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
+      >
+        <Screen k={k} />
+      </motion.div>
+    </AnimatePresence>
+  );
+}
 function AswBody({ asideOpen }: { asideOpen: boolean }) {
   const k = viewKey();
   const viewingOther = Boolean(S.view && S.view !== S.live);
   return (
     <div className={cn("grid min-h-0 flex-1", asideOpen && "lg:grid-cols-[minmax(0,1fr)_352px]")}>
       <div className="relative flex min-h-0 min-w-0 flex-col">
-        <StageTrack />
-        {DEV && <ScenarioStrip />}
-        <RecoveryBar />
+        {LIVE.on ? <LiveTrack /> : <StageTrack />}
+        {!LIVE.on && <RecoveryBar />}
         <div className={cn("flex items-center gap-3 border-b px-4 py-2.5 lg:hidden", S.inc && "max-lg:hidden")}>
           <div className="min-w-0 flex-1">
             <NowCard compact />
@@ -1444,9 +1708,9 @@ function AswBody({ asideOpen }: { asideOpen: boolean }) {
           <DetailsButton />
         </div>
         <Scroller>
-          <Screen key={k} k={k} />
+          <ScreenSwap k={k} />
         </Scroller>
-        {viewingOther && !S.gate && (
+        {viewingOther && !S.gate && !LIVE.stop && (
           <M
             in="pill"
             className="absolute bottom-4 left-1/2 z-10 flex max-w-[calc(100%-2rem)] -translate-x-1/2 items-center gap-3 whitespace-nowrap rounded-full bg-card py-1.5 pr-1.5 pl-4 text-sm shadow-lg ring-1 ring-foreground/10"
@@ -1456,12 +1720,20 @@ function AswBody({ asideOpen }: { asideOpen: boolean }) {
             </span>
             <Button type="button" size="sm" onClick={() => setView(S.live)}>
               {!S.done && <PulseDot className="bg-sky-400" />}
-              {S.done ? "Back to sign-off" : `Live: ${screenName(S.live)}`}
+              {S.done
+                ? LIVE.on
+                  ? LIVE.draft
+                    ? "Back to the draft"
+                    : "Back to the outline"
+                  : "Back to sign-off"
+                : `Live: ${screenName(S.live)}`}
               <Icon n="arrow" />
             </Button>
           </M>
         )}
-        {S.gate && <GateSheet key={S.gate.id + S.seq} id={S.gate.id} />}
+        {LIVE.on
+          ? LIVE.stop && <LiveStopSheet key={LIVE.stop.id} stop={LIVE.stop} />
+          : S.gate && <GateSheet key={S.gate.id + S.seq} id={S.gate.id} />}
       </div>
       {asideOpen && (
         <aside className="min-h-0 border-l bg-sidebar max-lg:hidden">
@@ -1509,7 +1781,11 @@ export function WritingStudio({ asideOpen = true }: { asideOpen?: boolean }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
-      if (e.key !== " " || target?.closest("input, textarea, button, select, [role=radio], [role=switch]")) return;
+      if (
+        e.key !== " " ||
+        target?.closest("input, textarea, button, select, [contenteditable=true], [role=radio], [role=switch]")
+      )
+        return;
       if (S.gate || S.done || S.lifecycle === "failed") return;
       e.preventDefault();
       setPaused(!S.paused);
@@ -1520,11 +1796,10 @@ export function WritingStudio({ asideOpen = true }: { asideOpen?: boolean }) {
   useDevHooks();
   return (
     <section aria-label="Writing stage" className="asw relative flex min-h-0 flex-1 flex-col">
-      <Toolbar />
-      {TRACK === "jfe" ? <JBody asideOpen={asideOpen} /> : <AswBody asideOpen={asideOpen} />}
+      {!LIVE.on && <Toolbar />}
+      {TRACK === "jfe" && !LIVE.on ? <JBody asideOpen={asideOpen} /> : <AswBody asideOpen={asideOpen} />}
       <DetailsSheet />
       {UI.sheet === "team" && <AgentsSheet />}
-      {DEV && UI.sheet === "scn" && <ScenarioSheet />}
     </section>
   );
 }
@@ -1554,10 +1829,6 @@ function useDevHooks() {
       },
       view: setView,
       jview: jSetView,
-      tab: (t: string) => {
-        S.tab = t;
-        emit();
-      },
       sheet: openSheet,
       play: playScenario,
       pause: setPaused,

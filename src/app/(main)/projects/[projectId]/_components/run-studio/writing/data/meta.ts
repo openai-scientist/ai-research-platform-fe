@@ -19,6 +19,13 @@ export interface ScreenDef {
 
 /* ===== who works here, and how the run is cut into screens (run-meta) ===== */
 export const AGENTS: Record<string, AgentMeta> = {
+  ai: {
+    name: "Model call",
+    initials: "AI",
+    text: "text-foreground",
+    soft: "bg-muted ring-foreground/15",
+    solid: "bg-foreground",
+  },
   or: {
     name: "Orchestrator",
     initials: "Or",
@@ -144,6 +151,35 @@ export const AGENTS: Record<string, AgentMeta> = {
     text: "text-fuchsia-700 dark:text-fuchsia-300",
     soft: "bg-fuchsia-500/12 ring-fuchsia-500/30",
     solid: "bg-fuchsia-600",
+  },
+  /* the engine's own names for roles the preview calls differently */
+  sci: {
+    name: "Statement Scientist",
+    initials: "Ss",
+    text: "text-violet-700 dark:text-violet-300",
+    soft: "bg-violet-500/12 ring-violet-500/30",
+    solid: "bg-violet-600",
+  },
+  qo: {
+    name: "Sources critic",
+    initials: "So",
+    text: "text-lime-700 dark:text-lime-300",
+    soft: "bg-lime-500/12 ring-lime-500/30",
+    solid: "bg-lime-600",
+  },
+  sy: {
+    name: "Synthesis Planner",
+    initials: "Sy",
+    text: "text-indigo-700 dark:text-indigo-300",
+    soft: "bg-indigo-500/12 ring-indigo-500/30",
+    solid: "bg-indigo-600",
+  },
+  ed: {
+    name: "Editor",
+    initials: "Ed",
+    text: "text-rose-700 dark:text-rose-300",
+    soft: "bg-rose-500/12 ring-rose-500/30",
+    solid: "bg-rose-600",
   },
   code: {
     name: "Code check",
@@ -393,7 +429,7 @@ export const ROSTER: { block: string; agents: [string, string, string, string, s
       [
         "ds",
         "Lays the research record into the standard data report and checks it is complete and consistent.",
-        "The research record package (rrp/v2)",
+        "The research record (rrp/v2) and the experiment result package",
         "DataReport.json, claim ceiling",
         "Guess a missing value or judge the method",
       ],

@@ -25,7 +25,7 @@ export const REGRESSION: StudyRecord = {
   values: {
     "A.1": "You · team of 3",
     "A.2": "CC BY 4.0, as the data (Cortez & Silva, 2008)",
-    "A.3": "rrp/v2 · every file hashed",
+    "A.3": "rrp/v2 · experiment package, every outside file by sha256",
     "B.1": "Reading notes on 9 papers",
     "B.2": "Scopus + ERIC · 2008–2026 · 2 queries · hits and reads logged",
     "B.3":
@@ -59,7 +59,7 @@ export const REGRESSION: StudyRecord = {
     "E.2": "One row per student, no duplicates found · two schools, kept as an input",
     "E.3": "Second-period grade G2 left out: it arrives after the prediction is made",
     "F.1": "15 traces with config, seed, split hash and a prediction per student",
-    "F.2": "results.csv · one row per run and per analysis, each linked to its traces",
+    "F.2": "Experiment package · one observation per run and metric, each comparison linked to its runs",
     "G.1": "A1 → H1",
     "G.2": "None",
     "G.3": "Mean absolute error in grade points, the unit teachers use · RMSE as secondary",
@@ -73,7 +73,7 @@ export const REGRESSION: StudyRecord = {
     "K.1": "Every entry with a DOI or a stable link",
     "K.2": "9 notes with quoted spans",
     "K.3": "Full text for every source",
-    "L.1": "Every figure linked to results.csv",
+    "L.1": "Every figure carries its data in the package",
     "M.1": "Education data journal (example) · research article",
     "N.1": "No AI used in the analysis",
   },

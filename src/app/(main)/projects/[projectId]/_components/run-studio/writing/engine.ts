@@ -25,6 +25,7 @@ import {
   STAGES,
   STOP_STAGE,
   STORY,
+  type StageDef,
   TOU,
   TOUMAP,
 } from "./data/core";
@@ -108,6 +109,11 @@ const stagesOf = (ids: string[]) =>
     ids.map((id): [string, StageRun] => [id, { status: "pending", done: [], cur: null, round: 1, summary: "" }]),
   );
 
+/** Gives the run a state for each stage it has beyond the preview's (a live run's own). */
+export function ensureStages(ids: string[]) {
+  for (const id of ids) S.st[id] ??= { status: "pending", done: [], cur: null, round: 1, summary: "" };
+}
+
 export function freshState(prev?: { speed: number; mode: string; pauseEach: boolean }) {
   return {
     speed: prev?.speed ?? 1,
@@ -126,7 +132,6 @@ export function freshState(prev?: { speed: number; mode: string; pauseEach: bool
     live: "handoff",
     reached: 0,
     view: null as string | null,
-    tab: "run",
     stage: "S00",
     st: stagesOf(STAGES.map((s) => s.id)),
     msg: null as Msg | null,
@@ -255,6 +260,8 @@ export function freshState(prev?: { speed: number; mode: string; pauseEach: bool
     so: { checks: 0, refs: false, ai: 0, ledger: false, signed: false },
     g2: { f1: "indicate", f2: "indicate", f3: "no clear gain" } as Record<string, string>,
     picked: ["F1", "F2", "F3", "C"],
+    /** How many items of each list a live run's screen shows, by list name (lists with no reducer of their own). */
+    n: {} as Record<string, number>,
     done: false,
   };
 }
@@ -421,7 +428,7 @@ export function setPaused(on: boolean) {
 }
 
 /* ---------- what the scene can see ---------- */
-export const following = () => TRACK === "asw" && !S.fast && (!S.view || S.view === S.live) && S.tab === "run";
+export const following = () => TRACK === "asw" && !S.fast && (!S.view || S.view === S.live);
 /** Scrolls what the agents just did into view, once it is drawn, unless you scrolled away a moment ago. */
 export function reveal(sel: string, block: ScrollLogicalPosition = "nearest") {
   afterPaint(() => {
@@ -507,6 +514,10 @@ const LISTS: Record<string, (p: WritingEventOf<"writing.item">["payload"]) => vo
     S.jr.lines = p.index + 1;
   },
 };
+/** A list with no reducer of its own counts its items: the screen shows that many. */
+const countItem = (p: WritingEventOf<"writing.item">["payload"]) => {
+  S.n[p.list] = p.index + 1;
+};
 /** Applies one event to the run's state, as `applyRunEvent` does for a research run. */
 function applyWriting(ev: WritingEvent) {
   const st = ev.stage_key ? S.st[ev.stage_key] : undefined;
@@ -543,7 +554,7 @@ function applyWriting(ev: WritingEvent) {
       break;
     }
     case "writing.item":
-      LISTS[ev.payload.list]?.(ev.payload);
+      (LISTS[ev.payload.list] ?? countItem)(ev.payload);
       S.now = `${ev.payload.list}:${ev.payload.item_id}`;
       break;
   }
@@ -588,7 +599,13 @@ export async function item(
 }
 
 /* ---------- narration, steps, stages ---------- */
-export const stepDef = (sid: string, id: string) => STAGE[sid].steps.find((s) => s.id === id);
+/** The definition of a stage on screen: the preview's, or a live run's while one is followed (see live/stages.ts). */
+export const DEFS = {
+  stage: (sid: string): StageDef => STAGE[sid],
+  /** The screen a stage is shown on: the preview's, or a live run's while one is followed. */
+  screen: (sid: string): string => SCREEN_OF[sid],
+};
+export const stepDef = (sid: string, id: string) => DEFS.stage(sid).steps.find((s) => s.id === id);
 /** Narration, streamed two words at a time as a research run's mock stream sends it. */
 export async function say(actor: string, text: string) {
   const id = `m${++messageCount}`;
@@ -639,7 +656,7 @@ export async function step(
 }
 export function openStage(sid: string) {
   S.stage = sid;
-  const scr = SCREEN_OF[sid];
+  const scr = DEFS.screen(sid);
   if (S.live !== scr) {
     S.live = scr;
     S.reached = Math.max(S.reached, screenIndex(scr));
@@ -743,13 +760,13 @@ export async function incident(key: string): Promise<string> {
   tellAway("asw", def.title);
   S.lifecycle = "blocked";
   tell(def.det[0], def.text);
-  log(def.det[0], `Unhappy case · ${def.title}`);
+  log(def.det[0], `Incident · ${def.title}`);
   emit();
   reveal("[data-incident]", "start");
   const opt = await waitFor<string>("incident");
   const o = def.opts.find((x) => x[0] === opt) ?? def.opts[0];
   S.incs.push({ key, sid: S.inc.sid, opt });
-  S.decisions.push({ seq: ++S.seq, actor: "you", text: o[4], stage: S.inc.sid, id: SCN[key]?.code ?? key });
+  S.decisions.push({ seq: ++S.seq, actor: "you", text: o[4], stage: S.inc.sid, id: "INC" });
   S.feed.push({ seq: S.seq, actor: "you", text: o[4], kind: "decision", stage: S.inc.sid });
   S.inc = null;
   S.lifecycle = "running";
@@ -781,12 +798,15 @@ async function checkParts(stepId: "a1" | "a2" | "a3") {
         emit();
         await sleep(500);
         const o = await incident("schema");
-        if (o === "stop") failRun("Stopped at S00: plan.md has no analysis plan (B.9), a must field of rrp/v2.");
+        if (o === "stop")
+          failRun(
+            "Stopped at S00: the package's protocol has no analysis plan, a must part of platform.experiment_result/v1.",
+          );
         S.up.fixed = true;
         S.up.bad = null;
         await say(
           "code",
-          "plan.md v2 received. §7 Analyses is present; the hash chain from 27 Oct holds. The check passes.",
+          "Package v2 received. The protocol holds its five analyses, and its sha256 still matches the lock of 27 Oct. The check passes.",
         );
         await sleep(400);
       }
@@ -864,7 +884,7 @@ export async function s01() {
         emit();
       }
     },
-    late ? { text: "plan.md was locked at 22:40 on 27 Oct. The first trace started at 10:51 that morning." } : {},
+    late ? { text: "The protocol was locked at 22:40 on 27 Oct. The first run started at 10:51 that morning." } : {},
   );
   await step("S01", "r3", async () => {
     reveal("[data-chain]", "center");
@@ -884,7 +904,7 @@ export async function s01() {
           );
           await say(
             "ds",
-            "results-h3.csv arrived with 3 rows and links end to end: H3 → A6 → results-h3.csv rows 1–3 → traces t06–t15. H3 is reported in the supplement.",
+            "Package v2 arrived with A6 and links end to end: H3 → A6 → comparison A6 → runs t06–t15. H3 is reported in the supplement.",
           );
           rp.h3 = "arrived";
         } else rp.h3 = "named";
@@ -907,7 +927,7 @@ export async function s01() {
         if (o === "rerun") {
           await say(
             "code",
-            "Rerunning the paired bootstrap from the 20 traces with 10,000 resamples. Row 21: 0.092 to 0.129, as the plan expects.",
+            "Rerunning the paired bootstrap from the 20 traces with 10,000 resamples. A1: 0.092 to 0.129, as the plan expects.",
           );
           rp.dev = "rerun";
           emit();
@@ -977,7 +997,7 @@ export async function s02() {
           S.ev.mis = "held";
           emit();
           await blockedUntilResume(
-            "Held until the owner checks results.csv row 21. Results 4.1 waits.",
+            "Held until the owner checks comparison A1. Results 4.1 waits.",
             "The owner confirmed 0.111",
           );
         }
@@ -1151,7 +1171,7 @@ export const TURNS_RESTATE: Turn[] = [
     tx: "At this polytechnic, first-semester results improve early warning overall; course by course the evidence is mixed.",
     g: [
       ["led", "F1"],
-      ["led", "A4 · rows 28–38"],
+      ["led", "A4 · by course"],
     ],
   },
   {
@@ -1161,7 +1181,7 @@ export const TURNS_RESTATE: Turn[] = [
     st: "concede",
     re: "T45",
     tx: "The claim no longer speaks of every course, so course 171 does not contradict it. Satisfied.",
-    g: [["led", "A4 · row 28"]],
+    g: [["led", "A4-171"]],
   },
   {
     id: "T47",
@@ -2237,7 +2257,7 @@ export async function main() {
   }
 }
 
-/* ---------- scenarios: the happy path, or one thing wrong ---------- */
+/* ---------- incidents on demand, from the development hooks: the normal run, or one thing wrong ---------- */
 /* The run restarts with the scenario; unless asked to start from the top, it replays silently to where it breaks. */
 export function playScenario(key: string, skip = true) {
   cancelAll();
@@ -2276,6 +2296,7 @@ export function startWriting(runId: string, label: string) {
   jcancel();
   HOST.runId = runId;
   HOST.label = label;
+  DEFS.stage = (sid) => STAGE[sid];
   S = freshState(S);
   J = jFresh();
   FF = null;
@@ -2284,6 +2305,36 @@ export function startWriting(runId: string, label: string) {
   for (const k in TOKS) delete TOKS[k];
   emit();
   void main();
+}
+/**
+ * Shows a writing run on the engine: the screens start empty and `play` fills them as the run's events and files
+ * arrive (live/player.ts). Opening the same run again keeps what is there.
+ */
+export function startLive(runId: string, label: string, play: () => Promise<void>) {
+  if (HOST.runId === runId) return;
+  cancelAll();
+  jcancel();
+  HOST.runId = runId;
+  HOST.label = label;
+  S = freshState();
+  J = jFresh();
+  FF = null;
+  QUIET = false;
+  TRACK = "asw";
+  for (const k in TOKS) delete TOKS[k];
+  emit();
+  play().catch((e) => {
+    if (e !== STOP) console.error(e);
+  });
+}
+/** Leaves a live run: the next preview or research run starts over. */
+export function leaveLive() {
+  cancelAll();
+  HOST.runId = null;
+  DEFS.stage = (sid) => STAGE[sid];
+  DEFS.screen = (sid) => SCREEN_OF[sid];
+  S = freshState();
+  emit();
 }
 /* ---------- the preview: the writing stage on its own, without a research run ---------- */
 export const PREVIEW_RUN_ID = "writing-preview";

@@ -19,7 +19,6 @@ export interface StageDef {
   title: string;
   gate?: string;
   lead: string;
-  ipo: { in: string; proc: string; hu: string; fa: string; needs: string };
   outs: string[];
   steps: StepDef[];
 }
@@ -147,39 +146,32 @@ export const STAGES: StageDef[] = [
     name: "Run Output Intake",
     a: "or",
     title: "Check what the experiment run handed over",
-    lead: "The run's output comes in eight parts: the plan it was held to, the environment, the runs, the results table, the analyses, the deviations, the figures and the sources. Each part is checked against the locked plan before anyone writes from it; what it cannot support is named, never filled in.",
-    ipo: {
-      in: "The output of RUN-25CD: locked plan, data and environment, 20 run traces, results.csv, analysis.json, deviations, figures, sources",
-      proc: "Check the plan is the one that was locked; check the environment, every run and every result row against it; check each analysis follows the decision rule and each deviation is declared; name what the paper cannot use",
-      hu: "None here; ownership is confirmed at stop 1",
-      fa: "No owner → STOP · a must field missing → BLOCK until the file is fixed",
-      needs: "Research run RUN-25CD finished",
-    },
-    outs: ["PackageManifest.json", "IntakeIssues.json"],
+    lead: "The experiment run hands over one object, its experiment result package: the protocol it was held to, data and environment, the runs, the results, the deviations and the figures, each id traceable to the others. The sources come from the research record. Each part is checked against the locked protocol before anyone writes from it; what it cannot support is named, never filled in.",
+    outs: ["IntakeChecks.json", "IntakeIssues.json"],
     steps: [
       {
         id: "a0",
         a: "or",
-        t: "Open the output of RUN-25CD",
-        x: "Eight parts arrive: the locked plan, the data and environment, 20 runs, the results table, 5 analyses, 1 deviation, 3 figures and 21 sources.",
+        t: "Open the package of RUN-25CD",
+        x: "One package, read in seven parts: the package itself, the locked protocol, data and environment, 20 runs, the results of 6 analyses, 1 deviation and 3 figures. The 21 sources come from the research record.",
       },
       {
         id: "a1",
         a: "code",
-        t: "Check the plan, the data and the environment",
-        x: "The plan was locked a minute before the first run and its hash is bound to it. The data has no entry year. The boosting encoding differs from the plan, declared as D1.",
+        t: "Check the package, the protocol, the data and the environment",
+        x: "The package is complete: every id resolves, every file outside it matches its sha256, all 10 quality gates passed. The protocol was locked a minute before the first run and the lock is bound to it. The data has no entry year. The boosting encoding differs from the plan, declared as D1.",
       },
       {
         id: "a2",
         a: "code",
         t: "Check the runs and the results",
-        x: "20 of 20 runs have a trace; in each seed every model saw the same 726 test students. Every result row names its runs.",
+        x: "20 of 20 jobs have a completed run with its trace; in each seed every model saw the same 726 test students. Every comparison names its analysis and its runs. A1–A3 follow the decision rule; A4 and A5 are exploratory.",
       },
       {
         id: "a3",
         a: "or",
-        t: "Check the analyses, deviations, figures and sources",
-        x: "A1–A3 follow the decision rule; A4 and A5 are exploratory. D1 was declared after the first run, and the run was repeated as planned. Every figure has its data; 6 papers are abstract-only.",
+        t: "Check the deviations, figures and sources",
+        x: "D1 was declared after the first run, and the boosting runs were repeated as planned with the verdicts unchanged. Every figure carries its data; 6 papers are abstract-only.",
       },
       {
         id: "a4",
@@ -198,13 +190,6 @@ export const STAGES: StageDef[] = [
     board: "report",
     title: "Lay the record into the standard frame",
     lead: "The Data Steward lays the record into one standard frame, built for data science from REFORMS, the pre-registration template for existing data, the NeurIPS checklist and Datasheets for Datasets. It checks that the record is complete and consistent; whether the method is sound is argued later, at S04.",
-    ipo: {
-      in: "Checked run output",
-      proc: "Fill 51 fields with their level (must, should, may), including the leakage checks; check the plan was locked before the runs; link each hypothesis to its analysis, result rows and traces; compare runs with the plan; set the claim ceiling",
-      hu: "Quick check on any exploratory analysis (K01)",
-      fa: "Plan locked after the runs → every analysis exploratory · hypothesis without result → selective-reporting block · undeclared deviation → BLOCK · tuning on test → BLOCK",
-      needs: "S00 checked run output",
-    },
     outs: ["DataReport.json", "ClaimCeiling.json", "LinkChain.json"],
     steps: [
       {
@@ -217,12 +202,12 @@ export const STAGES: StageDef[] = [
         id: "r2",
         a: "code",
         t: "Check the plan was locked before the runs",
-        x: "plan.md locked 27 Oct 2026, 10:50. First trace 10:51 the same morning. The plan is a real pre-registration.",
+        x: "The protocol was locked 27 Oct 2026, 10:50. The first run started 10:51 the same morning. The plan is a real pre-registration.",
       },
       {
         id: "r3",
         a: "ds",
-        t: "Link each hypothesis to its analysis, rows and traces",
+        t: "Link each hypothesis to its analysis, results and runs",
         x: "H1, H2 and H4 link end to end. H3, H5 and H6 are secondary and declared deferred. A4 and A5 have no hypothesis: exploratory, and A5 was not in the plan.",
       },
       {
@@ -249,13 +234,6 @@ export const STAGES: StageDef[] = [
     title: "List the evidence and what it allows",
     gate: "G0",
     lead: "The Evidence Curator resolves every reference, indexes every number and quote, and recomputes each number from the raw traces. What is missing stays blocked; nothing is written to fill a gap.",
-    ipo: {
-      in: "Data report; papers and DOIs; traces; results table; figures",
-      proc: "Resolve bibliographic identifiers; index evidence spans; recompute numbers from the traces; decide which sections can be written",
-      hu: "Stop 1 (G0): you confirm ownership and start writing from this record",
-      fa: "Number differs from its trace → BLOCK the row · DOI does not exist → quarantine · no source for a section → BLOCK the section",
-      needs: "S01 data report",
-    },
     outs: ["EvidenceLedger.json", "ReadinessReport.md"],
     steps: [
       {
@@ -274,7 +252,7 @@ export const STAGES: StageDef[] = [
         id: "b3",
         a: "code",
         t: "Recompute the numbers from the traces",
-        x: "Every value in results.csv is recomputed from the 20 traces. All match to three decimals.",
+        x: "Every comparison and descriptive in the package is recomputed from the 20 traces. All match to three decimals.",
       },
       {
         id: "b4",
@@ -294,13 +272,6 @@ export const STAGES: StageDef[] = [
     board: "axis",
     title: "Label every scientific statement",
     lead: "Each statement in the data report gets its type on the fourth axis and an epistemic status. Questions and objectives are not true or false, so they stay outside the argument graph as its context.",
-    ipo: {
-      in: "Data report fields; evidence ledger",
-      proc: "Label each statement gap, question, objective, hypothesis, assumption, finding, conclusion, implication or limitation; attach status and source field; link the lifecycle; block what exceeds the claim ceiling",
-      hu: "Quick check on statements whose type is unclear (K03)",
-      fa: "Finding without evidence → BLOCK · implication beyond the ceiling → BLOCK · type disputed → you decide",
-      needs: "G0 approved",
-    },
     outs: ["StatementRegistry.json", "LifecycleLinks.json"],
     steps: [
       {
@@ -345,13 +316,6 @@ export const STAGES: StageDef[] = [
     board: "debate",
     title: "Argue every claim before it is drawn",
     lead: "The Proponent states each claim. Four critics challenge it with the critical questions of its argument scheme, each challenge tied to a ground in the record. A separate Judge rules on every exchange, and each ruling becomes a part of the diagrams.",
-    ipo: {
-      in: "Statement registry; evidence ledger; data report; scheme catalogue with critical questions",
-      proc: "Five threads (gap, F1, F2, F3, conclusion): propose, challenge, answer or concede, rule. Unasked critical questions are closed from the record. At most three rounds per question",
-      hu: "Unresolved after three rounds → you decide (K04)",
-      fa: "Challenge without a ground → struck · answer with a number not in the ledger → rejected · deadlock → K04 · claim upheld against → it may be OUT at S07",
-      needs: "S03 registry",
-    },
     outs: ["DebateRecord.json", "Rulings.json"],
     steps: [
       {
@@ -397,13 +361,6 @@ export const STAGES: StageDef[] = [
     board: "toulmin",
     title: "Draw each claim in six parts",
     lead: "The Graph Builder draws each claim from the debate record: data, warrant, backing, qualifier, rebuttal and claim. Every part points to the ruling it came from; a warrant nobody wrote is drawn dashed as reconstructed.",
-    ipo: {
-      in: "Debate record and rulings; registry; ledger",
-      proc: "Premises → data; scheme → warrant; answered challenges → backing; concessions → qualifier; upheld or conceded challenges → rebuttal",
-      hu: "None; the debate already went through you",
-      fa: "A part with no ruling behind it → BLOCK the card",
-      needs: "S04 rulings",
-    },
     outs: ["ToulminCards.json"],
     steps: [
       {
@@ -430,13 +387,6 @@ export const STAGES: StageDef[] = [
     board: "aif",
     title: "Build the argument graph",
     lead: "The cards become an AIF graph: statements are I-nodes; inferences (RA), conflicts (CA) and preferences (PA) connect them. Scientific types live in an ASW extension, never in the AIF core fields.",
-    ipo: {
-      in: "Toulmin cards; registry; source spans",
-      proc: "Build I-nodes and RA/CA/PA schemes; link premises and conclusions; store the fourth-axis type outside the AIF core",
-      hu: "None here; the graph is locked at stop 2",
-      fa: "Dangling RA or invalid reference → BLOCK the graph",
-      needs: "S05 cards",
-    },
     outs: ["ArgumentGraph.json", "GraphEvidenceMap.json"],
     steps: [
       {
@@ -476,13 +426,6 @@ export const STAGES: StageDef[] = [
     title: "Evaluate every claim before you lock it",
     gate: "G1",
     lead: "The Verifier evaluates the graph under ASPIC+: each claim is IN, OUT or undecided. Only claims that are IN may be written as claims. What the record can answer is answered by Code check, never by an agent.",
-    ipo: {
-      in: "Argument graph; ledger; traces",
-      proc: "Trace every node; recompute numbers; label every claim under grounded semantics; answer attacks the record can answer; set confidence limits",
-      hu: "Stop 2 (G1): you lock the claims and freeze the graph",
-      fa: "Claim OUT → not written, or sent back to S03 · undecided → only hedged · critical factual conflict → no writing of that claim",
-      needs: "S06 graph",
-    },
     outs: ["EvaluationLabels.json", "FrozenGraph_v1.json"],
     steps: [
       { id: "g1", a: "av", t: "Trace every node to its source", x: "Every statement traces to a file, page and line." },
@@ -497,7 +440,7 @@ export const STAGES: StageDef[] = [
         id: "g4",
         a: "code",
         t: "Answer what the record can answer",
-        x: "The planned course-level bootstrap is read from the traces (row 24). The interval widens to 0.081–0.146 and still excludes zero. F1 is IN; so are the Conclusion and the implication.",
+        x: "The planned course-level bootstrap is read from the traces (A1-course). The interval widens to 0.081–0.146 and still excludes zero. F1 is IN; so are the Conclusion and the implication.",
       },
       { id: "g5", a: "av", t: "Set confidence limits", x: "How strongly each claim may be worded later." },
       { id: "G1", gate: true, t: "Lock the claims and freeze the graph?" },
@@ -511,13 +454,6 @@ export const STAGES: StageDef[] = [
     a: "js",
     title: "Merge the frozen claims with the journal profile",
     lead: "The two streams meet here. The Journal Specialist reads the published JFE profile and the publisher’s rules, keeps them apart, and turns them into a writing contract for these claims: where each statement goes, how sure it may sound, and how the sentences read.",
-    ipo: {
-      in: "Frozen graph v1; published JFE-EDJ-v2; author guidelines",
-      proc: "Separate rules from habits; place each statement type in IMRaD; map Toulmin parts to the journal’s habits; set structure, budgets, tense, voice and terms",
-      hu: "Quick check: approve the contract (K08)",
-      fa: "No published profile → write with rules only · rule and habit disagree → the rule wins, the habit is reported",
-      needs: "G1 frozen graph · JFE-EDJ-v2 published",
-    },
     outs: ["JournalWritingContract.json", "PlacementMap.json"],
     steps: [
       {
@@ -573,13 +509,6 @@ export const STAGES: StageDef[] = [
     a: "rp",
     title: "Lay out the storyline",
     lead: "The Planner places every frozen statement in its IMRaD section, as the contract says, and gives each section the statements it must carry, plus its figures and tables.",
-    ipo: {
-      in: "Frozen graph; journal contract; placement map; figure assets",
-      proc: "Arrange claims that are IN into a storyline; allocate statements to sections; choose the journal’s move patterns",
-      hu: "Quick check: approve the storyline (K09)",
-      fa: "Question, method and results measure different things → revise the outline",
-      needs: "G1 frozen graph · S08 contract",
-    },
     outs: ["ManuscriptBlueprint.json", "SectionContracts.json"],
     steps: [
       {
@@ -617,13 +546,6 @@ export const STAGES: StageDef[] = [
     a: "rp",
     title: "Give every paragraph a contract",
     lead: "Each paragraph gets a written contract from the journal’s recipes: its job, its move order, the role of each sentence, its citation slots and the evidence it may use. Writers cannot go beyond it.",
-    ipo: {
-      in: "Section contracts; JFE recipes and archetypes; frozen claim IDs",
-      proc: "Allocate paragraph goals, move order, sentence roles, citation slots and transitions",
-      hu: "Optional review for risky paragraphs (SmartPause)",
-      fa: "Paragraph with a claim but no evidence → BLOCK the paragraph",
-      needs: "S09 outline",
-    },
     outs: ["ParagraphContracts.json"],
     steps: [
       {
@@ -660,13 +582,6 @@ export const STAGES: StageDef[] = [
     a: "sw",
     title: "Write, section by section",
     lead: "Three writers work in parallel, each locked to its own section and sharing one glossary. Method and Results come first; the Discussion waits until you choose how strongly the findings are worded.",
-    ipo: {
-      in: "Paragraph contracts; frozen graph; ledger; journal terms",
-      proc: "Draft Method and Results first, then Discussion, Introduction, Conclusion, Abstract; reconcile terms",
-      hu: "Stop 3 (G2): you choose the wording before the Discussion is written",
-      fa: "Unknown result or metric → NEEDS_EVIDENCE, never invented",
-      needs: "S10 contracts",
-    },
     outs: ["Draft_1.md", "SentenceProvenance.json"],
     steps: [
       {
@@ -711,13 +626,6 @@ export const STAGES: StageDef[] = [
     a: "rv",
     title: "Read the draft back against the frozen graph",
     lead: "The Reverse Verifier reads the draft without the plan, rebuilds its argument graph and compares it with the one you froze. Language slips are fixed automatically; scientific divergences go to you.",
-    ipo: {
-      in: "Draft 1; frozen graph; ledger",
-      proc: "Re-extract propositions; compare source, strength and qualifiers; flag omissions, additions, invalid support and citation drift",
-      hu: "You settle scientific divergences (K12)",
-      fa: "New unsupported claim → roll the paragraph back to S10 and S11",
-      needs: "S11 draft · G1 graph",
-    },
     outs: ["GraphDelta.json", "VerifiedDraft.md"],
     steps: [
       {
@@ -755,13 +663,6 @@ export const STAGES: StageDef[] = [
     a: "js",
     title: "Measure the draft against the journal",
     lead: "The draft is compared with the 212 papers behind the profile. Style is aligned without changing what any sentence means. Journal fit is not scientific quality; exceptions are listed, not forced.",
-    ipo: {
-      in: "Verified draft; JFE bands; journal contract",
-      proc: "Check section shares, hedging, paragraph length, voice, citations and move order; edit without semantic drift",
-      hu: "Review exceptions to journal norms",
-      fa: "A style edit that changes meaning → revert and report · no profile → rules only",
-      needs: "S12 verified draft",
-    },
     outs: ["JournalFitReport.json", "AdaptedDraft.md"],
     steps: [
       {
@@ -804,13 +705,6 @@ export const STAGES: StageDef[] = [
     a: "rb",
     title: "Face three independent reviewers",
     lead: "A method reviewer, an evidence reviewer and a writing reviewer read the draft without seeing each other’s notes. Disagreements go to you, and the original reports are always kept.",
-    ipo: {
-      in: "Adapted draft; evidence and graph reports",
-      proc: "Independent critiques; check originality against the package; find disagreements; rank issues and route each to the stage that must fix it",
-      hu: "You settle disagreements (K14)",
-      fa: "Blocking issue → targeted S07, S11 or S12 revision",
-      needs: "S13 adapted draft",
-    },
     outs: ["ReviewerReports.json", "IssueBacklog.json"],
     steps: [
       {
@@ -848,20 +742,13 @@ export const STAGES: StageDef[] = [
     a: "re",
     title: "Patch only what the issues touch",
     lead: "Only the affected sentences change. Each change is shown as a semantic diff, and only the checks those changes affect run again. Revision rounds are capped at three.",
-    ipo: {
-      in: "Ranked backlog; your decisions; immutable draft snapshots",
-      proc: "Patch affected spans only; show the semantic diff; rerun the affected checks; at most three rounds",
-      hu: "You approve any change to a claim",
-      fa: "Three rounds without a clean read-back → escalate to you",
-      needs: "S14 backlog",
-    },
     outs: ["Draft_2.md", "ChangeLog.json"],
     steps: [
       {
         id: "n1",
         a: "code",
         t: "Rerun the analysis the reviewer asked for",
-        x: "A1 is rerun without the students who sat no first-semester evaluation, 664 of 726 per split on average: the gain is 0.122 (95% CI 0.100 to 0.143, row 41). Finding 1 holds.",
+        x: "A1 is rerun without the students who sat no first-semester evaluation, 664 of 726 per split on average: the gain is 0.122 (95% CI 0.100 to 0.143, R1 in package v2). Finding 1 holds.",
       },
       {
         id: "n2",
@@ -893,13 +780,6 @@ export const STAGES: StageDef[] = [
     title: "Final checks, then your signature",
     gate: "G3",
     lead: "The submission checklist, reference integrity and the AI-use statement are checked. The manuscript becomes submission-ready only after you sign. ASW never submits it.",
-    ipo: {
-      in: "Draft 2; approvals; contract; figures, tables, bibliography",
-      proc: "Check the submission list, every reference, the AI-use statement; build the audit manifest; export PDF, DOCX and LaTeX",
-      hu: "Stop 4 (G3): your signature; nothing is submitted for you",
-      fa: "Missing signature or open critical issue → export stays locked",
-      needs: "S15 draft 2",
-    },
     outs: ["SubmissionPackage.zip", "ApprovalLedger.json", "DisclosureDraft.md"],
     steps: [
       {
@@ -1070,7 +950,7 @@ export const SP: [string, string, number, string, string, string, string][] = [
     "F1 · Adding first-semester results finds more of the students who drop out",
     "SUPPORTED",
     "ok",
-    "G.1 · A1 · row 21",
+    "G.1 · A1 · comparison A1",
   ],
   [
     "SP-09",
@@ -1079,7 +959,7 @@ export const SP: [string, string, number, string, string, string, string][] = [
     "F2 · The gain appears in both admission groups and is not larger below the median",
     "SUPPORTED",
     "ok",
-    "G.1 · A2 · rows 22, 39–40",
+    "G.1 · A2 · A2, A2-below, A2-above",
   ],
   [
     "SP-10",
@@ -1088,7 +968,7 @@ export const SP: [string, string, number, string, string, string, string][] = [
     "F3 · No clear gain from boosting over logistic regression",
     "INCONCLUSIVE",
     "warn",
-    "G.1 · A3 · row 23",
+    "G.1 · A3 · comparison A3",
   ],
   [
     "SP-11",
@@ -1257,7 +1137,7 @@ export const PLANX: Record<string, PlanDef> = {
     ],
     roles: [
       ["topic", "Topic", "First-semester results against enrolment data"],
-      ["evid", "Evidence", "0.396 → 0.507, gain 0.111 [rows 6–15, 21]"],
+      ["evid", "Evidence", "0.396 → 0.507, gain 0.111 [t06–t15, A1]"],
       ["qual", "Qualification", "Threshold 0.05 from the plan; interval by students [21]"],
     ],
     len: "60–90 words",
@@ -1270,7 +1150,7 @@ export const PLANX: Record<string, PlanDef> = {
     moves: ["Name the groups", "Give both gains"],
     roles: [
       ["topic", "Topic", "The split by admission grade"],
-      ["evid", "Evidence", "0.098 and 0.129 [rows 39–40]"],
+      ["evid", "Evidence", "0.098 and 0.129 [A2-below, A2-above]"],
     ],
     len: "40–60 words",
     cites: "Figure 2",
@@ -1282,7 +1162,7 @@ export const PLANX: Record<string, PlanDef> = {
     moves: ["Say what is compared on enrolment data", "Give the difference and its interval"],
     roles: [
       ["topic", "Topic", "Boosting against logistic regression"],
-      ["evid", "Evidence", "0.004, CI −0.007 to 0.021 [row 23]"],
+      ["evid", "Evidence", "0.004, CI −0.007 to 0.021 [A3]"],
       ["qual", "Qualification", "Smallest gain the test could see: about 0.06"],
     ],
     len: "40–60 words",
@@ -1326,7 +1206,7 @@ export const PLANX: Record<string, PlanDef> = {
     moves: ["Which record", "Who is in it", "Who is analysed, and why"],
     roles: [
       ["topic", "Topic", "The record"],
-      ["evid", "Evidence", "3,630 of 4,424 [analysis.json]"],
+      ["evid", "Evidence", "3,630 of 4,424 [UCI-697]"],
       ["qual", "Qualification", "Exclusion rule, B.10"],
     ],
     len: "80–110 words",
@@ -1347,19 +1227,19 @@ export const TRACE: Record<string, [string, string, string, number?][]> = {
   F1: [
     ["quote", "Claim", "Finding 1 · First-semester results find more of the students who drop out"],
     ["link", "Inference", "RA1: Evidence E1 + Warrant W1 → F1 · undercut answered at S07"],
-    ["table", "Evidence", "results.csv rows 11–15, 21 · 0.507 vs 0.396, gain 0.111"],
-    ["hash", "Source", "10 traces, interval recomputed by course (row 24) · sha 3ef1…c45a"],
+    ["table", "Evidence", "Runs t11–t15, comparison A1 · 0.507 vs 0.396, gain 0.111"],
+    ["hash", "Source", "10 traces, interval recomputed by course (A1-course) · sha 3ef1…c45a"],
   ],
   F2: [
     ["quote", "Claim", "Finding 2 · The gain appears in both admission groups, not larger below the median"],
     ["link", "Inference", "RA2: Evidence E2 → F2 · CA5: F2 defeats H2"],
-    ["table", "Evidence", "results.csv rows 22, 39–40 · 0.098 and 0.129"],
+    ["table", "Evidence", "Comparisons A2, A2-below, A2-above · 0.098 and 0.129"],
     ["hash", "Source", "Traces t06–t15 · sha 3ef1…c45a"],
   ],
   F3: [
     ["quote", "Claim", "Finding 3 · On enrolment data, no clear gain from boosting"],
     ["link", "Conflict", "CA3: F3 contradicts H4; PA1 prefers the evidence"],
-    ["table", "Evidence", "results.csv row 23 · interval −0.007 to 0.021"],
+    ["table", "Evidence", "Comparison A3 · interval −0.007 to 0.021"],
   ],
   C: [
     ["quote", "Claim", "Conclusion · First-semester results are the better basis for early warning"],
@@ -1368,7 +1248,7 @@ export const TRACE: Record<string, [string, string, string, number?][]> = {
   ],
   M: [
     ["book", "Method", "Data report B.8–B.10 · same students, splits and flag rate for every model"],
-    ["file", "Source", "plan.md · locked 27 Oct 2026, 10:50 UTC"],
+    ["file", "Source", "Protocol EES-25CD v1 · locked 27 Oct 2026, 10:50 UTC"],
   ],
   GAP: [
     ["book", "Background", "Search strategy B.2 · Scopus, ERIC and arXiv"],
@@ -1385,22 +1265,26 @@ export const TRACE: Record<string, [string, string, string, number?][]> = {
   X: [
     ["x", "Claim", "No frozen claim says this", 1],
     ["link", "Inference", "No inference supports it in graph v1", 1],
-    ["table", "Evidence", "Row 23: the interval includes zero", 1],
+    ["table", "Evidence", "Comparison A3: the interval includes zero", 1],
   ],
 };
 export const EVSRC: [string, string][] = [
-  ["analysis.json", "3,630 of 4,424 students · 39.1% dropped out"],
-  ["rows 1–5", "LR-E · recall 0.392 · AUROC 0.783"],
-  ["rows 6–10", "GB-E · recall 0.396 · AUROC 0.788"],
-  ["rows 11–15", "GB-ES1 · recall 0.507 · AUROC 0.923"],
-  ["row 21", "A1 gain 0.111, CI 0.092 to 0.129"],
-  ["row 22", "A2 difference −0.031, CI −0.109 to 0.027"],
-  ["row 23", "A3 difference 0.004, CI −0.007 to 0.021"],
-  ["rows 24–25", "A1 and A3 with courses resampled"],
-  ["row 26", "undated columns added: 0.002"],
-  ["row 27", "A5 · 22% of flagged dropouts sat no evaluation"],
-  ["rows 28–38", "A4 · recall by course"],
-  ["rows 39–40", "gains 0.098 and 0.129 by admission grade"],
+  ["UCI-697", "3,630 of 4,424 students · 39.1% dropped out"],
+  ["splits", "5 splits · 726 test students, 284 dropouts each"],
+  ["ceiling", "highest recall the data allows: 0.511"],
+  ["t01–t05", "LR-E · recall 0.392 · AUROC 0.783"],
+  ["t06–t10", "GB-E · recall 0.396 · AUROC 0.788"],
+  ["t11–t15", "GB-ES1 · recall 0.507 · AUROC 0.923"],
+  ["A1", "A1 gain 0.111, CI 0.092 to 0.129"],
+  ["A2", "A2 difference −0.031, CI −0.109 to 0.027"],
+  ["A3", "A3 difference 0.004, CI −0.007 to 0.021"],
+  ["A1-course", "A1 with courses resampled: 0.081 to 0.146"],
+  ["A3-course", "A3 with courses resampled: −0.005 to 0.024"],
+  ["SA", "undated columns added: 0.002"],
+  ["A5", "A5 · 22% of flagged dropouts sat no evaluation"],
+  ["A4", "A4 · recall by course"],
+  ["A2-below", "gain below the median admission grade: 0.098"],
+  ["A2-above", "gain above the median admission grade: 0.129"],
 ];
 export const GLOSS: [string, string, string][] = [
   ["eligible student", "finished student", "Outcome known; defined in 3.1"],
@@ -1462,7 +1346,7 @@ export const RV_ISS: RvIssue[] = [
     sev: "critical",
     t: "New unsupported claim",
     w: "5.1, sentence 3",
-    x: "“Boosting also ranks students better than logistic regression” matches no frozen claim, and row 23 says otherwise.",
+    x: "“Boosting also ranks students better than logistic regression” matches no frozen claim, and comparison A3 says otherwise.",
     fix: "Paragraph rolled back to its contract and rewritten",
     route: "S12 → S10 → S11",
   },
@@ -1618,7 +1502,7 @@ export const BACKLOG: [string, string, string][] = [
 
 /* ---------- S15 / S16 ---------- */
 export const PATCHES: [string, string, string, string, string][] = [
-  ["4.1", "—", "without them: 0.122 (row 41)", "The new analysis, in one sentence", "strat"],
+  ["4.1", "—", "without them: 0.122 (R1)", "The new analysis, in one sentence", "strat"],
   [
     "5.2",
     "may already have stopped attending",
@@ -1637,13 +1521,13 @@ export const PATCHES: [string, string, string, string, string][] = [
   ["Abstract", "four numbers", "two numbers", "Interval moved to Results", "absci"],
 ];
 export const SDIFF: [string, string, string, string][] = [
-  ["Number", "A new analysis", "without students who sat no evaluation: 0.122 (row 41)", "warn"],
+  ["Number", "A new analysis", "without students who sat no evaluation: 0.122 (R1)", "warn"],
   ["Claim strength", "“indicate”", "unchanged", "ok"],
   ["Qualifier", "F1’s caveat, students who stopped attending", "answered by the new analysis", "ok"],
   ["Scope", "This polytechnic, 2008/09–2018/19", "unchanged", "ok"],
 ];
 export const RERUNS: [string, string, string][] = [
-  ["S07", "ASPIC+ label of F1 with row 41", "IN · caveat answered"],
+  ["S07", "ASPIC+ label of F1 with R1", "IN · caveat answered"],
   ["S12", "Read-back of 4.1, 5.2, 3.3, 1.1 and the Abstract", "pass"],
   ["G2", "Wording of the findings", "not affected"],
   ["S13", "Journal fit of the changed paragraphs", "pass"],
@@ -1685,7 +1569,7 @@ export const DEC: Record<string, DecDef> = {
     ],
     sum: [
       ["ok", "All 41 must and 9 should fields of the data report are present; 3 are partial"],
-      ["ok", "91 evidence spans; 40 result rows recomputed from the traces"],
+      ["ok", "91 evidence spans; 93 package results recomputed from the traces"],
       ["warn", "1 reference quarantined: the DOI does not exist"],
       ["bad", "Results 4.4 blocked: no entry year, so no claim across cohorts"],
     ],
@@ -1773,7 +1657,7 @@ export const DEC: Record<string, DecDef> = {
       "All claims still match after revision. The new analysis answers the caveat on Finding 1 about students who stopped attending; no locked claim moved.",
     ],
     checks: [
-      "I accept the new analysis in 4.1: without students who sat no evaluation the gain is 0.122 (row 41)",
+      "I accept the new analysis in 4.1: without students who sat no evaluation the gain is 0.122 (R1)",
       "I have read the final text and the AI-use statement",
     ],
     opts: [
@@ -1785,7 +1669,7 @@ export const DEC: Record<string, DecDef> = {
   K01: {
     kind: "check",
     title: "A5 was not in the plan. Keep it exploratory?",
-    why: "A5 (flagged dropouts with no first-semester evaluation, row 27) has no pre-registered hypothesis. Labelled exploratory, it can never be written as a finding.",
+    why: "A5 (flagged dropouts with no first-semester evaluation) has no pre-registered hypothesis. Labelled exploratory, it can never be written as a finding.",
     rec: [
       "Keep it exploratory",
       90,
@@ -2321,10 +2205,10 @@ export const MN: Record<string, MapNode> = {
   E1: {
     ty: "EVIDENCE",
     lane: "h",
-    t: "Rows 11–15, 21",
+    t: "t11–t15, A1",
     s: "0.507 vs 0.396",
     ev: 1,
-    src: "results.csv rows 6–15, 21",
+    src: "Package · runs t06–t15, comparison A1",
     num: "0.111",
     x: 346,
     y: 184,
@@ -2334,10 +2218,10 @@ export const MN: Record<string, MapNode> = {
   E2: {
     ty: "EVIDENCE",
     lane: "h",
-    t: "Rows 39–40",
+    t: "A2-below, A2-above",
     s: "0.098 and 0.129",
     ev: 1,
-    src: "results.csv rows 22, 39–40",
+    src: "Package · comparisons A2, A2-below, A2-above",
     num: "0.098",
     x: 346,
     y: 316,
@@ -2347,10 +2231,10 @@ export const MN: Record<string, MapNode> = {
   E3: {
     ty: "EVIDENCE",
     lane: "h",
-    t: "Row 23",
+    t: "Comparison A3",
     s: "CI −0.007 to 0.021",
     ev: 1,
-    src: "results.csv row 23",
+    src: "Package · comparison A3",
     num: "0.004",
     x: 346,
     y: 448,
@@ -2363,7 +2247,7 @@ export const MN: Record<string, MapNode> = {
     t: "Warrant",
     s: "Same students, splits, flag rate",
     ev: 1,
-    src: "plan.md §5",
+    src: "Protocol · plan.md §5",
     x: 346,
     y: 26,
     w: 140,
@@ -2376,7 +2260,7 @@ export const MN: Record<string, MapNode> = {
     t: "Counterexample",
     s: "Course 171: no dropout flagged",
     sp: "G.2",
-    src: "results.csv row 28 · A4",
+    src: "Package · A4-171",
     ev: 1,
     x: 742,
     y: 448,

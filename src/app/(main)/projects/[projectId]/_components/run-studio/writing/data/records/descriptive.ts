@@ -25,7 +25,7 @@ export const DESCRIPTIVE: StudyRecord = {
   values: {
     "A.1": "You · team of 2",
     "A.2": "CC BY 4.0, as the data (Realinho et al., 2022)",
-    "A.3": "rrp/v2 · every file hashed",
+    "A.3": "rrp/v2 · experiment package, every outside file by sha256",
     "B.1": "Reading notes on 10 papers",
     "B.2": "Scopus + ERIC · 1975–2026 · 3 queries · hits and reads logged",
     "B.3":
@@ -60,7 +60,7 @@ export const DESCRIPTIVE: StudyRecord = {
     "E.2": "Students share courses: intervals resample courses",
     "E.3": "Not applicable: no input is used to predict; when debt was recorded is named as a limit instead",
     "F.1": "One trace with config, seed and data hash",
-    "F.2": "results.csv · one row per estimate, each linked to the trace",
+    "F.2": "Experiment package · one descriptive per estimate, each linked to its run",
     "G.1": "A1 → H1 · A2 → H2",
     "G.2": "The gap by course, exploratory",
     "G.3": "Adjusted differences in percentage points, which readers can picture · odds ratios as secondary",
@@ -74,7 +74,7 @@ export const DESCRIPTIVE: StudyRecord = {
     "K.1": "Every entry with a DOI or a stable link",
     "K.2": "10 notes with quoted spans",
     "K.3": "8 full text · 2 abstract only",
-    "L.1": "Every figure linked to results.csv",
+    "L.1": "Every figure carries its data in the package",
     "M.1": "Higher education journal (example) · research article",
     "N.1": "No AI used in the analysis",
   },

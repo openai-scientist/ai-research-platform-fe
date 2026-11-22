@@ -451,7 +451,7 @@ export const TURNS: Turn[] = [
     tx: "Admission grades differ by course. The pattern may follow the course a student entered, not the grade.",
     g: [
       ["cq", "E3"],
-      ["led", "A4 · rows 28–38"],
+      ["led", "A4 · by course"],
       ["rep", "G.2"],
     ],
   },
@@ -693,10 +693,10 @@ export const TURNS_COUT: Turn[] = [
     tgt: "conclusion",
     sev: "fatal",
     re: "T31",
-    tx: "In course 171 the ranking flags none of the students who drop out (A4, row 28). The Conclusion speaks of every entrant.",
+    tx: "In course 171 the ranking flags none of the students who drop out (A4-171). The Conclusion speaks of every entrant.",
     g: [
       ["cq", "P3"],
-      ["led", "A4 · row 28"],
+      ["led", "A4-171"],
     ],
   },
   {
@@ -719,7 +719,7 @@ export const TURNS_COUT: Turn[] = [
     re: "T42",
     tx: "Exploratory or not, it is in the record, and the Conclusion names every entrant, course 171 included.",
     g: [
-      ["led", "A4 · row 28"],
+      ["led", "A4-171"],
       ["rep", "C.3"],
     ],
   },
@@ -737,10 +737,10 @@ export const TURNS_COUT: Turn[] = [
 /* the critical questions nobody asked are closed from the record by the judge */
 export const CLOSED_BY_RECORD: [string, string, string][] = [
   ["GAP", "G2", "All three indexes cover the venues where such a study would appear (B.2)."],
-  ["F1", "E1", "Row 21 traces to the ten runs behind it (F.1)."],
+  ["F1", "E1", "A1 traces to the ten runs behind it (F.1)."],
   ["F1", "E3", "Same students, splits and flag rate: no other difference between the models (B.8)."],
   ["F1", "E5", "A1 is confirmatory, locked before the runs (G.1)."],
-  ["F2", "E1", "Rows 39–40 trace to the runs behind them (F.1)."],
+  ["F2", "E1", "A2-below and A2-above trace to the runs behind them (F.1)."],
   ["F2", "E2", "The split uses the same students for both models (B.8)."],
   ["F2", "E4", "Recomputed by course with F1 at S07 (E.2)."],
   ["F3", "N2", "The comparison is A3, locked before the runs (G.1)."],

@@ -11,6 +11,8 @@ import { isActiveRun } from "@/lib/research-workspace";
 import { useRunStudio } from "@/lib/run-stream/run-store";
 
 import { RunStudio } from "./run-studio/run-studio";
+import { openWritingRun } from "./run-studio/writing/live/open";
+import { isWritingRun } from "./run-studio/writing/live/run";
 import type { WorkspaceProps } from "./workspace-ui";
 
 // Runs live on the backend; the workspace follows them through their events.
@@ -28,8 +30,12 @@ export function ExperimentsSection({ project, canWrite }: WorkspaceProps) {
       .getById(project.id, selectedRun)
       .then(({ data: run }) => {
         if (!current) return;
-        attachRun(project.id, run, isActiveRun(run.status));
-        openWorkspace(run.id);
+        // A writing run opens in the writing studio.
+        if (isWritingRun(run)) openWritingRun(project.id, run);
+        else {
+          attachRun(project.id, run, isActiveRun(run.status));
+          openWorkspace(run.id);
+        }
         router.replace(`/projects/${encodeURIComponent(project.id)}/experiments`);
       })
       .catch((error: unknown) => {

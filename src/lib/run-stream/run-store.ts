@@ -33,6 +33,8 @@ interface RunStudioState {
   /** Run whose workspace is open, and the element it opened from. */
   openRunId: string | null;
   openFrom: DOMRect | null;
+  /** Writing run open in the writing studio (it has its own studio, not the workspace). */
+  writingRunId: string | null;
   /** Starts a run and makes it the project's run. Resolves to the run to open, or null when none started. */
   startRun(projectId: string, mode: ReviewMode, input: RunInput): Promise<string | null>;
   /** Shows a run from the backend. `active` makes it the project's run; otherwise it can only be opened. */
@@ -118,6 +120,7 @@ export const useRunStudio = create<RunStudioState>()((set, get) => {
     activeRun: {},
     openRunId: null,
     openFrom: null,
+    writingRunId: null,
     async startRun(projectId, mode, input) {
       try {
         const { data: run } = await fetchRuns.create(projectId, {
@@ -138,7 +141,8 @@ export const useRunStudio = create<RunStudioState>()((set, get) => {
         // The project already has a run going: show that one instead.
         try {
           const running = (await fetchRuns.getList(projectId, { limit: 1 })).data[0];
-          if (!running || !runProblem(running)) return null;
+          // A writing run (pipeline `writing_outline`) opens in the writing studio, not here.
+          if (!running || !runProblem(running) || running.pipeline_key === "writing_outline") return null;
           get().attachRun(projectId, running, true);
           return running.id;
         } catch {

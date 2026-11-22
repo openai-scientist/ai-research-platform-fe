@@ -62,7 +62,7 @@ export const REV: Record<string, RevPiece> = {
   strat: R(
     "strat",
     "",
-    " Without the students who sat no first-semester evaluation, the gain was 0.122 (95% CI 0.100 to 0.143; row 41).",
+    " Without the students who sat no first-semester evaluation, the gain was 0.122 (95% CI 0.100 to 0.143; R1).",
   ),
   dis: R(
     "dis",
@@ -484,7 +484,7 @@ export const PARAS: Para[] = [
     sub: "Data and population",
     w: "m",
     job: "The record, the outcome and who is analysed.",
-    uses: ["analysis.json · data", "Data report C.1"],
+    uses: ["UCI-697", "Data report C.1"],
     s: [
       T(
         "M",
@@ -492,11 +492,11 @@ export const PARAS: Para[] = [
       ),
       T(
         "M",
-        "It holds {4,424|analysis.json} students and 36 attributes, with each student's status at the end of the normal duration of their course: {2,209|analysis.json} graduated, {1,421|analysis.json} dropped out and {794|analysis.json} were still enrolled. ",
+        "It holds {4,424|UCI-697} students and 36 attributes, with each student's status at the end of the normal duration of their course: {2,209|UCI-697} graduated, {1,421|UCI-697} dropped out and {794|UCI-697} were still enrolled. ",
       ),
       T(
         "M",
-        "Students still enrolled were excluded because their outcome is not known, leaving {3,630|analysis.json} students, of whom {39.1%|analysis.json} dropped out. The outcome is binary: dropout or graduate.",
+        "Students still enrolled were excluded because their outcome is not known, leaving {3,630|UCI-697} students, of whom {39.1%|UCI-697} dropped out. The outcome is binary: dropout or graduate.",
       ),
     ],
   },
@@ -629,11 +629,11 @@ export const PARAS: Para[] = [
     sub: "Splits, measures and intervals",
     w: "m",
     job: "Splits, runs and traces.",
-    uses: ["analysis.json · splits", "Data report D.4"],
+    uses: ["splits", "Data report D.4"],
     s: [
       T(
         "M",
-        "Each of five splits holds out a stratified 20% of students, {726|analysis.json} students of whom {284|analysis.json} dropped out; seeds 1 to 5 fix the splits. ",
+        "Each of five splits holds out a stratified 20% of students, {726|splits} students of whom {284|splits} dropped out; seeds 1 to 5 fix the splits. ",
       ),
       T(
         "M",
@@ -660,7 +660,7 @@ export const PARAS: Para[] = [
       ),
       T(
         "M",
-        "Because {39.1%|analysis.json} of students drop out, the highest possible value is {0.511|analysis.json}: even a perfect ranking leaves some dropouts unflagged. ",
+        "Because {39.1%|UCI-697} of students drop out, the highest possible value is {0.511|ceiling}: even a perfect ranking leaves some dropouts unflagged. ",
       ),
       T("M", "AUROC and the Brier score are reported as secondary measures, without hypotheses."),
     ],
@@ -838,16 +838,16 @@ export const PARAS: Para[] = [
     sub: "First-semester results",
     w: "r",
     job: "Finding 1: first-semester results against enrolment data.",
-    uses: ["rows 6–15", "row 21"],
+    uses: ["t06–t15", "A1"],
     claim: "F1",
     s: [
       T(
         "F1",
-        "Across five splits of {726|row 1} «g1» students each, adding first-semester results found more of the students who dropped out than «sc». ",
+        "Across five splits of {726|splits} «g1» students each, adding first-semester results found more of the students who dropped out than «sc». ",
       ),
       T(
         "F1",
-        "Recall at 20% flagged rose from {0.396|rows 6–10} with GB-E to {0.507|rows 11–15} with GB-ES1, a gain of {0.111|row 21} (95% CI {0.092 to 0.129|row 21}; Table 1).«strat» ",
+        "Recall at 20% flagged rose from {0.396|t06–t10} with GB-E to {0.507|t11–t15} with GB-ES1, a gain of {0.111|A1} (95% CI {0.092 to 0.129|A1}; Table 1).«strat» ",
       ),
       T("F1", "The gain exceeds the 0.05 the plan required, so A1 supports H1."),
     ],
@@ -860,16 +860,13 @@ export const PARAS: Para[] = [
     k: 2,
     w: "r",
     job: "Finding 1, split by split, and the ceiling.",
-    uses: ["row 21", "analysis.json"],
+    uses: ["A1", "ceiling"],
     claim: "F1",
     s: [
+      T("F1", "The gain was steady across splits, from {0.092|A1} in the smallest case to {0.130|A1} in the largest. "),
       T(
         "F1",
-        "The gain was steady across splits, from {0.092|analysis.json} in the smallest case to {0.130|analysis.json} in the largest. ",
-      ),
-      T(
-        "F1",
-        "GB-ES1 came within {0.004|rows 11–15} of the highest recall the measure allows, {0.511|analysis.json}, so nearly every student it flagged went on to drop out. ",
+        "GB-ES1 came within {0.004|t11–t15} of the highest recall the measure allows, {0.511|ceiling}, so nearly every student it flagged went on to drop out. ",
       ),
       T("M", "Because the comparison is paired, each split scores both models on the same students."),
     ],
@@ -881,12 +878,12 @@ export const PARAS: Para[] = [
     k: 3,
     w: "r",
     job: "Finding 1 with courses resampled.",
-    uses: ["row 24"],
+    uses: ["A1-course"],
     claim: "F1",
     s: [
       T(
         "F1",
-        "Resampling courses rather than students, as the plan specified for students who share a course and a cohort, widens the interval to {0.081 to 0.146|row 24}. ",
+        "Resampling courses rather than students, as the plan specified for students who share a course and a cohort, widens the interval to {0.081 to 0.146|A1-course}. ",
       ),
       T(
         "F1",
@@ -901,11 +898,11 @@ export const PARAS: Para[] = [
     k: 4,
     w: "r",
     job: "The secondary measures for the same comparison.",
-    uses: ["rows 6–15"],
+    uses: ["t06–t15"],
     s: [
       T(
         "F1",
-        "The secondary measures agree. AUROC rose from {0.788|rows 6–10} to {0.923|rows 11–15}, and the Brier score fell from {0.179|rows 6–10} to {0.097|rows 11–15}, so the scores of GB-ES1 also serve better as probabilities. ",
+        "The secondary measures agree. AUROC rose from {0.788|t06–t10} to {0.923|t11–t15}, and the Brier score fell from {0.179|t06–t10} to {0.097|t11–t15}, so the scores of GB-ES1 also serve better as probabilities. ",
       ),
       T("M", "The plan set no hypothesis on these measures, and we give them without intervals."),
     ],
@@ -917,11 +914,11 @@ export const PARAS: Para[] = [
     k: 5,
     w: "r",
     job: "Sensitivity: the undated columns added.",
-    uses: ["row 26", "rows 16–20"],
+    uses: ["SA", "t16–t20"],
     s: [
       T(
         "F1",
-        "Adding the three undated columns to GB-ES1 changed recall by {0.002|row 26} (95% CI {−0.001 to 0.008|row 26}). ",
+        "Adding the three undated columns to GB-ES1 changed recall by {0.002|SA} (95% CI {−0.001 to 0.008|SA}). ",
       ),
       T(
         "F1",
@@ -937,12 +934,12 @@ export const PARAS: Para[] = [
     sub: "By admission grade",
     w: "r",
     job: "Finding 2: the gain in each admission group.",
-    uses: ["rows 39–40"],
+    uses: ["A2-below", "A2-above"],
     claim: "F2",
     s: [
       T(
         "F2",
-        "The gain appeared in both admission groups: {0.098|row 39} (95% CI {0.058 to 0.128|row 39}) for students admitted below the median grade and {0.129|row 40} ({0.091 to 0.176|row 40}) for those above it (Figure 2).",
+        "The gain appeared in both admission groups: {0.098|A2-below} (95% CI {0.058 to 0.128|A2-below}) for students admitted below the median grade and {0.129|A2-above} ({0.091 to 0.176|A2-above}) for those above it (Figure 2).",
       ),
     ],
   },
@@ -954,10 +951,10 @@ export const PARAS: Para[] = [
     k: 2,
     w: "r",
     job: "Finding 2: the difference and its interval.",
-    uses: ["row 22"],
+    uses: ["A2"],
     claim: "F2",
     s: [
-      T("F2", "The difference between the two gains was {−0.031|row 22} (95% CI {−0.109 to 0.027|row 22}). "),
+      T("F2", "The difference between the two gains was {−0.031|A2} (95% CI {−0.109 to 0.027|A2}). "),
       T(
         "F2",
         "Its interval includes zero, so A2 does not support H2: the gain was not larger for students admitted with lower grades. ",
@@ -972,12 +969,12 @@ export const PARAS: Para[] = [
     k: 3,
     w: "r",
     job: "How the groups were formed, and what they may stand for.",
-    uses: ["analysis.json · splits", "Toulmin F2"],
+    uses: ["splits", "Toulmin F2"],
     claim: "F2",
     s: [
       T(
         "M",
-        "Each split used the median admission grade of its own training part, between {126.3|analysis.json} and {126.8|analysis.json}, fixed before any result was seen. ",
+        "Each split used the median admission grade of its own training part, between {126.3|splits} and {126.8|splits}, fixed before any result was seen. ",
       ),
       T(
         "LIM",
@@ -992,12 +989,12 @@ export const PARAS: Para[] = [
     sub: "Boosting and logistic regression",
     w: "r",
     job: "Finding 3: no clear gain from boosting on enrolment data.",
-    uses: ["rows 1–10", "row 23"],
+    uses: ["t01–t10", "A3"],
     claim: "F3",
     s: [
       T(
         "F3",
-        "On enrolment data, we found no clear gain from boosting over logistic regression: recall at 20% flagged was {0.396|rows 6–10} for GB-E and {0.392|rows 1–5} for LR-E, a difference of {0.004|row 23} (95% CI {−0.007 to 0.021|row 23}).",
+        "On enrolment data, we found no clear gain from boosting over logistic regression: recall at 20% flagged was {0.396|t06–t10} for GB-E and {0.392|t01–t05} for LR-E, a difference of {0.004|A3} (95% CI {−0.007 to 0.021|A3}).",
       ),
     ],
   },
@@ -1008,7 +1005,7 @@ export const PARAS: Para[] = [
     k: 2,
     w: "r",
     job: "Finding 3: what A3 says about H4.",
-    uses: ["row 23", "row 25"],
+    uses: ["A3", "A3-course"],
     claim: "F3",
     s: [
       T("F3", "The interval includes zero, so A3 does not support H4. "),
@@ -1016,7 +1013,7 @@ export const PARAS: Para[] = [
         "F3",
         "Its upper end lies well below the 0.06 the plan expected to detect, so a large gain is unlikely; a small one cannot be ruled out, and we do not conclude that the two models are equal. ",
       ),
-      T("F3", "Resampling courses gives a similar interval, {−0.005 to 0.024|row 25}."),
+      T("F3", "Resampling courses gives a similar interval, {−0.005 to 0.024|A3-course}."),
     ],
   },
   {
@@ -1026,12 +1023,12 @@ export const PARAS: Para[] = [
     k: 3,
     w: "r",
     job: "The secondary measures for the same comparison.",
-    uses: ["rows 1–10"],
+    uses: ["t01–t10"],
     claim: "F3",
     s: [
       T(
         "F3",
-        "The secondary measures tell the same story. AUROC was {0.783|rows 1–5} for logistic regression and {0.788|rows 6–10} for boosting, and the Brier scores were {0.182|rows 1–5} and {0.179|rows 6–10}. ",
+        "The secondary measures tell the same story. AUROC was {0.783|t01–t05} for logistic regression and {0.788|t06–t10} for boosting, and the Brier scores were {0.182|t01–t05} and {0.179|t06–t10}. ",
       ),
       T("F3", "On these inputs the two models rank and score students alike."),
     ],
@@ -1055,7 +1052,7 @@ export const PARAS: Para[] = [
     sub: "Exploratory analyses",
     w: "r",
     job: "A4, exploratory: recall by course.",
-    uses: ["rows 28–38"],
+    uses: ["A4"],
     s: [
       T(
         "EXP",
@@ -1063,7 +1060,7 @@ export const PARAS: Para[] = [
       ),
       T(
         "EXP",
-        "In ten of them it ranged from {0.328|row 30} to {0.690|row 38}. In course 171, with about {34|row 28} test students per split, no dropout was among the flagged students in any split ({0.0|row 28}). ",
+        "In ten of them it ranged from {0.328|A4-9070} to {0.690|A4-9991}. In course 171, with about {34|A4-171} test students per split, no dropout was among the flagged students in any split ({0.0|A4-171}). ",
       ),
       T(
         "EXP",
@@ -1078,12 +1075,12 @@ export const PARAS: Para[] = [
     k: 2,
     w: "r",
     job: "A5, exploratory: flagged dropouts with no evaluation.",
-    uses: ["row 27"],
+    uses: ["A5"],
     when: "a4",
     s: [
       T(
         "EXP",
-        "A second exploratory analysis, A5, was added after the first run. Of the dropouts GB-ES1 flagged, {22%|row 27} had sat no evaluation in the first semester. ",
+        "A second exploratory analysis, A5, was added after the first run. Of the dropouts GB-ES1 flagged, {22%|A5} had sat no evaluation in the first semester. ",
       ),
       T(
         "EXP",
@@ -1186,7 +1183,7 @@ export const PARAS: Para[] = [
     k: 4,
     w: "d",
     job: "How close the ranking came to its ceiling.",
-    uses: ["rows 11–15", "analysis.json"],
+    uses: ["t11–t15", "ceiling"],
     claim: "C",
     s: [
       T(
@@ -1286,7 +1283,7 @@ export const PARAS: Para[] = [
     k: 4,
     w: "d",
     job: "The change to the plan, and the columns left out.",
-    uses: ["Deviation D1", "row 26"],
+    uses: ["Deviation D1", "SA"],
     s: [
       T(
         "LIM",
@@ -1391,7 +1388,7 @@ export const PARAS: Para[] = [
       ),
       T(
         "C",
-        "Waiting for the first semester raised recall at 20% flagged by {0.111|row 21}, and the gain was clear in both admission groups. The choice between boosting and logistic regression on enrolment data made no difference we could detect.",
+        "Waiting for the first semester raised recall at 20% flagged by {0.111|A1}, and the gain was clear in both admission groups. The choice between boosting and logistic regression on enrolment data made no difference we could detect.",
       ),
     ],
   },

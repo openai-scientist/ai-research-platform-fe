@@ -295,7 +295,7 @@ export function CoverageMatrix({
   );
 }
 
-/* The re-check: the number the run reported, the number recomputed from the raw rows, and whether they agree. */
+/* The re-check: the number the run reported, the number recomputed from the traces, and whether they agree. */
 export function RecheckBand({ live }: { live: boolean }) {
   const e = S.ev;
   const st = S.st.S02;
@@ -326,9 +326,9 @@ export function RecheckBand({ live }: { live: boolean }) {
       tone: "bg-emerald-500/12 text-emerald-700 dark:text-emerald-300",
     };
   let note = "Numbers are recomputed from the traces once they are indexed.";
-  if (drift) note = "Row 21 differs from what the traces give. Blocked until you choose.";
+  if (drift) note = "Comparison A1 differs from what the traces give. Blocked until you choose.";
   else if (all && e.mis === "fixed")
-    note = "Every number recomputed from the traces; row 21 superseded by the trace value.";
+    note = "Every number recomputed from the traces; A1 superseded by the trace value.";
   else if (all) note = "Every number recomputed from the traces; none drifted.";
   else if (n) note = "Recomputing each number from the 20 traces, not from the run’s summary.";
   return (
@@ -370,7 +370,7 @@ export function RecheckBand({ live }: { live: boolean }) {
           >
             <span className="block text-[10.5px] text-muted-foreground">
               Reported by the run · {r.id}
-              {drift ? " · results.csv row 21" : ""}
+              {drift ? " · comparison A1" : ""}
             </span>
             <span
               className={cn(
@@ -386,7 +386,7 @@ export function RecheckBand({ live }: { live: boolean }) {
             <Icon n="right" className="size-4" />
           </span>
           <div className="min-w-0 rounded-lg px-3 py-2 ring-1 ring-foreground/10">
-            <span className="block text-[10.5px] text-muted-foreground">Recomputed · results.csv {r.at}</span>
+            <span className="block text-[10.5px] text-muted-foreground">Recomputed from the traces · {r.at}</span>
             <span className="block truncate font-mono font-semibold text-[15px] tabular-nums">{RECHECK[r.id]}</span>
           </div>
         </div>

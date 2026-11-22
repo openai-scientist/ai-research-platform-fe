@@ -35,7 +35,7 @@ import {
 import type { ScreenDef } from "./data/meta";
 import { AGENTS } from "./data/meta";
 import { PAPER_TITLE } from "./data/paper";
-import { emit, J, jsettle, playScenario, S, scrollTop, setTrack, TRACK, UI } from "./engine";
+import { emit, J, jsettle, S, scrollTop, setTrack, TRACK, UI } from "./engine";
 import { CorpusScene, ParseScene } from "./jfe-corpus";
 import { AnalyzeScene, AnnotateScene, ProfileView, PublishScene } from "./jfe-measure";
 import { AgentAvatar, Bump, cn, enter, Icon, M, pad2, quiet, SceneNote, WorkOrb } from "./lib";
@@ -972,11 +972,7 @@ export function JBody({ asideOpen = true }: { asideOpen?: boolean }) {
             title="The profile run stopped"
             text={J.failure}
             meta="ASW-0412 is told at S08 and writes with the publisher’s rules only."
-          >
-            <Button type="button" variant="outline" size="sm" onClick={() => playScenario("happy", false)}>
-              Back to the happy path
-            </Button>
-          </Bar>
+          />
         )}
         <div className="flex items-center gap-3 border-b px-4 py-2.5 lg:hidden">
           <div className="min-w-0 flex-1">

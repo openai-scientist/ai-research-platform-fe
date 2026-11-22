@@ -12,17 +12,15 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import { PulseDot } from "../run-bits";
-import { CASE_KIND, CASES, type CaseDef, SCN, SCN_ORDER } from "./data/cases";
+import { CASE_KIND, SCN } from "./data/cases";
 import { BLOCKS } from "./data/core";
 import { DEBATE_RULES, GROUND, RULING, RULING_ORDER, SCHEMES } from "./data/debate";
 import { INC } from "./data/incidents";
 import { JSTAGE, JTEAM } from "./data/jfe";
-import { AGENTS, isCode, ROSTER, ROSTER_COUNT, type ScreenDef, STAGE, STOP_NO } from "./data/meta";
-import { LEVEL_TONE } from "./data/report";
-import { emit, J, jPublishNow, playScenario, restart, S, setTrack, settle, UI } from "./engine";
+import { AGENTS, isCode, ROSTER, ROSTER_COUNT, type ScreenDef, STAGE } from "./data/meta";
+import { emit, J, jPublishNow, restart, S, setTrack, settle, UI } from "./engine";
 import { BOX_TYPES, type BoxNode, Diagram, type LinkEdge } from "./flow";
-import { AgentAvatar, canEnter, cn, DEV, EASE, Icon, M, Pane, quiet, WorkOrb } from "./lib";
-import { Card, ColHead } from "./scenes-gather";
+import { AgentAvatar, canEnter, cn, EASE, Icon, M, Pane, WorkOrb } from "./lib";
 
 /* ===== unhappy cases on screen: the recovery bar, the incident card, each stage's contract, the team and the scenarios ===== */
 
@@ -90,7 +88,6 @@ export function RecoveryBar() {
   const [busy, setBusy] = useState(false);
   if (S.inc) {
     const d = INC[S.inc.key];
-    const code = SCN[S.inc.key]?.code;
     return (
       <Bar
         key={`inc-${S.inc.key}`}
@@ -98,7 +95,7 @@ export function RecoveryBar() {
         tone={d.tone}
         title={d.title}
         text={d.text}
-        meta={`${code ? `Unhappy case ${code} · ` : ""}found by ${AGENTS[d.det[0]].name}${isCode(d.det[0]) ? ", no AI" : ""} · rule: ${d.det[1]}`}
+        meta={`Found by ${AGENTS[d.det[0]].name}${isCode(d.det[0]) ? ", no AI" : ""} · rule: ${d.det[1]}`}
       >
         {[...d.opts]
           .sort((a, b) => a[3] - b[3])
@@ -128,11 +125,6 @@ export function RecoveryBar() {
         text={S.failure}
         meta="Nothing after this stage happens. What finished stays on record."
       >
-        {S.scn !== "happy" && (
-          <Button type="button" variant="outline" size="sm" onClick={() => playScenario("happy", false)}>
-            Back to the happy path
-          </Button>
-        )}
         <Button type="button" size="sm" onClick={restart}>
           <Icon n="rotate" />
           Start over
@@ -178,34 +170,6 @@ export function RecoveryBar() {
       </Bar>
     );
   return null;
-}
-
-/* ---------- the strip that says which scenario is playing ---------- */
-export function ScenarioStrip() {
-  if (S.scn === "happy") return null;
-  const c = SCN[S.scn];
-  const k = CASE_KIND[c.kind];
-  return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b bg-muted/40 px-4 py-2 text-xs md:px-8">
-      <Badge className="font-mono">{c.code}</Badge>
-      <b className="font-semibold">Unhappy case · {c.t}</b>
-      <Badge className={k.c}>
-        <Icon n={k.icon} className="size-3" />
-        {k.label}
-      </Badge>
-      <span className="text-muted-foreground max-md:hidden">
-        Breaks at {c.stage} · {STAGE[c.stage].short}
-      </span>
-      <span className="ml-auto flex gap-1.5">
-        <Button type="button" variant="ghost" size="xs" onClick={() => playScenario(S.scn, false)}>
-          Play from the start
-        </Button>
-        <Button type="button" variant="outline" size="xs" onClick={() => playScenario("happy", false)}>
-          Back to the happy path
-        </Button>
-      </span>
-    </div>
-  );
 }
 
 /* ---------- the incident, in the scene where it happened ---------- */
@@ -290,7 +254,6 @@ export function RouteDiagram({ route }: { route: [string, string | null, string]
 }
 export function IncidentCard({ inc, resolved }: { inc: { key: string; opt?: string }; resolved?: boolean }) {
   const d = INC[inc.key];
-  const code = SCN[inc.key]?.code;
   const kind = CASE_KIND[SCN[inc.key]?.kind ?? "block"];
   const chosen = d.opts.find((o) => o[0] === inc.opt) ?? d.opts[0];
   if (resolved)
@@ -303,9 +266,7 @@ export function IncidentCard({ inc, resolved }: { inc: { key: string; opt?: stri
           <Icon n="check" className="size-3.5" />
         </span>
         <span className="min-w-0">
-          <b className="font-semibold">
-            Unhappy case {code} handled · {d.title}
-          </b>
+          <b className="font-semibold">Incident handled · {d.title}</b>
           <span className="block text-[12.5px] text-muted-foreground">
             You chose: <b className="font-medium text-foreground">{chosen[1]}</b>. {chosen[2]}
           </span>
@@ -328,8 +289,7 @@ export function IncidentCard({ inc, resolved }: { inc: { key: string; opt?: stri
           d.tone === "rose" ? "bg-rose-500/[0.06]" : "bg-amber-500/[0.07]",
         )}
       >
-        <Badge className="font-mono">{code ?? "!"}</Badge>
-        <b className="font-semibold text-sm">Unhappy case</b>
+        <b className="font-semibold text-sm">Incident</b>
         <Badge className={kind.c}>
           <Icon n={kind.icon} className="size-3" />
           {kind.label}
@@ -442,186 +402,6 @@ export function ScreenIncidents({ scr }: { scr: ScreenDef }) {
       ))}
       {open && <IncidentCard key={open.key} inc={open} />}
     </div>
-  );
-}
-
-/* ---------- each stage's contract: inputs, process, outputs, the happy path and every unhappy case ---------- */
-export function LevelChip({ lv }: { lv: string }) {
-  return <Badge className={LEVEL_TONE[lv]}>{lv}</Badge>;
-}
-export function CaseRow({ c }: { c: CaseDef }) {
-  const k = CASE_KIND[c.kind];
-  const playable = DEV && c.play && c.play !== "happy";
-  return (
-    <li className="grid gap-x-4 gap-y-2 border-t px-3.5 py-3 first:border-t-0 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)_auto]">
-      <div className="flex min-w-0 flex-col gap-1">
-        <span className="flex flex-wrap items-center gap-1.5">
-          <Badge className={k.c}>
-            <Icon n={k.icon} className="size-3" />
-            {k.label}
-          </Badge>
-          {c.play && playable && <Badge className="h-4 px-1.5 font-mono text-[10px]">{SCN[c.play].code}</Badge>}
-        </span>
-        <b className="font-semibold text-[13px] leading-snug">{c.t}</b>
-        <span className="text-[12px] text-muted-foreground leading-snug">
-          <b className="font-medium text-foreground/80">When</b> {c.trig}
-        </span>
-      </div>
-      <dl className="grid min-w-0 grid-cols-[62px_minmax(0,1fr)] gap-x-2 gap-y-1 text-[12px]">
-        <dt className="text-muted-foreground">Found by</dt>
-        <dd className="flex items-center gap-1.5">
-          <AgentAvatar a={c.det[0]} size="sm" />
-          <span className="min-w-0">
-            <span className="font-medium">{AGENTS[c.det[0]].name}</span>
-            <span className="text-muted-foreground"> · {c.det[1]}</span>
-          </span>
-        </dd>
-        <dt className="text-muted-foreground">ASW</dt>
-        <dd>{c.resp}</dd>
-        <dt className="text-muted-foreground">Route</dt>
-        <dd className="font-mono text-[11.5px]">{c.route}</dd>
-        <dt className="text-muted-foreground">Ends</dt>
-        <dd>{c.exit}</dd>
-      </dl>
-      <div className="flex items-start lg:justify-end">
-        {playable ? (
-          <Button type="button" variant="outline" size="sm" onClick={() => c.play && playScenario(c.play)}>
-            <Icon n="play" />
-            Play it
-          </Button>
-        ) : c.play === "happy" ? (
-          <span className="inline-flex h-7 items-center gap-1.5 rounded-md bg-emerald-500/10 px-2 font-medium text-[11.5px] text-emerald-800 dark:text-emerald-300">
-            <Icon n="check" className="size-3" />
-            In the happy path
-          </span>
-        ) : (
-          <span className="inline-flex h-7 items-center rounded-md px-2 text-[11.5px] text-muted-foreground ring-1 ring-foreground/10">
-            Described only
-          </span>
-        )}
-      </div>
-    </li>
-  );
-}
-export function StageContract({ sid }: { sid: string }) {
-  const def = STAGE[sid];
-  const cs = CASES[sid];
-  const unhappy = cs.cases.length;
-  return (
-    <section className="flex flex-col gap-3">
-      <h3 className="flex flex-wrap items-baseline gap-2 font-semibold text-[15px] tracking-tight">
-        <span className="font-medium font-mono text-[12px] text-muted-foreground">{sid}</span>
-        {def.name}
-      </h3>
-      <div className="grid min-w-0 gap-3 lg:grid-cols-3">
-        <Pane title="Input" aside="level">
-          <ul className="flex flex-col gap-1.5 text-[12.5px]">
-            {cs.in.map(([x, lv]) => (
-              <li key={x} className="flex items-start justify-between gap-2">
-                <span>{x}</span>
-                <LevelChip lv={lv} />
-              </li>
-            ))}
-          </ul>
-          <p className="mt-2.5 border-t pt-2 text-[11.5px] text-muted-foreground">
-            <b className="font-medium text-foreground/80">Starts when</b> {cs.pre}
-          </p>
-        </Pane>
-        <Pane title="Process" aside={`${def.steps.filter((s) => !s.gate && !s.check).length} steps`}>
-          <p className="text-[12.5px] leading-relaxed">{def.ipo.proc}.</p>
-          <p className="mt-2.5 border-t pt-2 text-[11.5px] text-muted-foreground">
-            <b className="font-medium text-foreground/80">You</b> {def.ipo.hu}
-          </p>
-        </Pane>
-        <Pane title="Output" aside="files">
-          <ul className="flex flex-wrap gap-1.5">
-            {def.outs.map((f) => (
-              <li key={f} className="inline-flex h-6 items-center gap-1 rounded-md border px-2 font-mono text-[11px]">
-                <Icon n="file" className="size-3 text-muted-foreground" />
-                {f}
-              </li>
-            ))}
-          </ul>
-          <p className="mt-2.5 border-t pt-2 text-[11.5px] text-muted-foreground">
-            <b className="font-medium text-foreground/80">Needs</b> {def.ipo.needs}
-          </p>
-        </Pane>
-      </div>
-      <Card>
-        <ColHead icon="check" title="Happy path" aside={`${def.steps.length} steps`} />
-        <ol className="grid gap-x-6 px-3.5 py-3 md:grid-cols-2">
-          {def.steps.map((s, i) => (
-            <li key={s.id} className="grid grid-cols-[22px_minmax(0,1fr)] gap-2 py-1 text-[12.5px]">
-              <span
-                className={cn(
-                  "mt-px grid size-[18px] place-items-center rounded-full font-mono font-semibold text-[9.5px]",
-                  s.gate || s.check
-                    ? "bg-amber-500/15 text-amber-800 dark:text-amber-300"
-                    : "bg-muted text-muted-foreground",
-                )}
-              >
-                {s.gate || s.check ? <Icon n="flag" className="size-2.5" /> : i + 1}
-              </span>
-              <span>
-                <b className="font-medium">{s.t}</b>
-                {s.x ? (
-                  <span className="block text-[11.5px] text-muted-foreground leading-snug">{s.x}</span>
-                ) : (
-                  <span className="block text-[11.5px] text-amber-700 dark:text-amber-300">
-                    {s.gate ? `Stop ${STOP_NO[s.id]} · you decide` : "Quick check · you decide"}
-                  </span>
-                )}
-              </span>
-            </li>
-          ))}
-        </ol>
-      </Card>
-      <Card>
-        <ColHead
-          icon="alert"
-          title="Unhappy cases"
-          aside={DEV ? `${unhappy} · ${cs.cases.filter((c) => c.play && c.play !== "happy").length} playable` : unhappy}
-        />
-        <ul>
-          {cs.cases.map((c) => (
-            <CaseRow key={c.t} c={c} />
-          ))}
-        </ul>
-      </Card>
-    </section>
-  );
-}
-export function ContractView({ scr }: { scr: ScreenDef }) {
-  return (
-    <div className="flex flex-col gap-6">
-      {scr.stages.map((sid) => (
-        <StageContract key={sid} sid={sid} />
-      ))}
-    </div>
-  );
-}
-export function ScreenTabs({ scr }: { scr: ScreenDef }) {
-  const n = scr.stages.reduce((s, id) => s + CASES[id].cases.length, 0);
-  const tab = S.tab;
-  const set = (t: string) => {
-    S.tab = t;
-    quiet();
-    emit();
-  };
-  return (
-    <Tabs value={tab} onValueChange={set} className="-mt-2">
-      <TabsList variant="line" aria-label="View" className="w-full justify-start border-b">
-        <TabsTrigger value="run" className="flex-none">
-          The run
-        </TabsTrigger>
-        <TabsTrigger value="contract" className="flex-none">
-          Contract and cases
-          <Badge variant="secondary" className="font-mono">
-            {n}
-          </Badge>
-        </TabsTrigger>
-      </TabsList>
-    </Tabs>
   );
 }
 
@@ -843,109 +623,3 @@ const GROUND_WHAT: Record<string, string> = {
   std: "An item of REFORMS, the pre-registration template for existing data, the NeurIPS checklist, Datasheets, CONSORT or PRISMA",
   src: "A paper or file in the package; nothing from outside",
 };
-
-/* ---------- the scenarios ---------- */
-export function ScenarioSheet() {
-  const total = Object.values(CASES).reduce((n, c) => n + c.cases.length, 0);
-  const happyShown = Object.values(CASES).reduce((n, c) => n + c.cases.filter((x) => x.play === "happy").length, 0);
-  return (
-    <StudioDialog
-      title="Play a scenario"
-      sub={`The happy path, or one thing wrong. ${total} cases are written into the stage contracts: ${happyShown} happen inside the happy path, ${SCN_ORDER.length} can be played on their own.`}
-      onClose={() => openSheet(null)}
-    >
-      <div className="flex flex-col gap-4">
-        <button
-          type="button"
-          onClick={() => {
-            openSheet(null);
-            playScenario("happy", false);
-          }}
-          className={cn(
-            "flex items-start gap-3 rounded-xl border px-4 py-3.5 text-left transition-colors hover:bg-muted/60",
-            S.scn === "happy" && "border-foreground ring-1 ring-foreground",
-          )}
-        >
-          <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-emerald-500/12 text-emerald-700 dark:text-emerald-300">
-            <Icon n="check" className="size-[18px]" />
-          </span>
-          <span className="min-w-0 flex-1">
-            <b className="block font-semibold text-sm">Happy path{S.scn === "happy" ? " · playing" : ""}</b>
-            <span className="text-[12.5px] text-muted-foreground">
-              The record is sound. What goes wrong is caught and handled inside the run: a fake DOI, an ungrounded
-              challenge, a made-up number, a deadlock, an undercut answered from the traces, a new claim rolled back, a
-              style edit reverted.
-            </span>
-          </span>
-        </button>
-        {BLOCKS.map((b) => {
-          const list = SCN_ORDER.filter((k) => SCN[k].stage >= b.from && SCN[k].stage <= b.to);
-          if (!list.length) return null;
-          return (
-            <section key={b.k} className="flex flex-col gap-2">
-              <h3 className="flex items-center gap-2 font-mono text-[11px] text-muted-foreground uppercase tracking-wider">
-                {b.n}
-                <i className="h-px flex-1 bg-border" />
-              </h3>
-              {list.map((k) => {
-                const c = SCN[k];
-                const kind = CASE_KIND[c.kind];
-                const on = S.scn === k;
-                return (
-                  <div
-                    key={k}
-                    className={cn(
-                      "grid gap-x-3 gap-y-2 rounded-xl border px-4 py-3 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center",
-                      on && "border-foreground ring-1 ring-foreground",
-                    )}
-                  >
-                    <span className="inline-flex h-6 w-fit items-center rounded-md bg-foreground px-1.5 font-bold font-mono text-[11px] text-background">
-                      {c.code}
-                    </span>
-                    <span className="min-w-0">
-                      <span className="flex flex-wrap items-center gap-2">
-                        <b className="font-semibold text-sm">{c.t}</b>
-                        <Badge className={kind.c}>
-                          <Icon n={kind.icon} className="size-3" />
-                          {kind.label}
-                        </Badge>
-                        <span className="font-mono text-[11px] text-muted-foreground">
-                          {c.stage} · {STAGE[c.stage].short}
-                        </span>
-                      </span>
-                      <span className="mt-0.5 block text-[12.5px] text-muted-foreground leading-snug">{c.x}</span>
-                    </span>
-                    <span className="flex gap-1.5">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          openSheet(null);
-                          playScenario(k, false);
-                        }}
-                      >
-                        From the start
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        onClick={() => {
-                          openSheet(null);
-                          playScenario(k);
-                        }}
-                      >
-                        <Icon n="play" />
-                        Skip to it
-                      </Button>
-                    </span>
-                  </div>
-                );
-              })}
-            </section>
-          );
-        })}
-      </div>
-    </StudioDialog>
-  );
-}

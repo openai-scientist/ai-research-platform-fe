@@ -274,7 +274,7 @@ export function Table1() {
     <M as="figure" in="up6" data-para="TAB1" className="relative my-4 font-sans">
       <figcaption className="mb-1.5 text-muted-foreground text-xs">
         <b className="text-foreground">Table 1.</b> Recall at 20% flagged and AUROC on 726 test students per split, mean
-        of five splits (rows 1–15). The highest possible recall is 0.511.
+        of five splits (runs t01–t15). The highest possible recall is 0.511.
       </figcaption>
       <table className="w-full border-foreground border-y-[1.5px] text-sm">
         <thead>
@@ -395,7 +395,7 @@ export function Figure2() {
       </div>
       <figcaption className="mt-1.5 text-muted-foreground text-xs">
         <b className="text-foreground">Figure 2.</b> Gain in recall at 20% flagged from first-semester results (GB-ES1
-        over GB-E), by admission grade (rows 39–40).
+        over GB-E), by admission grade (A2-below, A2-above).
       </figcaption>
     </M>
   );
@@ -491,8 +491,10 @@ export function paraBlock(p: Para, writingOf: Record<string, string>, comments: 
     ) : (
       skeletonFigure(p, "Table 2 · the hypotheses and their outcomes")
     );
-  if (p.kind === "table") return S.pp.table > 0 ? <Table1 key={p.id} /> : skeletonFigure(p, "Table 1 · from rows 1–15");
-  if (p.kind === "figure") return S.pp.fig ? <Figure2 key={p.id} /> : skeletonFigure(p, "Figure 2 · from rows 39–40");
+  if (p.kind === "table")
+    return S.pp.table > 0 ? <Table1 key={p.id} /> : skeletonFigure(p, "Table 1 · from runs t01–t15");
+  if (p.kind === "figure")
+    return S.pp.fig ? <Figure2 key={p.id} /> : skeletonFigure(p, "Figure 2 · from A2-below, A2-above");
   if (p.kind === "excluded")
     return S.bp.placed > 0 ? (
       <M

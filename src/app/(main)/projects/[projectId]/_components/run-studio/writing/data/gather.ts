@@ -1,3 +1,5 @@
+import { DROPOUT_ERP as ERP } from "./erp-dropout";
+
 export interface LedgerRow {
   id: string;
   k: string;
@@ -43,13 +45,13 @@ export const LEDGER: LedgerRow[] = [
     k: "num",
     sec: "Method",
     v: "3,630 of 4,424",
-    src: "analysis.json",
-    at: "data.analysed",
+    src: "Package · data",
+    at: "provenance.data · UCI-697",
     ctx: [
       '"rows": 4424,',
       '"classes": { "Graduate": 2209, "Dropout": 1421, "Enrolled": 794 },',
-      '"analysed": 3630,',
-      '"dropouts": 1421,',
+      '"facts": { "analysed": 3630,',
+      '  "dropouts": 1421, "dropout_rate": 0.3915 }',
     ],
     hit: 1,
   },
@@ -91,13 +93,13 @@ export const LEDGER: LedgerRow[] = [
     k: "num",
     sec: "Results",
     v: "0.392 · 0.396 · 0.507",
-    src: "results.csv",
-    at: "rows 1–15",
+    src: "Package · results",
+    at: "observations t01–t15",
     ctx: [
-      "row,name,recall_at_20 (seeds 1–5)",
-      "1–5,LR-E,0.387|0.394|0.391|0.398|0.387",
-      "6–10,GB-E,0.377|0.394|0.401|0.412|0.394",
-      "11–15,GB-ES1,0.507|0.504|0.511|0.504|0.511",
+      "run_id · recall_at_20, seeds 1–5",
+      "t01–t05 · LR-E    0.387 0.394 0.391 0.398 0.387",
+      "t06–t10 · GB-E    0.377 0.394 0.401 0.412 0.394",
+      "t11–t15 · GB-ES1  0.507 0.504 0.511 0.504 0.511",
     ],
     hit: 2,
   },
@@ -106,12 +108,12 @@ export const LEDGER: LedgerRow[] = [
     k: "num",
     sec: "Results",
     v: "0.111, CI 0.092–0.129",
-    src: "results.csv",
-    at: "row 21",
+    src: "Package · results",
+    at: "comparison A1",
     ctx: [
-      "row,name,estimate,ci_low,ci_high",
-      "21,A1 · H1 · GB-ES1 − GB-E,0.1113,0.0921,0.1291",
-      "22,A2 · H2 · gain below − above median admission,-0.0311,-0.1086,0.027",
+      '{ "comparison_id": "A1", "label": "GB-ES1 − GB-E",',
+      '  "estimate": 0.1113, "ci_low": 0.0921, "ci_high": 0.1291,',
+      '  "run_ids": ["t06", …, "t15"] }',
     ],
     hit: 2,
   },
@@ -120,9 +122,12 @@ export const LEDGER: LedgerRow[] = [
     k: "num",
     sec: "Results",
     v: "0.111, CI 0.081–0.146",
-    src: "results.csv",
-    at: "row 24",
-    ctx: ["row,name,estimate,ci_low,ci_high", "24,A1 · course bootstrap,0.1113,0.0811,0.1457"],
+    src: "Package · results",
+    at: "comparison A1-course",
+    ctx: [
+      '{ "comparison_id": "A1-course", "role": "robustness",',
+      '  "estimate": 0.1113, "ci_low": 0.0811, "ci_high": 0.1457 }',
+    ],
     hit: 1,
   },
   {
@@ -130,9 +135,12 @@ export const LEDGER: LedgerRow[] = [
     k: "num",
     sec: "Results",
     v: "−0.031, CI −0.109–0.027",
-    src: "results.csv",
-    at: "row 22",
-    ctx: ["row,name,estimate,ci_low,ci_high", "22,A2 · H2 · gain below − above median admission,-0.0311,-0.1086,0.027"],
+    src: "Package · results",
+    at: "comparison A2",
+    ctx: [
+      '{ "comparison_id": "A2", "label": "Gain below − above the median admission grade",',
+      '  "estimate": -0.0311, "ci_low": -0.1086, "ci_high": 0.027 }',
+    ],
     hit: 1,
   },
   {
@@ -140,9 +148,12 @@ export const LEDGER: LedgerRow[] = [
     k: "num",
     sec: "Results",
     v: "0.004, CI −0.007–0.021",
-    src: "results.csv",
-    at: "row 23",
-    ctx: ["row,name,estimate,ci_low,ci_high", "23,A3 · H4 · GB-E − LR-E,0.0042,-0.0065,0.0215"],
+    src: "Package · results",
+    at: "comparison A3",
+    ctx: [
+      '{ "comparison_id": "A3", "label": "GB-E − LR-E",',
+      '  "estimate": 0.0042, "ci_low": -0.0065, "ci_high": 0.0215 }',
+    ],
     hit: 1,
   },
   {
@@ -167,8 +178,9 @@ export const NUM_ROWS = LEDGER.filter((r) => r.k === "num").map((r) => r.id);
 export const BAD_REF = 17;
 /** Entries in refs.bib: 21 real references and one planted entry, number 17, whose DOI does not exist. */
 export const REFS_TOTAL = 22;
-/** Rows in results.csv; S02 recomputes every one from the traces. */
-export const RESULT_ROWS_TOTAL = 40;
+/** Results in the package that S02 recomputes from the traces: every observation, comparison and descriptive. */
+export const RESULT_ROWS_TOTAL =
+  ERP.results.observations.length + ERP.results.comparisons.length + ERP.results.descriptives.length;
 
 /* The journal: each topic with what the rules demand and what the journal's papers usually do. */
 export const JOURNAL_DIFF: { t: string; rule: string | null; habit: string; rel: string; fit?: number }[] = [
@@ -195,21 +207,21 @@ export const CONTRACT: [string, string, string][] = [
 /* Where each part of a claim comes from. */
 export const TOU_SRC: Record<string, Record<string, string>> = {
   F1: {
-    data: "rows 6–15, 21 · T08",
-    war: "plan.md §5 · answered T11",
+    data: "t06–t15, A1 · T08",
+    war: "Protocol §5 · answered T11",
     back: "Interval by course · S07",
     qual: "Record scope · C.3",
     reb: "Upheld at T15",
   },
   F2: {
-    data: "rows 39–40 · T18",
-    war: "plan.md §6 · answered T21",
+    data: "A2-below, A2-above · T18",
+    war: "Protocol §6 · answered T21",
     back: "Locked 27 Oct · T20",
     qual: "Conceded at T24",
     reb: "Conceded at T23",
   },
   F3: {
-    data: "row 23 · T25",
+    data: "A3 · T25",
     war: "In no source",
     back: "Efron & Tibshirani, 1993",
     qual: "Conceded at T30",
@@ -357,9 +369,15 @@ export const COVER_COLS: { k: string; s: string; n: string; full: string }[] = [
   { k: "dis", s: "Dis", n: "Disc.", full: "5 Discussion" },
 ];
 export const COVER_ROWS: { src: string; short: string; sub: string; k: string; c: Record<string, number> }[] = [
-  { src: "results.csv", short: "results.csv", sub: "40 rows", k: "num", c: { met: 3, r1: 8, r2: 5, r3: 5, dis: 4 } },
-  { src: "plan.md", short: "plan.md", sub: "locked plan", k: "quote", c: { int: 1, met: 5 } },
-  { src: "analysis.json", short: "analysis.json", sub: "verdicts", k: "quote", c: { r2: 2, r3: 3, dis: 3 } },
+  {
+    src: "Package · results",
+    short: "Results",
+    sub: "comparisons",
+    k: "num",
+    c: { met: 3, r1: 8, r2: 5, r3: 5, dis: 4 },
+  },
+  { src: "plan.md", short: "plan.md", sub: "locked protocol", k: "quote", c: { int: 1, met: 5 } },
+  { src: "Package · data", short: "Data", sub: "counts, splits", k: "num", c: { met: 1, r2: 2, r3: 3, dis: 3 } },
   { src: "Realinho et al., 2022", short: "Realinho ’22", sub: "the dataset", k: "quote", c: { int: 3, met: 4 } },
   { src: "Kapoor & Narayanan, 2023", short: "Kapoor ’23", sub: "leakage", k: "quote", c: { int: 1, rel: 5, dis: 2 } },
   { src: "Dekker et al., 2009", short: "Dekker ’09", sub: "dropout case", k: "quote", c: { rel: 3, met: 1 } },

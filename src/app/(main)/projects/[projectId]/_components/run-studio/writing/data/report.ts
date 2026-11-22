@@ -71,11 +71,11 @@ export const levelCount = (lv: string): [number, number, number] => {
   return [all.filter((f) => f.s !== "bad").length, all.length, all.filter((f) => f.s === "warn").length];
 };
 
-/* r2 · when things happened: the plan must be locked before the first trace */
+/* r2 · when things happened: the protocol must be locked before the first run */
 export const TIMELINE: TimelineEvent[] = [
-  { t: "27 Oct 10:50", k: "plan", x: "plan.md locked", sub: "sha b17a…" },
-  { t: "27 Oct 10:51", k: "run", x: "First trace", sub: "t01 · LR-E, seed 1" },
-  { t: "27 Oct 10:52", k: "run", x: "Last trace", sub: "t20 · GB-ES1U, seed 5" },
+  { t: "27 Oct 10:50", k: "plan", x: "Protocol locked", sub: "sha b17a…" },
+  { t: "27 Oct 10:51", k: "run", x: "First run", sub: "t01 · LR-E, seed 1" },
+  { t: "27 Oct 10:52", k: "run", x: "Last run", sub: "t20 · GB-ES1U, seed 5" },
   { t: "27 Oct 10:52", k: "ana", x: "Analyses A1–A4", sub: "A4 exploratory in the plan" },
   { t: "27 Oct 10:53", k: "dev", x: "D1 declared", sub: "native categories, not one-hot" },
   { t: "27 Oct 10:54", k: "ana", x: "Rerun as planned · A5", sub: "A5 not in the plan" },
@@ -87,15 +87,15 @@ export const TIMELINE_VERDICT = {
   late: "Every analysis is exploratory: no finding may be stated as confirmed.",
 };
 export const TIMELINE_LATE: TimelineEvent[] = [
-  { t: "27 Oct 10:51", k: "run", x: "First trace", sub: "t01 · LR-E, seed 1" },
-  { t: "27 Oct 10:52", k: "run", x: "Last trace", sub: "t20 · GB-ES1U, seed 5" },
-  { t: "27 Oct 22:40", k: "plan", x: "plan.md locked", sub: "12 h after the first trace" },
+  { t: "27 Oct 10:51", k: "run", x: "First run", sub: "t01 · LR-E, seed 1" },
+  { t: "27 Oct 10:52", k: "run", x: "Last run", sub: "t20 · GB-ES1U, seed 5" },
+  { t: "27 Oct 22:40", k: "plan", x: "Protocol locked", sub: "12 h after the first run" },
   { t: "27 Oct 22:45", k: "dev", x: "D1 declared", sub: "native categories, not one-hot" },
   { t: "27 Oct 22:50", k: "ana", x: "Analyses A1–A5", sub: "A5 not in the plan" },
-  { t: "28 Oct 09:00", k: "hand", x: "Hand-off to ASW", sub: "rrp/v2" },
+  { t: "28 Oct 09:00", k: "hand", x: "Hand-off to ASW", sub: "ERP-25CD v1 · rrp/v2" },
 ];
 
-/* r3 · each hypothesis to its analysis, its rows and its traces */
+/* r3 · each hypothesis to its analysis, its results and its runs */
 export const CHAIN: ChainLink[] = [
   {
     h: "H1",
@@ -103,7 +103,7 @@ export const CHAIN: ChainLink[] = [
     pri: "primary",
     a: "A1",
     kind: "confirmatory",
-    rows: "rows 6–15, 21",
+    rows: "t06–t15, A1",
     tr: "t06–t15",
     s: "ok",
   },
@@ -113,7 +113,7 @@ export const CHAIN: ChainLink[] = [
     pri: "primary",
     a: "A2",
     kind: "confirmatory",
-    rows: "rows 6–15, 22, 39–40",
+    rows: "t06–t15, A2, A2-below, A2-above",
     tr: "t06–t15",
     s: "ok",
   },
@@ -123,7 +123,7 @@ export const CHAIN: ChainLink[] = [
     pri: "primary",
     a: "A3",
     kind: "confirmatory",
-    rows: "rows 1–10, 23",
+    rows: "t01–t10, A3",
     tr: "t01–t10",
     s: "ok",
   },
@@ -166,7 +166,7 @@ export const CHAIN: ChainLink[] = [
     pri: null,
     a: "A4",
     kind: "exploratory",
-    rows: "rows 28–38",
+    rows: "A4",
     tr: "t11–t15",
     s: "ok",
     why: "Exploratory in the plan, §7",
@@ -177,7 +177,7 @@ export const CHAIN: ChainLink[] = [
     pri: null,
     a: "A5",
     kind: "exploratory",
-    rows: "row 27",
+    rows: "A5",
     tr: "t11–t15",
     s: "warn",
     why: "Not in the plan: exploratory",

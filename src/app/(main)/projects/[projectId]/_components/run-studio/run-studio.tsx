@@ -35,7 +35,9 @@ import {
 } from "./run-meta";
 import { compactNumber, RunStats } from "./run-stats";
 import { CaseDetailsInput, IntentInput, StartRunDialog, TopicInput, useTopicDraft } from "./start-run-dialog";
-import { openWritingPreview, useWritingPreviewState } from "./writing/engine";
+import { WritingRunRow } from "./writing/live/entry";
+import { openWritingRun } from "./writing/live/open";
+import { isDraftRun, isWritingRun } from "./writing/live/run";
 
 function SectionTitle({ title, aside }: { title: string; aside?: string }) {
   return (
@@ -397,11 +399,15 @@ function PastRunRow({ run }: { run: RunItem }) {
             ? `${compactNumber(run.tokens_used ?? 0)} of ${compactNumber(run.token_budget ?? 0)} tokens`
             : `$${run.cost_usd} of $${run.budget_usd}`}{" "}
           ·{" "}
-          {run.pipeline_key
-            ? INTENT_LINE[run.case?.intent.kind ?? "test"]
-            : run.auto_review
-              ? "frame reviews approved automatically"
-              : "you review frames"}
+          {isWritingRun(run)
+            ? isDraftRun(run)
+              ? "first draft from the sample results"
+              : "paper outline from the sample results"
+            : run.pipeline_key
+              ? INTENT_LINE[run.case?.intent.kind ?? "test"]
+              : run.auto_review
+                ? "frame reviews approved automatically"
+                : "you review frames"}
         </span>
       </span>
       <span className="whitespace-nowrap text-muted-foreground text-xs max-md:justify-self-end">
@@ -413,47 +419,6 @@ function PastRunRow({ run }: { run: RunItem }) {
       </span>
       <ChevronRight className="size-4 text-muted-foreground max-md:hidden" />
     </>
-  );
-}
-
-const PREVIEW_STATE = {
-  idle: null,
-  live: { label: "In progress", dot: "bg-sky-500", c: "bg-sky-500/12 text-sky-700 dark:text-sky-300" },
-  waiting: { label: "Waiting for you", dot: "bg-amber-500", c: "bg-amber-500/15 text-amber-800 dark:text-amber-300" },
-  done: { label: "Signed", dot: "bg-emerald-500", c: "bg-emerald-500/12 text-emerald-700 dark:text-emerald-300" },
-};
-
-/** The writing stage on its own: it plays on an example record, so it can be tried without a research run. */
-function WritingPreviewRow() {
-  const state = useWritingPreviewState();
-  const chip = PREVIEW_STATE[state];
-  return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-2.5 rounded-xl bg-card px-4 py-3 ring-1 ring-foreground/10">
-      <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground">
-        <PenLine className="size-4" />
-      </span>
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="flex flex-wrap items-center gap-2">
-          <b className="font-medium text-sm">Writing stage</b>
-          <span className="rounded bg-muted px-1.5 font-medium text-[10.5px] text-muted-foreground">Preview</span>
-          {chip && (
-            <span
-              className={cn("inline-flex h-5 items-center gap-1.5 rounded-full px-2 font-medium text-[11px]", chip.c)}
-            >
-              <span className={cn("size-1.5 rounded-full", chip.dot)} />
-              {chip.label}
-            </span>
-          )}
-        </span>
-        <span className="text-pretty text-muted-foreground text-xs">
-          Plays the writing stage on an example research record, without running the research flow first.
-        </span>
-      </div>
-      <Button variant="outline" size="sm" className="max-sm:w-full" onClick={openWritingPreview}>
-        <Play />
-        {state === "idle" ? "Run the writing stage" : "Open the writing stage"}
-      </Button>
-    </div>
   );
 }
 
@@ -483,6 +448,8 @@ function PastRuns({ projectId, hide }: { projectId: string; hide?: string }) {
                 type="button"
                 className={ROW}
                 onClick={(event) => {
+                  // A writing run opens in the writing studio.
+                  if (isWritingRun(run)) return openWritingRun(projectId, run);
                   attachRun(projectId, run, false);
                   openWorkspace(run.id, event.currentTarget);
                 }}
@@ -562,7 +529,7 @@ export function RunStudio({ projectId, canWrite }: { projectId: string; canWrite
         />
       )}
       {!session && <RunStats />}
-      {SHOW_WRITING_PREVIEW && <WritingPreviewRow />}
+      {SHOW_WRITING_PREVIEW && <WritingRunRow projectId={projectId} canWrite={canWrite} />}
       <PastRuns projectId={projectId} hide={session?.runId} />
       <StartRunDialog open={dialog} onOpenChange={setDialog} defaultMode={mode} onStart={start} />
     </div>

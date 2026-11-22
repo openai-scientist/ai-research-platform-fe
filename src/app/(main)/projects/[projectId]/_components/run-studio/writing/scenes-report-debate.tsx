@@ -88,7 +88,7 @@ export function chainRows() {
         pri: "primary",
         a: "A6",
         kind: "confirmatory",
-        rows: "results-h3.csv rows 1–3",
+        rows: "A6, package v2",
         tr: "t06–t15",
         s: "ok",
         why: "Arrived after the hold",
@@ -188,11 +188,11 @@ function reportNow() {
   }
   if (st.cur === "r2") {
     const tl = S.scn === "late" ? TIMELINE_LATE : TIMELINE;
-    return `Comparing the lock of plan.md with the first trace · ${tl[Math.max(0, rp.tl - 1)].x}`;
+    return `Comparing the protocol lock with the first run · ${tl[Math.max(0, rp.tl - 1)].x}`;
   }
   if (st.cur === "r3") {
     const c = chainRows()[Math.max(0, rp.chain - 1)];
-    return c.h ? `Linking ${c.h} to its analysis, rows and traces` : `Linking ${c.a}, which has no hypothesis`;
+    return c.h ? `Linking ${c.h} to its analysis, results and runs` : `Linking ${c.a}, which has no hypothesis`;
   }
   if (st.cur === "r4") {
     const r = planRunRows()[Math.max(0, rp.plan - 1)];
@@ -555,26 +555,37 @@ export function Timeline() {
   );
 }
 
-/* ----- r3 · each hypothesis to its analysis, its rows and its traces ----- */
+/* ----- r3 · each hypothesis to its analysis, its results and its runs ----- */
 export function ChainView() {
   const rp = S.rp;
   const st = S.st.S01;
   const rows = chainRows();
   const linking = st.status === "running" && st.cur === "r3";
-  const missing = (v: string | null) => v ?? <span className="text-muted-foreground">—</span>;
+  // A list of ids wraps between ids, never inside one ("A2-below").
+  const missing = (v: string | null) =>
+    v == null ? (
+      <span className="text-muted-foreground">—</span>
+    ) : (
+      v.split(", ").map((id, i, all) => (
+        <span key={id} className="whitespace-nowrap">
+          {id}
+          {i < all.length - 1 && ", "}
+        </span>
+      ))
+    );
   return (
     <Card data-chain className="@container">
       <ColHead
         icon="link"
         title="Each hypothesis to its result"
-        aside={rp.chainDone ? stepResult("r3").label : "hypothesis → analysis → rows → traces"}
+        aside={rp.chainDone ? stepResult("r3").label : "hypothesis → analysis → results → runs"}
       />
       <Table className="table-fixed">
         <TableHeader>
           <TableRow className="hover:bg-transparent">
             <TableHead className="pl-4">Hypothesis</TableHead>
             <TableHead className="w-24 @max-3xl:hidden">Analysis</TableHead>
-            <TableHead className="w-32 @max-3xl:hidden">Results rows</TableHead>
+            <TableHead className="w-32 @max-3xl:hidden">Results</TableHead>
             <TableHead className="w-24 @max-3xl:hidden">Traces</TableHead>
             <TableHead className="w-44 pr-4 @max-xl:hidden">Status</TableHead>
           </TableRow>

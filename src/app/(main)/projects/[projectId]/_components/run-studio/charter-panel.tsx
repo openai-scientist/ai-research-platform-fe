@@ -340,7 +340,8 @@ function Columns({
  * The charter to read, set as a research protocol: the question, then numbered sections with every line numbered, so a
  * note can cite "A2" or "E3". Sections are set one after another, each rule drawn before its lines.
  */
-function CharterDocument({ charter }: { charter: Charter }) {
+/** The charter as the research protocol it is: the question, then aims, success criteria, eligibility and limits. */
+export function CharterDocument({ charter }: { charter: Charter }) {
   const [why, setWhy] = useState(false);
   const posture = POSTURE[charter.risk_posture] ?? POSTURE.exploratory;
   const profile = [charter.profile?.domain, charter.profile?.research_type].filter(Boolean);

@@ -51,7 +51,8 @@ export function useSignalR() {
         if (!notification) break;
         // News about the run on screen is already in front of the person; it stays in the bell. The workspace drops
         // `?run=` from the address once it opens, so the open run comes from the run studio.
-        if (notification.run_id && useRunStudio.getState().openRunId === notification.run_id) continue;
+        const studio = useRunStudio.getState();
+        if (notification.run_id && [studio.openRunId, studio.writingRunId].includes(notification.run_id)) continue;
         const invitation = notification.kind === NotificationKind.ProjectInvited;
         const { text, href } = getNotificationContent(notification);
         const toastId = `notification:${notification.id}`;
@@ -146,9 +147,9 @@ export function useSignalR() {
     });
     // A toast about a run that opens afterwards (the page was still loading it) has nothing left to say.
     const unwatchOpenRun = useRunStudio.subscribe((studio) => {
-      if (!studio.openRunId) return;
+      if (!studio.openRunId && !studio.writingRunId) return;
       for (const [id, { run, finish }] of runOfToast)
-        if (run === studio.openRunId) {
+        if (run === studio.openRunId || run === studio.writingRunId) {
           toast.dismiss(id);
           finish();
         }

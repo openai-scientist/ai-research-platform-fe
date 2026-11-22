@@ -25,7 +25,7 @@ export const GROUPED: StudyRecord = {
   values: {
     "A.1": "You · team of 2",
     "A.2": "CC BY 4.0, as the data (Kuzilek et al., 2017)",
-    "A.3": "rrp/v2 · every file hashed",
+    "A.3": "rrp/v2 · experiment package, every outside file by sha256",
     "B.1": "Reading notes on 11 papers",
     "B.2": "Scopus + ERIC + EDM proceedings · 2014–2026 · 3 queries · hits and reads logged",
     "B.3":
@@ -59,7 +59,7 @@ export const GROUPED: StudyRecord = {
     "E.2": "Students repeat modules: a student's registrations stay in one fold · intervals resample modules",
     "E.3": "Only clicks and assessments up to day 30 · the final result and later activity left out",
     "F.1": "21 traces with config, fold, split hash and a score per student",
-    "F.2": "results.csv · one row per run and per analysis, each linked to its traces",
+    "F.2": "Experiment package · one observation per run and metric, each comparison linked to its runs",
     "G.1": "A1 → H1",
     "G.2": "AUROC by module, exploratory",
     "G.3": "AUROC, as tutors may set the flag rate per module · calibration as secondary",
@@ -73,7 +73,7 @@ export const GROUPED: StudyRecord = {
     "K.1": "Every entry with a DOI or a stable link",
     "K.2": "11 notes with quoted spans",
     "K.3": "Full text for every source",
-    "L.1": "Every figure linked to results.csv",
+    "L.1": "Every figure carries its data in the package",
     "M.1": "Learning analytics journal (example) · research article",
     "N.1": "No AI used in the analysis",
   },

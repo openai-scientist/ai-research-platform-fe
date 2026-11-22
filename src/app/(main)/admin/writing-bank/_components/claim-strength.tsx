@@ -233,7 +233,9 @@ export function ClaimStrength({ blueprint, enabled }: { readonly blueprint: Blue
     direction: text(item.direction),
     description: text(item.description),
     question: text(item.question),
+    evidenceTypes: list(item.evidenceTypes).map(text).filter(Boolean),
   }));
+  const typeNames = new Map(types.map((type) => [type.id, type.name]));
   const labels: Record<Part, string> = { matrix: "Matrix", levels: "Levels of evidence", modifiers: "Modifiers" };
   const counts: Record<Part, number> = { matrix: cells.length, levels: LEVELS.length, modifiers: modifiers.length };
 
@@ -389,29 +391,71 @@ export function ClaimStrength({ blueprint, enabled }: { readonly blueprint: Blue
               {modifiers.filter((item) => item.direction === "up").length} raise it; together they move it by at most{" "}
               {plural(Number(matrix.maxNetShift ?? 2), "level")}.
             </p>
-            {(["down", "up"] as const).map((direction) => (
-              <section key={direction} className="flex flex-col gap-1">
-                <h3 className="flex items-center gap-2 font-semibold text-sm">
-                  {direction === "down" ? (
-                    <ArrowDown className="size-4 text-rose-600 dark:text-rose-400" aria-hidden="true" />
-                  ) : (
-                    <ArrowUp className="size-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
-                  )}
-                  {direction === "down" ? "Lower the level" : "Raise the level"}
-                </h3>
-                <ul className="flex flex-col divide-y">
-                  {modifiers
-                    .filter((item) => item.direction === direction)
-                    .map((item) => (
-                      <li key={item.id} className="flex flex-col gap-1 py-3">
-                        <p className="font-semibold text-sm">{item.name}</p>
-                        <p className="text-sm leading-relaxed">{item.description}</p>
-                        <p className="text-muted-foreground text-sm leading-relaxed">Ask: {item.question}</p>
-                      </li>
-                    ))}
-                </ul>
-              </section>
-            ))}
+            <div className="grid items-start gap-6 lg:grid-cols-2">
+              {(["down", "up"] as const).map((direction) => {
+                const down = direction === "down";
+                const items = modifiers.filter((item) => item.direction === direction);
+                const Arrow = down ? ArrowDown : ArrowUp;
+                return (
+                  <section
+                    key={direction}
+                    className="flex flex-col gap-3"
+                    aria-label={down ? "Lower the level" : "Raise the level"}
+                  >
+                    <div
+                      className={cn(
+                        "flex items-center gap-3 rounded-lg px-3 py-2.5 text-white",
+                        down ? "bg-rose-600 dark:bg-rose-700" : "bg-emerald-600 dark:bg-emerald-700",
+                      )}
+                    >
+                      <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-white/20">
+                        <Arrow className="size-4" aria-hidden="true" />
+                      </span>
+                      <div className="flex min-w-0 flex-col">
+                        <h3 className="font-semibold text-sm">
+                          {down ? "Lower the level" : "Raise the level"} · {items.length}
+                        </h3>
+                        <p className="text-white/90 text-xs">
+                          {down ? "Each takes the evidence one level down." : "Each takes the evidence one level up."}
+                        </p>
+                      </div>
+                    </div>
+                    <ul className="flex flex-col gap-4">
+                      {items.map((item) => (
+                        <li
+                          key={item.id}
+                          className={cn(
+                            "flex flex-col gap-1.5 border-l-4 pl-3",
+                            down ? "border-rose-500" : "border-emerald-500",
+                          )}
+                        >
+                          <p className="font-semibold text-sm">{item.name}</p>
+                          <p className="text-sm leading-relaxed">{item.description}</p>
+                          <p className="text-sm leading-relaxed">
+                            <span
+                              className={cn(
+                                "mr-1.5 rounded px-1.5 py-0.5 font-semibold text-[11px] uppercase tracking-wide",
+                                down
+                                  ? "bg-rose-50 text-rose-800 dark:bg-rose-950 dark:text-rose-200"
+                                  : "bg-emerald-50 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200",
+                              )}
+                            >
+                              Ask
+                            </span>
+                            {item.question}
+                          </p>
+                          {item.evidenceTypes.length > 0 && (
+                            <p className="text-muted-foreground text-xs leading-relaxed">
+                              Applies to {item.evidenceTypes.map((id) => typeNames.get(id) ?? id).join(", ")}
+                            </p>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                );
+              })}
+            </div>
           </>
         )}
       </div>

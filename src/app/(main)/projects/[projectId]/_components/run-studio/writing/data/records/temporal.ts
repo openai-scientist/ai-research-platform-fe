@@ -25,7 +25,7 @@ export const TEMPORAL: StudyRecord = {
   values: {
     "A.1": "You · team of 2",
     "A.2": "CC BY 4.0, as the data (Fanaee-T & Gama, 2013)",
-    "A.3": "rrp/v2 · every file hashed",
+    "A.3": "rrp/v2 · experiment package, every outside file by sha256",
     "B.1": "Reading notes on 7 papers",
     "B.2": "Scopus + arXiv · 2013–2026 · 2 queries · hits and reads logged",
     "B.3":
@@ -60,7 +60,7 @@ export const TEMPORAL: StudyRecord = {
     "E.3":
       "Casual and registered counts left out: they add up to the outcome · weather is the recorded value, standing in for a forecast",
     "F.1": "18 traces with config, origin, split hash and a forecast per day",
-    "F.2": "results.csv · one row per run and per analysis, each linked to its traces",
+    "F.2": "Experiment package · one observation per run and metric, each comparison linked to its runs",
     "G.1": "A1 → H1",
     "G.2": "Error by season, exploratory",
     "G.3": "Mean absolute error in rentals per day, the unit the operator plans with",
@@ -74,7 +74,7 @@ export const TEMPORAL: StudyRecord = {
     "K.1": "Every entry with a DOI or a stable link",
     "K.2": "7 notes with quoted spans",
     "K.3": "6 full text · 1 abstract only",
-    "L.1": "Every figure linked to results.csv",
+    "L.1": "Every figure carries its data in the package",
     "M.1": "Transport data journal (example) · research article",
     "N.1": "A code assistant drafted the plotting code; the team reviewed it",
   },

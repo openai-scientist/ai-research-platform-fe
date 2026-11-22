@@ -79,20 +79,23 @@ import {
   DEVIATION,
   ENV_ROWS,
   FIGURES,
+  fmt3,
   GAINS,
   INTAKE,
   INTAKE_CHECKS,
   INTAKE_LIMITS,
   type IntakeCheck,
   type IntakeSection,
-  PLAN_EXPERIMENTS,
+  OTHER_RESULTS,
+  PACKAGE_FACTS,
+  PACKAGE_GATES,
   PLAN_FACTS,
   PLAN_HYPOTHESES,
   PLAN_TIMELINE,
-  RESULT_ROWS,
   RUN_FACTS,
   RUN_SEEDS,
   RUN_SYSTEMS,
+  runOf,
   SOURCE_FACTS,
 } from "./data/intake";
 import { ENTITY, STATUS_CHIP } from "./data/meta";
@@ -302,8 +305,9 @@ const EVENT_DOT: Record<string, string> = {
   run: "bg-sky-500",
   dev: "bg-amber-500",
   ana: "bg-emerald-500",
+  pkg: "bg-violet-500",
 };
-/* The plan's events in order: locked before the first run, the deviation before the analyses. */
+/* The protocol's events in order: locked before the first run, the deviation declared, the package built last. */
 function PlanTimeline() {
   return (
     <ol className="relative grid gap-2.5 sm:grid-cols-5 sm:gap-2">
@@ -326,31 +330,31 @@ function PlanTimeline() {
     </ol>
   );
 }
-const fmtGain = (v: number) => (v < 0 ? `−${Math.abs(v).toFixed(3)}` : v.toFixed(3));
-/* Each gain with its interval, against 0: concluded only if the interval stays above 0. */
+/* Each planned gain with its interval, against 0: concluded only if the interval stays above 0. */
 function GainPlot() {
   // The axis spans every interval, in steps of 0.05.
   const lo = Math.floor(Math.min(0, ...GAINS.map((g) => g.lo)) / 0.05) * 0.05;
   const hi = Math.ceil(Math.max(...GAINS.map((g) => g.hi)) / 0.05) * 0.05;
   const ticks = Array.from({ length: Math.round((hi - lo) / 0.05) + 1 }, (_, i) => lo + i * 0.05);
   const x = (v: number) => ((v - lo) / (hi - lo)) * 100;
+  const crossing = GAINS.filter((g) => g.lo <= 0);
   return (
     <div className="flex flex-col gap-1">
       <div className="grid grid-cols-[6.5rem_minmax(0,1fr)_5rem] items-center gap-x-3 gap-y-3 text-[13px] sm:grid-cols-[9rem_minmax(0,1fr)_5.5rem]">
         {GAINS.map((g, i) => {
           const crosses = g.lo <= 0;
           return (
-            <Fragment key={g.row}>
+            <Fragment key={g.id}>
               <span className="min-w-0 leading-tight">
                 {g.what}
                 <span className="block font-mono text-[11px] text-muted-foreground">
-                  row {g.row} · {g.h}
+                  {g.id} · {g.h}
                 </span>
               </span>
               <span
                 className="relative h-7"
                 role="img"
-                aria-label={`${g.what}: ${fmtGain(g.v)}, interval ${fmtGain(g.lo)} to ${fmtGain(g.hi)}`}
+                aria-label={`${g.what}: ${fmt3(g.v)}, interval ${fmt3(g.lo)} to ${fmt3(g.hi)}`}
               >
                 <span className="absolute inset-y-0 w-px bg-foreground/30" style={{ left: `${x(0)}%` }} />
                 <M
@@ -372,9 +376,9 @@ function GainPlot() {
                 />
               </span>
               <span className="text-right font-mono tabular-nums leading-tight">
-                {fmtGain(g.v)}
+                {fmt3(g.v)}
                 <span className="block text-[11px] text-muted-foreground">
-                  {fmtGain(g.lo)}–{fmtGain(g.hi)}
+                  {fmt3(g.lo)}–{fmt3(g.hi)}
                 </span>
               </span>
             </Fragment>
@@ -383,24 +387,54 @@ function GainPlot() {
         <span />
         <span className="relative h-4 font-mono text-[10.5px] text-muted-foreground">
           {ticks.map((t) => (
-            <span key={t} className="absolute -translate-x-1/2" style={{ left: `${x(t)}%` }}>
-              {Math.abs(t) < 1e-9 ? "0" : fmtGain(t).slice(0, -1)}
+            // On a phone only the tenths are labelled, so the labels never run into each other.
+            <span
+              key={t}
+              className={cn("absolute -translate-x-1/2", Math.abs(Math.round(t * 20)) % 2 === 1 && "max-sm:hidden")}
+              style={{ left: `${x(t)}%` }}
+            >
+              {Math.abs(t) < 1e-9 ? "0" : fmt3(t).slice(0, -1)}
             </span>
           ))}
         </span>
         <span />
       </div>
       <p className="text-muted-foreground text-xs">
-        Gain in recall at 20% flagged, with its 95% interval. The intervals in rows 22 and 23 reach below 0, so H2 and
-        H4 are not shown.
+        Gain in recall at 20% flagged, with its 95% interval.
+        {crossing.length > 0 &&
+          ` The ${crossing.length === 1 ? "interval" : "intervals"} of ${crossing.map((g) => g.id).join(" and ")} reach below 0, so ${crossing.map((g) => g.h).join(" and ")} ${crossing.length === 1 ? "is" : "are"} not shown.`}
       </p>
     </div>
   );
 }
 
-/* What each part holds, as the run handed it over. */
+const GATE_STATE: Record<string, string> = { passed: "ok", not_applicable: "na", waived: "warn", pending: "wait" };
+
+/* What each part holds, read from the package. */
 function SectionDetail({ k }: { k: string }) {
   switch (k) {
+    case "pkg":
+      return (
+        <>
+          <dl className="divide-y">
+            {PACKAGE_FACTS.map(([f, v]) => (
+              <Fact key={f} k={f}>
+                {v}
+              </Fact>
+            ))}
+          </dl>
+          <SubHead>Quality gates</SubHead>
+          <ul className="grid gap-x-4 gap-y-1.5 text-[13px] sm:grid-cols-2">
+            {PACKAGE_GATES.map((g) => (
+              <li key={g.id} className="flex min-w-0 items-start gap-2 leading-5">
+                <StateMark k={GATE_STATE[g.s] ?? "bad"} size="size-3.5" />
+                <span className="w-9 shrink-0 font-mono text-muted-foreground text-xs">{g.id}</span>
+                <span className="min-w-0">{g.n}</span>
+              </li>
+            ))}
+          </ul>
+        </>
+      );
     case "plan":
       return (
         <>
@@ -413,28 +447,17 @@ function SectionDetail({ k }: { k: string }) {
           </dl>
           <SubHead>Order of events</SubHead>
           <PlanTimeline />
-          <SubHead>Experiments in the index</SubHead>
-          <ul className="flex flex-col gap-1.5 text-[13px]">
-            {PLAN_EXPERIMENTS.map((e) => (
-              <li key={e.id} className="grid grid-cols-[2rem_minmax(0,1fr)] gap-2">
-                <span className="font-mono text-muted-foreground">{e.id}</span>
-                <span className="min-w-0">
-                  {e.what}
-                  <span className="block text-muted-foreground text-xs">
-                    {e.kind} · tests {e.hs}
-                  </span>
-                </span>
-              </li>
-            ))}
-          </ul>
           <SubHead>Hypotheses</SubHead>
-          <ul className="grid gap-x-4 gap-y-1 text-[13px] sm:grid-cols-2">
+          <ul className="flex flex-col gap-1.5 text-[13px]">
             {PLAN_HYPOTHESES.map((h) => (
-              <li key={h.id} className={cn("flex gap-2", !h.primary && "text-muted-foreground")}>
+              <li
+                key={h.id}
+                className={cn("grid grid-cols-[2rem_minmax(0,1fr)] gap-2", !h.primary && "text-muted-foreground")}
+              >
                 <span className="font-mono">{h.id}</span>
                 <span className="min-w-0">
                   {h.t}
-                  {!h.primary && <span className="text-xs"> · deferred</span>}
+                  {h.why && <span className="block text-xs">Deferred · {h.why}</span>}
                 </span>
               </li>
             ))}
@@ -459,7 +482,8 @@ function SectionDetail({ k }: { k: string }) {
           <div
             role="img"
             aria-label={`${RUN_SYSTEMS.length * RUN_SEEDS.length} runs: ${RUN_SYSTEMS.length} models by ${RUN_SEEDS.length} seeds, each with a trace`}
-            className="grid grid-cols-[4.5rem_repeat(5,minmax(0,1fr))] items-center gap-1.5 text-xs"
+            className="grid items-center gap-1.5 text-xs"
+            style={{ gridTemplateColumns: `4.5rem repeat(${RUN_SEEDS.length}, minmax(0, 1fr))` }}
           >
             <span />
             {RUN_SEEDS.map((seed) => (
@@ -471,7 +495,7 @@ function SectionDetail({ k }: { k: string }) {
               <Fragment key={sys}>
                 <span className="text-muted-foreground">{sys}</span>
                 {RUN_SEEDS.map((seed, c) => {
-                  const n = r * 5 + c + 1;
+                  const n = r * RUN_SEEDS.length + c;
                   return (
                     <span
                       key={seed}
@@ -481,9 +505,9 @@ function SectionDetail({ k }: { k: string }) {
                           ? "bg-emerald-500/10 text-emerald-800 dark:text-emerald-300"
                           : "bg-muted text-muted-foreground",
                       )}
-                      style={{ transitionDelay: lit && canEnter() ? `${(n - 1) * 45}ms` : "0ms" }}
+                      style={{ transitionDelay: lit && canEnter() ? `${n * 45}ms` : "0ms" }}
                     >
-                      t{String(n).padStart(2, "0")}
+                      {runOf(sys, seed)?.run_id ?? "—"}
                     </span>
                   );
                 })}
@@ -504,65 +528,62 @@ function SectionDetail({ k }: { k: string }) {
       return (
         <>
           <GainPlot />
-          <SubHead>Other rows</SubHead>
-          <dl className="divide-y">
-            {RESULT_ROWS.filter((r) => !GAINS.some((g) => g.row === r.row)).map((r) => (
-              <Fact key={r.row} k={`Row ${r.row}`}>
-                {r.what}
-                <span className="block font-mono text-muted-foreground text-xs">
-                  {r.v}
-                  {r.ci && ` · ${r.ci}`}
+          <SubHead>Analyses</SubHead>
+          <div className="grid grid-cols-[2.5rem_2.5rem_minmax(0,1fr)_auto] gap-x-3 text-[13px]">
+            {ANALYSES.map((a) => (
+              <Fragment key={a.id}>
+                <span className="border-t py-2 font-mono first:border-t-0">{a.id}</span>
+                <span className="border-t py-2 font-mono text-muted-foreground">{a.h}</span>
+                <span className="min-w-0 border-t py-2">
+                  {a.kind}
+                  <span className="block font-mono text-muted-foreground text-xs">{a.est}</span>
                 </span>
+                <span className={cn("border-t py-2 text-right", STATE_TEXT[a.tone])}>{a.verdict}</span>
+              </Fragment>
+            ))}
+          </div>
+          <SubHead>Other results</SubHead>
+          <dl className="divide-y">
+            {OTHER_RESULTS.map((r) => (
+              <Fact key={r.id} k={r.id}>
+                {r.what}
+                <span className="block font-mono text-muted-foreground text-xs">{r.v}</span>
               </Fact>
             ))}
           </dl>
-          <p className="mt-2 text-muted-foreground text-xs">
-            30 more rows: the other runs, the course-level bootstrap, A4 by course and the two gains A2 compares.
-          </p>
         </>
-      );
-    case "analyses":
-      return (
-        <div className="grid grid-cols-[2rem_2.5rem_minmax(0,1fr)_auto] gap-x-3 text-[13px]">
-          {ANALYSES.map((a) => (
-            <Fragment key={a.id}>
-              <span className="border-t py-2 font-mono first:border-t-0">{a.id}</span>
-              <span className="border-t py-2 font-mono text-muted-foreground">{a.h}</span>
-              <span className="min-w-0 border-t py-2">
-                {a.kind}
-                <span className="block font-mono text-muted-foreground text-xs">{a.est}</span>
-              </span>
-              <span className={cn("border-t py-2 text-right", STATE_TEXT[a.tone])}>{a.verdict}</span>
-            </Fragment>
-          ))}
-        </div>
       );
     case "dev":
       return (
-        <dl className="divide-y">
-          <Fact k={DEVIATION.id}>{DEVIATION.when}</Fact>
-          <Fact k="Encoding">
-            <span className="text-muted-foreground line-through">{DEVIATION.plan}</span> → {DEVIATION.ran}
-          </Fact>
-          <Fact k="Why">{DEVIATION.why}</Fact>
-          <Fact k="Affects">{DEVIATION.affects}</Fact>
-        </dl>
+        <>
+          <dl className="divide-y">
+            <Fact k={DEVIATION.id}>{DEVIATION.when}</Fact>
+            <Fact k="Encoding">
+              <span className="text-muted-foreground line-through">{DEVIATION.plan}</span> → {DEVIATION.ran}
+            </Fact>
+            <Fact k="Why">{DEVIATION.why}</Fact>
+            <Fact k="Affects">{DEVIATION.affects}</Fact>
+          </dl>
+          <SubHead>As planned, run as a check</SubHead>
+          <dl className="divide-y">
+            {DEVIATION.check.map((r) => (
+              <Fact key={r.id} k={r.id}>
+                <span className="font-mono text-xs">{r.v}</span>
+                <span className="block font-mono text-muted-foreground text-xs">as run {r.asRun}</span>
+              </Fact>
+            ))}
+          </dl>
+        </>
       );
     case "figs":
       return (
-        <ul className="grid grid-cols-2 gap-2">
+        <ul className="grid grid-cols-1 gap-2 sm:grid-cols-3">
           {FIGURES.map((f) => (
-            <li
-              key={f.n}
-              className={cn(
-                "flex min-w-0 flex-col gap-0.5 rounded-lg px-3 py-2.5 text-[13px]",
-                f.data ? "bg-muted/60" : "border border-amber-500/50 border-dashed",
-              )}
-            >
-              <b className="font-medium">Figure {f.n}</b>
+            <li key={f.id} className="flex min-w-0 flex-col gap-0.5 rounded-lg bg-muted/60 px-3 py-2.5 text-[13px]">
+              <b className="font-medium">{f.id}</b>
               <span className="text-muted-foreground text-xs leading-snug">{f.t}</span>
-              <span className={cn("mt-1 font-mono text-[11px]", f.data ? "text-muted-foreground" : STATE_TEXT.warn)}>
-                {f.data ?? "No data behind it"}
+              <span className="mt-1 font-mono text-[11px] text-muted-foreground">
+                {f.rows} rows · from {f.src}
               </span>
             </li>
           ))}
@@ -910,7 +931,7 @@ export function HandoffScene({ live }: { live: boolean }) {
                   STATE_RING[state.k],
                 )}
               >
-                <AccordionTrigger className="items-center gap-3 rounded-none px-4 py-3 hover:bg-muted/40 hover:no-underline sm:px-5">
+                <AccordionTrigger className="min-w-0 items-center gap-3 rounded-none px-4 py-3 hover:bg-muted/40 hover:no-underline sm:px-5">
                   <SectionHead sec={sec} index={i} />
                 </AccordionTrigger>
                 <AccordionContent className="pb-0">
@@ -1050,7 +1071,7 @@ export function EvidenceScene({ live }: { live: boolean }) {
               [
                 "Numbers re-checked",
                 `${Math.round((RESULT_ROWS_TOTAL * e.recomp) / NUM_ROWS.length)}/${RESULT_ROWS_TOTAL}`,
-                e.recomp === NUM_ROWS.length ? "0 drift" : "against raw rows",
+                e.recomp === NUM_ROWS.length ? "0 drift" : "against the traces",
                 e.recomp === NUM_ROWS.length ? "text-emerald-700 dark:text-emerald-300" : "",
               ],
               [

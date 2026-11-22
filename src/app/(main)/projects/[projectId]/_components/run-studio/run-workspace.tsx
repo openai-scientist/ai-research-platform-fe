@@ -44,6 +44,8 @@ import {
   useWritingPreviewOpen,
   useWritingRun,
 } from "./writing/engine";
+import { WritingRunHost } from "./writing/live/host";
+import { isWritingRun } from "./writing/live/run";
 import { WritingStudio } from "./writing/shell";
 import { WritingPreview } from "./writing-preview";
 
@@ -501,13 +503,14 @@ function useLatestRun(projectId: string, session: RunSession | undefined) {
   const ended = session ? session.state.completed || session.state.lifecycle === "failed" : false;
   const latest = useRunsQuery(
     projectId,
-    { limit: 1 },
+    { limit: 10 },
     {
       enabled: !session || ended,
       refetchInterval: (query) => (session && !query.state.error ? 15_000 : false),
     },
   );
-  const run = latest.data?.data[0];
+  // A writing run opens in the writing studio; the research card shows the latest research run.
+  const run = latest.data?.data.find((r) => !isWritingRun(r));
   const shown = session?.runId;
   const shownAt = session?.createdAt;
   useEffect(() => {
@@ -588,6 +591,7 @@ export function RunWorkspaceHost({ projectId }: { projectId: string }) {
   return createPortal(
     <>
       <FlightLayer />
+      <WritingRunHost projectId={projectId} />
       <AnimatePresence>
         {open?.projectId === projectId && <RunWorkspace key={open.runId} session={open} />}
         {previewOpen && !open && <WritingPreview key="writing-preview" />}
