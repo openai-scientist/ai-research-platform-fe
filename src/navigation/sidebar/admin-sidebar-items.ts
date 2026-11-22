@@ -5,6 +5,7 @@ import {
   Gauge,
   HeartPulse,
   LayoutDashboard,
+  LibraryBig,
   ScrollText,
   Settings,
   Users,
@@ -59,6 +60,19 @@ export const adminSidebarItems: NavGroup[] = [
         title: "Decision Providers",
         url: "/admin/decision-providers",
         icon: Waypoints,
+      },
+    ],
+  },
+  {
+    id: 6,
+    label: "WRITING",
+    items: [
+      {
+        id: "admin-writing-bank",
+        title: "Writing Bank",
+        url: "/admin/writing-bank",
+        icon: LibraryBig,
+        activeMatch: "prefix",
       },
     ],
   },

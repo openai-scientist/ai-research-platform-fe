@@ -66,3 +66,13 @@ export const adminKeys = {
   models: () => ["admin", "models"] as const,
   integrations: () => ["admin", "integrations"] as const,
 };
+export const writingBankKeys = {
+  all: ["admin", "writing-bank"] as const,
+  status: () => ["admin", "writing-bank", "status"] as const,
+  journals: () => ["admin", "writing-bank", "journals"] as const,
+  journal: (journalId: string) => ["admin", "writing-bank", "journal", journalId] as const,
+  context: (journalId: string, contextId: string) =>
+    ["admin", "writing-bank", "journal", journalId, "context", contextId] as const,
+  library: (collection: string) => ["admin", "writing-bank", "library", collection] as const,
+  entry: (collection: string, id: string) => ["admin", "writing-bank", "library", collection, id] as const,
+};
