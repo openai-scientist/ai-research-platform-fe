@@ -406,6 +406,9 @@ function HypothesisAcceptReview({ gate, header, pending, onAnswer }: AcceptRevie
   const piLeft = piPick ? selection.map((s) => s.id).filter((id) => !piPick.includes(id)) : null;
   const followsPi = piLeft !== null && piLeft.length === left.length && piLeft.every((id) => left.includes(id));
   const advice = gate.advice;
+  const sendBack = gate.options.find((option) => option.id === "send_back" && !option.disabled);
+  // The PI's advice picks the primary answer: anything but accepting points to sending it back.
+  const piPrefersSendBack = Boolean(sendBack && advice && advice.action !== "accept");
   const headline = !advice
     ? ""
     : advice.action === "accept" && selection.length
@@ -475,7 +478,23 @@ function HypothesisAcceptReview({ gate, header, pending, onAnswer }: AcceptRevie
         <span className="mr-auto text-muted-foreground text-xs max-sm:hidden">
           {left.length ? `${left.length} left out, kept on record.` : "Nothing runs until you answer."}
         </span>
+        {sendBack && (
+          <div className="grid w-full gap-1 sm:w-auto sm:justify-items-end">
+            <Button
+              variant={piPrefersSendBack ? "default" : "outline"}
+              disabled={pending || !note.trim()}
+              onClick={() => onAnswer({ option_id: "send_back", note: note.trim() })}
+            >
+              <Undo2 />
+              {sendBack.confirm_label || "Send back"}
+            </Button>
+            {!note.trim() && (
+              <span className="text-muted-foreground text-xs">Write what should change in the note first.</span>
+            )}
+          </div>
+        )}
         <Button
+          variant={piPrefersSendBack ? "outline" : "default"}
           onClick={() =>
             onAnswer({
               option_id: "accept",

@@ -150,4 +150,70 @@ describe("AcceptReview", () => {
     expect(markup).toContain(source.statement);
     expect(markup).toContain(source.falsify.text);
   });
+
+  it("offers Send back beside Accept for the hypotheses, and the PI's advice picks the primary", () => {
+    const source = published.primary.hypotheses[0];
+    const state = initialRunState("run-1");
+    const render = (action: string) => {
+      const gate: Gate = {
+        id: "accept-hypotheses",
+        kind: "accept",
+        title: "Accept the hypotheses",
+        why: "",
+        summary: [],
+        options: [
+          { id: "accept", label: "Accept", description: "", leads_to: "", confirm_label: "Accept", recommended: true },
+          {
+            id: "send_back",
+            label: "Send back with a note",
+            description: "",
+            leads_to: "",
+            confirm_label: "Send back",
+            needsText: true,
+          },
+        ],
+        stop_index: 1,
+        stop_total: 1,
+        selection: [{ id: source.id, label: source.statement, falsify: source.falsify.text, fromArtifact: true }],
+        advice: { consultationId: "", action, confidence: 0.8, text: "advice" } as Gate["advice"],
+      };
+      const markup = renderToStaticMarkup(
+        createElement(
+          QueryClientProvider,
+          { client: new QueryClient() },
+          createElement(
+            WorkspaceContext.Provider,
+            {
+              value: {
+                session: { runId: "run-1", projectId: "project-1", label: "R", pipeline: true, createdAt: "", state },
+                state,
+                follow: false,
+                setFollow: () => undefined,
+                dropMode: false,
+                dropped: [],
+                toggleDrop: () => undefined,
+                kept: [],
+                toggleKeep: () => undefined,
+              },
+            },
+            createElement(AcceptReview, { gate, header: null, pending: false, onAnswer: () => undefined }),
+          ),
+        ),
+      );
+      const buttons = markup.split("</button>");
+      return {
+        markup,
+        accept: buttons.find((html) => html.endsWith("Accept 1")) ?? "",
+        sendBack: buttons.find((html) => html.endsWith("Send back")) ?? "",
+      };
+    };
+    const accepting = render("accept");
+    expect(accepting.sendBack).toMatch(/\sdisabled(?:=|\s|>)/);
+    expect(accepting.sendBack).toContain('data-variant="outline"');
+    expect(accepting.accept).toContain('data-variant="default"');
+    expect(accepting.markup).toContain("Write what should change in the note first.");
+    const refining = render("refine");
+    expect(refining.sendBack).toContain('data-variant="default"');
+    expect(refining.accept).toContain('data-variant="outline"');
+  });
 });
