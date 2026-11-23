@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import apiService from "@/lib/api/core";
 import { fetchRuns, type StageRunItem } from "@/lib/api/services/fetch-runs";
 
-import { redoExecution, startExecutionAgain } from "./redo-execution";
+import { REDO_BLOCKED, redoBlocked, redoExecution, startExecutionAgain } from "./redo-execution";
 
 const stage = (status: string, extra: Partial<StageRunItem> = {}): StageRunItem => ({
   stage_run_id: `s-${status}`,
@@ -36,6 +36,29 @@ describe("redoExecution", () => {
     const newest = stage("COMPLETED", { stage_run_id: "new", created_at: "2026-11-01T11:00:00Z" });
     expect(redoExecution([newest, earlier])).toEqual({ how: "send_back", stageRunId: "new" });
     expect(redoExecution([earlier, { ...newest, status: "RUNNING" }])).toBeNull();
+  });
+});
+
+describe("when the Platform would refuse", () => {
+  const writing = (status: string, extra: Partial<StageRunItem> = {}) =>
+    stage(status, { stage_key: "writing", stage_run_id: "w", created_at: "2026-11-01T12:00:00Z", ...extra });
+
+  it("hides the redo while a later stage of the same iteration is pending or running", () => {
+    for (const status of ["PENDING", "RUNNING"]) {
+      const stages = [stage("COMPLETED"), writing(status)];
+      expect(redoExecution(stages)).toBeNull();
+      expect(redoBlocked(stages)).toBe(REDO_BLOCKED);
+    }
+  });
+
+  it("allows it when the later stage finished or belongs to another iteration", () => {
+    expect(redoBlocked([stage("COMPLETED"), writing("COMPLETED")])).toBeNull();
+    expect(redoBlocked([stage("COMPLETED"), writing("RUNNING", { iteration: 2 })])).toBeNull();
+    expect(redoExecution([stage("FAILED"), writing("FAILED")])?.how).toBe("rerun");
+  });
+
+  it("gives no reason while Execution itself is still running", () => {
+    expect(redoBlocked([stage("RUNNING"), writing("PENDING")])).toBeNull();
   });
 });
 

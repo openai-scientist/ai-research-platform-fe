@@ -1042,4 +1042,48 @@ describe("a review gate belongs to the stage that opened it", () => {
     });
     expect(state.gate?.title).not.toMatch(/hypotheses/i);
   });
+  it("shows the open needs-you checks beside the Dataset stage review, with a required note to send back", () => {
+    const adapter = new PipelineAdapter({ ...info, datasetFirst: true });
+    const head = convert([envelopes[0]], adapter);
+    const dataset = { ...envelopes[0], stage_key: "dataset", stage_run_id: "dataset-stage", step_key: "work" };
+    const inbox = (id: string, key: string, question: string) =>
+      appended(dataset, "dataset.inbox_item", {
+        id,
+        kind: "needs_you",
+        object_ref: key,
+        question,
+        why: `${key} reason`,
+      });
+    const list = [
+      appended(dataset, "dataset.item", { key: "data_checks", state: "needs_you", reason: "open" }),
+      inbox("dataset-inbox-4", "data_checks", "Data checks is not finished."),
+      inbox("dataset-inbox-5", "dictionary", "The dictionary lacks units."),
+      appended(dataset, "dataset.item", { key: "dictionary", state: "green" }),
+      appended(
+        dataset,
+        "run.gate_opened",
+        {
+          gate_id: "ask_user-2",
+          kind: "question",
+          step_key: "review",
+          header: "Stage review",
+          prompt: "Accept the stage as it is, or send it back with a note.",
+          options: [
+            { option_id: "approve", label: "Accept the stage as it is" },
+            { option_id: "send_back", label: "Send it back: I will type a note" },
+          ],
+        },
+        { step_key: "review" },
+      ),
+    ];
+    const state = replayRunEvents("run-1", [...head, ...convert(list, adapter)]);
+    expect(state.gate?.needsYou).toEqual([
+      { id: "dataset-inbox-4", question: "Data checks is not finished.", why: "data_checks reason" },
+    ]);
+    expect(state.gate?.options.map((o) => [o.id, o.label, o.needsText ?? false])).toEqual([
+      ["approve", "Accept as is and leave the gap", false],
+      ["send_back", "Send back with a note", true],
+    ]);
+    expect(adapter.route("ask_user-2")).toMatchObject({ to: "gate", stageRunId: "dataset-stage" });
+  });
 });

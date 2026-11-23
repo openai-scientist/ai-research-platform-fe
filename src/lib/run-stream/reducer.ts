@@ -916,6 +916,7 @@ export function applyRunEvent(previous: RunState, event: RunEvent): RunState {
           selectionPending?: boolean;
           review?: Gate["review"];
           advice?: Gate["advice"];
+          needsYou?: Gate["needsYou"];
         };
         const raw = payload.gate ?? (payload.gate_id ? payload : null);
         if (raw) {
@@ -960,6 +961,7 @@ export function applyRunEvent(previous: RunState, event: RunEvent): RunState {
             ...(raw.selectionPending ? { selectionPending: true } : {}),
             ...(raw.review ? { review: raw.review } : {}),
             ...(raw.advice ? { advice: raw.advice } : {}),
+            ...(raw.needsYou?.length ? { needsYou: raw.needsYou } : {}),
           };
         }
         break;

@@ -702,6 +702,24 @@ interface Shown {
   actor?: AgentRole;
 }
 
+type NeedsYouItem = { id: string; question: string; why?: string; ref?: string };
+
+/** A stage review offers two answers; say what each does, and ask for the note a send back needs. */
+export function stageReviewOptions(gate: Gate) {
+  for (const option of gate.options) {
+    if (option.id === "approve") {
+      option.label = gate.needsYou?.length ? "Accept as is and leave the gap" : "Accept as is";
+      option.description = gate.needsYou?.length
+        ? "The stage continues and the open checks stay open as a gap."
+        : "The stage continues as it is.";
+    } else if (option.id === "send_back") {
+      option.label = "Send back with a note";
+      option.description = "The agents revise the stage following your note.";
+      option.needsText = true;
+    }
+  }
+}
+
 /**
  * Turns a pipeline run's envelopes, in `seq` order, into run studio events. It keeps what it has seen (the screen and
  * step the run is on, the content of each scope for the summaries and redraws, the open gate), so one adapter follows
@@ -732,6 +750,8 @@ export class PipelineAdapter {
   private designIds: string[] = [];
   private designAsked?: string;
   private designGateHistory = new Map<string, string>();
+  /** Checks handed to the researcher and not yet settled, by stage, then by item key. */
+  private needsYou = new Map<string, Map<string, NeedsYouItem>>();
   private decision: Record<string, unknown> | null = null;
   private failed = false;
   private completed = false;
@@ -969,6 +989,7 @@ export class PipelineAdapter {
       }
       return this.out;
     }
+    this.trackNeedsYou(envelope);
     if (envelope.stage_key === DESIGN_STAGE || envelope.type.startsWith(DESIGN_STAGE + ".")) {
       this.convertDesign(envelope);
       return this.out;
@@ -1006,6 +1027,26 @@ export class PipelineAdapter {
     if (type.startsWith(engine)) this.activity(type.slice(engine.length), payload);
     else this.lifecycle(type, payload, envelope.phase);
     return this.out;
+  }
+
+  /** The open "needs you" items of a stage: one is raised by an inbox item and settled when its check moves on. */
+  private trackNeedsYou(envelope: PipelineEnvelope) {
+    const stage = envelope.stage_key;
+    if (!stage) return;
+    const { type, payload } = envelope;
+    if (type === `${stage}.inbox_item` && payload.kind === "needs_you") {
+      const id = designText(payload.id);
+      const question = designText(payload.question);
+      if (!id || !question) return;
+      const items = this.needsYou.get(stage) ?? new Map<string, NeedsYouItem>();
+      items.set(id, { id, question, why: designText(payload.why), ref: designText(payload.object_ref) });
+      this.needsYou.set(stage, items);
+    } else if (type === `${stage}.item` && payload.state !== "needs_you") {
+      const key = designText(payload.key);
+      const items = this.needsYou.get(stage);
+      if (!key || !items) return;
+      for (const [id, item] of items) if (item.ref === key) items.delete(id);
+    }
   }
 
   private convertExecution(envelope: PipelineEnvelope) {
@@ -1778,6 +1819,9 @@ export class PipelineAdapter {
         true,
       );
       gate.stageKey = stageKey;
+      const open = stageKey ? [...(this.needsYou.get(stageKey)?.values() ?? [])] : [];
+      if (open.length) gate.needsYou = open.map(({ id, question, why }) => ({ id, question, ...(why ? { why } : {}) }));
+      if (engineKind === "question" && (payload.step_key ?? this.at?.step_key) === "review") stageReviewOptions(gate);
       if (engineKind === "artifact_review") {
         gate.options = [
           {

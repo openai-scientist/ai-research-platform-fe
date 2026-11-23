@@ -8,9 +8,38 @@ import { EXECUTION_STAGE } from "./execution";
  */
 export type RedoExecution = { how: "send_back" | "rerun"; stageRunId: string };
 
+const FINISHED = new Set(["COMPLETED", "ACCEPTED", "FAILED", "STOPPED"]);
+
+/** Said when Execution cannot start again because a later stage of the same iteration has begun. */
+export const REDO_BLOCKED = "Writing has started; stop or finish it before running Execution again.";
+
+/** What the Platform accepts: not while a later stage of the same iteration is pending or running. */
+export function redoBlocked(stages: readonly StageRunItem[] | undefined): string | null {
+  const latest = latestExecution(stages);
+  if (!latest || !FINISHED.has(latest.status)) return null;
+  const later = (stages ?? []).some(
+    (stage) =>
+      stage.stage_key !== EXECUTION_STAGE &&
+      stage.iteration === latest.iteration &&
+      stage.created_at >= latest.created_at &&
+      (stage.status === "PENDING" || stage.status === "RUNNING"),
+  );
+  return later ? REDO_BLOCKED : null;
+}
+
 /** `null` while Execution is still running, or when the run has none. */
 export function redoExecution(stages: readonly StageRunItem[] | undefined): RedoExecution | null {
-  const latest = (stages ?? [])
+  const latest = latestExecution(stages);
+  if (!latest || redoBlocked(stages)) return null;
+  if (latest.status === "COMPLETED" || latest.status === "ACCEPTED")
+    return { how: "send_back", stageRunId: latest.stage_run_id };
+  if (latest.status === "FAILED" || latest.status === "STOPPED")
+    return { how: "rerun", stageRunId: latest.stage_run_id };
+  return null;
+}
+
+function latestExecution(stages: readonly StageRunItem[] | undefined) {
+  return (stages ?? [])
     .filter((stage) => stage.stage_key === EXECUTION_STAGE)
     .reduce<StageRunItem | undefined>(
       (best, stage) =>
@@ -21,12 +50,6 @@ export function redoExecution(stages: readonly StageRunItem[] | undefined): Redo
           : best,
       undefined,
     );
-  if (!latest) return null;
-  if (latest.status === "COMPLETED" || latest.status === "ACCEPTED")
-    return { how: "send_back", stageRunId: latest.stage_run_id };
-  if (latest.status === "FAILED" || latest.status === "STOPPED")
-    return { how: "rerun", stageRunId: latest.stage_run_id };
-  return null;
 }
 
 const NOTE = "Run Execution again on the same locked plan.";

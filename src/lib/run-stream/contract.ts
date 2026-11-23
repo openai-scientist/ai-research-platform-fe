@@ -683,6 +683,8 @@ export interface Gate {
   selectionPending?: boolean;
   /** What the PI advises at this stop, when it was asked: `charter` and `accept` gates. */
   advice?: PiAdvice;
+  /** Checks the agents handed to the researcher that are still open at this stop: what is asked and why. */
+  needsYou?: { id: string; question: string; why?: string }[];
   /** What the independent reviewer found, which the person may send back to be fixed (`hypotheses` gates). */
   review?: { findings: ReviewFinding[]; hypotheses: { id: string; label: string }[] };
 }

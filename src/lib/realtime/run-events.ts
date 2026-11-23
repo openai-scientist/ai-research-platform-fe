@@ -8,6 +8,8 @@ import type { RunEvent } from "@/lib/run-stream/contract";
 import { ApiError } from "@/types/api";
 
 const PAGE = 500;
+/** A stream that stays quiet this long is read again from the last cursor: a stream can stall without dropping. */
+export const QUIET_REPLAY_MS = 30_000;
 
 // Only the envelope is checked here. The backend validates every payload against the contract before storing it.
 const envelopeSchema = z.object({
@@ -72,11 +74,13 @@ export function subscribeRunEvents(
   // Until the stream has been open once, what the backend returns is the run's history.
   let followed = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let quiet: ReturnType<typeof setTimeout> | undefined;
   const controller = new AbortController();
   const stop = () => {
     disposed = true;
     controller.abort();
     clearTimeout(timer);
+    clearTimeout(quiet);
     source?.close();
     source = null;
   };
@@ -85,6 +89,17 @@ export function subscribeRunEvents(
     if (!fresh.length) return;
     lastSeq = fresh[fresh.length - 1].seq;
     handlers.onEvents(fresh, origin);
+  };
+  // While connected, every quiet stretch replays the stored events after the cursor, so one the stream never
+  // delivered (a gate opened behind a stalled connection) still arrives. Events already seen are dropped by `deliver`.
+  const watchQuiet = () => {
+    clearTimeout(quiet);
+    if (disposed || !source) return;
+    quiet = setTimeout(() => {
+      void catchUp()
+        .catch(() => undefined)
+        .finally(watchQuiet);
+    }, QUIET_REPLAY_MS);
   };
   const catchUp = async () => {
     for (;;) {
@@ -100,6 +115,7 @@ export function subscribeRunEvents(
     source?.close();
     source = null;
     clearTimeout(timer);
+    clearTimeout(quiet);
     const delay = seconds ?? [1, 2, 5, 10, 30][Math.min(attempt++, 4)];
     timer = setTimeout(() => void sync(), delay * 1000);
   };
@@ -141,6 +157,7 @@ export function subscribeRunEvents(
       if (source !== current) return;
       attempt = 0;
       followed = true;
+      watchQuiet();
     };
     current.addEventListener("run-event", (message) => {
       if (disposed || source !== current) return;
@@ -151,8 +168,10 @@ export function subscribeRunEvents(
         event = null;
       }
       // Events the stream replays before it opened are still the history.
-      if (event) deliver([event], followed ? "live" : "history");
-      else {
+      if (event) {
+        deliver([event], followed ? "live" : "history");
+        watchQuiet();
+      } else {
         handlers.onError(new Error("Unable to read the run's progress. Reconnecting."));
         retry();
       }

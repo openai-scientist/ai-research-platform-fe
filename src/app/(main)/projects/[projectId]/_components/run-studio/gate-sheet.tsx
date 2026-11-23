@@ -416,6 +416,7 @@ export function GateSheet({
                   ))}
                 </RadioGroup>
               )}
+              {gate.needsYou?.length ? <NeedsYouList items={gate.needsYou} /> : null}
               {revising && gate.review && (
                 <RevisePicker review={gate.review} picked={sendBack} onPick={setSendBack} own={own} onOwn={setOwn} />
               )}
@@ -423,9 +424,19 @@ export function GateSheet({
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
                 placeholder={
-                  option?.needsText ? "Type your answer" : "Optional: a note for the agents, kept with your decision"
+                  option?.needsText
+                    ? option.id === "send_back"
+                      ? "Required: what should change?"
+                      : "Type your answer"
+                    : "Optional: a note for the agents, kept with your decision"
                 }
-                aria-label={option?.needsText ? "Your answer" : "Note for the agents"}
+                aria-label={
+                  option?.needsText
+                    ? option.id === "send_back"
+                      ? "Note to send back"
+                      : "Your answer"
+                    : "Note for the agents"
+                }
               />
             </div>
             <div className="flex items-center gap-3 border-t bg-popover px-5 py-3.5">
@@ -496,5 +507,25 @@ export function DropBar({
         {pending ? "Sending…" : `Approve ${kept}`}
       </Button>
     </motion.div>
+  );
+}
+
+/** The checks still open at a stage review, in plain words, beside the answer they need. */
+function NeedsYouList({ items }: { items: NonNullable<Gate["needsYou"]> }) {
+  return (
+    <section
+      aria-label="Needs you"
+      className="grid gap-2 rounded-xl border border-amber-500/30 bg-amber-500/8 px-3 py-2.5 text-sm"
+    >
+      <b className="font-semibold">Still open, and waiting for you</b>
+      <ul className="grid gap-2">
+        {items.map((item) => (
+          <li key={item.id} className="grid gap-0.5">
+            <span className="font-medium">{item.question}</span>
+            {item.why && <span className="text-muted-foreground text-xs">{item.why}</span>}
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }

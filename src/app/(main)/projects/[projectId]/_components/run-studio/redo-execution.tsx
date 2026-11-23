@@ -10,7 +10,7 @@ import { useProjectDetailQuery } from "@/hooks/use-projects-query";
 import { projectKeys } from "@/lib/api/query-keys";
 import { fetchRuns } from "@/lib/api/services/fetch-runs";
 import { getProjectAccess } from "@/lib/auth/project-access";
-import { type RedoExecution, redoExecution, startExecutionAgain } from "@/lib/run-stream/redo-execution";
+import { type RedoExecution, redoBlocked, redoExecution, startExecutionAgain } from "@/lib/run-stream/redo-execution";
 import { useRunStudio } from "@/lib/run-stream/run-store";
 
 import { perform } from "../workspace-ui";
@@ -32,9 +32,11 @@ export function RedoExecutionAction({ projectId, runId }: { projectId: string; r
     [projectKeys.run(projectId, runId), stagesKey],
   );
   const plan = redoExecution(stages.data?.data);
+  const blocked = redoBlocked(stages.data?.data);
   return (
     <RedoExecutionView
       plan={plan}
+      blocked={blocked}
       canWrite={Boolean(project && getProjectAccess(project.my_role, project.status).canWrite)}
       pending={redo.isPending}
       onConfirm={() => {
@@ -50,19 +52,34 @@ export function RedoExecutionAction({ projectId, runId }: { projectId: string; r
 
 export function RedoExecutionView({
   plan,
+  blocked = null,
   canWrite,
   pending,
   onConfirm,
   initiallyAsking = false,
 }: {
   plan: RedoExecution | null;
+  /** Why it cannot start now, when a finished Execution is there but the Platform would refuse. */
+  blocked?: string | null;
   canWrite: boolean;
   pending: boolean;
   onConfirm: () => void;
   initiallyAsking?: boolean;
 }) {
   const [asking, setAsking] = useState(initiallyAsking);
-  if (!plan || !canWrite) return null;
+  if (!canWrite) return null;
+  if (blocked)
+    return (
+      <div className="grid gap-1">
+        <Button variant="outline" size="sm" disabled aria-describedby="redo-blocked" className="w-fit">
+          <RotateCcw data-icon="inline-start" /> Run Execution again
+        </Button>
+        <p id="redo-blocked" className="text-muted-foreground text-xs">
+          {blocked}
+        </p>
+      </div>
+    );
+  if (!plan) return null;
   if (!asking)
     return (
       <div>

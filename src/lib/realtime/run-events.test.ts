@@ -7,7 +7,7 @@ import { applyRunEvent, replayRunEvents } from "@/lib/run-stream/reducer";
 import { initialRunState } from "@/lib/run-stream/run-state";
 import { ApiError } from "@/types/api";
 
-import { parseRunEvent, subscribeRunEvents } from "./run-events";
+import { parseRunEvent, QUIET_REPLAY_MS, subscribeRunEvents } from "./run-events";
 
 class FakeSource {
   static CLOSED = 2;
@@ -80,6 +80,28 @@ describe("run event subscription", () => {
     source.emit("run-ended", { status: "completed" });
     expect(listener.onEnded).toHaveBeenCalledOnce();
     expect(source.close).toHaveBeenCalled();
+  });
+
+  it("replays stored events after the cursor when the stream stays quiet, and never twice", async () => {
+    vi.useFakeTimers();
+    const getEvents = vi
+      .spyOn(fetchRuns, "getEvents")
+      .mockResolvedValueOnce(page([event(1), event(2)]))
+      .mockResolvedValueOnce(page([event(2), event(3, "run.gate_opened")]))
+      .mockResolvedValue(page([]));
+    const listener = handlers();
+    const stop = subscribeRunEvents("project-1", "run-1", { after: 0, live: true }, listener);
+    await vi.advanceTimersByTimeAsync(0);
+    const source = FakeSource.instances[0];
+    source.onopen?.();
+    await vi.advanceTimersByTimeAsync(QUIET_REPLAY_MS);
+    expect(getEvents).toHaveBeenLastCalledWith("project-1", "run-1", { after: 2, limit: 500 }, expect.any(AbortSignal));
+    expect(seqs(listener.onEvents.mock.calls)).toEqual([1, 2, 3]);
+    expect(listener.onEvents.mock.calls.at(-1)?.[1]).toBe("live");
+    // The stream delivering the same event later does not repeat it.
+    source.emit("run-event", event(3, "run.gate_opened"));
+    expect(seqs(listener.onEvents.mock.calls)).toEqual([1, 2, 3]);
+    stop();
   });
 
   it("only reads a run that is no longer live", async () => {
