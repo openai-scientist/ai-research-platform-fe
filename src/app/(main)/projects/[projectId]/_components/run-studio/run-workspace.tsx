@@ -40,7 +40,7 @@ import { NowCard, RunAside } from "./run-aside";
 import { FlightLayer, PulseDot } from "./run-bits";
 import { RunHeader, StopRun } from "./run-header";
 import { STAGE_SHORT } from "./run-meta";
-import { DesignHandoff } from "./scenes/experiment-design-scene";
+import { DesignHandoff } from "./scenes/design-handoff";
 import { Pane } from "./scenes/scene-ui";
 import { useStageHold } from "./stage-hold";
 import { StageScreen } from "./stage-screen";
@@ -780,7 +780,10 @@ export function RunWorkspace({ session, preview }: { session: RunSession; previe
                           <DesignHandoff
                             local={Boolean(datasetStage?.local)}
                             blocked={showGate.options.some((option) => option.id === "send_back")}
-                            artifacts={design?.artifacts}
+                            design={design}
+                            projectId={session.projectId}
+                            runId={runId}
+                            detailed
                           />
                         ))
                       ) : undefined

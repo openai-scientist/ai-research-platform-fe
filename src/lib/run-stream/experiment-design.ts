@@ -4,10 +4,10 @@ import type { ReviewFinding, WorkCheck } from "./contract";
 import type { PublicationRef } from "./published-hypotheses";
 
 export const DESIGN_STAGE = "experiment_design";
-const PLAN = "experiment_design.plan/v1";
+export const DESIGN_PLAN = "experiment_design.plan/v1";
 const INDEX = "experiment_design.experiment_index/v2";
-const REVIEW = "review.findings/v1";
-const DIAGNOSIS = "experiment_design.design_diagnosis/v1";
+export const DESIGN_REVIEW = "review.findings/v1";
+export const DESIGN_DIAGNOSIS = "experiment_design.design_diagnosis/v1";
 export const DESIGN_DOCUMENTS = ["experiment_design.exp_plan/v1", "experiment_design.preregistration/v1"] as const;
 export const DESIGN_LOCK = "experiment_design.lock/v1";
 
@@ -28,7 +28,8 @@ export type DesignHypothesis = {
   forecast?: DesignFields;
 };
 
-export type DesignArtifact = { id: string; schema: string; label: string };
+export type DesignArtifact = { id: string; schema: string; label: string; contentType?: string };
+export const DESIGN_SAP = "experiment_design.sap/v1";
 
 export type DesignFinding = ReviewFinding;
 type DesignDocuments = Partial<Record<(typeof DESIGN_DOCUMENTS)[number], string>>;
@@ -220,22 +221,22 @@ export function designAgent(payload: DesignFields) {
 
 const schemas: Record<string, string> = {
   "experiment_design.exp_plan/v1": "Experiment plan",
-  [PLAN]: "Analysis plan",
+  [DESIGN_PLAN]: "Analysis plan",
   [INDEX]: "Experiment index",
   [DESIGN_LOCK]: "Plan lock",
-  "experiment_design.sap/v1": "Statistical analysis plan",
+  [DESIGN_SAP]: "Statistical analysis plan",
   "experiment_design.preregistration/v1": "Pre-registration",
   "experiment_design.rehearsal/v1": "Rehearsal",
   "experiment_design.release_log/v1": "Release log",
-  [DIAGNOSIS]: "Design diagnosis",
+  [DESIGN_DIAGNOSIS]: "Design diagnosis",
   "experiment_design.reviewed/v1": "Reviewed plan",
-  [REVIEW]: "Review findings",
+  [DESIGN_REVIEW]: "Review findings",
   "stage.story/v1": "Stage history",
 };
 
-export function designArtifact(id: unknown, schema: unknown): DesignArtifact | undefined {
+export function designArtifact(id: unknown, schema: unknown, contentType?: unknown): DesignArtifact | undefined {
   if (typeof id !== "string" || typeof schema !== "string" || !Object.hasOwn(schemas, schema)) return;
-  return { id, schema, label: schemas[schema] };
+  return { id, schema, label: schemas[schema], ...(typeof contentType === "string" ? { contentType } : {}) };
 }
 
 export function parseDesignPlan(body: unknown): DesignHypothesis[] {
@@ -331,14 +332,14 @@ export async function loadPublishedDesign(
     return source ? (JSON.parse(source) as unknown) : undefined;
   };
   const [body, review, lock, ...documents] = await Promise.all([
-    json(PLAN),
-    json(REVIEW).catch(() => undefined),
+    json(DESIGN_PLAN),
+    json(DESIGN_REVIEW).catch(() => undefined),
     json(DESIGN_LOCK).catch(() => undefined),
     ...DESIGN_DOCUMENTS.map((schema) => download(schema).catch(() => undefined)),
   ]);
   let hypotheses = parseDesignPlan(body);
   if (!body) {
-    const [index, diagnosis] = await Promise.all([json(INDEX), json(DIAGNOSIS).catch(() => undefined)]);
+    const [index, diagnosis] = await Promise.all([json(INDEX), json(DESIGN_DIAGNOSIS).catch(() => undefined)]);
     const byHypothesis = designRecord(designRecord(diagnosis).hypotheses);
     hypotheses = indexHypotheses(index).map((row) => ({ ...row, diagnosis: nonempty(byHypothesis[row.id]) }));
   }
@@ -349,6 +350,6 @@ export async function loadPublishedDesign(
       DESIGN_DOCUMENTS.flatMap((schema, i) => (documents[i] ? [[schema, documents[i]]] : [])),
     ),
     findings: parseDesignFindings(review),
-    artifacts: [...latest.values()].flatMap((item) => designArtifact(item.id, item.schema_id) ?? []),
+    artifacts: [...latest.values()].flatMap((item) => designArtifact(item.id, item.schema_id, item.content_type) ?? []),
   };
 }

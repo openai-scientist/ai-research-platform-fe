@@ -1,8 +1,6 @@
 import { useId, useState } from "react";
 
-import { ArrowRight, CircleCheck, FileText, GitFork, HardDrive, Lock, RotateCcw, Target } from "lucide-react";
-import Markdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { ArrowRight, FileText, GitFork, Target } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,6 +15,8 @@ import {
 } from "@/lib/run-stream/experiment-design";
 
 import { WorkChecklist } from "../aside-ui";
+import { DesignHandoff } from "./design-handoff";
+import { DesignMarkdown } from "./design-markdown";
 import { designChecklist, designRuleQuestion, designView, fieldRows } from "./experiment-design-view";
 import { PaperSurface } from "./paper-surface";
 import { ReviewFindings } from "./review-findings";
@@ -403,76 +403,6 @@ function HypothesisPlan({
   );
 }
 
-export function DesignHandoff({
-  local,
-  accepted = false,
-  blocked = false,
-  artifacts,
-  onShowGate,
-  onExecution,
-}: {
-  local: boolean;
-  accepted?: boolean;
-  blocked?: boolean;
-  artifacts?: DesignContent["artifacts"];
-  onShowGate?(): void;
-  onExecution?(): void;
-}) {
-  return (
-    <Pane
-      title={
-        <span className="flex flex-wrap items-center gap-2">
-          {blocked ? (
-            <Lock className="size-4 text-muted-foreground" />
-          ) : accepted ? (
-            <CircleCheck className="size-4 text-emerald-600" />
-          ) : (
-            <FileText className="size-4" />
-          )}
-          {blocked ? "Plan lock missing" : accepted ? "Analysis plan accepted" : "Analysis plan ready for review"}
-          {!blocked && (
-            <>
-              <ArrowRight className="size-4 text-muted-foreground" />
-              <span>{accepted && !onExecution ? "Waiting for Execution" : "Execution"}</span>
-            </>
-          )}
-        </span>
-      }
-      aside={blocked ? "Execution blocked" : "Stage hand-off"}
-    >
-      <div className="flex flex-col items-start gap-2.5 text-sm">
-        {blocked && <p>Execution cannot start until the analysis plan is locked.</p>}
-        <div className="flex flex-wrap gap-1.5">
-          {Object.values(artifacts ?? {}).map(({ schema, label }) => (
-            <Badge key={schema} variant="secondary">
-              <FileText />
-              {label}
-            </Badge>
-          ))}
-          {blocked && <Badge variant="outline">Plan lock missing</Badge>}
-        </div>
-        {local && (
-          <p className="flex items-center gap-2 text-muted-foreground">
-            <HardDrive className="size-4 shrink-0" />
-            Execution runs on your Local Node.
-          </p>
-        )}
-        {onShowGate && (
-          <Button size="sm" onClick={onShowGate}>
-            {blocked ? <RotateCcw data-icon="inline-start" /> : <ArrowRight data-icon="inline-start" />}
-            {blocked ? "Review and send back" : "Review hand-off"}
-          </Button>
-        )}
-        {accepted && onExecution && (
-          <Button size="sm" onClick={onExecution}>
-            Open Execution <ArrowRight data-icon="inline-end" />
-          </Button>
-        )}
-      </div>
-    </Pane>
-  );
-}
-
 function PublishedDocuments({ design, projectId, runId }: { design: DesignContent; projectId: string; runId: string }) {
   const files = Object.values(design.artifacts).filter(
     ({ schema }) => !DESIGN_DOCUMENTS.some((document) => document === schema),
@@ -495,38 +425,7 @@ function PublishedDocuments({ design, projectId, runId }: { design: DesignConten
                   Download document
                 </a>
               </Button>
-              {source && (
-                <PaperSurface>
-                  <Markdown
-                    skipHtml
-                    remarkPlugins={[remarkGfm]}
-                    components={{
-                      h1: ({ children }) => (
-                        <h4 className="mb-4 border-b pb-3 font-(family-name:--font-lora) text-xl">{children}</h4>
-                      ),
-                      h2: ({ children }) => (
-                        <h5 className="mt-5 mb-2 border-t border-dashed pt-3 font-sans font-semibold text-sm">
-                          {children}
-                        </h5>
-                      ),
-                      h3: ({ children }) => <h5 className="mt-4 mb-2 font-sans font-semibold text-sm">{children}</h5>,
-                      h4: ({ children }) => <h6 className="mt-4 font-sans font-semibold text-xs">{children}</h6>,
-                      p: ({ children }) => <p className="my-2 break-words">{children}</p>,
-                      ul: ({ children }) => <ul className="my-2 list-disc pl-5">{children}</ul>,
-                      ol: ({ children }) => <ol className="my-2 list-decimal pl-5">{children}</ol>,
-                      table: ({ children }) => (
-                        <div className="my-3 overflow-x-auto">
-                          <table className="w-full border-collapse font-sans text-xs [&_td]:border [&_td]:p-2 [&_th]:border [&_th]:bg-muted [&_th]:p-2">
-                            {children}
-                          </table>
-                        </div>
-                      ),
-                    }}
-                  >
-                    {source}
-                  </Markdown>
-                </PaperSurface>
-              )}
+              {source && <DesignMarkdown source={source} />}
             </div>
           </details>
         );
@@ -642,7 +541,9 @@ export function ExperimentDesignScene({
             local={local}
             accepted={design?.accepted}
             blocked={missingLock}
-            artifacts={design?.artifacts}
+            design={design}
+            projectId={projectId}
+            runId={runId}
             onShowGate={canReview ? onShowGate : undefined}
             onExecution={onExecution}
           />

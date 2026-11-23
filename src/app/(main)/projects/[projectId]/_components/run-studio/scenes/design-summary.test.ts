@@ -1,0 +1,139 @@
+import { describe, expect, it } from "vitest";
+
+import type { ReviewFinding } from "@/lib/run-stream/contract";
+import type { DesignContent, DesignHypothesis } from "@/lib/run-stream/experiment-design";
+import { parseDesignPlan } from "@/lib/run-stream/experiment-design";
+import plan from "@/lib/run-stream/fixtures/run-0719-design-plan.json";
+
+import { designLockSummary, robustnessCount, splitDesignFiles } from "./design-summary";
+
+const finding = (severity: ReviewFinding["severity"], id: string): ReviewFinding => ({
+  finding_id: id,
+  locator: "item:design",
+  category: "design",
+  kind: "fix",
+  severity,
+  issue: "Something to check",
+});
+
+const hypothesis: DesignHypothesis = {
+  id: "H1",
+  statement: "Sleep raises grades",
+  estimand: {
+    exposure: { variable: "sleep_hours" },
+    outcome: { variable: "grade" },
+    effect_measure: "linear_coefficient",
+  },
+  program: { family: "linear_regression" },
+  decisionRule: { direction: "> 0", sesoi: 0.2, sesoi_unit: "grade points", sesoi_source_kind: "researcher" },
+  diagnosis: { power: { value: 0.8 }, null: { false_positive_rate: 0.047 } },
+  assumptions: {
+    robustness: { sensitivity: { method: "e-value" }, negative_control: { none_reason: "none" }, forks: [{}, {}] },
+  },
+};
+
+const design = (overrides: Partial<DesignContent> = {}): DesignContent => ({
+  hypotheses: { H1: hypothesis },
+  artifacts: {},
+  findings: [],
+  notices: {},
+  ...overrides,
+});
+
+describe("designLockSummary", () => {
+  it("reads the main analysis, margin and diagnosis in researcher words", () => {
+    const [row] = designLockSummary(design()).hypotheses;
+    expect(row).toMatchObject({
+      id: "H1",
+      claim: "Sleep raises grades",
+      estimand: "Effect of sleep_hours on grade (linear coefficient)",
+      method: "Linear regression",
+      decision: "A positive effect beyond the margin supports the claim",
+      margin: "±0.2 grade points",
+      marginSource: "You set",
+      robustness: 4,
+      diagnosis: "Power 80% · false positives 4.7%",
+    });
+  });
+
+  it("does not invent the research question or any missing field", () => {
+    const summary = designLockSummary(design({ hypotheses: { H2: { id: "H2" } } }));
+    expect(summary.question).toBeUndefined();
+    expect(summary.hypotheses[0]).toMatchObject({
+      id: "H2",
+      estimand: undefined,
+      method: undefined,
+      decision: undefined,
+      margin: undefined,
+      diagnosis: undefined,
+      robustness: 0,
+    });
+    expect(designLockSummary(design(), "  Does sleep matter?  ").question).toBe("Does sleep matter?");
+  });
+
+  it("counts findings by severity and robustness checks across hypotheses", () => {
+    const summary = designLockSummary(
+      design({
+        hypotheses: { H1: hypothesis, H2: { ...hypothesis, id: "H2" } },
+        findings: [finding("blocking", "a"), finding("major", "b"), finding("minor", "c"), finding("minor", "d")],
+      }),
+    );
+    expect(summary.findings).toEqual({ total: 4, blocking: 1, major: 1, minor: 2 });
+    expect(summary.robustness).toBe(8);
+  });
+
+  it("summarizes a real plan without raw objects", () => {
+    const summary = designLockSummary(
+      design({ hypotheses: Object.fromEntries(parseDesignPlan(plan).map((h) => [h.id, h])) }),
+    );
+    expect(summary.hypotheses.length).toBeGreaterThan(0);
+    for (const row of summary.hypotheses)
+      for (const text of [row.claim, row.estimand, row.method, row.decision, row.margin, row.diagnosis])
+        expect(text ?? "").not.toMatch(/\[object|^\{|undefined/);
+  });
+
+  it("counts only checks the plan records", () => {
+    expect(robustnessCount({ id: "H1" })).toBe(0);
+    expect(robustnessCount({ id: "H1", assumptions: { robustness: { forks: [{}] } } })).toBe(1);
+  });
+});
+
+describe("splitDesignFiles", () => {
+  const file = (schema: string, label = schema) => [schema, { id: `id-${schema}`, schema, label }] as const;
+
+  it("puts the documents to read first, in reading order, and the rest under supporting", () => {
+    const { key, supporting } = splitDesignFiles(
+      Object.fromEntries([
+        file("experiment_design.experiment_index/v2", "Experiment index"),
+        file("experiment_design.preregistration/v1"),
+        file("experiment_design.design_diagnosis/v1"),
+        file("review.findings/v1"),
+        file("experiment_design.plan/v1"),
+        file("experiment_design.sap/v1"),
+        file("experiment_design.exp_plan/v1"),
+        file("stage.story/v1"),
+      ]),
+    );
+    expect(key.map((entry) => entry.schema)).toEqual([
+      "experiment_design.plan/v1",
+      "experiment_design.sap/v1",
+      "review.findings/v1",
+      "experiment_design.design_diagnosis/v1",
+      "experiment_design.preregistration/v1",
+    ]);
+    expect(supporting.map((entry) => entry.schema)).toEqual([
+      "experiment_design.experiment_index/v2",
+      "experiment_design.exp_plan/v1",
+      "stage.story/v1",
+    ]);
+  });
+
+  it("reads the experiment plan as the statistical analysis plan when there is no separate one", () => {
+    const { key } = splitDesignFiles(Object.fromEntries([file("experiment_design.exp_plan/v1")]));
+    expect(key.map((entry) => entry.schema)).toEqual(["experiment_design.exp_plan/v1"]);
+  });
+
+  it("is empty without artifacts", () => {
+    expect(splitDesignFiles(undefined)).toEqual({ key: [], supporting: [] });
+  });
+});

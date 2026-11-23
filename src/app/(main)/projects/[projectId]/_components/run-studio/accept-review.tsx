@@ -188,6 +188,7 @@ function StageAcceptReview({ gate, header, pending, onAnswer, documentPreview }:
   const option = gate.options.find((item) => (item.id === "accept" || item.id === "send_back") && !item.disabled);
   const sendBack = option?.id === "send_back";
   const acceptingDataset = gate.stageKey === "dataset" && !sendBack;
+  const lockingDesign = gate.stageKey === "experiment_design" && !sendBack;
   const subject = gate.title.replace(/^Accept the /i, "");
   const advice = gate.advice;
   let headline = "";
@@ -235,9 +236,14 @@ function StageAcceptReview({ gate, header, pending, onAnswer, documentPreview }:
           acceptingDataset ? "border-primary/20 bg-primary/5" : "bg-popover",
         )}
       >
-        <span className="mr-auto text-muted-foreground text-xs max-sm:hidden">
+        <span
+          className={cn("mr-auto text-muted-foreground text-xs", lockingDesign ? "max-sm:w-full" : "max-sm:hidden")}
+        >
           {acceptingDataset && "Next: Hypothesis uses this Data card."}
-          {!acceptingDataset && (sendBack ? "Send the design back for another pass." : "Accept to continue the run.")}
+          {lockingDesign && "Check the main analysis and the margin. Once you lock the plan, they cannot change."}
+          {!acceptingDataset &&
+            !lockingDesign &&
+            (sendBack ? "Send the design back for another pass." : "Accept to continue the run.")}
         </span>
         <Button
           size={acceptingDataset ? "lg" : "default"}
