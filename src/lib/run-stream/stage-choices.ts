@@ -1,4 +1,5 @@
 import type { Gate, GateOption } from "./contract";
+import { NO_RESULTS_ACCEPT } from "./stage-copy";
 
 export interface StageChoice {
   id: string;
@@ -29,11 +30,12 @@ export function stageChoices(
   const options = gate.options.filter((option) => option.id !== "other");
   const choices = options.map((option: GateOption): StageChoice => {
     const reason = option.id === "send_back" && sendBackBlocked ? sendBackBlocked : option.disabledReason;
+    const none = noResults && CONTINUES.has(option.id) ? NO_RESULTS_ACCEPT : null;
     return {
       id: option.id,
       label: option.label,
-      description: option.description,
-      leadsTo: option.leads_to,
+      description: none?.description ?? option.description,
+      leadsTo: none?.leads_to ?? option.leads_to,
       confirmLabel: option.confirm_label,
       needsNote: (Boolean(option.needsText) || option.id === "send_back") && options.length > 1,
       primary: false,

@@ -37,6 +37,7 @@ import {
 } from "./experiment-design";
 import { hypothesisWork } from "./hypothesis-work";
 import { type PublicationRef, type PublishedHypotheses, publishedMap } from "./published-hypotheses";
+import { type AnswerCopy, stageAnswerCopy } from "./stage-copy";
 
 /** A stored event of a pipeline run, as the backend sends it. */
 export interface PipelineEnvelope {
@@ -706,12 +707,11 @@ interface Shown {
 type NeedsYouItem = { id: string; question: string; why?: string; ref?: string };
 
 /** The answer that returns a finished stage to its agents with the researcher's note. */
-function sendBackOption(subject: string): GateOption {
+function sendBackOption(copy: AnswerCopy): GateOption {
   return {
     id: "send_back",
     label: "Send back with a note",
-    description: `The agents work on the ${subject} again, following your note.`,
-    leads_to: `The ${subject} runs again`,
+    ...copy,
     confirm_label: "Send back",
     needsText: true,
   };
@@ -2239,7 +2239,7 @@ export class PipelineAdapter {
                 confirm_label: "Accept and continue",
                 recommended: true,
               },
-              sendBackOption("analysis plan"),
+              sendBackOption(stageAnswerCopy(stageKey, "analysis plan").sendBack),
             ],
         stop_index: 1,
         stop_total: 1,
@@ -2248,6 +2248,7 @@ export class PipelineAdapter {
     if (!this.isHypothesisStage(stageKey)) {
       const subject = this.acceptSubject(stageKey);
       const execution = stageKey === EXECUTION_STAGE;
+      const copy = stageAnswerCopy(stageKey, subject);
       return {
         id,
         kind: "accept",
@@ -2261,12 +2262,11 @@ export class PipelineAdapter {
           {
             id: "accept",
             label: `Accept the ${subject}`,
-            description: execution ? "" : `Use this published ${subject} in the next stage.`,
-            leads_to: execution ? "Acceptance recorded" : "The next stage can begin",
+            ...copy.accept,
             confirm_label: "Accept",
             recommended: true,
           },
-          sendBackOption(subject),
+          sendBackOption(copy.sendBack),
         ],
         stop_index: 1,
         stop_total: 1,
@@ -2275,6 +2275,7 @@ export class PipelineAdapter {
     }
 
     const set = this.final();
+    const hypothesisCopy = stageAnswerCopy("hypothesis", "hypotheses", this.run.continuesToDesign);
     const drafts = this.drafts();
     const published = new Map(this.publishedDetails?.hypotheses.map((h) => [h.id, h]));
     return {
@@ -2292,14 +2293,11 @@ export class PipelineAdapter {
         {
           id: "accept",
           label: "Accept the picked hypotheses",
-          description: this.run.continuesToDesign
-            ? "Design the analyses for the hypotheses you pick."
-            : "They become this run's result.",
-          leads_to: this.run.continuesToDesign ? "Experiment design starts" : "The run is complete",
+          ...hypothesisCopy.accept,
           confirm_label: "Accept",
           recommended: true,
         },
-        sendBackOption("hypotheses"),
+        sendBackOption(hypothesisCopy.sendBack),
       ],
       ...this.stop("accept"),
       ...(this.advice.stage_outcome ? { advice: this.advice.stage_outcome } : {}),

@@ -65,4 +65,11 @@ describe("stageChoices", () => {
     expect(withReason.disabledReason).toBe("The plan check is still open.");
     expect(without.disabledReason).toMatch(/not available/i);
   });
+
+  it("says accepting ends Execution with no estimates when nothing was computed", () => {
+    const [choice] = stageChoices({ options: [accept, sendBack] }, { noResults: true });
+    expect(choice.description).toBe("Ends Execution with no estimates.");
+    expect(choice.leadsTo).toBe("Execution ends with no estimates");
+    expect(stageChoices({ options: [accept, sendBack] })[0].description).toBe(accept.description);
+  });
 });
