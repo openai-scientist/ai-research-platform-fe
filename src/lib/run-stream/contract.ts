@@ -657,6 +657,8 @@ export interface GateOption {
   confirm_label: string;
   recommended?: boolean;
   disabled?: boolean;
+  /** Why the option cannot be chosen now, in words the researcher can read. */
+  disabledReason?: string;
   needsText?: boolean;
 }
 

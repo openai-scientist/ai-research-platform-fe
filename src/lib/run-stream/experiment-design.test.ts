@@ -216,6 +216,10 @@ describe("RUN-0719 Experiment design", () => {
     expect(review.stages.execution.content).toMatchObject({
       execution: { artifacts: { "evidence.records/v1": "published-records" } },
     });
-    expect(adapter.route("accept-execution-stage")).toEqual({ to: "accept", stageRunId: "execution-stage" });
+    expect(adapter.route("accept-execution-stage")).toEqual({
+      to: "accept",
+      stageRunId: "execution-stage",
+      stageKey: "execution",
+    });
   });
 });

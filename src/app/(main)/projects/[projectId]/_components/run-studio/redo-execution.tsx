@@ -15,6 +15,16 @@ import { useRunStudio } from "@/lib/run-stream/run-store";
 
 import { perform } from "../workspace-ui";
 
+/** Why Execution cannot be sent back or run again now, or `null`. */
+export function useRedoBlocked(projectId: string, runId: string) {
+  const stages = useApiQuery(
+    [...projectKeys.run(projectId, runId), "stages"],
+    (signal) => fetchRuns.listStages(projectId, runId, signal),
+    { enabled: Boolean(projectId && runId) },
+  );
+  return redoBlocked(stages.data?.data);
+}
+
 /** Run Execution again, from a finished or failed Execution. Says what happens before it does anything. */
 export function RedoExecutionAction({ projectId, runId }: { projectId: string; runId: string }) {
   const stagesKey = [...projectKeys.run(projectId, runId), "stages"];

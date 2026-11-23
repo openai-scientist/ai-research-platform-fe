@@ -2,7 +2,6 @@
 
 import { type ReactNode, useState } from "react";
 
-import { useQuery } from "@tanstack/react-query";
 import { cn } from "cn";
 import {
   ArrowRight,
@@ -19,7 +18,6 @@ import {
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { fetchArtifacts } from "@/lib/api/services/fetch-artifacts";
 import {
   DESIGN_DIAGNOSIS,
@@ -33,6 +31,7 @@ import {
 
 import { DesignMarkdown } from "./design-markdown";
 import { designLockSummary, type LockHypothesis, splitDesignFiles } from "./design-summary";
+import { FetchedDocument, ReaderSheet, unavailable } from "./document-reader";
 import { designView, fieldRows } from "./experiment-design-view";
 import { bySeverity, FINDING_SEVERITY, findingTarget } from "./findings";
 import { Pane } from "./scene-ui";
@@ -254,34 +253,15 @@ function DiagnosisReading({ design }: { design: DesignContent }) {
   );
 }
 
-const unavailable = (
-  <p className="text-muted-foreground text-sm">This file cannot be previewed here. Download it to read it.</p>
-);
-
-function FetchedDocument({ file, source }: { file: DesignArtifact; source: Source }) {
-  const query = useQuery({
-    queryKey: ["design-document", source.runId, file.id],
-    queryFn: async ({ signal }) =>
-      (await fetchArtifacts.download(source.projectId, source.runId, file.id, signal)).blob.text(),
-    staleTime: Number.POSITIVE_INFINITY,
-    retry: false,
-  });
-  if (query.isPending) return <p className="text-muted-foreground text-sm">Loading the document…</p>;
-  // A structured file is not a document: no raw JSON on screen.
-  if (query.isError || !query.data || /^\s*[[{]/.test(query.data)) return unavailable;
-  return <DesignMarkdown source={query.data} />;
-}
-
 function DocumentBody({ file, design, source }: { file: DesignArtifact; design: DesignContent; source: Source }) {
   const local = localSource(design, file);
   if (local) return <DesignMarkdown source={local} />;
   if (file.schema === DESIGN_REVIEW) return <FindingList design={design} />;
   if (file.schema === DESIGN_PLAN) return <PlanReading design={design} />;
   if (file.schema === DESIGN_DIAGNOSIS) return <DiagnosisReading design={design} />;
-  return isPreviewable(file, design) ? <FetchedDocument file={file} source={source} /> : unavailable;
+  return isPreviewable(file, design) ? <FetchedDocument source={source} artifactId={file.id} /> : unavailable;
 }
 
-/** Opens beside the gate. Closing it only closes the reader: the gate keeps its answer and its place. */
 function DocumentReader({
   file,
   design,
@@ -294,27 +274,13 @@ function DocumentReader({
   onClose(): void;
 }) {
   return (
-    <Sheet open={file !== null} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent className="gap-0 data-[side=right]:w-full data-[side=right]:sm:max-w-2xl">
-        {file && (
-          <>
-            <SheetHeader className="border-b pr-12">
-              <SheetTitle>{keyTitle(file)}</SheetTitle>
-              <SheetDescription>Close this to go back to your decision. Nothing is answered here.</SheetDescription>
-              <Button asChild size="sm" variant="outline" className="mt-1 w-fit">
-                <a href={fetchArtifacts.getDownloadUrl(source.projectId, source.runId, file.id)} download>
-                  <Download data-icon="inline-start" />
-                  Download
-                </a>
-              </Button>
-            </SheetHeader>
-            <div className="min-h-0 flex-1 overflow-y-auto p-4">
-              <DocumentBody file={file} design={design} source={source} />
-            </div>
-          </>
-        )}
-      </SheetContent>
-    </Sheet>
+    <ReaderSheet
+      title={file && keyTitle(file)}
+      download={file ? fetchArtifacts.getDownloadUrl(source.projectId, source.runId, file.id) : ""}
+      onClose={onClose}
+    >
+      {file && <DocumentBody file={file} design={design} source={source} />}
+    </ReaderSheet>
   );
 }
 

@@ -59,6 +59,13 @@ function hasWorkWithoutOutputs(content: StageState["content"]) {
 }
 
 /** Hypotheses left out, at the review stop or when the run was accepted, from the last round of hypotheses. */
+/** What each hypothesis of the locked plan says, by id. */
+function lockedStatements(state: RunState) {
+  const design = state.stages.experiment_design?.content;
+  const rows = design?.stage === "experiment" ? (design.liveDesign?.hypotheses ?? {}) : {};
+  return Object.fromEntries(Object.entries(rows).map(([id, row]) => [id, row.statement]));
+}
+
 function dropped(state: RunState) {
   const key = [...state.stageOrder].reverse().find((k) => state.stages[k]?.content.stage === "hypothesize");
   const content = key ? state.stages[key].content : undefined;
@@ -477,6 +484,7 @@ export function StageScreen({
                     executionFocus ?? (executionStep(stage, null) === "execution_readout" ? "execution_readout" : step)
                   }
                   onDesign={onDesign}
+                  hypotheses={lockedStatements(state)}
                 />
                 {decisionNotes}
               </>

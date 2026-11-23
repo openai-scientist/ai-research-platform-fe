@@ -5,7 +5,7 @@ import { subscribeRunEvents } from "@/lib/realtime/run-events";
 import { RunStatus } from "@/types/enums";
 
 import type { GateAnswer, RunCommands, RunEvent } from "./contract";
-import { DESIGN_STAGE, loadPublishedDesign } from "./experiment-design";
+import { loadPublishedDesign } from "./experiment-design";
 import { RunPacer } from "./pacer";
 import { PipelineAdapter, type PipelineEnvelope, type PipelineRunInfo } from "./pipeline-adapter";
 import { loadPublishedHypotheses, type PublicationRef } from "./published-hypotheses";
@@ -208,8 +208,8 @@ export class ApiRun implements RunCommands {
       return;
     }
     if (route.to === "accept") {
-      if (route.stageKey === DESIGN_STAGE && answer.option_id === "send_back") {
-        await fetchRuns.sendStageBack(this.projectId, this.runId, route.stageRunId, DESIGN_STAGE, note);
+      if (answer.option_id === "send_back" && route.stageKey) {
+        await fetchRuns.sendStageBack(this.projectId, this.runId, route.stageRunId, route.stageKey, note);
         return;
       }
       const dropped = answer.dropped ?? [];

@@ -53,6 +53,52 @@ describe("AcceptReview", () => {
     expect(markup).not.toMatch(/Take forward|0 of 0|Accept 0/);
   });
 
+  it("offers every advertised answer: Accept, and Send back that waits for a note", () => {
+    const gate: Gate = {
+      id: "accept-stage-synthetic",
+      kind: "accept",
+      stageKey: "dataset",
+      title: "Accept the data card",
+      why: "The data card is published.",
+      summary: [],
+      options: [
+        {
+          id: "accept",
+          label: "Accept the data card",
+          description: "Use it.",
+          leads_to: "The next stage can begin",
+          confirm_label: "Accept",
+          recommended: true,
+        },
+        {
+          id: "send_back",
+          label: "Send back with a note",
+          description: "The agents revise it.",
+          leads_to: "The data card runs again",
+          confirm_label: "Send back",
+          needsText: true,
+        },
+      ],
+      stop_index: 1,
+      stop_total: 1,
+    };
+    const markup = renderToStaticMarkup(
+      createElement(AcceptReview, {
+        gate,
+        header: createElement("h2", null, gate.title),
+        pending: false,
+        onAnswer: () => undefined,
+      }),
+    );
+    const buttons = markup.split("</button>");
+    const accept = buttons.find((html) => html.endsWith("Accept"));
+    const sendBack = buttons.find((html) => html.endsWith("Send back"));
+    expect(accept).toBeDefined();
+    expect(accept).not.toMatch(/\sdisabled(?:=|\s|>)/);
+    expect(sendBack).toMatch(/\sdisabled(?:=|\s|>)/);
+    expect(markup).toContain("Write what should change in the note first.");
+  });
+
   it("shows a published hypothesis as picked and makes Accept available", () => {
     const source = published.primary.hypotheses[0];
     const state = initialRunState("run-1");

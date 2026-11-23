@@ -13,6 +13,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import type { Decision, Gate, GateAnswer, OwnFinding } from "@/lib/run-stream/contract";
+import { plainNote } from "@/lib/run-stream/plain-notes";
 
 import { AcceptReview } from "./accept-review";
 import { CharterReview } from "./charter-panel";
@@ -323,6 +324,7 @@ export function GateSheet({
                   </div>
                 )}
               </div>
+              {gate.needsYou?.length ? <NeedsYouList items={gate.needsYou} /> : null}
               {shownDecision ? (
                 <ForkDiagram choice={shownDecision} round={round} className="max-w-[520px]" />
               ) : (
@@ -407,7 +409,15 @@ export function GateSheet({
                           </span>
                         )}
                       </span>
-                      <span className="text-muted-foreground text-xs">{o.description}</span>
+                      <span className="flex flex-col gap-1">
+                        <span className="text-muted-foreground text-xs">{o.description}</span>
+                        {o.disabled && (
+                          <span className="text-amber-800 text-xs dark:text-amber-300">
+                            {o.disabledReason ?? "This choice is not available right now."}
+                          </span>
+                        )}
+                      </span>
+
                       <span className="flex items-center gap-1.5 text-xs">
                         <ArrowRight className="size-3 text-muted-foreground" />
                         {o.leads_to}
@@ -416,7 +426,6 @@ export function GateSheet({
                   ))}
                 </RadioGroup>
               )}
-              {gate.needsYou?.length ? <NeedsYouList items={gate.needsYou} /> : null}
               {revising && gate.review && (
                 <RevisePicker review={gate.review} picked={sendBack} onPick={setSendBack} own={own} onOwn={setOwn} />
               )}
@@ -521,8 +530,8 @@ function NeedsYouList({ items }: { items: NonNullable<Gate["needsYou"]> }) {
       <ul className="grid gap-2">
         {items.map((item) => (
           <li key={item.id} className="grid gap-0.5">
-            <span className="font-medium">{item.question}</span>
-            {item.why && <span className="text-muted-foreground text-xs">{item.why}</span>}
+            <span className="font-medium">{plainNote(item.question)}</span>
+            {item.why && <span className="text-muted-foreground text-xs">{plainNote(item.why)}</span>}
           </li>
         ))}
       </ul>

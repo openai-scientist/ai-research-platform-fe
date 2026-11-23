@@ -779,7 +779,7 @@ export function RunWorkspace({ session, preview }: { session: RunSession; previe
                         (preview?.experimentDesign?.document ?? (
                           <DesignHandoff
                             local={Boolean(datasetStage?.local)}
-                            blocked={showGate.options.some((option) => option.id === "send_back")}
+                            blocked={!showGate.options.some((option) => option.id === "accept")}
                             design={design}
                             projectId={session.projectId}
                             runId={runId}

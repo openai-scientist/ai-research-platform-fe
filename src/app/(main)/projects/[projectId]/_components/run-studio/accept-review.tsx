@@ -3,18 +3,29 @@
 import { type ReactNode, useEffect, useState } from "react";
 
 import { cn } from "cn";
-import { Check, Sparkles } from "lucide-react";
+import { ArrowRight, Check, Sparkles, TriangleAlert, Undo2 } from "lucide-react";
 import { motion } from "motion/react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { Gate, GateAnswer, NoveltyCheck, ReviewFinding } from "@/lib/run-stream/contract";
+import {
+  EXECUTION_RECORDS,
+  EXECUTION_STAGE,
+  executionNoResults,
+  type NoResults,
+  noResultsMessage,
+} from "@/lib/run-stream/execution";
+import { plainNote } from "@/lib/run-stream/plain-notes";
 import type { DraftState, HypothesizeContent } from "@/lib/run-stream/run-state";
+import { type StageChoice, stageChoices } from "@/lib/run-stream/stage-choices";
 
 import { NoteField, useConsultations } from "./charter-panel";
 import { CitedText } from "./cite";
 import { PiAdviceCard } from "./pi-advice";
+import { useRedoBlocked } from "./redo-execution";
+import { useExecutionEvidence } from "./scenes/execution-scene";
 import { FINDING_SEVERITY, findingTarget } from "./scenes/findings";
 import { useWorkspace } from "./workspace-context";
 
@@ -178,17 +189,114 @@ type AcceptReviewProps = {
   documentPreview?: ReactNode;
 };
 
-/** A finished stage with a selectable hypothesis set, or a simple accept for a stage with no selection. */
+/** A finished stage with a selectable hypothesis set, or a stage review with no selection. */
 export function AcceptReview(props: AcceptReviewProps) {
-  return props.gate.selection === undefined ? <StageAcceptReview {...props} /> : <HypothesisAcceptReview {...props} />;
+  if (props.gate.selection !== undefined) return <HypothesisAcceptReview {...props} />;
+  return props.gate.stageKey === EXECUTION_STAGE ? (
+    <ExecutionAcceptReview {...props} />
+  ) : (
+    <StageAcceptReview {...props} />
+  );
 }
 
-function StageAcceptReview({ gate, header, pending, onAnswer, documentPreview }: AcceptReviewProps) {
+/** Execution's review: reads what Execution produced, so it can say so when nothing was computed. */
+function ExecutionAcceptReview(props: AcceptReviewProps) {
+  const { session, state } = useWorkspace();
+  const content = state.stages[EXECUTION_STAGE]?.content;
+  const execution = content?.stage === "interpret" ? content.execution : undefined;
+  const evidence = useExecutionEvidence(session.projectId, state.runId, execution?.artifacts[EXECUTION_RECORDS]);
+  const redoBlocked = useRedoBlocked(session.projectId, state.runId);
+  return (
+    <StageAcceptReview
+      {...props}
+      noResults={executionNoResults(execution, evidence.data)}
+      sendBackBlocked={redoBlocked}
+    />
+  );
+}
+
+/** What the researcher may answer, each as a button, with the reason beside any that cannot be used. */
+function StageChoices({
+  choices,
+  note,
+  pending,
+  onChoose,
+}: {
+  choices: StageChoice[];
+  note: string;
+  pending: boolean;
+  onChoose(choice: StageChoice): void;
+}) {
+  const [asked, setAsked] = useState<string | null>(null);
+  return (
+    <>
+      <ul aria-label="Your answer" className="grid gap-2">
+        {choices.map((choice) => {
+          const reasonId = `choice-${choice.id}-reason`;
+          return (
+            <li
+              key={choice.id}
+              className={cn(
+                "grid gap-1 rounded-xl border px-3.5 py-3 text-sm",
+                choice.primary && "border-foreground/30 bg-card",
+              )}
+            >
+              <span className="flex flex-wrap items-center justify-between gap-2">
+                <span className="grid min-w-0 gap-0.5">
+                  <b className="font-semibold">{choice.label}</b>
+                  {choice.description && <span className="text-muted-foreground text-xs">{choice.description}</span>}
+                  {choice.disabledReason ? (
+                    <span id={reasonId} className="text-amber-800 text-xs dark:text-amber-300">
+                      {choice.disabledReason}
+                    </span>
+                  ) : (
+                    choice.leadsTo && (
+                      <span className="flex items-center gap-1 text-xs">
+                        <ArrowRight aria-hidden className="size-3 text-muted-foreground" />
+                        {choice.leadsTo}
+                      </span>
+                    )
+                  )}
+                </span>
+                <Button
+                  size="sm"
+                  variant={choice.primary ? "default" : "outline"}
+                  aria-describedby={choice.disabledReason ? reasonId : undefined}
+                  disabled={pending || Boolean(choice.disabledReason) || (choice.needsNote && !note.trim())}
+                  onClick={() => {
+                    setAsked(choice.id);
+                    onChoose(choice);
+                  }}
+                >
+                  {choice.id === "send_back" ? <Undo2 /> : <Check />}
+                  {pending && asked === choice.id ? "Sending…" : choice.confirmLabel}
+                </Button>
+              </span>
+              {choice.needsNote && !choice.disabledReason && !note.trim() && (
+                <span className="text-muted-foreground text-xs">Write what should change in the note first.</span>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </>
+  );
+}
+
+function StageAcceptReview({
+  gate,
+  header,
+  pending,
+  onAnswer,
+  documentPreview,
+  noResults = null,
+  sendBackBlocked = null,
+}: AcceptReviewProps & { noResults?: NoResults | null; sendBackBlocked?: string | null }) {
   const [note, setNote] = useState("");
-  const option = gate.options.find((item) => (item.id === "accept" || item.id === "send_back") && !item.disabled);
-  const sendBack = option?.id === "send_back";
-  const acceptingDataset = gate.stageKey === "dataset" && !sendBack;
-  const lockingDesign = gate.stageKey === "experiment_design" && !sendBack;
+  const choices = stageChoices(gate, { noResults: Boolean(noResults), sendBackBlocked });
+  const several = choices.length > 1;
+  const acceptingDataset = gate.stageKey === "dataset";
+  const lockingDesign = gate.stageKey === "experiment_design" && choices.some((choice) => choice.id === "accept");
   const subject = gate.title.replace(/^Accept the /i, "");
   const advice = gate.advice;
   let headline = "";
@@ -201,13 +309,13 @@ function StageAcceptReview({ gate, header, pending, onAnswer, documentPreview }:
 
   const reviewContext = (
     <div className="grid gap-2">
-      {gate.why && <p className="text-muted-foreground text-sm">{gate.why}</p>}
+      {gate.why && <p className="text-muted-foreground text-sm">{plainNote(gate.why)}</p>}
       {gate.summary.length > 0 && (
         <ul className="flex flex-col gap-1.5 text-sm">
           {gate.summary.map((line) => (
             <li key={line} className="flex items-start gap-2">
               <Check className="mt-1 size-3.5 shrink-0 text-emerald-600" />
-              {line}
+              {plainNote(line)}
             </li>
           ))}
         </ul>
@@ -219,6 +327,16 @@ function StageAcceptReview({ gate, header, pending, onAnswer, documentPreview }:
     <>
       <div className="flex flex-col gap-4 overflow-y-auto px-5 pt-4.5 pb-5 sm:px-6">
         {header}
+        {noResults && (
+          <section
+            role="alert"
+            aria-label="No analysis was computed"
+            className="flex items-start gap-2.5 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3.5 py-3 text-sm"
+          >
+            <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-amber-700 dark:text-amber-300" />
+            <p className="min-w-0 wrap-anywhere">{noResultsMessage(noResults)}</p>
+          </section>
+        )}
         {acceptingDataset && (
           <section aria-label="What to review" className="grid gap-2 rounded-lg border bg-muted/35 p-3">
             <h4 className="font-semibold text-sm">What you’re accepting</h4>
@@ -228,6 +346,9 @@ function StageAcceptReview({ gate, header, pending, onAnswer, documentPreview }:
         {documentPreview}
         {!acceptingDataset && reviewContext}
         {advice && <PiAdviceCard advice={advice} headline={headline} />}
+        {several && (
+          <StageChoices choices={choices} note={note} pending={pending} onChoose={(choice) => answer(choice)} />
+        )}
         <NoteField value={note} onChange={setNote} />
       </div>
       <footer
@@ -243,22 +364,29 @@ function StageAcceptReview({ gate, header, pending, onAnswer, documentPreview }:
           {lockingDesign && "Check the main analysis and the margin. Once you lock the plan, they cannot change."}
           {!acceptingDataset &&
             !lockingDesign &&
-            (sendBack ? "Send the design back for another pass." : "Accept to continue the run.")}
+            (choices[0]?.id === "send_back" ? "Send the design back for another pass." : "Accept to continue the run.")}
         </span>
-        <Button
-          size={acceptingDataset ? "lg" : "default"}
-          onClick={() => {
-            if (!option) return;
-            onAnswer({ option_id: option.id, ...(note.trim() ? { note: note.trim() } : {}) });
-          }}
-          disabled={pending || !option}
-        >
-          <Check />
-          {pending ? (sendBack ? "Sending…" : "Accepting…") : (option?.confirm_label ?? "Accept")}
-        </Button>
+        {!several &&
+          choices.map((choice) => (
+            <Button
+              key={choice.id}
+              size={acceptingDataset ? "lg" : "default"}
+              variant={choice.primary || !noResults ? "default" : "outline"}
+              onClick={() => answer(choice)}
+              disabled={pending || Boolean(choice.disabledReason)}
+            >
+              {choice.id === "send_back" ? <Undo2 /> : <Check />}
+              {pending ? (choice.id === "send_back" ? "Sending…" : "Accepting…") : choice.confirmLabel || "Accept"}
+            </Button>
+          ))}
       </footer>
     </>
   );
+
+  function answer(choice: StageChoice) {
+    if (choice.needsNote && !note.trim()) return;
+    onAnswer({ option_id: choice.id, ...(note.trim() ? { note: note.trim() } : {}) });
+  }
 }
 
 /** The last stop of the run: pick the hypotheses it ends with, with the PI's advice beside you. */

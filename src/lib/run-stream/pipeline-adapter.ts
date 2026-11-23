@@ -11,6 +11,7 @@ import type {
   Gate,
   GateAnswer,
   GateKind,
+  GateOption,
   PiAdvice,
   PlannedStage,
   ReviewFinding,
@@ -64,7 +65,7 @@ export type GateRoute =
       artifactId?: string;
       findings?: Record<string, unknown>[];
     }
-  | { to: "accept"; stageRunId: string; hypothesisIds?: string[]; stageKey?: typeof DESIGN_STAGE }
+  | { to: "accept"; stageRunId: string; hypothesisIds?: string[]; stageKey?: string }
   /** The PI's charter: endorse its draft, or write it yourself; `retry` asks the PI again after it failed. */
   | { to: "charter"; consultationId: string };
 
@@ -704,6 +705,18 @@ interface Shown {
 
 type NeedsYouItem = { id: string; question: string; why?: string; ref?: string };
 
+/** The answer that returns a finished stage to its agents with the researcher's note. */
+function sendBackOption(subject: string): GateOption {
+  return {
+    id: "send_back",
+    label: "Send back with a note",
+    description: `The agents work on the ${subject} again, following your note.`,
+    leads_to: `The ${subject} runs again`,
+    confirm_label: "Send back",
+    needsText: true,
+  };
+}
+
 /** A stage review offers two answers; say what each does, and ask for the note a send back needs. */
 export function stageReviewOptions(gate: Gate) {
   for (const option of gate.options) {
@@ -859,7 +872,7 @@ export class PipelineAdapter {
       return {
         to: "accept",
         stageRunId,
-        ...(this.gate.stageKey === DESIGN_STAGE ? { stageKey: DESIGN_STAGE } : {}),
+        ...(this.gate.stageKey ? { stageKey: this.gate.stageKey } : {}),
         ...(this.isHypothesisStage(this.gate.stageKey) ? { hypothesisIds: this.final() } : {}),
       };
     if (!this.gate.engineKind) return null;
@@ -2226,6 +2239,7 @@ export class PipelineAdapter {
                 confirm_label: "Accept and continue",
                 recommended: true,
               },
+              sendBackOption("analysis plan"),
             ],
         stop_index: 1,
         stop_total: 1,
@@ -2252,6 +2266,7 @@ export class PipelineAdapter {
             confirm_label: "Accept",
             recommended: true,
           },
+          sendBackOption(subject),
         ],
         stop_index: 1,
         stop_total: 1,
@@ -2284,6 +2299,7 @@ export class PipelineAdapter {
           confirm_label: "Accept",
           recommended: true,
         },
+        sendBackOption("hypotheses"),
       ],
       ...this.stop("accept"),
       ...(this.advice.stage_outcome ? { advice: this.advice.stage_outcome } : {}),

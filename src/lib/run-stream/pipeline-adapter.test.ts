@@ -134,7 +134,11 @@ describe("PipelineAdapter", () => {
     const review = replayRunEvents("run-1", pending);
     expect(review.stageOrder).toEqual([]);
     expect(review.gate).toMatchObject({ kind: "accept", stageKey: "dataset", title: "Accept the data card" });
-    expect(adapter.route(review.gate?.id ?? "")).toEqual({ to: "accept", stageRunId: "dataset-stage" });
+    expect(adapter.route(review.gate?.id ?? "")).toEqual({
+      to: "accept",
+      stageRunId: "dataset-stage",
+      stageKey: "dataset",
+    });
     const after = convert(
       [
         appended(dataset, "stage.status_changed", { status: "ACCEPTED" }),
@@ -663,7 +667,10 @@ describe("PipelineAdapter", () => {
     expect(gate).toMatchObject({
       kind: "accept",
       title: "Accept the data card",
-      options: [{ id: "accept", label: "Accept the data card", confirm_label: "Accept", recommended: true }],
+      options: [
+        { id: "accept", label: "Accept the data card", confirm_label: "Accept", recommended: true },
+        { id: "send_back", label: "Send back with a note", confirm_label: "Send back", needsText: true },
+      ],
       advice: { action: "accept", text: "I recommend accepting the data card." },
     });
     expect(gate?.selection).toBeUndefined();
@@ -673,7 +680,11 @@ describe("PipelineAdapter", () => {
       "accept",
     );
     if (!gate) throw new Error("Expected the dataset acceptance gate to be open.");
-    expect(adapter.route(gate.id)).toEqual({ to: "accept", stageRunId: "stage-synthetic-dataset" });
+    expect(adapter.route(gate.id)).toEqual({
+      to: "accept",
+      stageRunId: "stage-synthetic-dataset",
+      stageKey: "dataset",
+    });
 
     const acceptedDecision = appended(
       recommendation,
@@ -746,6 +757,7 @@ describe("PipelineAdapter", () => {
     expect(adapter.route(state.gate?.id ?? "")).toEqual({
       to: "accept",
       stageRunId: STAGE_RUN,
+      stageKey: expect.any(String),
       hypothesisIds: ["H1", "H2", "H3", "H4", "H5", "H6"],
     });
   });
