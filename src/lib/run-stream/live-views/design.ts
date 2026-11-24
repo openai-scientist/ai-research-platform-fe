@@ -1,3 +1,4 @@
+import { questionFromDocuments } from "../plan-question";
 import {
   body,
   bool,
@@ -36,6 +37,8 @@ export function mapDesignViews(input: LiveViewInput) {
   const report = body(input, "review.findings/v1");
   const resultPackage = body(input, "platform.experiment_result/v1");
   const specification = record(record(resultPackage.protocol).specification);
+  // The plan documents state the question first; the run's own question is the fallback.
+  const planQuestion = questionFromDocuments(input.artifacts);
   const briefQuestion = record(body(input, "dataset.brief/v2").chosen);
   const diagnosis = body(input, "experiment_design.design_diagnosis/v1");
   const simulations = record((present(diagnosis) ? diagnosis : record(plan.design_diagnosis)).hypotheses);
@@ -256,7 +259,7 @@ export function mapDesignViews(input: LiveViewInput) {
       {
         header: {
           title: human(specification.title) ?? "Analysis plan",
-          question: human(specification.question ?? briefQuestion.text),
+          question: human(planQuestion ?? specification.question ?? briefQuestion.text),
           version: number(plan.version),
           lockedAt: human(lock.locked_at),
           lockedBy: label(lock.locked_by),

@@ -469,3 +469,37 @@ describe("Execution live views", () => {
     expect(JSON.stringify(view)).not.toContain(digest);
   });
 });
+
+describe("the hand-off card's question", () => {
+  const sap = [
+    "# Statistical analysis plan",
+    "",
+    "## Research question",
+    "",
+    "Is feedback linked to a higher score?",
+    "",
+    "## Design",
+    "",
+    "x",
+  ].join("\n");
+  const accept = (artifacts: Record<string, unknown>) =>
+    mapDesignViews({ artifacts }).design_accept.content.header.question;
+
+  it("reads the plan document first", () => {
+    expect(
+      accept({
+        "experiment_design.exp_plan/v1": sap,
+        "dataset.brief/v2": { chosen: { text: "The run's question" } },
+      }),
+    ).toBe("Is feedback linked to a higher score?");
+  });
+
+  it("falls back to the pre-registration, then to the run's question", () => {
+    expect(accept({ "experiment_design.preregistration/v1": sap })).toBe("Is feedback linked to a higher score?");
+    expect(accept({ "dataset.brief/v2": { chosen: { text: "The run's question" } } })).toBe("The run's question");
+  });
+
+  it("stays empty when nothing records it", () => {
+    expect(accept({})).toBeNull();
+  });
+});

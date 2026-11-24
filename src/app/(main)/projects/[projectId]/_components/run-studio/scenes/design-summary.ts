@@ -11,6 +11,7 @@ import {
   designRecord,
   designText,
 } from "@/lib/run-stream/experiment-design";
+import { questionFromDocuments, questionFromMarkdown } from "@/lib/run-stream/plan-question";
 
 import { designView } from "./experiment-design-view";
 
@@ -126,17 +127,10 @@ export function adjustedForLine(hypothesis?: DesignHypothesis): string | undefin
     : `Adjusted for: ${row.adjustedFor}`;
 }
 
-/** The text under "## Research question" in a plan document, on one line; undefined when it has none. */
-export function questionFromMarkdown(markdown?: string): string | undefined {
-  const section = /^##[ \t]+Research question[ \t]*\r?\n([\s\S]*?)(?=^#{1,2}[ \t]|(?![\s\S]))/im.exec(
-    markdown ?? "",
-  )?.[1];
-  return designText(section?.replace(/\s+/g, " "));
-}
+export { questionFromMarkdown };
 
 /** The question the plan documents record, when they do. */
-const planQuestion = (design?: DesignContent) =>
-  DESIGN_DOCUMENTS.map((schema) => questionFromMarkdown(design?.documents?.[schema])).find(Boolean);
+const planQuestion = (design?: DesignContent) => questionFromDocuments(design?.documents);
 
 /**
  * What the researcher is about to lock, read only from content the Design stage already holds. The question is the one

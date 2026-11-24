@@ -307,7 +307,7 @@ export function ExecutionReadout({
                   typeof row.execution_status?.reason === "string"
                     ? plainNote(row.execution_status.reason)
                     : typeof row.execution_status?.code === "string"
-                      ? designLabel(row.execution_status.code)
+                      ? plainNote(row.execution_status.code)
                       : undefined,
                 ],
                 [designLabel(row.verdict), typeof row.reason === "string" ? plainNote(row.reason) : undefined],

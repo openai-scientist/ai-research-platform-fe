@@ -1,4 +1,5 @@
 import type { AgentRole } from "./contract";
+import { firstGateRefusal } from "./node-gate-refusal";
 
 export const EXECUTION_STAGE = "execution";
 export const EXECUTION_RECORDS = "evidence.records/v1";
@@ -135,6 +136,8 @@ const BLOCKING_CHECKS = ["lock", "rehearsal", "dry_run", "confirmatory", "unseal
 export interface NoResults {
   /** Why nothing was computed, lowercase and without a final full stop. */
   reason: string;
+  /** The Local Node's own refusal, in plain words, when its reason code reached the page. */
+  refusal?: string;
 }
 
 /** Reads inside a sentence: no final full stop, and a lowercase start unless it opens with an id such as H1. */
@@ -160,15 +163,27 @@ export function executionNoResults(
     records !== undefined && records.length > 0 && records.every((row) => typeof row.estimate !== "number");
   if (!notDone("unseal") && !notDone("verdicts") && !noRecords && !noEstimates) return null;
 
+  const refusal = firstGateRefusal([
+    ...Object.values(checks).flatMap((check) => [check.reason]),
+    ...(records ?? []).flatMap((row) => [
+      row.execution_status?.reason,
+      row.execution_status?.code,
+      row.reason,
+      row.assessment?.reason,
+      ...(row.assessment?.codes ?? []),
+    ]),
+  ]);
   const open = BLOCKING_CHECKS.map((key) => checks[key]).find(
     (check) => check && check.state !== "green" && check.state !== "not_applicable" && check.reason,
   );
   const status = records?.map((row) => row.execution_status?.reason).find((reason) => typeof reason === "string");
   const fallback = BEFORE_UNSEAL;
-  return { reason: clean(open?.reason ?? status ?? checks.unseal?.reason ?? fallback) };
+  const reason = clean(open?.reason ?? status ?? checks.unseal?.reason ?? fallback);
+  return refusal ? { reason, refusal: refusal.sentence } : { reason };
 }
 
 /** The notice at the Execution gate and in the scene when nothing was computed. */
-export function noResultsMessage({ reason }: NoResults) {
+export function noResultsMessage({ reason, refusal }: NoResults) {
+  if (refusal) return `No analysis was computed. ${refusal} Accepting ends Execution with no estimates.`;
   return `No analysis was computed. The plan check stopped before unseal: ${reason}. Accepting ends Execution with no estimates.`;
 }

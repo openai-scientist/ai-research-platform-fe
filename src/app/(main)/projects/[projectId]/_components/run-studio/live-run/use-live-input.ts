@@ -4,8 +4,11 @@ import { useEffect, useRef, useState } from "react";
 
 import { fetchArtifacts, type RunArtifactItem } from "@/lib/api/services/fetch-artifacts";
 import { subscribeRunEvents } from "@/lib/realtime/run-events";
+import { DESIGN_DOCUMENTS } from "@/lib/run-stream/experiment-design";
 import type { LiveViewInput } from "@/lib/run-stream/live-views";
 import type { PipelineEnvelope } from "@/lib/run-stream/pipeline-adapter";
+
+const MARKDOWN_SCHEMAS: ReadonlySet<string> = new Set(DESIGN_DOCUMENTS);
 
 /** Picks the artifact the mapper should read: the newest one, from the stage attempt when the schema belongs to it. */
 export function pickArtifact(items: readonly RunArtifactItem[], stageRunId: string | null, scoped: boolean) {
@@ -92,7 +95,9 @@ export function useLiveInput({
           if (!item) return null;
           if (!bodies.current.has(item.id)) {
             const { blob } = await fetchArtifacts.download(projectId, runId, item.id, abort.signal);
-            bodies.current.set(item.id, JSON.parse(await blob.text()));
+            const text = await blob.text();
+            // Plan documents are Markdown: kept as text, not parsed.
+            bodies.current.set(item.id, MARKDOWN_SCHEMAS.has(schema) ? text : JSON.parse(text));
           }
           return [schema, bodies.current.get(item.id)] as const;
         } catch {

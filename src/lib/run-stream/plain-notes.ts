@@ -3,6 +3,8 @@
  * returned as it came, so a new note is never hidden or garbled.
  */
 
+import { gateRefusal } from "./node-gate-refusal";
+
 const runs = (n: string) => (n === "1" ? "one earlier run" : `${n} earlier runs`);
 
 const RULES: readonly [pattern: RegExp, say: (...match: string[]) => string][] = [
@@ -42,6 +44,8 @@ const RULES: readonly [pattern: RegExp, say: (...match: string[]) => string][] =
 
 /** A system note in plain words, or the note itself when it is not one this knows. */
 export function plainNote(text: string): string {
+  const refusal = gateRefusal(text);
+  if (refusal) return refusal.sentence;
   let out = text;
   for (const [pattern, say] of RULES) out = out.replace(pattern, (...m) => say(...(m.slice(0, -2) as string[])));
   return out;

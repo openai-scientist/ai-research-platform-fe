@@ -67,3 +67,32 @@ describe("executionNoResults", () => {
     expect(executionNoResults(content(checks, { [EXECUTION_RECORDS]: "a1" }), [record(0.4)])).toBeNull();
   });
 });
+
+describe("a Local Node refusal", () => {
+  const SEALED =
+    "This file's confirmation rows are already locked to another analysis plan (an earlier run). Another plan cannot use them. Start the study on a new data file.";
+  const refused = (code: string): EvidenceRecord => ({
+    ...record(null),
+    execution_status: { state: "not_computed", code },
+  });
+
+  it("replaces the dry-run wording when the records carry gate_plan_sealed (RUN-AACE)", () => {
+    const found = executionNoResults(
+      content({ dry_run: item("dry_run", "red", "dry_runs empty; no tool posts a dry run") }),
+      [refused("gate_plan_sealed")],
+    );
+    expect(noResultsMessage(found!)).toBe(
+      `No analysis was computed. ${SEALED} Accepting ends Execution with no estimates.`,
+    );
+  });
+
+  it("also reads the refusal from a check reason", () => {
+    const found = executionNoResults(content({ unseal: item("unseal", "red", "gate_plan_sealed") }));
+    expect(noResultsMessage(found!)).toContain("Start the study on a new data file.");
+  });
+
+  it("keeps the old wording when no refusal reason is present", () => {
+    const found = executionNoResults(content({ unseal: item("unseal", "red", "the results are sealed") }));
+    expect(noResultsMessage(found!)).toContain("The plan check stopped before unseal");
+  });
+});

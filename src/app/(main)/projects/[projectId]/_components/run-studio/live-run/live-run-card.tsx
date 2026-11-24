@@ -2,6 +2,7 @@
 
 import { type ReactNode, useMemo } from "react";
 
+import { DESIGN_DOCUMENTS } from "@/lib/run-stream/experiment-design";
 import {
   buildLiveSidePanel,
   type DatasetStepKey,
@@ -202,6 +203,7 @@ export function DesignLiveCard({ projectId, runId, ...rest }: CardProps) {
       "experiment_design.plan/v1",
       "experiment_design.design_diagnosis/v1",
       "experiment_design.lock/v1",
+      ...DESIGN_DOCUMENTS,
       "review.findings/v1",
       "revision.response/v1",
     ],
