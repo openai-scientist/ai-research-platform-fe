@@ -25,6 +25,7 @@ import {
   RESEARCH_PACKAGE_ZIP,
 } from "@/lib/run-stream/execution";
 import { designLabel } from "@/lib/run-stream/experiment-design";
+import { localRecomputeNotice } from "@/lib/run-stream/local-recompute";
 import { plainNote } from "@/lib/run-stream/plain-notes";
 import { packageFigures } from "@/lib/run-stream/result-figures";
 
@@ -34,6 +35,15 @@ import { PackageFigureCards, RESULT_PACKAGE_SCHEMA } from "../results-report/pac
 import { FetchedDocument, ReaderSheet } from "./document-reader";
 import { ExecutionLayers } from "./execution-layers";
 import { Pane } from "./scene-ui";
+
+/** Why this record's claim stays inconclusive on a Local Node, or null. */
+export function recordNotice(row: EvidenceRecord) {
+  return localRecomputeNotice({
+    claim: row.assessment?.value,
+    codes: row.assessment?.codes,
+    secondPath: row.second_path,
+  });
+}
 
 /** The evidence records Execution published, read once and shared by the scene and the gate. */
 export function useExecutionEvidence(projectId: string, runId: string, evidenceId?: string) {
@@ -307,6 +317,12 @@ export function ExecutionReadout({
                 ],
               ]}
             />
+            {(() => {
+              const notice = recordNotice(row);
+              return notice ? (
+                <p className="border-t px-4 py-3 text-muted-foreground text-xs leading-relaxed">{notice}</p>
+              ) : null;
+            })()}
           </details>
         );
       })}

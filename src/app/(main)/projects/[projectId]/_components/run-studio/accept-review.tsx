@@ -25,7 +25,7 @@ import { NoteField, useConsultations } from "./charter-panel";
 import { CitedText } from "./cite";
 import { PiAdviceCard } from "./pi-advice";
 import { useRedoBlocked } from "./redo-execution";
-import { useExecutionEvidence } from "./scenes/execution-scene";
+import { recordNotice, useExecutionEvidence } from "./scenes/execution-scene";
 import { FINDING_SEVERITY, findingTarget } from "./scenes/findings";
 import { useWorkspace } from "./workspace-context";
 
@@ -210,6 +210,7 @@ function ExecutionAcceptReview(props: AcceptReviewProps) {
     <StageAcceptReview
       {...props}
       noResults={executionNoResults(execution, evidence.data)}
+      claimNotice={evidence.data?.map(recordNotice).find(Boolean) ?? undefined}
       sendBackBlocked={redoBlocked}
     />
   );
@@ -290,8 +291,9 @@ function StageAcceptReview({
   onAnswer,
   documentPreview,
   noResults = null,
+  claimNotice,
   sendBackBlocked = null,
-}: AcceptReviewProps & { noResults?: NoResults | null; sendBackBlocked?: string | null }) {
+}: AcceptReviewProps & { noResults?: NoResults | null; sendBackBlocked?: string | null; claimNotice?: string }) {
   const [note, setNote] = useState("");
   const choices = stageChoices(gate, { noResults: Boolean(noResults), sendBackBlocked });
   const several = choices.length > 1;
@@ -310,6 +312,7 @@ function StageAcceptReview({
   const reviewContext = (
     <div className="grid gap-2">
       {gate.why && <p className="text-muted-foreground text-sm">{plainNote(gate.why)}</p>}
+      {claimNotice && <p className="text-muted-foreground text-sm">{claimNotice}</p>}
       {gate.summary.length > 0 && (
         <ul className="flex flex-col gap-1.5 text-sm">
           {gate.summary.map((line) => (

@@ -17,6 +17,7 @@ import {
   type ResearchPackage,
 } from "@/lib/api/services/fetch-research-package";
 import { RESEARCH_PACKAGE_ZIP } from "@/lib/run-stream/execution";
+import { localRecomputeNotice } from "@/lib/run-stream/local-recompute";
 import {
   type FigureSlot,
   figureSlots,
@@ -68,6 +69,11 @@ function statusWords(outcome: PackageOutcome) {
 
 function HypothesisCard({ row }: { row: PackageHypothesis }) {
   const layers = layersOf(row);
+  const notice = localRecomputeNotice({
+    claim: row.claim_assessment?.value,
+    codes: row.claim_assessment?.codes,
+    secondPath: row.second_computation,
+  });
   const has = typeof row.estimate === "number";
   const next = nextStepWords(row.next_step);
   const unit = row.outcome.join(", ");
@@ -126,6 +132,7 @@ function HypothesisCard({ row }: { row: PackageHypothesis }) {
           </div>
         ))}
       </dl>
+      {notice && <p className="text-muted-foreground text-xs leading-relaxed">{notice}</p>}
       <p className="text-muted-foreground text-xs leading-relaxed">
         {next ? `Next step: ${next}. ` : ""}
         {row.margin !== null && (

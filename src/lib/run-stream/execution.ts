@@ -109,7 +109,9 @@ export interface EvidenceRecord {
   execution_status?: { state: string; reason?: string | null; code?: string | null } | null;
   verdict: string;
   reason?: string;
-  assessment?: { value: string; reason: string } | null;
+  assessment?: { value: string; reason: string; codes?: string[] } | null;
+  /** The status of the main result's second path; `unproven` on a Local Node. */
+  second_path?: string | null;
 }
 
 export function executionEvidence(value: unknown): EvidenceRecord[] {
