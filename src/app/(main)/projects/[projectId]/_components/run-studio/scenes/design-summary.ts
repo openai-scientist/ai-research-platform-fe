@@ -27,6 +27,12 @@ export type LockHypothesis = {
   margin?: string;
   marginSource?: string;
   robustness: number;
+  /** What the main analysis adjusts for: the covariate names, or "none". */
+  adjustedFor: string;
+  /** True when the locked main analysis has no covariates. */
+  unadjusted: boolean;
+  /** Why it has none, when the plan records the reason. */
+  adjustmentReason?: string;
   /** One line from the design diagnosis, such as "Power 80% · false positives 4.7%". */
   diagnosis?: string;
 };
@@ -35,6 +41,8 @@ export type LockSummary = {
   /** Logos does not record the research question yet: stays undefined rather than invented. */
   question?: string;
   hypotheses: LockHypothesis[];
+  /** Set when the question or a claim asks for adjustment but a main analysis has none. */
+  adjustmentWarning?: string;
   robustness: number;
   findings: { total: number; blocking: number; major: number; minor: number };
 };
@@ -61,12 +69,25 @@ export function robustnessCount(hypothesis: DesignHypothesis): number {
   return named + forks;
 }
 
+const ADJUSTMENT_WORDS = /\badjust(?:ed|ing|ment)?\b|\bcontroll?(?:ed|ing)? for\b|\bcovariates?\b/i;
+
+/** Whether text asks for the analysis to be adjusted for something. */
+export const asksForAdjustment = (text?: string) => Boolean(text && ADJUSTMENT_WORDS.test(text));
+
+/** The plan's reason for having no covariates, when it records one. */
+function adjustmentReason(hypothesis: DesignHypothesis): string | undefined {
+  const robustness = designRecord(hypothesis.assumptions?.robustness);
+  if (robustness.timing_confirmed === false) return "the order of measurements (timing) was not confirmed";
+  return undefined;
+}
+
 function lockHypothesis(hypothesis: DesignHypothesis): LockHypothesis {
   const view = designView(hypothesis);
   const { margin, unit, direction } = view.rule;
   const measure = view.estimandRows.find(([label]) => label === "Effect measure")?.[1];
   const power = finite(designRecord(hypothesis.diagnosis?.power).value);
   const falsePositive = finite(designRecord(hypothesis.diagnosis?.null).false_positive_rate);
+  const covariates = view.program.covariates;
   const diagnosis = [
     power !== undefined && `Power ${percent(power)}`,
     falsePositive !== undefined && `false positives ${percent(falsePositive)}`,
@@ -83,18 +104,63 @@ function lockHypothesis(hypothesis: DesignHypothesis): LockHypothesis {
     margin: margin !== undefined ? `±${margin}${unit ? ` ${unit}` : ""}` : undefined,
     marginSource: view.rule.source ?? view.rule.sourceNote,
     robustness: robustnessCount(hypothesis),
+    adjustedFor: covariates.length ? covariates.join(", ") : "none",
+    unadjusted: covariates.length === 0,
+    adjustmentReason: covariates.length === 0 ? adjustmentReason(hypothesis) : undefined,
     diagnosis: diagnosis.length ? diagnosis.join(" · ") : undefined,
   };
 }
 
-/** What the researcher is about to lock, read only from content the Design stage already holds. */
-export function designLockSummary(design?: DesignContent, question?: string): LockSummary {
+export function adjustmentWarning(ids: string[], reason?: string) {
+  return `The question asks for adjustment, but the main analysis for ${ids.join(", ")} adjusts for nothing${
+    reason ? ` because ${reason}` : ""
+  }. Its estimate is unadjusted and may not answer the question as asked.`;
+}
+
+/** The "Adjusted for" line of one executed analysis, with the reason when the plan records one. */
+export function adjustedForLine(hypothesis?: DesignHypothesis): string | undefined {
+  if (!hypothesis) return undefined;
+  const row = lockHypothesis(hypothesis);
+  return row.unadjusted
+    ? `Adjusted for: none${row.adjustmentReason ? ` (${row.adjustmentReason})` : ""}`
+    : `Adjusted for: ${row.adjustedFor}`;
+}
+
+/** The text under "## Research question" in a plan document, on one line; undefined when it has none. */
+export function questionFromMarkdown(markdown?: string): string | undefined {
+  const section = /^##[ \t]+Research question[ \t]*\r?\n([\s\S]*?)(?=^#{1,2}[ \t]|(?![\s\S]))/im.exec(
+    markdown ?? "",
+  )?.[1];
+  return designText(section?.replace(/\s+/g, " "));
+}
+
+/** The question the plan documents record, when they do. */
+const planQuestion = (design?: DesignContent) =>
+  DESIGN_DOCUMENTS.map((schema) => questionFromMarkdown(design?.documents?.[schema])).find(Boolean);
+
+/**
+ * What the researcher is about to lock, read only from content the Design stage already holds. The question is the one
+ * the plan documents record; when they record none it is the one the run was started with.
+ */
+export function designLockSummary(design?: DesignContent, runQuestion?: string): LockSummary {
+  const question = planQuestion(design) ?? runQuestion;
   const hypotheses = Object.values(design?.hypotheses ?? {}).map(lockHypothesis);
   const findings = design?.findings ?? [];
   const count = (severity: string) => findings.filter((finding) => finding.severity === severity).length;
+  const asked = [question, ...Object.values(design?.hypotheses ?? {}).map((row) => row.statement)].some(
+    asksForAdjustment,
+  );
+  const bare = hypotheses.filter((row) => row.unadjusted);
   return {
     question: designText(question),
     hypotheses,
+    adjustmentWarning:
+      asked && bare.length > 0
+        ? adjustmentWarning(
+            bare.map((row) => row.id),
+            bare[0].adjustmentReason,
+          )
+        : undefined,
     robustness: hypotheses.reduce((sum, row) => sum + row.robustness, 0),
     findings: { total: findings.length, blocking: count("blocking"), major: count("major"), minor: count("minor") },
   };

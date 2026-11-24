@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import { ArrowLeft, Download, FileText, TriangleAlert } from "lucide-react";
+import { ArrowLeft, Download, FileArchive, FileText, TriangleAlert } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,21 +10,27 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useApiQuery } from "@/hooks/use-api";
 import { projectKeys } from "@/lib/api/query-keys";
 import { fetchArtifacts } from "@/lib/api/services/fetch-artifacts";
+import { fetchResearchPackage } from "@/lib/api/services/fetch-research-package";
 import {
   type EvidenceRecord,
   EXECUTION_RECORDS,
   type ExecutionContent,
   executionArtifacts,
   executionCheckStep,
+  executionDownload,
   executionEvidence,
   executionNoResults,
   executionSteps,
   noResultsMessage,
+  RESEARCH_PACKAGE_ZIP,
 } from "@/lib/run-stream/execution";
 import { designLabel } from "@/lib/run-stream/experiment-design";
 import { plainNote } from "@/lib/run-stream/plain-notes";
+import { packageFigures } from "@/lib/run-stream/result-figures";
 
+import { saveProjectFile } from "../../project-file-download";
 import { RedoExecutionAction } from "../redo-execution";
+import { PackageFigureCards, RESULT_PACKAGE_SCHEMA } from "../results-report/package-figures";
 import { FetchedDocument, ReaderSheet } from "./document-reader";
 import { ExecutionLayers } from "./execution-layers";
 import { Pane } from "./scene-ui";
@@ -49,6 +55,7 @@ export function ExecutionScene({
   step,
   onDesign,
   hypotheses,
+  adjustments,
 }: {
   execution?: ExecutionContent;
   projectId: string;
@@ -57,6 +64,8 @@ export function ExecutionScene({
   onDesign?: () => void;
   /** The statement of each hypothesis, by id, from the locked plan. */
   hypotheses?: Readonly<Record<string, string | undefined>>;
+  /** The "Adjusted for" line of each hypothesis of the locked plan, by id. */
+  adjustments?: Readonly<Record<string, string | undefined>>;
 }) {
   const [reading, setReading] = useState<string | null>(null);
   const evidenceId = execution?.artifacts[EXECUTION_RECORDS];
@@ -67,6 +76,24 @@ export function ExecutionScene({
   const readingId = reading ? execution?.artifacts[reading] : undefined;
   const noResults = executionNoResults(execution, evidence.data);
   const source = { projectId, runId };
+  const [saving, setSaving] = useState<string | null>(null);
+  const save = async (
+    key: string,
+    file: { filename: string },
+    request: () => ReturnType<typeof fetchArtifacts.download>,
+  ) => {
+    setSaving(key);
+    try {
+      saveProjectFile({ ...(await request()), filename: file.filename }, file.filename);
+    } catch {
+      // The request layer already told the person; the button is usable again.
+    } finally {
+      setSaving(null);
+    }
+  };
+  const saveArtifact = (schema: string, id: string) =>
+    save(schema, executionDownload(schema), () => fetchArtifacts.download(projectId, runId, id));
+  const readingFile = reading ? executionDownload(reading) : null;
   return (
     <div className="grid min-w-0 gap-4">
       {noResults && <NoResultsNotice message={noResultsMessage(noResults)} />}
@@ -106,21 +133,40 @@ export function ExecutionScene({
                 <Button variant="outline" size="sm" onClick={() => setReading(schema)}>
                   <FileText data-icon="inline-start" /> {executionArtifacts[schema] ?? designLabel(schema)}
                 </Button>
-                <Button variant="ghost" size="icon-sm" asChild>
-                  <a
-                    href={fetchArtifacts.getDownloadUrl(projectId, runId, id)}
-                    download
-                    aria-label={`Download ${executionArtifacts[schema] ?? schema}`}
-                  >
-                    <Download />
-                  </a>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  disabled={saving === schema}
+                  title={`Download ${executionDownload(schema).label}`}
+                  aria-label={`Download ${executionDownload(schema).label}`}
+                  onClick={() => saveArtifact(schema, id)}
+                >
+                  <Download />
                 </Button>
               </li>
             ))}
+            {execution?.accepted && (
+              <li className="flex items-center gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={saving === "zip"}
+                  aria-label={`Download ${RESEARCH_PACKAGE_ZIP.label}`}
+                  onClick={() =>
+                    save("zip", RESEARCH_PACKAGE_ZIP, () => fetchResearchPackage.exportZip(projectId, runId))
+                  }
+                >
+                  <FileArchive data-icon="inline-start" />{" "}
+                  {saving === "zip" ? "Preparing…" : RESEARCH_PACKAGE_ZIP.label}
+                </Button>
+              </li>
+            )}
           </ul>
           <ReaderSheet
             title={reading && (executionArtifacts[reading] ?? designLabel(reading))}
             download={readingId ? fetchArtifacts.getDownloadUrl(projectId, runId, readingId) : ""}
+            downloadLabel={readingFile ? `Download ${readingFile.label}` : "Download"}
+            onDownload={reading && readingId ? () => saveArtifact(reading, readingId) : undefined}
             onClose={() => setReading(null)}
           >
             {readingId && (
@@ -129,10 +175,14 @@ export function ExecutionScene({
                 artifactId={readingId}
                 json={(value) => {
                   const records = executionEvidence(value);
-                  return records.length ? (
-                    <ExecutionReadout records={records} hypotheses={hypotheses} />
-                  ) : (
-                    <PrettyJson value={value} />
+                  if (records.length)
+                    return <ExecutionReadout records={records} hypotheses={hypotheses} adjustments={adjustments} />;
+                  const figures = reading === RESULT_PACKAGE_SCHEMA ? packageFigures(value) : [];
+                  return (
+                    <div className="grid gap-4">
+                      <PackageFigureCards figures={figures} />
+                      <PrettyJson value={value} />
+                    </div>
                   );
                 }}
               />
@@ -144,7 +194,7 @@ export function ExecutionScene({
         {evidenceId && evidence.isPending ? (
           <Skeleton className="h-24 w-full" aria-label="Loading evidence records" />
         ) : evidence.data?.length ? (
-          <ExecutionReadout records={evidence.data} hypotheses={hypotheses} />
+          <ExecutionReadout records={evidence.data} hypotheses={hypotheses} adjustments={adjustments} />
         ) : !evidence.isError ? (
           <p className="text-muted-foreground text-sm">
             {evidenceId
@@ -169,6 +219,10 @@ function NoResultsNotice({ message }: { message: string }) {
     </section>
   );
 }
+
+/** Why n can differ from the pre-registration and from the Node's own row count. */
+export const ROWS_NOTE =
+  "n is rounded down to 10. The pre-registration count was the expected split at lock time, so it can differ from the rows used.";
 
 const ROLE: Record<string, string> = {
   primary: "Main analysis",
@@ -196,15 +250,18 @@ export function estimateLine(row: EvidenceRecord) {
 export function ExecutionReadout({
   records,
   hypotheses,
+  adjustments,
 }: {
   records: readonly EvidenceRecord[];
   hypotheses?: Readonly<Record<string, string | undefined>>;
+  adjustments?: Readonly<Record<string, string | undefined>>;
 }) {
   return (
     <div className="grid gap-3">
       {records.map((row) => {
         const statements = row.hypothesis_ids.map((id) => hypotheses?.[id]).filter(Boolean);
         const line = estimateLine(row);
+        const adjusted = row.hypothesis_ids.map((id) => adjustments?.[id]).find(Boolean);
         return (
           <details key={row.record_id} open className="min-w-0 rounded-lg border">
             <summary className="cursor-pointer wrap-anywhere px-4 py-3 font-medium text-sm">
@@ -218,6 +275,14 @@ export function ExecutionReadout({
             )}
             <p className="border-t px-4 pt-3 text-sm">
               {line ?? "No estimate was computed for this analysis."}
+              {adjusted && row.role !== "robustness" && (
+                <span className="block pt-1 text-muted-foreground text-xs">
+                  <b className="font-medium text-foreground">{adjusted}</b>
+                </span>
+              )}
+              {typeof row.n === "number" && (
+                <span className="block pt-1 text-muted-foreground text-xs">{ROWS_NOTE}</span>
+              )}
               <span className="block pt-1 text-muted-foreground text-xs">
                 Decision: <b className="font-medium text-foreground">{designLabel(row.verdict)}</b>
                 {typeof row.reason === "string" && row.reason ? ` · ${plainNote(row.reason)}` : ""}

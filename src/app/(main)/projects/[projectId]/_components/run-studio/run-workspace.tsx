@@ -781,6 +781,7 @@ export function RunWorkspace({ session, preview }: { session: RunSession; previe
                             local={Boolean(datasetStage?.local)}
                             blocked={!showGate.options.some((option) => option.id === "accept")}
                             design={design}
+                            question={preview?.dataset?.workFacts?.question ?? state.topic}
                             projectId={session.projectId}
                             runId={runId}
                             detailed

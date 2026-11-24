@@ -1,0 +1,1025 @@
+{
+  "artifacts": [],
+  "conventions": {
+    "notes": [
+      "An estimate is target minus reference, as the plan defines the exposure contrast.",
+      "Intervals are 95% confidence intervals."
+    ],
+    "timezone": "UTC"
+  },
+  "design": {
+    "ees_version": 1,
+    "generation_mode": "full",
+    "jobs": [
+      {
+        "job_id": "local-H1-main",
+        "levels": {},
+        "seed": 3288744564,
+        "split_id": "confirmation",
+        "treatment_id": "H1-target"
+      },
+      {
+        "job_id": "local-H1-fork-1",
+        "levels": {},
+        "seed": 3288744565,
+        "split_id": "confirmation",
+        "treatment_id": "H1-target"
+      },
+      {
+        "job_id": "local-H1-fork-wide_adjustment",
+        "levels": {},
+        "seed": 3288744566,
+        "split_id": "confirmation",
+        "treatment_id": "H1-target"
+      },
+      {
+        "job_id": "local-H1-fork-timing_v2",
+        "levels": {},
+        "seed": 3288744567,
+        "split_id": "confirmation",
+        "treatment_id": "H1-target"
+      },
+      {
+        "job_id": "local-H1-fork-timing_v3",
+        "levels": {},
+        "seed": 3288744568,
+        "split_id": "confirmation",
+        "treatment_id": "H1-target"
+      },
+      {
+        "job_id": "local-H1-fork-timing_unconfirmed_set",
+        "levels": {},
+        "seed": 3288744569,
+        "split_id": "confirmation",
+        "treatment_id": "H1-target"
+      },
+      {
+        "job_id": "local-H1-sensitivity",
+        "levels": {},
+        "seed": 3288744570,
+        "split_id": "confirmation",
+        "treatment_id": "H1-target"
+      },
+      {
+        "job_id": "local-H1-doubt-1",
+        "levels": {},
+        "seed": 3288744570,
+        "split_id": "confirmation",
+        "treatment_id": "H1-target"
+      }
+    ],
+    "matrix_id": "MX-08cce7b0",
+    "randomization": {
+      "method": "random_rows",
+      "seeds": [
+        3288744564,
+        3288744565,
+        3288744566,
+        3288744567,
+        3288744568,
+        3288744569,
+        3288744570
+      ],
+      "splits": [
+        {
+          "facts": {
+            "confirmation": 2640,
+            "exploration": 1430,
+            "reserve": 710
+          },
+          "hash": "a34f23b074eb2763555e07ced71263ef553e65d90d1e5fe933c65c8b70873f01",
+          "method": "random_rows",
+          "n_test": 2640,
+          "n_train": 0,
+          "seed": 3460235542,
+          "split_id": "confirmation"
+        }
+      ]
+    },
+    "sha256": "08cce7b049616909af1d48475060f55a1d29fa2840946b544df597ba0046fec6"
+  },
+  "erp_id": "ERP-c4064274",
+  "execution": {
+    "attempts": [
+      {
+        "attempt_id": "H1-main-attempt-1",
+        "ended_at": "2026-11-24T03:51:15.711752Z",
+        "environment_id": "env-1",
+        "exit_reason": "succeeded",
+        "retry_index": 0,
+        "run_id": "H1-main",
+        "started_at": "2026-11-24T03:48:29.373961Z",
+        "worker": null
+      },
+      {
+        "attempt_id": "H1-fork-1-attempt-1",
+        "ended_at": "2026-11-24T03:51:26.288826Z",
+        "environment_id": "env-1",
+        "exit_reason": "succeeded",
+        "retry_index": 0,
+        "run_id": "H1-fork-1",
+        "started_at": "2026-11-24T03:51:15.761414Z",
+        "worker": null
+      },
+      {
+        "attempt_id": "H1-sensitivity-attempt-1",
+        "ended_at": "2026-11-24T03:51:26.756026Z",
+        "environment_id": "env-1",
+        "exit_reason": "succeeded",
+        "retry_index": 0,
+        "run_id": "H1-sensitivity",
+        "started_at": "2026-11-24T03:51:26.504632Z",
+        "worker": null
+      },
+      {
+        "attempt_id": "H1-doubt-1-attempt-1",
+        "ended_at": "2026-11-24T03:51:27.024646Z",
+        "environment_id": "env-1",
+        "exit_reason": "succeeded",
+        "retry_index": 0,
+        "run_id": "H1-doubt-1",
+        "started_at": "2026-11-24T03:51:26.810727Z",
+        "worker": null
+      }
+    ],
+    "resource_usage": [],
+    "runs": [
+      {
+        "ees_version": 1,
+        "job_id": "local-H1-main",
+        "phase": "exploratory",
+        "run_id": "H1-main",
+        "status": "completed",
+        "status_reason": null
+      },
+      {
+        "ees_version": 1,
+        "job_id": "local-H1-fork-1",
+        "phase": "exploratory",
+        "run_id": "H1-fork-1",
+        "status": "completed",
+        "status_reason": null
+      },
+      {
+        "ees_version": 1,
+        "job_id": "local-H1-fork-wide_adjustment",
+        "phase": "exploratory",
+        "run_id": "H1-fork-wide_adjustment",
+        "status": "skipped",
+        "status_reason": "H1-fork-wide_adjustment was not derived: Not computed on the Local Node: card widened by a column"
+      },
+      {
+        "ees_version": 1,
+        "job_id": "local-H1-fork-timing_v2",
+        "phase": "exploratory",
+        "run_id": "H1-fork-timing_v2",
+        "status": "skipped",
+        "status_reason": "H1-fork-timing_v2 was not derived: Not computed on the Local Node: card widened by a column"
+      },
+      {
+        "ees_version": 1,
+        "job_id": "local-H1-fork-timing_v3",
+        "phase": "exploratory",
+        "run_id": "H1-fork-timing_v3",
+        "status": "skipped",
+        "status_reason": "H1-fork-timing_v3 was not derived: Not computed on the Local Node: card widened by a column"
+      },
+      {
+        "ees_version": 1,
+        "job_id": "local-H1-fork-timing_unconfirmed_set",
+        "phase": "exploratory",
+        "run_id": "H1-fork-timing_unconfirmed_set",
+        "status": "skipped",
+        "status_reason": "H1-fork-timing_unconfirmed_set was not derived: Not computed on the Local Node: card widened by a column"
+      },
+      {
+        "ees_version": 1,
+        "job_id": "local-H1-sensitivity",
+        "phase": "exploratory",
+        "run_id": "H1-sensitivity",
+        "status": "completed",
+        "status_reason": null
+      },
+      {
+        "ees_version": 1,
+        "job_id": "local-H1-doubt-1",
+        "phase": "exploratory",
+        "run_id": "H1-doubt-1",
+        "status": "completed",
+        "status_reason": null
+      }
+    ],
+    "started_at": "2026-11-24T03:48:08.627956Z"
+  },
+  "figures": [
+    {
+      "chart": "interval",
+      "figure_id": "F2",
+      "group": null,
+      "rows": [
+        {
+          "ci_high": 5.614543654,
+          "ci_low": 4.358567194,
+          "comparison_id": "H1-main",
+          "estimate": 4.986555424,
+          "n_used": 2640
+        }
+      ],
+      "source_ids": [
+        "H1-main"
+      ],
+      "title": "What is the estimated difference in v4 for feedback compared with no_feedback in v1, with its interval?",
+      "x": {
+        "field": "comparison_id",
+        "label": "Analysis",
+        "unit": null
+      },
+      "y": {
+        "field": "estimate",
+        "label": "Estimate",
+        "unit": "unknown"
+      }
+    }
+  ],
+  "generated_at": "2026-11-24T03:53:37.398222Z",
+  "generated_by": "logos-execution 0.1.0",
+  "protocol": {
+    "amendments": [],
+    "deviations": [],
+    "lock": {
+      "ees_sha256": "c4064274b20bc36efe3ec821cac2e88a2f88cede208e33321bfe45ddd95a49a6",
+      "ees_version": 1,
+      "frozen_at": "2026-11-24T03:43:37Z",
+      "frozen_by": "researcher",
+      "matrix_sha256": "08cce7b049616909af1d48475060f55a1d29fa2840946b544df597ba0046fec6"
+    },
+    "specification": {
+      "analyses": [
+        {
+          "analysis_class": "exploratory",
+          "analysis_id": "H1-analysis",
+          "comparison": "v1 = feedback versus v1 = no_feedback",
+          "decision": {
+            "direction": "greater",
+            "min_effect": 1.781,
+            "null_value": 0.0
+          },
+          "estimand": "The adjusted mean difference in v4 units for feedback versus no_feedback, conditional on v2 and v3; interpretation as delayed retention is withheld because v4 meaning and unit are unidentified.",
+          "failure_policy": "A failed program is reported with its reason, never dropped.",
+          "hypothesis_ids": [
+            "H1"
+          ],
+          "interval": "95% confidence interval",
+          "method": "linear_regression, adjusted for nothing",
+          "metric_id": "H1-estimate",
+          "multiplicity": "holm across 1 hypotheses",
+          "unit_of_analysis": "row"
+        }
+      ],
+      "assurance_target": null,
+      "claim_kind": "descriptive",
+      "classification": {
+        "methods": [
+          "observational_evaluation"
+        ],
+        "objectives": [
+          "comparison"
+        ],
+        "result_kinds": [
+          "empirical_finding"
+        ],
+        "strategy": "exploratory",
+        "templates": []
+      },
+      "decision_rule": "H1 (exploratory): predicted > 0; alpha 0.05; margin 1.781 The verdict of each hypothesis is decided by code from the interpretation table that the plan locked before the results were opened. Every hypothesis of the family, the primary included, is tested with the Holm correction at the same alpha, so no hypothesis waits for another and the order of the family does not change a verdict. The tests that an effect lies inside the margin (two one-sided tests) or at or beyond it join the tests against no effect in that one Holm step-down. For one hypothesis no effect, an effect inside the margin and an effect at or beyond it cannot be true together, so each step divides alpha by the number of hypotheses still holding a test not yet rejected, not by the number of tests; the chance of any false claim across the whole family, a wrong effect, a wrong inside or a wrong beyond, stays at alpha. The primary hypothesis is the one reported first. The design diagnosis measures the power of every hypothesis at alpha divided by the number of hypotheses, the level of the first step, which no test of the family meets below.",
+      "document_artifact_id": null,
+      "ees_id": "analysis-plan",
+      "exclusion_rule": "H1: v1 in no_feedback, feedback, complete case",
+      "factors": [],
+      "hypotheses": [
+        {
+          "hypothesis_id": "H1",
+          "metric_ids": [
+            "H1-estimate"
+          ],
+          "priority": "secondary",
+          "reason": "the plan's primary hypothesis, listed secondary because it is labelled exploratory: The diagnosed power at the SESOI is 1.000, at or above min_power 0.8, but a limit keeps the label exploratory: the claim is not fresh: 1 earlier run on this file already saw its result.",
+          "statement": "Among people represented in the table, the feedback-condition category is positively associated with v4 compared with the no-feedback category, adjusting for v2 and v3 if those fields are verified as baseline score and prior weekly study hours. This is only a conditional proxy claim: unless v1 category meanings and v4 meaning and unit are verified, it must not be interpreted as a finding about feedback or delayed retention.",
+          "status": "planned"
+        }
+      ],
+      "inputs": [],
+      "metrics": [
+        {
+          "aggregation": "one linear_regression estimate on the confirmation rows",
+          "definition": "The adjusted mean difference in v4 units for feedback versus no_feedback, conditional on v2 and v3; interpretation as delayed retention is withheld because v4 meaning and unit are unidentified.",
+          "direction": "higher",
+          "granularity": "the rows analysed",
+          "metric_id": "H1-estimate",
+          "name": "linear_coefficient of v4",
+          "primary": true,
+          "unit": "unknown",
+          "valid_max": null,
+          "valid_min": null
+        }
+      ],
+      "objective": "Among people represented in the table, the feedback-condition category is positively associated with v4 compared with the no-feedback category, adjusting for v2 and v3 if those fields are verified as baseline score and prior weekly study hours. This is only a conditional proxy claim: unless v1 category meanings and v4 meaning and unit are verified, it must not be interpreted as a finding about feedback or delayed retention.",
+      "population": "All people represented in the table; adult-learner status is not recorded, so adult learners cannot be isolated.",
+      "prior_knowledge": [
+        "H1: not_recorded"
+      ],
+      "question": "Among adult learners in this synthetic dataset, is retrieval practice with corrective feedback associated with a higher delayed retention test score than the same retrieval practice without feedback, after adjustment for baseline score and prior weekly study hours?",
+      "sha256": "c4064274b20bc36efe3ec821cac2e88a2f88cede208e33321bfe45ddd95a49a6",
+      "title": "Among adult learners in this synthetic dataset, is retrieval practice with corrective feedback associated with a higher delayed retention test score than the same retrieval practice without feedback, after adjustment for baseline score and prior weekly study hours?",
+      "treatments": [
+        {
+          "grid": {},
+          "inputs": [],
+          "model": "linear_regression",
+          "name": "v1 = feedback",
+          "role": "proposed",
+          "treatment_id": "H1-target"
+        },
+        {
+          "grid": {},
+          "inputs": [],
+          "model": "linear_regression",
+          "name": "v1 = no_feedback",
+          "role": "control",
+          "treatment_id": "H1-reference"
+        }
+      ],
+      "units": [],
+      "version": 1
+    }
+  },
+  "provenance": {
+    "code": [
+      {
+        "code_id": "locked-programs",
+        "command": "logos-execution 0.1.0 computes each program of the plan",
+        "entrypoint": "the programs of the analysis plan",
+        "sha256": "08cce7b049616909af1d48475060f55a1d29fa2840946b544df597ba0046fec6"
+      }
+    ],
+    "data": [
+      {
+        "citation": "not provided",
+        "classes": {},
+        "columns": 5,
+        "data_id": "primary",
+        "facts": {
+          "confirmation": 2640,
+          "exploration": 1430,
+          "reserve": 710
+        },
+        "license": "not provided",
+        "name": "retrieval-feedback-happy-case-v4.csv",
+        "personal_data": false,
+        "rows": 4800,
+        "sha256": "ce3f0116edb5a5b02a4938f1d52a430e7de1de1f01311c7e471433a7228c72f5",
+        "uri": "retrieval-feedback-happy-case-v4.csv",
+        "version": "00321599-9d48-464b-8aaa-579582f9ef50"
+      }
+    ],
+    "environments": [
+      {
+        "environment_id": "env-1",
+        "hardware": "x86_64, 16 cpus",
+        "libraries": {
+          "logos-analysis": "0.1.0",
+          "logos-tables": "0.1.0",
+          "numpy": "2.5.3",
+          "pandas": "3.0.6",
+          "statsmodels": "0.15.0"
+        },
+        "library_versions": {
+          "logos-analysis": "0.1.0",
+          "logos-tables": "0.1.0",
+          "numpy": "2.5.3",
+          "pandas": "3.0.6",
+          "statsmodels": "0.15.0"
+        },
+        "lockfile": "installed distributions",
+        "lockfile_sha256": "562d0a3d04a49f62ad40550223c78e5c688ad0fb1cbd46f2fca5e495ea9437a2",
+        "os": "Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.36",
+        "packages": 39,
+        "runtime": "CPython 3.12.16"
+      }
+    ],
+    "models": [
+      {
+        "model": "cx/gpt-5.6-luna",
+        "provider": "openai_compatible",
+        "role": "review",
+        "stage_key": "dataset"
+      },
+      {
+        "model": "cx/gpt-6-luna",
+        "provider": "openai_compatible",
+        "role": "stage",
+        "stage_key": "dataset"
+      },
+      {
+        "model": "cx/gpt-5.6-luna",
+        "provider": "openai_compatible",
+        "role": "review",
+        "stage_key": "hypothesis"
+      },
+      {
+        "model": "cx/gpt-6-luna",
+        "provider": "openai_compatible",
+        "role": "stage",
+        "stage_key": "hypothesis"
+      },
+      {
+        "model": "cx/gpt-5.6-luna",
+        "provider": "openai_compatible",
+        "role": "review",
+        "stage_key": "experiment_design"
+      },
+      {
+        "model": "cx/gpt-6-luna",
+        "provider": "openai_compatible",
+        "role": "stage",
+        "stage_key": "experiment_design"
+      },
+      {
+        "model": "cx/gpt-5.6-luna",
+        "provider": "openai_compatible",
+        "role": "review",
+        "stage_key": "execution"
+      },
+      {
+        "model": "cx/gpt-6-luna",
+        "provider": "openai_compatible",
+        "role": "stage",
+        "stage_key": "execution"
+      }
+    ]
+  },
+  "quality": {
+    "assurance": {
+      "achieved": null,
+      "conditions": [
+        "v1 measures the exposure, and v4 measures the outcome only approximately",
+        "no column says who the question is about, so the result speaks for the whole table",
+        "self-reported answers",
+        "one cross-section",
+        "it is not shown that the sample stands for the larger set (sampling: unknown, represents: unknown)",
+        "how the source was collected and sampled is stated but not confirmed by the researcher, so a statement that would lift a limit does not",
+        "v1 is a proxy for what the question asks; v4 is a proxy for what the question asks",
+        "10 of 4800 rows are not complete on the pair and its covariates; the screening could not run: Not computed on the Local Node: screening (unsupported)., so check value_completeness, missing_model, little_mcar did not look at this pair",
+        "the screening could not run: Not computed on the Local Node: screening (unsupported)., so check positivity did not look at this pair",
+        "the screening could not run: Not computed on the Local Node: screening (unsupported)., so check cluster_icc did not look at this pair",
+        "it is not known whether the sample stands for the larger set",
+        "H1 population: The result speaks for every row of the table. The column v1 stands in for feedback condition (a proxy): the result speaks for v1, not for feedback condition as such. The column v4 stands in for delayed retention score (a proxy): the result speaks for v4, not for delayed retention score as such. The column v2 stands in for baseline score (a proxy): the result speaks for v2, not for baseline score as such. The column v3 stands in for prior weekly study hours (a proxy): the result speaks for v3, not for prior weekly study hours as such.",
+        "H1 is exploratory: The diagnosed power at the SESOI is 1.000, at or above min_power 0.8, but a limit keeps the label exploratory: the claim is not fresh: 1 earlier run on this file already saw its result."
+      ],
+      "target": null,
+      "unmet": [
+        "QG04 Leakage and independence: pending",
+        "QG05 Implementation validity: pending"
+      ]
+    },
+    "gates": [
+      {
+        "decided_at": null,
+        "evidence_refs": [
+          "H1-estimate"
+        ],
+        "gate_id": "QG01",
+        "name": "Objective and metric",
+        "rationale": "every planned hypothesis names its metric",
+        "reviewer": null,
+        "status": "passed"
+      },
+      {
+        "decided_at": null,
+        "evidence_refs": [
+          "primary",
+          "env-1"
+        ],
+        "gate_id": "QG02",
+        "name": "Data and environment provenance",
+        "rationale": "the data digest and the environment are recorded",
+        "reviewer": null,
+        "status": "passed"
+      },
+      {
+        "decided_at": null,
+        "evidence_refs": [
+          "MX-08cce7b0"
+        ],
+        "gate_id": "QG03",
+        "name": "Experimental design",
+        "rationale": "the design stage diagnosed every planned hypothesis before the lock",
+        "reviewer": null,
+        "status": "passed"
+      },
+      {
+        "decided_at": null,
+        "evidence_refs": [],
+        "gate_id": "QG04",
+        "name": "Leakage and independence",
+        "rationale": "no negative control or check of independence was recorded",
+        "reviewer": null,
+        "status": "pending"
+      },
+      {
+        "decided_at": null,
+        "evidence_refs": [],
+        "gate_id": "QG05",
+        "name": "Implementation validity",
+        "rationale": "no deviation record was kept",
+        "reviewer": null,
+        "status": "pending"
+      },
+      {
+        "decided_at": null,
+        "evidence_refs": [],
+        "gate_id": "QG06",
+        "name": "Comparative fairness",
+        "rationale": "the study estimates associations in one table and compares no models",
+        "reviewer": null,
+        "status": "not_applicable"
+      },
+      {
+        "decided_at": null,
+        "evidence_refs": [
+          "H1-fork-1"
+        ],
+        "gate_id": "QG07",
+        "name": "Inference and robustness",
+        "rationale": "a robustness fork was computed and no robustness flag was raised",
+        "reviewer": null,
+        "status": "passed"
+      },
+      {
+        "decided_at": null,
+        "evidence_refs": [
+          "locked-programs"
+        ],
+        "gate_id": "QG08",
+        "name": "Provenance and reproducibility",
+        "rationale": "the rerun of every program matched the posted result",
+        "reviewer": null,
+        "status": "passed"
+      },
+      {
+        "decided_at": null,
+        "evidence_refs": [
+          "H1"
+        ],
+        "gate_id": "QG09",
+        "name": "Evidence completeness",
+        "rationale": "every planned hypothesis has a verdict",
+        "reviewer": null,
+        "status": "passed"
+      },
+      {
+        "decided_at": null,
+        "evidence_refs": [],
+        "gate_id": "QG10",
+        "name": "Package and handoff",
+        "rationale": "every id of the package resolves",
+        "reviewer": null,
+        "status": "passed"
+      }
+    ],
+    "strobe": {
+      "covered": [
+        {
+          "checklist": "STROBE",
+          "item": "1",
+          "label": "design in the title",
+          "record": "protocol.specification.title"
+        },
+        {
+          "checklist": "STROBE",
+          "item": "2",
+          "label": "background and rationale",
+          "record": "protocol.specification.prior_knowledge"
+        },
+        {
+          "checklist": "STROBE",
+          "item": "3",
+          "label": "objectives and hypotheses",
+          "record": "protocol.specification.hypotheses"
+        },
+        {
+          "checklist": "STROBE",
+          "item": "4",
+          "label": "study design",
+          "record": "protocol.specification.classification.methods"
+        },
+        {
+          "checklist": "STROBE",
+          "item": "5",
+          "label": "setting, locations and dates",
+          "record": "provenance.data[0].uri"
+        },
+        {
+          "checklist": "STROBE",
+          "item": "6",
+          "label": "participants and eligibility",
+          "record": "protocol.specification.exclusion_rule"
+        },
+        {
+          "checklist": "STROBE",
+          "item": "7",
+          "label": "outcomes, exposures and confounders",
+          "record": "protocol.specification.metrics"
+        },
+        {
+          "checklist": "STROBE",
+          "item": "8",
+          "label": "data sources and measurement",
+          "record": "provenance.data[0].sha256"
+        },
+        {
+          "checklist": "STROBE",
+          "item": "9",
+          "label": "efforts to address bias",
+          "record": "design.randomization.splits"
+        },
+        {
+          "checklist": "STROBE",
+          "item": "10",
+          "label": "study size",
+          "record": "provenance.data[0].rows"
+        },
+        {
+          "checklist": "STROBE",
+          "item": "11",
+          "label": "quantitative variables and their units",
+          "record": "protocol.specification.metrics[0].unit"
+        },
+        {
+          "checklist": "STROBE",
+          "item": "12",
+          "label": "statistical methods",
+          "record": "protocol.specification.analyses[0].method"
+        },
+        {
+          "checklist": "STROBE",
+          "item": "15",
+          "label": "outcome data",
+          "record": "results.observations"
+        },
+        {
+          "checklist": "STROBE",
+          "item": "16",
+          "label": "main results with intervals",
+          "record": "results.comparisons[0].ci_low"
+        },
+        {
+          "checklist": "STROBE",
+          "item": "17",
+          "label": "other analyses",
+          "record": "results.comparisons[1].role"
+        },
+        {
+          "checklist": "STROBE",
+          "item": "18",
+          "label": "key results",
+          "record": "results.verdicts"
+        },
+        {
+          "checklist": "STROBE",
+          "item": "19",
+          "label": "limitations",
+          "record": "quality.assurance.conditions"
+        },
+        {
+          "checklist": "STROBE",
+          "item": "20",
+          "label": "interpretation",
+          "record": "protocol.specification.decision_rule"
+        },
+        {
+          "checklist": "RECORD",
+          "item": "R1.1",
+          "label": "type of data",
+          "record": "provenance.data[0].name"
+        },
+        {
+          "checklist": "RECORD",
+          "item": "R1.3",
+          "label": "linkage of databases",
+          "record": "snapshot.source_roles"
+        },
+        {
+          "checklist": "RECORD",
+          "item": "R6.1",
+          "label": "codes or algorithms that select the population",
+          "record": "plan.hypotheses[0].program.population"
+        },
+        {
+          "checklist": "RECORD",
+          "item": "R7.1",
+          "label": "codes or algorithms for exposures, outcomes and confounders",
+          "record": "provenance.code[0].sha256"
+        },
+        {
+          "checklist": "RECORD",
+          "item": "R12.1",
+          "label": "extent of access to the database population",
+          "record": "provenance.data[0].rows"
+        },
+        {
+          "checklist": "RECORD",
+          "item": "R12.2",
+          "label": "data cleaning",
+          "record": "snapshot.cleaning_recipe"
+        },
+        {
+          "checklist": "RECORD",
+          "item": "R12.3",
+          "label": "linkage methods",
+          "record": "snapshot.source_roles"
+        },
+        {
+          "checklist": "RECORD",
+          "item": "R19.1",
+          "label": "limits from data quality",
+          "record": "snapshot.data_checks"
+        },
+        {
+          "checklist": "RECORD",
+          "item": "R22.1",
+          "label": "availability of the protocol, the data and the code",
+          "record": "protocol.lock.ees_sha256"
+        }
+      ],
+      "missing": [
+        {
+          "checklist": "STROBE",
+          "item": "13",
+          "label": "participants at each step",
+          "reason": "no row count of a step is recorded"
+        },
+        {
+          "checklist": "STROBE",
+          "item": "14",
+          "label": "descriptive data",
+          "reason": "no table of the groups is recorded"
+        },
+        {
+          "checklist": "STROBE",
+          "item": "21",
+          "label": "generalisability",
+          "reason": "the paper states it; the package holds no record of it"
+        },
+        {
+          "checklist": "STROBE",
+          "item": "22",
+          "label": "funding",
+          "reason": "the paper states it; the package holds no record of it"
+        },
+        {
+          "checklist": "RECORD",
+          "item": "R1.2",
+          "label": "geographic region and time frame",
+          "reason": "the paper states it; the package holds no record of it"
+        },
+        {
+          "checklist": "RECORD",
+          "item": "R6.2",
+          "label": "validation of the codes or algorithms",
+          "reason": "the paper states it; the package holds no record of it"
+        },
+        {
+          "checklist": "RECORD",
+          "item": "R6.3",
+          "label": "flow of a linkage",
+          "reason": "the paper states it; the package holds no record of it"
+        },
+        {
+          "checklist": "RECORD",
+          "item": "R13.1",
+          "label": "flow diagram of the selection",
+          "reason": "no flow diagram is recorded"
+        }
+      ]
+    },
+    "validation": {
+      "checksum_failures": [],
+      "missing_items": [
+        {
+          "action": "attach the plan as a document",
+          "item": "the plan as written",
+          "required_by": "protocol.specification"
+        },
+        {
+          "action": "record the licence of the source",
+          "item": "licence of source primary",
+          "required_by": "provenance.data"
+        },
+        {
+          "action": "record the citation of the source",
+          "item": "citation of source primary",
+          "required_by": "provenance.data"
+        },
+        {
+          "action": "record the address of the source",
+          "item": "address of source primary",
+          "required_by": "provenance.data"
+        },
+        {
+          "action": "record whether the source holds personal data",
+          "item": "personal-data review of source primary",
+          "required_by": "provenance.data"
+        },
+        {
+          "action": "attach the bundle and the plan as written",
+          "item": "artifacts",
+          "required_by": "artifacts"
+        },
+        {
+          "action": "no level is defined for the plan",
+          "item": "assurance level achieved",
+          "required_by": "quality.assurance"
+        }
+      ],
+      "warnings": []
+    }
+  },
+  "results": {
+    "added_analyses": [],
+    "checks": [
+      {
+        "analysis_id": "H1-analysis",
+        "assumption": "heteroscedasticity",
+        "check_id": "H1-main-heteroscedasticity",
+        "evidence": "value 0.04930391187",
+        "status": "violated"
+      }
+    ],
+    "comparisons": [
+      {
+        "analysis_id": "H1-analysis",
+        "ci_high": 5.614543654,
+        "ci_level": 0.95,
+        "ci_low": 4.358567194,
+        "comparison_id": "H1-main",
+        "control_treatment_id": "H1-reference",
+        "estimate": 4.986555424,
+        "excluded": [],
+        "label": "H1-main",
+        "method": "linear_coefficient (hc3)",
+        "metric_id": "H1-estimate",
+        "note": null,
+        "per_seed": null,
+        "role": "primary",
+        "run_ids": [
+          "H1-main"
+        ],
+        "target_treatment_id": "H1-target"
+      },
+      {
+        "analysis_id": "H1-analysis",
+        "ci_high": 0.1869018318,
+        "ci_level": 0.95,
+        "ci_low": 0.1458778189,
+        "comparison_id": "H1-fork-1",
+        "control_treatment_id": "H1-reference",
+        "estimate": 0.1663898254,
+        "excluded": [],
+        "label": "rank_outcome",
+        "method": "a12_minus_half (standard errors not recorded)",
+        "metric_id": "H1-estimate",
+        "note": "Use a rank-based comparison to reduce sensitivity to the top-coded numeric outcome scale.",
+        "per_seed": null,
+        "role": "robustness",
+        "run_ids": [
+          "H1-fork-1"
+        ],
+        "target_treatment_id": "H1-target"
+      }
+    ],
+    "confounding_sensitivity": [],
+    "descriptives": [],
+    "failures": [
+      {
+        "attempt_id": null,
+        "category": "error",
+        "detail": "H1-fork-wide_adjustment was not derived: Not computed on the Local Node: card widened by a column",
+        "failure_id": "F-H1-fork-wide_adjustment",
+        "handling": "kept_as_failed",
+        "run_id": "H1-fork-wide_adjustment"
+      },
+      {
+        "attempt_id": null,
+        "category": "error",
+        "detail": "H1-fork-timing_v2 was not derived: Not computed on the Local Node: card widened by a column",
+        "failure_id": "F-H1-fork-timing_v2",
+        "handling": "kept_as_failed",
+        "run_id": "H1-fork-timing_v2"
+      },
+      {
+        "attempt_id": null,
+        "category": "error",
+        "detail": "H1-fork-timing_v3 was not derived: Not computed on the Local Node: card widened by a column",
+        "failure_id": "F-H1-fork-timing_v3",
+        "handling": "kept_as_failed",
+        "run_id": "H1-fork-timing_v3"
+      },
+      {
+        "attempt_id": null,
+        "category": "error",
+        "detail": "H1-fork-timing_unconfirmed_set was not derived: Not computed on the Local Node: card widened by a column",
+        "failure_id": "F-H1-fork-timing_unconfirmed_set",
+        "handling": "kept_as_failed",
+        "run_id": "H1-fork-timing_unconfirmed_set"
+      }
+    ],
+    "flags": [],
+    "forecast_scores": [
+      {
+        "brier": 0.12249999999999998,
+        "forecaster": "model",
+        "hypothesis_id": "H1",
+        "probability": 0.65,
+        "reason": null,
+        "verdict": "supported"
+      }
+    ],
+    "next_study": null,
+    "observations": [
+      {
+        "attempt_id": "H1-main-attempt-1",
+        "metric_id": "H1-estimate",
+        "observation_id": "OBS-H1-main-attempt-1",
+        "run_id": "H1-main",
+        "status": "recorded",
+        "value": 4.986555424
+      },
+      {
+        "attempt_id": "H1-fork-1-attempt-1",
+        "metric_id": "H1-estimate",
+        "observation_id": "OBS-H1-fork-1-attempt-1",
+        "run_id": "H1-fork-1",
+        "status": "recorded",
+        "value": 0.1663898254
+      },
+      {
+        "attempt_id": "H1-sensitivity-attempt-1",
+        "metric_id": "H1-estimate",
+        "observation_id": "OBS-H1-sensitivity-attempt-1",
+        "run_id": "H1-sensitivity",
+        "status": "not_recorded",
+        "value": null
+      },
+      {
+        "attempt_id": "H1-doubt-1-attempt-1",
+        "metric_id": "H1-estimate",
+        "observation_id": "OBS-H1-doubt-1-attempt-1",
+        "run_id": "H1-doubt-1",
+        "status": "not_recorded",
+        "value": null
+      }
+    ],
+    "verdicts": [
+      {
+        "analysis_ids": [
+          "H1-analysis"
+        ],
+        "assessment": {
+          "codes": [
+            "not_computed"
+          ],
+          "reason": "computed once: Not computed on the Local Node: independent recomputation",
+          "value": "inconclusive"
+        },
+        "claim_acceptance": {
+          "accepted": false,
+          "at": null,
+          "by": null,
+          "teach_back": null
+        },
+        "comparison_ids": [
+          "H1-main"
+        ],
+        "hypothesis_id": "H1",
+        "identification": {
+          "benchmark_r2": null,
+          "covariate": null,
+          "reason": "not assessed: no measured covariate gives a benchmark bound",
+          "robustness_value": null,
+          "status": "not_assessed"
+        },
+        "reason": "Inconclusive: 4.987 v4 units, between the two groups (95% interval 4.359 to 5.615, 2640 confirmation rows). Why: computed once: Not computed on the Local Node: independent recomputation. Code owes the second, independent computation of the estimate: only two computations that agree confirm a number. The planned test alone reads: This test was planned before the confirmation rows were opened, but the claim is not fresh: earlier run on this file already saw its result, so this one result cannot confirm the claim. The data support the hypothesis: the estimate is 4.99 with interval [4.36, 5.61] (95% CI), the p value is < 0.001, below the adjusted level, the sign is positive as predicted, and the equivalence test does not show the effect inside the margin of 1.78 around zero.",
+        "second_path": {
+          "reason": "Not computed on the Local Node: independent recomputation",
+          "status": "unproven"
+        },
+        "verdict": "supported"
+      }
+    ]
+  },
+  "schema": "platform.experiment_result/v1",
+  "status": "partial",
+  "supersedes_version": null,
+  "version": 1
+}

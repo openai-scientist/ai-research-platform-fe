@@ -17,6 +17,7 @@ import { DesignLiveCard, ExecutionLiveCard } from "./live-run/live-run-card";
 import { currentMilestone, stagePosition } from "./pipeline-stage-selection";
 import { ExecutionResults } from "./results-report/results-entry";
 import { ClaimScopeScene } from "./scenes/claim-scope-scene";
+import { adjustedForLine } from "./scenes/design-summary";
 import { ExecutionScene } from "./scenes/execution-scene";
 import { ExperimentDesignScene } from "./scenes/experiment-design-scene";
 import { ExperimentScene } from "./scenes/experiment-scene";
@@ -64,6 +65,13 @@ function lockedStatements(state: RunState) {
   const design = state.stages.experiment_design?.content;
   const rows = design?.stage === "experiment" ? (design.liveDesign?.hypotheses ?? {}) : {};
   return Object.fromEntries(Object.entries(rows).map(([id, row]) => [id, row.statement]));
+}
+
+/** The "Adjusted for" line of each hypothesis of the locked plan, by id. */
+function lockedAdjustments(state: RunState) {
+  const design = state.stages.experiment_design?.content;
+  const rows = design?.stage === "experiment" ? (design.liveDesign?.hypotheses ?? {}) : {};
+  return Object.fromEntries(Object.entries(rows).map(([id, row]) => [id, adjustedForLine(row)]));
 }
 
 function dropped(state: RunState) {
@@ -440,6 +448,7 @@ export function StageScreen({
                 projectId={projectId}
                 runId={state.runId}
                 local={local}
+                researchQuestion={state.topic}
                 checks={Object.values(state.workChecks[stageKey]?.design_work ?? {})}
                 step={stage.currentStepId}
                 gate={state.gate?.stageKey === stageKey ? state.gate : null}
@@ -485,6 +494,7 @@ export function StageScreen({
                   }
                   onDesign={onDesign}
                   hypotheses={lockedStatements(state)}
+                  adjustments={lockedAdjustments(state)}
                 />
                 {decisionNotes}
               </>

@@ -21,12 +21,18 @@ export const unavailable = (
 export function ReaderSheet({
   title,
   download,
+  downloadLabel = "Download",
+  onDownload,
   onClose,
   children,
 }: {
   /** What is open; `null` keeps the reader closed. */
   title: string | null;
   download: string;
+  /** What the download button says it saves, such as "Download Experiment result package (JSON)". */
+  downloadLabel?: string;
+  /** Saves under a name of the page's choosing instead of the link's; the link is used when absent. */
+  onDownload?(): void;
   onClose(): void;
   children: ReactNode;
 }) {
@@ -38,12 +44,19 @@ export function ReaderSheet({
             <SheetHeader className="border-b pr-12">
               <SheetTitle>{title}</SheetTitle>
               <SheetDescription>Close this to go back to your decision. Nothing is answered here.</SheetDescription>
-              <Button asChild size="sm" variant="outline" className="mt-1 w-fit">
-                <a href={download} download>
+              {onDownload ? (
+                <Button size="sm" variant="outline" className="mt-1 w-fit" onClick={onDownload}>
                   <Download data-icon="inline-start" />
-                  Download
-                </a>
-              </Button>
+                  {downloadLabel}
+                </Button>
+              ) : (
+                <Button asChild size="sm" variant="outline" className="mt-1 w-fit">
+                  <a href={download} download>
+                    <Download data-icon="inline-start" />
+                    {downloadLabel}
+                  </a>
+                </Button>
+              )}
             </SheetHeader>
             <div className="min-h-0 flex-1 overflow-y-auto p-4">{children}</div>
           </>

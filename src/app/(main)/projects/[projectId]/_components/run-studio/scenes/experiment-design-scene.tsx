@@ -456,6 +456,7 @@ export function ExperimentDesignScene({
   projectId,
   runId,
   local,
+  researchQuestion,
   checks,
   step,
   gate,
@@ -466,6 +467,8 @@ export function ExperimentDesignScene({
   projectId: string;
   runId: string;
   local: boolean;
+  /** The research question the run was started with. */
+  researchQuestion?: string;
   checks: WorkCheck[];
   step: string | null;
   gate?: Gate | null;
@@ -542,6 +545,7 @@ export function ExperimentDesignScene({
             accepted={design?.accepted}
             blocked={missingLock}
             design={design}
+            question={researchQuestion}
             projectId={projectId}
             runId={runId}
             onShowGate={canReview ? onShowGate : undefined}

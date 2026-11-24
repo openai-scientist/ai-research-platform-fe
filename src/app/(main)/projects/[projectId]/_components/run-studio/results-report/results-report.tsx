@@ -16,6 +16,7 @@ import {
   type PackageOutcome,
   type ResearchPackage,
 } from "@/lib/api/services/fetch-research-package";
+import { RESEARCH_PACKAGE_ZIP } from "@/lib/run-stream/execution";
 import {
   type FigureSlot,
   figureSlots,
@@ -31,6 +32,7 @@ import {
 } from "@/lib/run-stream/research-report";
 
 import { saveProjectFile } from "../../project-file-download";
+import { PackageFigureCards, usePackageFigures } from "./package-figures";
 import { type FrameTheme, ReportFrame, ThemeProbe, useFrameTheme } from "./report-frame";
 
 export const packageKey = (projectId: string, runId: string) =>
@@ -48,6 +50,10 @@ const Pill = ({ tone, children }: { tone: Tone; children: React.ReactNode }) => 
     {children}
   </span>
 );
+
+/** Why the n shown here can differ from the pre-registration and from the Node's own row count. */
+const ROWS_NOTE =
+  "Counts here are rounded down to 10. The pre-registration count was the expected split at lock time, so it can differ from the rows actually used.";
 
 const capital = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 
@@ -85,12 +91,17 @@ function HypothesisCard({ row }: { row: PackageHypothesis }) {
               </span>
             )}
             {typeof row.rows_used === "number" && row.rows_used > 0 && (
-              <span className="tabular-nums">{row.rows_used.toLocaleString("en-US")} rows</span>
+              <span className="tabular-nums">n = {row.rows_used.toLocaleString("en-US")}</span>
             )}
           </>
         ) : (
           <span className="text-sm">No estimate</span>
         )}
+      </p>
+      <p className="text-muted-foreground text-xs">
+        <b className="font-medium text-foreground">
+          Adjusted for: {row.covariates.length ? row.covariates.join(", ") : "none"}
+        </b>
       </p>
       <dl className="grid grid-cols-3 overflow-hidden rounded-lg border">
         {(
@@ -336,6 +347,7 @@ export function ResultsReport({
     { enabled: Boolean(pack) },
   );
   const report = useMemo(() => (page.data ? parseReport(page.data) : null), [page.data]);
+  const resultFigures = usePackageFigures(projectId, runId, Boolean(pack));
   const summary = pack?.summary ?? [];
   const outcome = useMemo(() => describePackage(summary), [summary]);
   const slots = useMemo(() => figureSlots(report, summary), [report, summary]);
@@ -365,7 +377,10 @@ export function ResultsReport({
   const download = async () => {
     setBusy("zip");
     try {
-      saveProjectFile(await fetchResearchPackage.exportZip(projectId, runId), "research-package.zip");
+      saveProjectFile(
+        { ...(await fetchResearchPackage.exportZip(projectId, runId)), filename: RESEARCH_PACKAGE_ZIP.filename },
+        RESEARCH_PACKAGE_ZIP.filename,
+      );
     } catch {
       // The request layer already told the person; the button simply becomes usable again.
     } finally {
@@ -396,7 +411,8 @@ export function ResultsReport({
             <ExternalLink data-icon="inline-start" /> Open as page
           </Button>
           <Button size="sm" disabled={!pack || busy === "zip"} onClick={download}>
-            <Download data-icon="inline-start" /> {busy === "zip" ? "Preparing…" : "Download package"}
+            <Download data-icon="inline-start" />{" "}
+            {busy === "zip" ? "Preparing…" : `Download ${RESEARCH_PACKAGE_ZIP.label}`}
           </Button>
         </div>
       </div>
@@ -426,6 +442,9 @@ export function ResultsReport({
             ))}
           </div>
 
+          {summary.some((row) => typeof row.rows_used === "number" && row.rows_used > 0) && (
+            <p className="text-muted-foreground text-xs">{ROWS_NOTE}</p>
+          )}
           <div className="grid min-w-0 items-start gap-6 md:grid-cols-[11.5rem_minmax(0,1fr)]">
             <Contents report={report} slots={slots} go={go} />
             {page.isPending || !theme ? (
@@ -438,13 +457,16 @@ export function ResultsReport({
                 The report text could not be read. The package can still be downloaded.
               </p>
             ) : (
-              <Document
-                report={report}
-                slots={slots}
-                theme={theme}
-                isOpen={isOpen}
-                onToggle={(section) => setToggled((was) => ({ ...was, [section.id]: !isOpen(section) }))}
-              />
+              <div className="grid min-w-0 gap-7">
+                <Document
+                  report={report}
+                  slots={slots}
+                  theme={theme}
+                  isOpen={isOpen}
+                  onToggle={(section) => setToggled((was) => ({ ...was, [section.id]: !isOpen(section) }))}
+                />
+                <PackageFigureCards figures={resultFigures.data ?? []} />
+              </div>
             )}
           </div>
         </>

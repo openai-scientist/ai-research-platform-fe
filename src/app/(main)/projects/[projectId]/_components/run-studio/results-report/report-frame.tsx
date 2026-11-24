@@ -61,6 +61,7 @@ export function ThemeProbe({ probe }: { probe: React.RefObject<HTMLSpanElement |
 
 const SHEET = (t: FrameTheme) => `
 *{box-sizing:border-box}
+html{color-scheme:${t.dark ? "dark" : "light"}}
 html,body{margin:0;background:transparent;color:${t.fg};font:14px/1.6 ${t.font}}
 body{overflow-wrap:break-word;display:flow-root}
 h3{font-size:14px;font-weight:600;margin:18px 0 4px}

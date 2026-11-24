@@ -77,6 +77,16 @@ function HypothesisLock({ row }: { row: LockHypothesis }) {
         <SummaryRow label="Main analysis">
           {[row.estimand, row.method].filter(Boolean).join(" · ") || undefined}
         </SummaryRow>
+        <SummaryRow label="Adjusted for">
+          {row.unadjusted ? (
+            <>
+              <b className="font-semibold">none</b>
+              {row.adjustmentReason && <span className="text-muted-foreground"> · {row.adjustmentReason}</span>}
+            </>
+          ) : (
+            row.adjustedFor
+          )}
+        </SummaryRow>
         <SummaryRow label="Decision rule">{row.decision}</SummaryRow>
         <SummaryRow label="Smallest effect that matters">
           {row.margin && (
@@ -99,8 +109,8 @@ function HypothesisLock({ row }: { row: LockHypothesis }) {
   );
 }
 
-function LockSummary({ design }: { design: DesignContent }) {
-  const summary = designLockSummary(design);
+function LockSummary({ design, question }: { design: DesignContent; question?: string }) {
+  const summary = designLockSummary(design, question);
   const { findings } = summary;
   const warned = findings.blocking + findings.major;
   const counts = [
@@ -116,6 +126,15 @@ function LockSummary({ design }: { design: DesignContent }) {
       <dl>
         <SummaryRow label="Research question">{summary.question}</SummaryRow>
       </dl>
+      {summary.adjustmentWarning && (
+        <p
+          role="alert"
+          className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/8 px-3 py-2 text-sm"
+        >
+          <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-amber-700 dark:text-amber-300" />
+          <span className="min-w-0 break-words">{summary.adjustmentWarning}</span>
+        </p>
+      )}
       {summary.hypotheses.length > 0 ? (
         <ul className="flex flex-col gap-2">
           {summary.hypotheses.map((row) => (
@@ -370,6 +389,7 @@ export function DesignHandoff({
   accepted = false,
   blocked = false,
   design,
+  question,
   projectId,
   runId,
   detailed = false,
@@ -380,6 +400,8 @@ export function DesignHandoff({
   accepted?: boolean;
   blocked?: boolean;
   design?: DesignContent;
+  /** The research question the run was started with, when the page knows it. */
+  question?: string;
   projectId?: string;
   runId?: string;
   /** Inside the gate: what is being locked, and the documents to read first. */
@@ -415,7 +437,7 @@ export function DesignHandoff({
     >
       <div className="flex flex-col items-start gap-3 text-sm">
         {blocked && <p>Execution cannot start until the analysis plan is locked.</p>}
-        {readable && design && !blocked && <LockSummary design={design} />}
+        {readable && design && !blocked && <LockSummary design={design} question={question} />}
         {readable && design && (
           <>
             <KeyDocuments

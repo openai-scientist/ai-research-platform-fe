@@ -36,6 +36,32 @@ export const executionArtifacts: Readonly<Record<string, string>> = {
   "stage.story/v1": "Stage story",
 };
 
+/** Schemas Logos publishes as JSON documents, whatever name the server gives the file. */
+const JSON_ARTIFACTS: ReadonlySet<string> = new Set([
+  EXECUTION_RECORDS,
+  "execution.bundle/v1",
+  "platform.experiment_result/v1",
+]);
+
+const slug = (text: string) =>
+  text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+
+/**
+ * What a published execution file is called when it is downloaded. A JSON document is labelled and saved as JSON, so
+ * it is never mistaken for an archive; the real archive is the research package export, see `RESEARCH_PACKAGE_ZIP`.
+ */
+export function executionDownload(schema: string, serverName?: string | null): { label: string; filename: string } {
+  const name = executionArtifacts[schema] ?? schema;
+  if (JSON_ARTIFACTS.has(schema)) return { label: `${name} (JSON)`, filename: `${slug(name)}.json` };
+  return { label: name, filename: serverName ?? slug(name) };
+}
+
+/** The archive Logos builds from the accepted run: manifest, report, figures as SVG and references. */
+export const RESEARCH_PACKAGE_ZIP = { label: "Research package (.zip)", filename: "research-package.zip" } as const;
+
 const checkSteps: Readonly<Record<string, string>> = {
   lock: "execution_verify",
   rehearsal: "execution_prepare",
