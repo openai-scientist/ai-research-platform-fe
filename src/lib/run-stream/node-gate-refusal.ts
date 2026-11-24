@@ -3,7 +3,7 @@
  * Only a code that is actually present is explained: nothing is inferred when the reason is absent.
  */
 const REFUSALS: Readonly<Record<string, string>> = {
-  gate_plan_sealed:
+  plan_sealed:
     "This file's confirmation rows are already locked to another analysis plan (an earlier run). Another plan cannot use them. Start the study on a new data file.",
   gate_small_cell:
     "The Local Node withheld this result: it covers too few rows to be released without exposing individuals.",
@@ -22,7 +22,7 @@ const REFUSALS: Readonly<Record<string, string>> = {
   probe_budget_exhausted: "This file's query budget is used up. The Local Node cannot answer more queries on it.",
 };
 
-const CODE = /\b(gate_[a-z0-9_]+|probe_budget_exhausted|release_review_required|invalid_gate_payload)\b/;
+const CODE = /\b(gate_[a-z0-9_]+|plan_sealed|probe_budget_exhausted|release_review_required|invalid_gate_payload)\b/;
 
 export interface GateRefusal {
   code: string;
@@ -39,7 +39,9 @@ export function gateRefusal(text: unknown): GateRefusal | null {
   if (!code) return null;
   return {
     code,
-    sentence: REFUSALS[code] ?? `The Local Node refused the release (${readable(code)}).`,
+    sentence:
+      REFUSALS[code === "gate_plan_sealed" ? "plan_sealed" : code] ??
+      `The Local Node refused the release (${readable(code)}).`,
   };
 }
 

@@ -8,6 +8,7 @@ const SEALED =
 
 describe("gateRefusal", () => {
   it("says a plan-sealed refusal in the agreed words", () => {
+    expect(gateRefusal("plan_sealed")).toEqual({ code: "plan_sealed", sentence: SEALED });
     expect(gateRefusal("gate_plan_sealed")).toEqual({ code: "gate_plan_sealed", sentence: SEALED });
     expect(gateRefusal("refused by the node: gate_plan_sealed")?.sentence).toBe(SEALED);
   });

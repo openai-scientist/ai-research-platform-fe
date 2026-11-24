@@ -76,18 +76,23 @@ describe("a Local Node refusal", () => {
     execution_status: { state: "not_computed", code },
   });
 
-  it("replaces the dry-run wording when the records carry gate_plan_sealed (RUN-AACE)", () => {
+  it("replaces the dry-run wording when the records carry plan_sealed", () => {
     const found = executionNoResults(
       content({ dry_run: item("dry_run", "red", "dry_runs empty; no tool posts a dry run") }),
-      [refused("gate_plan_sealed")],
+      [refused("plan_sealed")],
     );
     expect(noResultsMessage(found!)).toBe(
       `No analysis was computed. ${SEALED} Accepting ends Execution with no estimates.`,
     );
   });
 
-  it("also reads the refusal from a check reason", () => {
-    const found = executionNoResults(content({ unseal: item("unseal", "red", "gate_plan_sealed") }));
+  it("reads the refusal from the confirmatory check before results are published", () => {
+    const found = executionNoResults(
+      content({
+        confirmatory: item("confirmatory", "green", "plan_sealed: Start the study on a new data file."),
+        unseal: item("unseal", "red", "the results are sealed"),
+      }),
+    );
     expect(noResultsMessage(found!)).toContain("Start the study on a new data file.");
   });
 
