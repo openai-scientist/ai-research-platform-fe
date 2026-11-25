@@ -27,11 +27,11 @@ const FIELD_NAMES: Record<string, Record<string, string>> = {
     approval: "join_approval",
     reviewersSeeData: "reviewers_see_data",
   },
-  runs: { stageLimit: "stage_limit", pauseOnFailure: "pause_on_failure" },
+  runs: { tokenBudget: "token_budget", stageLimit: "stage_limit", pauseOnFailure: "pause_on_failure" },
   literature: { perRound: "per_round" },
   review: { selfApproval: "self_approval" },
   data: { sameName: "same_name" },
-  spending: { warnAt: "warn_at", atLimit: "at_limit", billingEmail: "billing_email" },
+  spending: { tokenLimit: "token_limit", warnAt: "warn_at", atLimit: "at_limit", billingEmail: "billing_email" },
 };
 
 export function settingsFormValues(section: string, values: SettingValues): SettingValues {

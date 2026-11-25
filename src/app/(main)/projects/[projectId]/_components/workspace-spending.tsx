@@ -16,7 +16,7 @@ import { fetchWorkspaceSettings } from "@/lib/api/services/fetch-workspace-setti
 
 import { SettingsSpending } from "./settings-system";
 import { WorkspaceMonthPicker } from "./workspace-month-picker";
-import { formatWorkspaceMoney as money, workspaceMonth } from "./workspace-settings-format";
+import { workspaceMonth } from "./workspace-settings-format";
 import { WorkspaceSettingsLoading, WorkspaceSettingsReload } from "./workspace-settings-state";
 
 const BUDGET_LABELS = {
@@ -26,7 +26,8 @@ const BUDGET_LABELS = {
   uncapped: "No monthly limit",
   unknown: "Budget usage incomplete",
 };
-const tokens = (value: number | null) => (value === null ? "—" : value.toLocaleString("en-US"));
+const tokens = (value: number | null | undefined) =>
+  value === null || value === undefined ? "—" : value.toLocaleString("en-US");
 
 export function WorkspaceSpending({
   projectId,
@@ -53,7 +54,7 @@ export function WorkspaceSpending({
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex flex-col gap-1">
             <h2 className="font-semibold text-lg">Usage overview</h2>
-            <p className="text-muted-foreground text-sm">Model costs in USD · {usage?.timezone ?? timezone}</p>
+            <p className="text-muted-foreground text-sm">Model usage in tokens · {usage?.timezone ?? timezone}</p>
           </div>
           <div className="flex flex-wrap gap-2">
             <WorkspaceMonthPicker
@@ -85,16 +86,16 @@ export function WorkspaceSpending({
                 </Badge>
                 <p className="max-w-prose text-muted-foreground text-sm">
                   {usage.coverage.status === "partial"
-                    ? "Some costs are not recorded or priced yet. Reported spending is a minimum, and remaining budget cannot be determined."
-                    : "No usage records are available for this month. Costs before the ledger was enabled are not reconstructed."}
+                    ? "Some usage is not recorded yet. Reported tokens are a minimum, and remaining budget cannot be determined."
+                    : "No usage records are available for this month. Usage before the ledger was enabled is not reconstructed."}
                 </p>
               </div>
             )}
             <div className="grid gap-4 sm:grid-cols-3">
               {[
                 {
-                  label: usage.coverage.status === "partial" ? "Recorded spending (minimum)" : "Spent this month",
-                  value: money(usage.totals.spent),
+                  label: usage.coverage.status === "partial" ? "Recorded tokens (minimum)" : "Tokens used this month",
+                  value: tokens(usage.totals.tokens),
                   hint:
                     usage.totals.run_count === null
                       ? "Run count unavailable"
@@ -102,19 +103,19 @@ export function WorkspaceSpending({
                 },
                 {
                   label: "Budget remaining",
-                  value: money(budget?.remaining ?? null),
+                  value: tokens(budget?.remaining ?? null),
                   hint: !budget
                     ? "No historical budget snapshot"
                     : !budget.capped
                       ? "No monthly limit set"
-                      : `Limit: ${money(budget.limit)}`,
+                      : `Limit: ${tokens(budget.token_limit)} tokens`,
                 },
                 {
-                  label: "Average per run",
-                  value: money(usage.totals.average_cost_per_run),
+                  label: "Average tokens per run",
+                  value: tokens(usage.totals.average_tokens_per_run),
                   hint:
                     usage.coverage.status === "partial"
-                      ? "Based on recorded costs only"
+                      ? "Based on recorded usage only"
                       : "Runs with recorded model usage",
                 },
               ].map((metric) => (
@@ -142,7 +143,7 @@ export function WorkspaceSpending({
                   </div>
                   <CardDescription>
                     {budget.capped
-                      ? `${money(usage.totals.spent)} recorded · ${money(budget.limit)} limit`
+                      ? `${tokens(usage.totals.tokens)} tokens recorded · ${tokens(budget.token_limit)} limit`
                       : "Research runs have no project monthly spending limit."}
                   </CardDescription>
                 </CardHeader>
@@ -176,7 +177,7 @@ export function WorkspaceSpending({
               <CardHeader>
                 <CardTitle>Usage by model</CardTitle>
                 <CardDescription>
-                  Costs recorded for {usage.month}. Missing token counts or prices are shown as unavailable.
+                  Tokens recorded for {usage.month}. Missing counts are shown as unavailable.
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -199,7 +200,7 @@ export function WorkspaceSpending({
                         <TableHead className="text-right">Runs</TableHead>
                         <TableHead className="hidden text-right md:table-cell">Input tokens</TableHead>
                         <TableHead className="hidden text-right md:table-cell">Output tokens</TableHead>
-                        <TableHead className="text-right">Cost</TableHead>
+                        <TableHead className="text-right">Tokens</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -216,9 +217,7 @@ export function WorkspaceSpending({
                           <TableCell className="hidden text-right tabular-nums md:table-cell">
                             {tokens(model.output_tokens)}
                           </TableCell>
-                          <TableCell className="text-right tabular-nums">
-                            {model.cost === null ? "Unpriced" : money(model.cost)}
-                          </TableCell>
+                          <TableCell className="text-right tabular-nums">{tokens(model.tokens)}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>

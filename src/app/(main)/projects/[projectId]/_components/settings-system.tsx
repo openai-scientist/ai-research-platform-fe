@@ -9,9 +9,6 @@ import { useProjectSettings } from "./settings-api";
 import { ChoiceRow, DraftTab, NumberRow, SwitchRow, TextRow, useDraft } from "./settings-kit";
 import { SettingsGroup, SettingsRow, TagInput } from "./settings-panel";
 
-// The server's run budget: $5 unless a run asks for more, never above $20.
-const MAX_BUDGET = 20;
-
 /** A select whose options carry a short line under their name; the trigger shows the name only. */
 function DescribedSelect({
   id,
@@ -66,7 +63,7 @@ const STARTER_OPTIONS = [
 export function SettingsRuns({ readOnly }: { readOnly: boolean }) {
   const draft = useDraft("runs", {
     mode: "copilot",
-    budget: "5",
+    tokenBudget: "30000000",
     fields: [] as string[],
     starters: "researchers",
     concurrent: "2",
@@ -86,9 +83,7 @@ export function SettingsRuns({ readOnly }: { readOnly: boolean }) {
       onDiscard={draft.discard}
       onSave={draft.save}
       validate={() => {
-        const amount = Number(v.budget);
-        if (!(amount > 0)) return "Enter a budget above $0 for each run.";
-        if (amount > MAX_BUDGET) return `A run's budget can be up to $${MAX_BUDGET}.`;
+        if (!(Number(v.tokenBudget) > 0)) return "Enter a token budget above 0 for each run.";
       }}
     >
       <SettingsGroup title="Defaults for new runs">
@@ -104,10 +99,10 @@ export function SettingsRuns({ readOnly }: { readOnly: boolean }) {
         <NumberRow
           id="runs-budget"
           label="Budget per run"
-          hint={`A run stops once it spends this much. Up to $${MAX_BUDGET}.`}
-          prefix="$"
-          value={v.budget}
-          onChange={set("budget")}
+          hint="A run stops once it has used this many tokens."
+          unit="tokens"
+          value={String(v.tokenBudget)}
+          onChange={set("tokenBudget")}
           disabled={readOnly}
         />
         <ChoiceRow
@@ -189,7 +184,7 @@ export function SettingsSpending({ readOnly }: { readOnly: boolean }) {
   const unsupported = (field: string) => readOnly || !snapshot.capabilities[`spending.${field}`]?.supported;
   const draft = useDraft("spending", {
     capped: false,
-    limit: "100",
+    tokenLimit: "100000000",
     warnAt: "80",
     atLimit: "stop",
     billingEmail: "",
@@ -205,7 +200,7 @@ export function SettingsSpending({ readOnly }: { readOnly: boolean }) {
       onDiscard={draft.discard}
       onSave={draft.save}
       validate={() => {
-        if (v.capped && !(Number(v.limit) > 0)) return "Enter a monthly limit above $0.";
+        if (v.capped && !(Number(v.tokenLimit) > 0)) return "Enter a monthly token limit above 0.";
         if (v.billingEmail && !/^\S+@\S+\.\S+$/.test(v.billingEmail)) return "Enter a valid billing email.";
       }}
     >
@@ -213,7 +208,7 @@ export function SettingsSpending({ readOnly }: { readOnly: boolean }) {
         <SwitchRow
           id="spending-cap"
           label="Limit monthly spending"
-          hint="A soft limit on recorded model costs. Resets on the 1st in the project's timezone; work already dispatched may still incur costs."
+          hint="A soft limit on recorded model tokens. Resets on the 1st in the project's timezone; work already dispatched may still incur costs."
           checked={v.capped}
           onChange={set("capped")}
           disabled={unsupported("capped")}
@@ -223,11 +218,10 @@ export function SettingsSpending({ readOnly }: { readOnly: boolean }) {
             <NumberRow
               id="spending-limit"
               label="Limit"
-              prefix="$"
-              unit="per month"
-              value={v.limit}
-              onChange={set("limit")}
-              disabled={unsupported("limit")}
+              unit="tokens per month"
+              value={String(v.tokenLimit)}
+              onChange={set("tokenLimit")}
+              disabled={unsupported("token_limit")}
             />
             <ChoiceRow
               id="spending-warn"

@@ -22,26 +22,29 @@ export interface ProjectActivity {
   changes: { field: string; before: unknown; after: unknown }[];
   created_at: string;
 }
+/** Usage is counted in tokens. Checked against the live `/spending/usage` response; fields marked optional were not seen. */
 export interface SpendingUsage {
   project_id: string;
   month: string;
   timezone: string;
-  currency: "USD";
+  unit: "tokens";
   start_at: string;
   end_at: string;
   as_of: string;
   coverage: { status: "complete" | "partial" | "unavailable"; from: string | null; reason_code: string | null };
   totals: {
-    spent: string | null;
+    tokens: number | null;
     run_count: number | null;
-    average_cost_per_run: string | null;
+    average_tokens_per_run: number | null;
     input_tokens: number | null;
     output_tokens: number | null;
   };
   budget: {
     capped: boolean;
-    limit: string | null;
-    remaining: string | null;
+    /** The monthly limit in tokens. */
+    token_limit?: number | null;
+    /** Tokens left this month; null when coverage is partial. Only the null case was seen live. */
+    remaining: number | null;
     used_percent: number | null;
     warning_percent: number;
     status: "within_budget" | "warning" | "exceeded" | "uncapped" | "unknown";
@@ -56,7 +59,7 @@ export interface SpendingUsage {
     run_count: number;
     input_tokens: number | null;
     output_tokens: number | null;
-    cost: string | null;
+    tokens: number | null;
   }[];
 }
 export type NotificationEventKey = "review" | "finished" | "comments" | "members" | "budget" | "integrations";
