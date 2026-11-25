@@ -1,16 +1,4 @@
-import {
-  Activity,
-  Cpu,
-  FolderKanban,
-  Gauge,
-  HeartPulse,
-  LayoutDashboard,
-  LibraryBig,
-  ScrollText,
-  Settings,
-  Users,
-  Waypoints,
-} from "lucide-react";
+import { Activity, Cpu, FolderKanban, Gauge, LayoutDashboard, LibraryBig, ScrollText, Users } from "lucide-react";
 
 import type { NavGroup } from "./sidebar-items";
 
@@ -56,10 +44,10 @@ export const adminSidebarItems: NavGroup[] = [
         icon: Cpu,
       },
       {
-        id: "admin-decision-providers",
-        title: "Decision Providers",
-        url: "/admin/decision-providers",
-        icon: Waypoints,
+        id: "admin-usage",
+        title: "Usage & Cost",
+        url: "/admin/usage",
+        icon: Activity,
       },
     ],
   },
@@ -81,12 +69,6 @@ export const adminSidebarItems: NavGroup[] = [
     label: "OPERATIONS",
     items: [
       {
-        id: "admin-usage",
-        title: "Usage & Cost",
-        url: "/admin/usage",
-        icon: Activity,
-      },
-      {
         id: "admin-system",
         title: "System Health",
         url: "/admin/system",
@@ -97,24 +79,6 @@ export const adminSidebarItems: NavGroup[] = [
         title: "Audit Log",
         url: "/admin/logs",
         icon: ScrollText,
-      },
-      {
-        id: "admin-log-monitoring",
-        title: "Log Monitoring",
-        url: "/admin/log-monitoring",
-        icon: HeartPulse,
-      },
-    ],
-  },
-  {
-    id: 5,
-    label: "SYSTEM",
-    items: [
-      {
-        id: "admin-settings",
-        title: "Settings",
-        url: "/admin/settings",
-        icon: Settings,
       },
     ],
   },

@@ -66,7 +66,7 @@ export function MetricCard({
             <Icon className="size-4" />
           </div>
         </div>
-        <CardTitle className="mt-2 text-2xl tabular-nums">{value}</CardTitle>
+        <p className="mt-2 font-heading text-2xl tabular-nums leading-tight">{value}</p>
         {(Boolean(change) || Boolean(detail)) && (
           <div className="flex items-center gap-1 text-muted-foreground text-xs">
             {change && (

@@ -5,7 +5,7 @@ import { ArtifactKind, PlatformRole, ProjectRole, ProjectStatus, RunStatus, User
 
 import apiService from "../core";
 import { failure, respond, success } from "../test-utils";
-import { fetchAdmin } from "./fetch-admin";
+import { fetchAdmin, type PlatformSettings } from "./fetch-admin";
 import { fetchArtifacts } from "./fetch-artifacts";
 import { fetchAuth } from "./fetch-auth";
 import { fetchComments } from "./fetch-comments";
@@ -15,6 +15,7 @@ import { fetchMembers } from "./fetch-members";
 import { fetchNotifications } from "./fetch-notifications";
 import { fetchProject } from "./fetch-project";
 import { fetchRuns } from "./fetch-runs";
+import { fetchWorkspaceSettings } from "./fetch-workspace-settings";
 
 // These paths and verbs come from the backend handoff, including PATCH project and no DELETE project.
 const p = "project /1";
@@ -22,6 +23,32 @@ const project = "/projects/project%20%2F1";
 const run = `${project}/runs/run%2F1`;
 const list = { limit: 10, offset: 20 };
 const signal = new AbortController().signal;
+const platformSettings: PlatformSettings = {
+  max_auto_revisions: 2,
+  max_iterations: 3,
+  max_rounds: 3,
+  run_default_token_budget: 30_000_000,
+  run_max_token_budget: 60_000_000,
+  allowed_signup_domains: ["example.com"],
+  max_active_runs_per_user: 2,
+  max_active_runs_total: 10,
+  user_monthly_token_limit: 120_000_000,
+  platform_monthly_token_limit: 1_000_000_000,
+  credits_per_million_tokens: 1_000_000,
+  release_share_max_days: 90,
+  oversight_llm_timeout_seconds: 180,
+  oversight_contact_email: null,
+  oversight_evalue_alpha: 0.05,
+  oversight_pi_steps_by_kind: { charter: 24, stage_outcome: 1, failure: 24, close: 24 },
+  oversight_pi_proposal_steps: 24,
+  project_brief_chars: 6000,
+  project_lesson_min_runs: 3,
+  max_active_runs_per_engine: 3,
+  engine_run_retention_days: 90,
+  sweep_engine_concurrency: 5,
+  sweep_pass_seconds: 60,
+  stage_finish_grace_seconds: 300,
+};
 interface Contract {
   name: string;
   method: string;
@@ -326,6 +353,43 @@ const contracts: Contract[] = [
     url: "/users/user%2F1/platform-role",
     call: () => fetchAdmin.updatePlatformRole("user/1", { role: PlatformRole.PlatformAdmin }),
     body: { role: "platform_admin" },
+  },
+  {
+    name: "platform settings",
+    method: "get",
+    url: "/admin/settings",
+    call: () => fetchAdmin.getSettings(signal),
+    params: undefined,
+    signal,
+  },
+  {
+    name: "platform settings schema",
+    method: "get",
+    url: "/admin/settings/schema",
+    call: () => fetchAdmin.getSettingsSchema(signal),
+    params: undefined,
+    signal,
+  },
+  {
+    name: "save platform settings (the whole object)",
+    method: "put",
+    url: "/admin/settings",
+    call: () => fetchAdmin.saveSettings(platformSettings),
+    body: platformSettings,
+  },
+  {
+    name: "platform limits of a project",
+    method: "get",
+    url: `${project}/platform-limits`,
+    call: () => fetchWorkspaceSettings.platformLimits(p, signal),
+    params: undefined,
+    signal,
+  },
+  {
+    name: "sign a user out everywhere",
+    method: "post",
+    url: "/admin/users/user%2F1/sessions/revoke",
+    call: () => fetchAdmin.revokeUserSessions("user/1"),
   },
   { name: "audit", method: "get", url: "/audit", call: () => fetchAdmin.getAudit(list, signal), params: list, signal },
   {

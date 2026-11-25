@@ -1,8 +1,8 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
-import { Check, CircleAlert, KeyRound, PlugZap } from "lucide-react";
+import { Check, CircleAlert, Ellipsis, ExternalLink, KeyRound, PlugZap } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -17,6 +17,13 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -36,7 +43,9 @@ import {
 import { timeAgo } from "../../projects/[projectId]/_components/dataset-format";
 import { SectionCard } from "./admin-primitives";
 
-const ROLES: Record<ModelRole, { title: string; description: string }> = {
+export const RUN_MODEL_ROLES = ["stage", "review"] as const;
+
+export const RUN_MODEL_DETAILS: Record<ModelRole, { title: string; description: string }> = {
   stage: {
     title: "Stage model",
     description: "Does the research: the goal, the searches, the cards, the debate and the hypotheses.",
@@ -48,7 +57,7 @@ const ROLES: Record<ModelRole, { title: string; description: string }> = {
   },
 };
 
-function KeyState({ saved, required }: { readonly saved: boolean; readonly required?: boolean }) {
+export function KeyState({ saved, required }: { readonly saved: boolean; readonly required?: boolean }) {
   if (saved)
     return (
       <Badge
@@ -135,7 +144,7 @@ function ModelForm({ role, profile }: { readonly role: ModelRole; readonly profi
       {
         onSuccess: () => {
           setApiKey("");
-          toast.success(`${ROLES[role].title} saved.`);
+          toast.success(`${RUN_MODEL_DETAILS[role].title} saved.`);
         },
       },
     );
@@ -209,23 +218,34 @@ function ModelForm({ role, profile }: { readonly role: ModelRole; readonly profi
   );
 }
 
+export function useRunModelProfiles() {
+  return useApiQuery(adminKeys.models(), async (signal) => (await fetchAdmin.getModels(signal)).data);
+}
+
 /** The two models every run uses, as the Platform holds them (`/admin/models`). */
 export function RunModelsSettings() {
-  const { data, isPending } = useApiQuery(
-    adminKeys.models(),
-    async (signal) => (await fetchAdmin.getModels(signal)).data,
-  );
+  const { data, isError, isFetching, isPending, refetch } = useRunModelProfiles();
+  if (isError && !data) {
+    return (
+      <div>
+        <Button type="button" variant="outline" size="sm" disabled={isFetching} onClick={() => void refetch()}>
+          Retry loading model settings
+        </Button>
+      </div>
+    );
+  }
+
   return (
     // The two cards share their rows, so their headers and fields line up whatever the descriptions' length.
     <div className="grid gap-4 lg:grid-cols-2">
-      {(["stage", "review"] as const).map((role) => {
+      {RUN_MODEL_ROLES.map((role) => {
         const profile = data?.[role] ?? null;
         return (
           <SectionCard
             key={role}
             className="lg:row-span-2 lg:grid lg:grid-rows-subgrid lg:gap-0"
-            title={ROLES[role].title}
-            description={ROLES[role].description}
+            title={RUN_MODEL_DETAILS[role].title}
+            description={RUN_MODEL_DETAILS[role].description}
             action={!isPending && <KeyState saved={Boolean(profile?.has_api_key)} required />}
           >
             {isPending ? (
@@ -245,27 +265,39 @@ export function RunModelsSettings() {
   );
 }
 
-const INTEGRATIONS: { name: string; label: string; description: string; required?: boolean }[] = [
+type IntegrationDefinition = {
+  readonly name: string;
+  readonly label: string;
+  readonly description: string;
+  readonly required?: boolean;
+  readonly keyLink?: { href: string; label: string };
+};
+
+const INTEGRATIONS: IntegrationDefinition[] = [
   {
     name: "typesafe",
     label: "Typesafe",
     description: "Decision provider of the experiment design stage. Accepting hypotheses into that stage needs it.",
     required: true,
+    keyLink: { href: "https://console.typesafe.ai/keys", label: "Get API key" },
   },
   {
     name: "openalex",
     label: "OpenAlex",
     description: "Literature search. A key raises the daily request limit.",
+    keyLink: { href: "https://openalex.org/settings/api", label: "Get API key" },
   },
   {
     name: "semantic_scholar",
     label: "Semantic Scholar",
     description: "Literature search. Without a key, the shared rate limit often turns searches away.",
+    keyLink: { href: "https://www.semanticscholar.org/product/api#api-key-form", label: "Request API key" },
   },
   {
     name: "huggingface",
     label: "Hugging Face",
     description: "Datasets and models the experiment design stage may use.",
+    keyLink: { href: "https://huggingface.co/settings/tokens", label: "Create access token" },
   },
 ];
 
@@ -273,43 +305,58 @@ function IntegrationRow({
   name,
   label,
   description,
+  keyLink,
   required,
   saved,
-}: {
-  readonly name: string;
-  readonly label: string;
-  readonly description: string;
-  readonly required?: boolean;
-  readonly saved: IntegrationItem | undefined;
-}) {
+}: IntegrationDefinition & { readonly saved: IntegrationItem | undefined }) {
   const id = useId();
+  const editButton = useRef<HTMLButtonElement>(null);
+  const keyInput = useRef<HTMLInputElement>(null);
+  const menuButton = useRef<HTMLButtonElement>(null);
+  const restoreEditorFocus = useRef(false);
+  const [editing, setEditing] = useState(false);
   const [value, setValue] = useState("");
   const [removing, setRemoving] = useState(false);
   const invalidate = [adminKeys.integrations()];
   const save = useApiMutation((key: string) => fetchAdmin.saveIntegration(name, key), invalidate);
   const remove = useApiMutation(() => fetchAdmin.deleteIntegration(name), invalidate);
+  const editLabel = saved ? "Replace key" : "Add API key";
+
+  useEffect(() => {
+    if (editing) {
+      keyInput.current?.focus();
+    } else if (restoreEditorFocus.current) {
+      restoreEditorFocus.current = false;
+      editButton.current?.focus();
+    }
+  }, [editing]);
+
+  const closeEditor = () => {
+    restoreEditorFocus.current = true;
+    setEditing(false);
+    setValue("");
+  };
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
+    if (save.isPending) return;
     if (!value.trim()) {
       toast.error(`Paste the ${label} key.`);
       return;
     }
     save.mutate(value.trim(), {
       onSuccess: () => {
-        setValue("");
+        closeEditor();
         toast.success(`${label} key saved.`);
       },
     });
   };
 
   return (
-    <li className="grid gap-3 py-4 first:pt-0 last:pb-0 md:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] md:items-start md:gap-6">
+    <li className="grid gap-3 py-3.5 first:pt-0 last:pb-0 md:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] md:items-center md:gap-x-6">
       <div className="flex min-w-0 flex-col gap-1">
         <div className="flex flex-wrap items-center gap-2">
-          <label htmlFor={id} className="font-medium text-sm">
-            {label}
-          </label>
+          <span className="font-medium text-sm">{label}</span>
           {required && (
             <Badge variant="outline" className="border-transparent bg-muted text-muted-foreground">
               Required
@@ -318,39 +365,95 @@ function IntegrationRow({
           <KeyState saved={Boolean(saved)} required={required} />
         </div>
         <p className="text-muted-foreground text-sm">{description}</p>
-        {saved && (
-          <p className="flex flex-wrap items-center gap-x-2 text-muted-foreground text-xs">
-            {saved.updated_at && <span>Updated {timeAgo(saved.updated_at)}</span>}
-            <Button
-              type="button"
-              variant="link"
-              size="sm"
-              className="h-auto p-0 text-muted-foreground text-xs hover:text-destructive"
-              onClick={() => setRemoving(true)}
-              disabled={remove.isPending}
-            >
-              Remove key
-            </Button>
-          </p>
+        {(keyLink ?? saved?.updated_at) && (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground text-xs">
+            {keyLink && (
+              <Button asChild variant="link" size="sm" className="h-auto p-0 text-xs">
+                <a href={keyLink.href} target="_blank" rel="noopener noreferrer">
+                  {keyLink.label}
+                  <span className="sr-only"> for {label} (opens in a new tab)</span>
+                  <ExternalLink data-icon="inline-end" aria-hidden="true" />
+                </a>
+              </Button>
+            )}
+            {saved?.updated_at && <span>Updated {timeAgo(saved.updated_at)}</span>}
+          </div>
         )}
       </div>
-      <form onSubmit={submit} className="flex flex-wrap items-center gap-2">
-        <Input
-          id={id}
-          type="password"
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          placeholder={saved ? "Paste a new key to replace it" : "Paste the key"}
-          autoComplete="new-password"
-          className="min-w-0 flex-1 basis-40"
-        />
-        <Button type="submit" size="sm" disabled={!value.trim() || save.isPending}>
-          {save.isPending && <Spinner />}
-          Save
-        </Button>
-      </form>
+      {editing ? (
+        <form onSubmit={submit} className="flex min-w-0 flex-wrap items-center gap-2">
+          <label htmlFor={id} className="sr-only">
+            {label} API key
+          </label>
+          <Input
+            ref={keyInput}
+            id={id}
+            type="password"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            placeholder={saved ? "Paste the new API key" : "Paste the API key"}
+            autoComplete="new-password"
+            className="min-w-0 flex-1 basis-32"
+            readOnly={save.isPending}
+          />
+          <Button type="submit" size="sm" disabled={!value.trim() || save.isPending}>
+            {save.isPending && <Spinner />}
+            Save
+          </Button>
+          <Button type="button" variant="ghost" size="sm" onClick={closeEditor} disabled={save.isPending}>
+            Cancel
+          </Button>
+        </form>
+      ) : (
+        <div className="grid grid-cols-[auto_1.75rem] items-center justify-start gap-2 md:justify-end">
+          <Button
+            ref={editButton}
+            type="button"
+            variant="outline"
+            size="sm"
+            aria-label={`${editLabel} for ${label}`}
+            disabled={remove.isPending}
+            onClick={() => setEditing(true)}
+          >
+            {editLabel}
+          </Button>
+          {saved && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  ref={menuButton}
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={`More actions for ${label}`}
+                  disabled={remove.isPending}
+                >
+                  <Ellipsis />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="end"
+                onCloseAutoFocus={(event) => {
+                  if (removing) event.preventDefault();
+                }}
+              >
+                <DropdownMenuGroup>
+                  <DropdownMenuItem variant="destructive" onSelect={() => setRemoving(true)}>
+                    Remove key
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
+      )}
       <AlertDialog open={removing} onOpenChange={setRemoving}>
-        <AlertDialogContent>
+        <AlertDialogContent
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            (menuButton.current ?? editButton.current)?.focus();
+          }}
+        >
           <AlertDialogHeader>
             <AlertDialogTitle>Remove the {label} key?</AlertDialogTitle>
             <AlertDialogDescription>

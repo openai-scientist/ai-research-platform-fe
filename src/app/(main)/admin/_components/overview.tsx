@@ -15,7 +15,6 @@ const sections: { value: OverviewSection; label: string }[] = [
   { value: "overview", label: "Overview" },
   { value: "operations", label: "Operations" },
   { value: "projects", label: "Projects" },
-  { value: "governance", label: "Governance" },
 ];
 
 export function AdminOverview() {
@@ -33,10 +32,20 @@ export function AdminOverview() {
       setDates({});
       return;
     }
-    const to = new Date();
-    const from =
-      value === "year-to-date" ? new Date(to.getFullYear(), 0, 1) : new Date(to.getTime() - Number(value) * 86400000);
+    // Request telemetry is captured with a short delay, so the last hour ends a minute ago.
+    const to = value === "hour" ? new Date(Date.now() - 60_000) : new Date();
+    let from: Date;
+    if (value === "hour") from = new Date(to.getTime() - 3_600_000);
+    else if (value === "year-to-date") from = new Date(to.getFullYear(), 0, 1);
+    else from = new Date(to.getTime() - Number(value) * 86400000);
     setDates({ from: from.toISOString(), to: to.toISOString() });
+  }
+  // Operations opens on the last hour: the telemetry source has not covered a longer window yet.
+  function changeSection(next: OverviewSection) {
+    setSection(next);
+    // Request telemetry only covers short windows, so Operations has its own ranges.
+    if (next === "operations") selectRange("hour");
+    else if (section === "operations") selectRange("default");
   }
   return (
     <div className="flex min-w-0 flex-col gap-4">
@@ -48,7 +57,7 @@ export function AdminOverview() {
       </div>
       <Tabs
         value={section}
-        onValueChange={(value) => setSection(value as OverviewSection)}
+        onValueChange={(value) => changeSection(value as OverviewSection)}
         className="flex min-w-0 flex-col gap-4"
       >
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -63,15 +72,22 @@ export function AdminOverview() {
             actionLabel="Admin actions"
             value={range}
             onValueChange={selectRange}
-            onRefresh={() => void query.refetch()}
+            onRefresh={() => (range === "default" ? void query.refetch() : selectRange(range))}
             refreshDisabled={!enabled || query.isFetching}
-            options={[
-              { value: "default", label: defaultRange },
-              { value: "7", label: "Last 7 days" },
-              { value: "28", label: "Last 4 weeks" },
-              { value: "90", label: "Last 3 months" },
-              { value: "year-to-date", label: "Year to date" },
-            ]}
+            options={
+              section === "operations"
+                ? [
+                    { value: "hour", label: "Last hour" },
+                    { value: "default", label: defaultRange },
+                  ]
+                : [
+                    { value: "default", label: defaultRange },
+                    { value: "7", label: "Last 7 days" },
+                    { value: "28", label: "Last 4 weeks" },
+                    { value: "90", label: "Last 3 months" },
+                    { value: "year-to-date", label: "Year to date" },
+                  ]
+            }
           />
         </div>
         {sections.map((item) => (

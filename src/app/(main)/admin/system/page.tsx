@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { AdminSystem } from "../_components/operations-pages";
+import { SystemHealth } from "./_components/system-health";
 
 export const metadata: Metadata = {
   title: "System Health · OpenAI Scientist",
@@ -8,5 +8,5 @@ export const metadata: Metadata = {
 };
 
 export default function Page() {
-  return <AdminSystem />;
+  return <SystemHealth />;
 }

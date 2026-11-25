@@ -1,6 +1,10 @@
 "use client";
 
-import type { AdminOverviewData, OverviewSection } from "@/lib/api/services/admin-monitoring-types";
+import { cn } from "cn";
+
+import { ManagementStatusBadge } from "@/components/management-status-badge";
+import { Badge } from "@/components/ui/badge";
+import type { AdminOverviewData, LogLevel, OverviewSection } from "@/lib/api/services/admin-monitoring-types";
 
 import { AnalyticsKpiStrip } from "../../dashboard/analytics/_components/analytics-kpi-strip";
 import { RealtimeVisitors } from "../../dashboard/analytics/_components/realtime-visitors";
@@ -10,7 +14,7 @@ import { TrafficQuality } from "../../dashboard/analytics/_components/traffic-qu
 import { formatTimestamp } from "./admin-api-utils";
 import { InlineProgress, SectionCard } from "./admin-primitives";
 import { breakdownTabs, liveBreakdown, overviewKpis } from "./overview-presentation";
-import { availabilityReason, formatMeasurement, readableKey, TelemetryEmpty } from "./telemetry-ui";
+import { availabilityReason, formatMeasurement, TelemetryEmpty } from "./telemetry-ui";
 
 type Props = { data?: AdminOverviewData; section: OverviewSection };
 
@@ -31,8 +35,10 @@ function OverviewTrend({
   description,
   actualLabel,
   baselineLabel,
+  pointsOnly = false,
 }: {
   data?: AdminOverviewData;
+  pointsOnly?: boolean;
   seriesKey: string;
   title: string;
   description: string;
@@ -60,6 +66,7 @@ function OverviewTrend({
       tooltipLabel={title}
       tooltipLabelFormatter={(timestamp) => formatBucketTime(timestamp, data?.window.timezone)}
       showPoints
+      pointsOnly={pointsOnly}
       xDomain={[start, end]}
       xTicks={[0.1, 0.35, 0.6, 0.85].map((fraction) => start + (end - start) * fraction)}
       xTickFormatter={(value) =>
@@ -84,6 +91,41 @@ function OverviewTrend({
   );
 }
 
+const levelClass: Record<LogLevel, string> = {
+  DEBUG: "bg-muted text-muted-foreground",
+  INFO: "bg-blue-500/10 text-blue-700 dark:text-blue-400",
+  WARN: "bg-amber-500/10 text-amber-800 dark:text-amber-300",
+  ERROR: "bg-destructive/10 text-destructive",
+};
+
+function LevelBadge({ level }: { level: LogLevel }) {
+  return (
+    <Badge variant="outline" className={cn("border-transparent", levelClass[level])}>
+      {level}
+    </Badge>
+  );
+}
+
+const MAX_BARS = 36;
+
+/** Keeps a long series readable: neighbouring buckets are merged, keeping the highest value of each group. */
+function groupPoints(points: { timestamp: string; value: number | null }[]) {
+  const size = Math.max(1, Math.ceil(points.length / MAX_BARS));
+  const bars: { minute: number; visitors: number | null }[] = [];
+  for (let index = 0; index < points.length; index += size) {
+    const group = points.slice(index, index + size);
+    const values = group.flatMap((point) => (point.value === null ? [] : [point.value]));
+    bars.push({ minute: Date.parse(group[0].timestamp), visitors: values.length ? Math.max(...values) : null });
+  }
+  return bars;
+}
+
+function realtimeEmptyText(data: AdminOverviewData | undefined, seriesKey: string, idle: boolean) {
+  if (!data) return "Loading…";
+  if (idle) return "Nothing was in progress in this time window.";
+  return availabilityReason(data.unavailable_fields.find((item) => item.key === `series.${seriesKey}`)?.reason_code);
+}
+
 function RealtimeMetric({
   data,
   metricKey,
@@ -101,6 +143,8 @@ function RealtimeMetric({
 }) {
   const metric = data?.metrics[metricKey];
   const series = data?.series.find((item) => item.key === seriesKey);
+  const bars = series?.available ? groupPoints(series.points) : [];
+  const idle = bars.length > 0 && bars.every((bar) => !bar.visitors);
   return (
     <RealtimeVisitors
       title={title}
@@ -109,19 +153,11 @@ function RealtimeMetric({
       liveLabel="Snapshot"
       unit={unit}
       value={metric?.available ? formatMeasurement(metric.value) : "—"}
-      data={
-        series?.available
-          ? series.points.map((point) => ({ minute: Date.parse(point.timestamp), visitors: point.value }))
-          : []
-      }
+      data={idle ? [] : bars}
       tooltipLabelFormatter={(timestamp) => formatBucketTime(timestamp, data?.window.timezone)}
       breakdown={liveBreakdown(data, breakdownKey)}
       yDomain={[0, "auto"]}
-      emptyText={
-        !data
-          ? "Loading…"
-          : availabilityReason(data.unavailable_fields.find((item) => item.key === `series.${seriesKey}`)?.reason_code)
-      }
+      emptyText={realtimeEmptyText(data, seriesKey, idle)}
     />
   );
 }
@@ -150,7 +186,7 @@ function RecentRuns({ data }: { data?: AdminOverviewData }) {
       rows={(data?.recent_runs ?? []).map((run) => ({
         id: run.id,
         path: `${run.id.slice(0, 8)} · ${run.topic ?? run.project_name}`,
-        views: readableKey(run.status),
+        views: <ManagementStatusBadge status={run.status} />,
         time: run.duration_ms === null ? "—" : formatMeasurement(run.duration_ms, "ms"),
         bounce: run.project_name,
       }))}
@@ -170,6 +206,7 @@ export function OverviewContent({ data, section }: Props) {
               <OverviewTrend
                 data={data}
                 seriesKey="execution_reliability"
+                pointsOnly
                 title="Execution reliability"
                 actualLabel="Successful runs"
                 baselineLabel="Reliability target"
@@ -196,7 +233,6 @@ export function OverviewContent({ data, section }: Props) {
                 title="Platform activity"
                 valueLabel="Activity"
                 tabs={breakdownTabs(data, [
-                  ["activity_by_service", "Services"],
                   ["token_usage_by_model", "Models"],
                   ["runs_by_project", "Projects"],
                 ])}
@@ -209,16 +245,6 @@ export function OverviewContent({ data, section }: Props) {
         <>
           <div className="grid grid-cols-1 items-stretch gap-4 xl:grid-cols-12">
             <div className="min-w-0 xl:col-span-7">
-              <OverviewTrend
-                data={data}
-                seriesKey="service_reliability"
-                title="Service reliability"
-                actualLabel="Observed uptime"
-                baselineLabel="SLO target"
-                description="Platform availability and service reliability across the selected time window."
-              />
-            </div>
-            <div className="min-w-0 xl:col-span-5">
               <RealtimeMetric
                 data={data}
                 metricKey="request_rate"
@@ -228,27 +254,11 @@ export function OverviewContent({ data, section }: Props) {
                 unit="req/s"
               />
             </div>
-          </div>
-          <div className="grid grid-cols-1 items-stretch gap-4 xl:grid-cols-12">
             <div className="min-w-0 xl:col-span-5">
-              <RealtimeMetric
-                data={data}
-                metricKey="queue_depth"
-                seriesKey="queue_depth"
-                breakdownKey="pending_jobs_by_queue"
-                title="Queue depth"
-                unit="jobs pending"
-              />
-            </div>
-            <div className="min-w-0 xl:col-span-7">
               <TopTrafficSources
                 title="Service load"
                 valueLabel="Requests"
-                tabs={breakdownTabs(data, [
-                  ["requests_by_service", "Services"],
-                  ["requests_by_region", "Regions"],
-                  ["pending_jobs_by_queue", "Queues"],
-                ])}
+                tabs={breakdownTabs(data, [["requests_by_service", "Services"]])}
               />
             </div>
           </div>
@@ -260,7 +270,7 @@ export function OverviewContent({ data, section }: Props) {
             rows={(data?.recent_events ?? []).map((event) => ({
               id: event.id,
               path: `${event.message} · ${formatTimestamp(event.created_at)}`,
-              views: event.level,
+              views: <LevelBadge level={event.level} />,
               time: event.duration_ms === null ? "—" : formatMeasurement(event.duration_ms, "ms"),
               bounce: event.status ?? "—",
             }))}
@@ -275,6 +285,7 @@ export function OverviewContent({ data, section }: Props) {
               <OverviewTrend
                 data={data}
                 seriesKey="project_execution_health"
+                pointsOnly
                 title="Project execution health"
                 actualLabel="Execution health"
                 baselineLabel="Project target"
@@ -369,20 +380,6 @@ export function OverviewContent({ data, section }: Props) {
                   ? "Loading…"
                   : availabilityReason(
                       data.unavailable_fields.find((item) => item.key === "governance_events")?.reason_code,
-                    )
-              }
-            />
-          </SectionCard>
-          <SectionCard
-            title="Decision gates"
-            description="Active providers and escalation rules for bounded decisions."
-          >
-            <TelemetryEmpty
-              description={
-                !data
-                  ? "Loading…"
-                  : availabilityReason(
-                      data.unavailable_fields.find((item) => item.key === "decision_gates")?.reason_code,
                     )
               }
             />

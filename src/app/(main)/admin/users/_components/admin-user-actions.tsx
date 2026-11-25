@@ -26,7 +26,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useUpdatePlatformRoleMutation, useUpdateUserStatusMutation } from "@/hooks/use-admin-query";
+import {
+  useRevokeUserSessionsMutation,
+  useUpdatePlatformRoleMutation,
+  useUpdateUserStatusMutation,
+} from "@/hooks/use-admin-query";
 import type { UserAdminItem } from "@/lib/api/services/fetch-admin";
 import { useAppDispatch } from "@/lib/redux/hooks";
 import { restoreSession } from "@/lib/redux/slices/auth-slice";
@@ -43,12 +47,13 @@ export function AdminUserActions({
   enabled: boolean;
   onEdit?: () => void;
 }) {
-  const [action, setAction] = useState<"status" | "role" | null>(null);
+  const [action, setAction] = useState<"status" | "role" | "sessions" | null>(null);
   const statusMutation = useUpdateUserStatusMutation();
   const roleMutation = useUpdatePlatformRoleMutation();
+  const sessionsMutation = useRevokeUserSessionsMutation();
   const router = useRouter();
   const dispatch = useAppDispatch();
-  const busy = statusMutation.isPending || roleMutation.isPending;
+  const busy = statusMutation.isPending || roleMutation.isPending || sessionsMutation.isPending;
   const active = user.status === UserStatus.Active;
   const admin = user.platform_role === PlatformRole.PlatformAdmin;
   const statusLabel = active ? "Suspend" : "Activate";
@@ -61,7 +66,13 @@ export function AdminUserActions({
   const roleDescription = admin
     ? "This user will lose platform-wide administrator access."
     : "This user will gain platform-wide administrator access.";
-  const description = action === "status" ? statusDescription : roleDescription;
+  const who = user.display_name?.trim() || user.email;
+  const sessionsDescription = `Every session of ${who} ends and they must sign in again. This does not suspend the account.`;
+  const copy = {
+    status: { title: `${statusLabel} user?`, description: statusDescription, confirm: "Confirm" },
+    role: { title: `${roleLabel} user?`, description: roleDescription, confirm: "Confirm" },
+    sessions: { title: "Sign out everywhere?", description: sessionsDescription, confirm: "Sign out everywhere" },
+  }[action ?? "role"];
   const onSuccess = () => {
     setAction(null);
     const who = user.display_name?.trim() || user.email;
@@ -74,7 +85,17 @@ export function AdminUserActions({
       void dispatch(restoreSession()).then(() => router.refresh());
     }
   };
+  const onSessionsRevoked = (count: number) => {
+    setAction(null);
+    toast.success("Signed out everywhere", {
+      description: `${user.email} · ${count} ${count === 1 ? "session" : "sessions"} ended`,
+    });
+    // Ending your own sessions ends this one too: the auth provider sends you to sign in.
+    if (self) window.dispatchEvent(new Event("auth:expired"));
+  };
   const confirm = () => {
+    if (action === "sessions")
+      sessionsMutation.mutate(user.id, { onSuccess: (response) => onSessionsRevoked(response.data.sessions) });
     if (action === "status")
       statusMutation.mutate(
         { userId: user.id, status: active ? UserStatus.Suspended : UserStatus.Active },
@@ -110,6 +131,9 @@ export function AdminUserActions({
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
+              <DropdownMenuItem variant="destructive" onSelect={() => setAction("sessions")}>
+                Sign out everywhere
+              </DropdownMenuItem>
               <DropdownMenuItem variant={active ? "destructive" : "default"} onSelect={() => setAction("status")}>
                 {statusLabel}
               </DropdownMenuItem>
@@ -136,6 +160,15 @@ export function AdminUserActions({
           >
             {roleLabel}
           </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            aria-label={`Sign ${user.email} out everywhere`}
+            disabled={!enabled || busy}
+            onClick={() => setAction("sessions")}
+          >
+            Sign out everywhere
+          </Button>
         </div>
       )}
       <AlertDialog
@@ -146,22 +179,26 @@ export function AdminUserActions({
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{action === "status" ? statusLabel : roleLabel} user?</AlertDialogTitle>
+            <AlertDialogTitle>{copy.title}</AlertDialogTitle>
             <AlertDialogDescription>
-              {user.email}. {description}
-              {self && " You are changing your own account. Your current access may end immediately."}
+              {user.email}. {copy.description}
+              {self &&
+                (action === "sessions"
+                  ? " This is your own account: your current session ends too and you will be sent to sign in."
+                  : " You are changing your own account. Your current access may end immediately.")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
             <AlertDialogAction
+              variant={action === "sessions" || (action === "status" && active) ? "destructive" : "default"}
               disabled={!enabled || busy}
               onClick={(event) => {
                 event.preventDefault();
                 confirm();
               }}
             >
-              {busy ? "Saving..." : "Confirm"}
+              {busy ? "Saving..." : copy.confirm}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

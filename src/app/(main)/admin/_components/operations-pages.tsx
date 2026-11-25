@@ -1,4 +1,4 @@
-import { Activity, AlertTriangle, CheckCircle2, Clock3, Gauge, RefreshCw, Server, Zap } from "lucide-react";
+import { Activity, AlertTriangle, CheckCircle2, RefreshCw } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -7,13 +7,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import { type AnalyticsKpiItem, AnalyticsKpiStrip } from "../../dashboard/analytics/_components/analytics-kpi-strip";
 import { AnalyticsToolbar } from "../../dashboard/analytics/_components/analytics-toolbar";
-import { type RealtimeBreakdownItem, RealtimeVisitors } from "../../dashboard/analytics/_components/realtime-visitors";
 import { TopTrafficSources, type TrafficSourceTab } from "../../dashboard/analytics/_components/top-traffic-sources";
 import {
   PerformanceOverview,
   type PerformanceOverviewPoint,
 } from "../../dashboard/default/_components/performance-overview";
-import { logs, systemServices } from "./admin-data";
+import { logs } from "./admin-data";
 import { AdminPageHeader, InlineProgress, MetricCard, SectionCard, StatusBadge } from "./admin-primitives";
 
 const usageKpis: AnalyticsKpiItem[] = [
@@ -54,51 +53,6 @@ const usageTrendData: PerformanceOverviewPoint[] = [
   { activeAccounts: 0, date: "2026-09-20", newCustomers: 92_000, returningUsers: 0 },
   { activeAccounts: 0, date: "2026-09-21", newCustomers: 68_000, returningUsers: 0 },
 ];
-
-const systemTrendData: PerformanceOverviewPoint[] = [
-  { activeAccounts: 33, date: "2026-09-08", newCustomers: 34, returningUsers: 1 },
-  { activeAccounts: 37, date: "2026-09-09", newCustomers: 39, returningUsers: 1 },
-  { activeAccounts: 35, date: "2026-09-10", newCustomers: 36, returningUsers: 2 },
-  { activeAccounts: 40, date: "2026-09-11", newCustomers: 42, returningUsers: 1 },
-  { activeAccounts: 37, date: "2026-09-12", newCustomers: 38, returningUsers: 2 },
-  { activeAccounts: 40, date: "2026-09-13", newCustomers: 41, returningUsers: 1 },
-  { activeAccounts: 44, date: "2026-09-14", newCustomers: 45, returningUsers: 2 },
-  { activeAccounts: 42, date: "2026-09-15", newCustomers: 43, returningUsers: 1 },
-  { activeAccounts: 47, date: "2026-09-16", newCustomers: 48, returningUsers: 2 },
-  { activeAccounts: 45, date: "2026-09-17", newCustomers: 46, returningUsers: 1 },
-  { activeAccounts: 50, date: "2026-09-18", newCustomers: 52, returningUsers: 2 },
-  { activeAccounts: 47, date: "2026-09-19", newCustomers: 49, returningUsers: 1 },
-  { activeAccounts: 54, date: "2026-09-20", newCustomers: 56, returningUsers: 2 },
-  { activeAccounts: 49, date: "2026-09-21", newCustomers: 51, returningUsers: 1 },
-];
-
-const runtimeBreakdown: RealtimeBreakdownItem[] = [
-  { label: "API Gateway", markerClassName: "bg-emerald-500", value: 14 },
-  { label: "Experiment Runner", markerClassName: "bg-sky-500", value: 10 },
-  { label: "Decision Provider", markerClassName: "bg-violet-500", value: 8 },
-  { label: "Worker queue", markerClassName: "bg-amber-500", value: 6 },
-];
-
-const systemIncidents = [
-  {
-    detail: "OpenAI · p95 reached 2.4s",
-    level: "Warning" as const,
-    time: "42 min ago",
-    title: "Provider latency above target",
-  },
-  {
-    detail: "3 fallback decisions in the last hour",
-    level: "Info" as const,
-    time: "1 hr ago",
-    title: "Decision provider fallback triggered",
-  },
-  {
-    detail: "Worker pool recovered automatically",
-    level: "Healthy" as const,
-    time: "3 hr ago",
-    title: "Queue backlog cleared",
-  },
-] as const;
 
 const usageBreakdownTabs: TrafficSourceTab[] = [
   {
@@ -302,147 +256,6 @@ function UsageStat({
   );
 }
 
-export function AdminSystem() {
-  return (
-    <div className="flex flex-col gap-6">
-      <AdminPageHeader
-        eyebrow="Operations"
-        title="System Health"
-        description="Monitor infrastructure, runtime performance, sandbox capacity, and provider availability."
-        actions={
-          <div className="flex items-center gap-3">
-            <span className="text-muted-foreground text-xs">Updated 30s ago</span>
-            <Button size="sm" variant="outline">
-              <RefreshCw data-icon="inline-start" />
-              Refresh status
-            </Button>
-          </div>
-        }
-      />
-
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        <MetricCard
-          label="API latency"
-          value="142ms"
-          change="-8.4%"
-          detail="p95 · last hour"
-          icon={Gauge}
-          trend="down"
-        />
-        <MetricCard label="Service uptime" value="99.93%" change="+0.04pp" detail="last 30 days" icon={CheckCircle2} />
-        <MetricCard label="Request rate" value="38.4 req/s" change="+12.1%" detail="last 15 minutes" icon={Activity} />
-        <MetricCard label="Active agent runs" value="18" change="+3" detail="currently running" icon={Zap} />
-        <MetricCard label="Queued jobs" value="12" change="-4" detail="vs last hour" icon={Clock3} trend="down" />
-      </div>
-
-      <div className="grid grid-cols-1 items-stretch gap-4 xl:grid-cols-12">
-        <div className="min-w-0 xl:col-span-7">
-          <PerformanceOverview
-            className="h-full"
-            data={systemTrendData}
-            description="Requests, successful completions, and retry traffic over the last 14 days."
-            headerBadge="Live · 30s"
-            labels={{
-              activeAccounts: "Successful requests",
-              newCustomers: "Total requests",
-              returningUsers: "Retries & fallback",
-            }}
-            showControls={false}
-            title="Request throughput"
-          />
-        </div>
-        <div className="min-w-0 xl:col-span-5">
-          <RealtimeVisitors
-            breakdown={runtimeBreakdown}
-            chartLabel="Requests"
-            liveLabel="Receiving traffic"
-            title="Live request rate"
-            unit="req/s"
-            value="38.4"
-          />
-        </div>
-      </div>
-
-      <SectionCard
-        title="Service health"
-        description="Current health across infrastructure and runtime components."
-        action={<Badge variant="outline">6 healthy · 1 degraded</Badge>}
-      >
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {systemServices.map((service) => (
-            <div key={service.name} className="rounded-xl border bg-muted/20 p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                  <Server className="size-4" />
-                </div>
-                <StatusBadge status={service.status} />
-              </div>
-              <p className="mt-4 font-medium text-sm">{service.name}</p>
-              <p className="mt-1 font-heading text-2xl tabular-nums">{service.metric}</p>
-              <p className="mt-1 text-muted-foreground text-xs">{service.detail}</p>
-            </div>
-          ))}
-        </div>
-      </SectionCard>
-
-      <div className="grid grid-cols-1 items-stretch gap-4 xl:grid-cols-12">
-        <div className="min-w-0 xl:col-span-7">
-          <SectionCard
-            className="h-full"
-            title="Runtime capacity"
-            description="Execution pressure across sandbox and worker resources."
-            action={<StatusBadge status="Healthy" />}
-          >
-            <div className="grid gap-5 xl:grid-cols-[1.15fr_1fr]">
-              <div className="space-y-5">
-                <InlineProgress label="CPU usage" value={44} />
-                <InlineProgress label="Memory usage" value={58} />
-                <InlineProgress label="Queued executions" value={22} />
-              </div>
-              <div className="grid grid-cols-2 gap-4 rounded-xl border bg-muted/20 p-4">
-                <MiniHealth label="Active sandboxes" value="3" />
-                <MiniHealth label="Average execution" value="4m 12s" />
-                <MiniHealth label="Failed executions" value="7" />
-                <MiniHealth label="Timeout count" value="3" />
-              </div>
-            </div>
-          </SectionCard>
-        </div>
-        <div className="min-w-0 xl:col-span-5">
-          <SectionCard
-            className="h-full"
-            title="Recent incidents"
-            description="Events that affected reliability or execution."
-          >
-            <div className="space-y-3">
-              {systemIncidents.map((incident) => (
-                <div key={incident.title} className="flex items-start gap-3 rounded-lg border p-3">
-                  <StatusBadge status={incident.level} />
-                  <div className="min-w-0 flex-1">
-                    <p className="font-medium text-sm">{incident.title}</p>
-                    <p className="mt-1 text-muted-foreground text-xs">
-                      {incident.detail} · {incident.time}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </SectionCard>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function MiniHealth({ label, value }: { readonly label: string; readonly value: string }) {
-  return (
-    <div>
-      <p className="text-muted-foreground text-xs">{label}</p>
-      <p className="mt-1 font-semibold tabular-nums">{value}</p>
-    </div>
-  );
-}
-
 const levelClass: Record<string, string> = {
   INFO: "border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-400",
   WARNING: "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400",
@@ -458,13 +271,10 @@ export function AdminLogs() {
         title="Logs & Monitoring"
         description="Trace system activity, agent execution, experiments, decisions, and security events."
         actions={
-          <>
-            <Button size="sm" variant="outline">
-              <RefreshCw data-icon="inline-start" />
-              Live refresh
-            </Button>
-            <Button size="sm">Export logs</Button>
-          </>
+          <Button size="sm" variant="outline">
+            <RefreshCw data-icon="inline-start" />
+            Live refresh
+          </Button>
         }
       />
 

@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import { Ellipsis } from "lucide-react";
 
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,7 +11,7 @@ export type AnalyticsTableRow = {
   bounce: string;
   path: string;
   time: string;
-  views: string;
+  views: ReactNode;
 };
 
 const defaultRows: AnalyticsTableRow[] = [

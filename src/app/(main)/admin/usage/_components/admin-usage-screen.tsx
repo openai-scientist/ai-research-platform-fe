@@ -5,6 +5,7 @@ import { type FormEvent, useState } from "react";
 import { toast } from "sonner";
 
 import { DataTable } from "@/components/data-table";
+import { ManagementStatusBadge } from "@/components/management-status-badge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { FieldGroup } from "@/components/ui/field";
@@ -12,7 +13,7 @@ import { useProjectUsageQuery } from "@/hooks/use-admin-query";
 import type { TimeRangeParams } from "@/lib/api/types";
 
 import { AdminRefresh } from "../../_components/admin-api-table";
-import { ADMIN_PAGE_SIZE, formatTimestamp, formatUsd, toTimeRange } from "../../_components/admin-api-utils";
+import { ADMIN_PAGE_SIZE, formatTimestamp, formatTokens, toTimeRange } from "../../_components/admin-api-utils";
 import { AdminPageHeader } from "../../_components/admin-primitives";
 import { AdminTimeFilters } from "../../_components/admin-time-filters";
 import { useAdminAccess } from "../../_components/use-admin-access";
@@ -36,22 +37,17 @@ export function AdminUsageScreen() {
     }
   };
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex min-w-0 flex-col gap-4">
       <AdminPageHeader
         title="Usage & Cost"
-        description="Review run costs and budgets by project, ordered by highest cost."
-        actions={
-          <AdminRefresh
-            busy={!enabled || usage.isFetching}
-            onRefresh={() => {
-              void usage.refetch();
-            }}
-          />
-        }
+        description="Review tokens used and budgeted by project, ordered by most tokens used."
+        actions={<AdminRefresh busy={!enabled || usage.isFetching} onRefresh={() => void usage.refetch()} />}
       />
       <DataTable
         rows={rows}
         getRowId={(row) => row.project_id}
+        selectable={false}
+        framed
         columns={[
           {
             id: "project",
@@ -66,17 +62,15 @@ export function AdminUsageScreen() {
             ),
           },
           { id: "runs", label: "Runs", align: "right", cell: (item) => item.run_count },
-          { id: "cost", label: "Cost", align: "right", cell: (item) => formatUsd(item.cost_usd) },
-          { id: "budget", label: "Budget", align: "right", cell: (item) => formatUsd(item.budget_usd) },
+          { id: "tokens", label: "Tokens used", align: "right", cell: (item) => formatTokens(item.tokens_used) },
+          { id: "budget", label: "Token budget", align: "right", cell: (item) => formatTokens(item.token_budget) },
           {
             id: "statuses",
             label: "Run statuses",
             cell: (item) => (
               <div className="flex max-w-sm flex-wrap gap-1">
                 {Object.entries(item.runs_by_status).map(([status, count]) => (
-                  <Badge key={status} variant="outline">
-                    {status.replaceAll("_", " ")}: {count}
-                  </Badge>
+                  <ManagementStatusBadge key={status} status={status} count={count} />
                 ))}
                 {Object.keys(item.runs_by_status).length === 0 && "—"}
               </div>

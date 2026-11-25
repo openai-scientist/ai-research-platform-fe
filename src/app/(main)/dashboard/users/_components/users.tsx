@@ -92,6 +92,8 @@ type UsersProps = {
   readonly roleOptions?: readonly string[];
   readonly showPrimaryActions?: boolean;
   readonly showViewControls?: boolean;
+  /** Row checkboxes and the "N selected" count; leave off when the screen has no bulk action. */
+  readonly showSelection?: boolean;
   readonly statusOptions?: readonly string[];
   readonly teamOptions?: readonly string[];
   readonly title?: string;
@@ -117,6 +119,7 @@ export function Users({
   roleOptions = filters.role,
   showPrimaryActions = true,
   showViewControls = true,
+  showSelection = true,
   statusOptions = filters.status,
   teamOptions = filters.team,
   title = "Users",
@@ -144,7 +147,10 @@ export function Users({
 
   // Phones always get the card grid: the table does not fit a narrow screen.
   const isMobile = useIsMobile();
-  const activeView: UsersView = isMobile ? "grid" : view;
+  // Without view controls a stored "grid" choice could not be undone, so the list is fixed.
+  const desktopView: UsersView = showViewControls ? view : "list";
+  const activeView: UsersView = isMobile ? "grid" : desktopView;
+  const showViewTabs = showViewControls && !isMobile;
 
   function changeView(next: UsersView) {
     setView(next);
@@ -167,8 +173,9 @@ export function Users({
         roleChoices,
         showTeam: teamOptions.length > 0,
         showWorkspace: workspaceOptions.length > 0,
-      }),
+      }).filter((column) => (showSelection ? true : column.id !== "select")),
     [
+      showSelection,
       roleChangeDisabled,
       showActions,
       nameColumnLabel,
@@ -201,7 +208,7 @@ export function Users({
     manualSorting: Boolean(server),
     enableSorting: !server,
     rowCount: server?.total,
-    enableRowSelection: true,
+    enableRowSelection: showSelection,
     onRowSelectionChange: setRowSelection,
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
@@ -393,7 +400,13 @@ export function Users({
           ) : null}
         </CardAction>
       </CardHeader>
-      <CardContent className="flex flex-col gap-4 px-0">
+      <CardContent
+        className={cn(
+          "flex flex-col gap-4 px-0",
+          // Nothing sits between the header and the table: join them so the rules do not double up.
+          compactToolbar && !showSelection && !showViewTabs && "-mt-4 [&_thead_tr]:border-t-0",
+        )}
+      >
         {compactToolbar ? null : (
           <div className="flex flex-wrap items-center justify-between gap-3 px-4">
             <div className="flex flex-wrap items-center gap-3">
@@ -406,10 +419,16 @@ export function Users({
           </div>
         )}
 
-        <div className="flex items-center justify-between gap-3 px-4">
-          <div className="text-muted-foreground text-sm tabular-nums">{selectedCount} selected</div>
-          {isMobile ? null : viewTabs}
-        </div>
+        {showSelection || showViewTabs ? (
+          <div className="flex items-center justify-between gap-3 px-4">
+            {showSelection ? (
+              <div className="text-muted-foreground text-sm tabular-nums">{selectedCount} selected</div>
+            ) : (
+              <span />
+            )}
+            {showViewTabs ? viewTabs : null}
+          </div>
+        ) : null}
 
         <UsersTable
           loadingLabel={"Loading " + entityLabel + "..."}

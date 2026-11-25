@@ -1,17 +1,12 @@
 import type { Metadata } from "next";
 
-import { AdminProjects } from "../_components/admin-projects";
+import { AdminProjectsScreen } from "./_components/admin-projects-screen";
 
 export const metadata: Metadata = {
   title: "Projects · OpenAI Scientist",
-  description: "Review and manage OpenAI Scientist research projects.",
+  description: "Usage metadata of every OpenAI Scientist project.",
 };
 
-interface PageProps {
-  searchParams: Promise<{ view?: string | string[] }>;
-}
-
-export default async function Page({ searchParams }: PageProps) {
-  const { view } = await searchParams;
-  return <AdminProjects activeView={view === "list" ? "list" : "grid"} />;
+export default function Page() {
+  return <AdminProjectsScreen />;
 }

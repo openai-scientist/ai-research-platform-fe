@@ -116,7 +116,9 @@ export function TopTrafficSources({
   readonly valueLabel?: string;
   readonly title?: string;
 }) {
+  // Open on the first tab that has rows; the key re-selects it when the data arrives.
   const [firstTab] = tabs;
+  const initialTab = tabs.find((tab) => tab.data.length > 0) ?? firstTab;
 
   return (
     <Card className="h-full gap-2">
@@ -128,7 +130,7 @@ export function TopTrafficSources({
       </CardHeader>
 
       <CardContent className="px-0">
-        <Tabs defaultValue={firstTab?.value} className="flex flex-col gap-3">
+        <Tabs key={initialTab?.value} defaultValue={initialTab?.value} className="flex flex-col gap-3">
           <TabsList className="w-full justify-start border-b px-2.5" variant="line">
             {tabs.map((tab) => (
               <TabsTrigger className="flex-none font-normal" key={tab.value} value={tab.value}>

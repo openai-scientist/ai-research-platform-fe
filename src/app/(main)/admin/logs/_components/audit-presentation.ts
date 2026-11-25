@@ -51,6 +51,39 @@ export function auditTitle(item: AuditItem) {
   return actionLabels[item.action] ?? readableValue(item.action);
 }
 
+type ActivityTone = "success" | "info" | "warning" | "destructive" | "neutral";
+
+const activityVerbs: Readonly<Partial<Record<string, ActivityTone>>> = {
+  added: "success",
+  completed: "success",
+  created: "success",
+  granted: "success",
+  registered: "success",
+  reopened: "success",
+  restored: "success",
+  changed: "info",
+  recorded: "info",
+  reauthorized: "info",
+  renamed: "info",
+  transferred: "info",
+  updated: "info",
+  abandoned: "warning",
+  archived: "warning",
+  deleted: "destructive",
+  failed: "destructive",
+  removed: "destructive",
+  revoked: "destructive",
+};
+
+export function auditActivityTone(item: AuditItem): ActivityTone {
+  if (item.action === "user.status_changed") {
+    if (item.details.after === UserStatus.Active) return "success";
+    if (item.details.after === UserStatus.Suspended) return "destructive";
+  }
+  const verb = item.action.split(/[._]/).at(-1) ?? "";
+  return Object.hasOwn(activityVerbs, verb) ? (activityVerbs[verb] ?? "neutral") : "neutral";
+}
+
 export function auditTransition(item: AuditItem): { label: string; before: string; after: string } | null {
   if (
     item.action === "user.status_changed" &&

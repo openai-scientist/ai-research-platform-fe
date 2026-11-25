@@ -116,6 +116,8 @@ export interface TrafficQualityProps {
   tooltipLabel?: string;
   tooltipLabelFormatter?: (value: number) => string;
   showPoints?: boolean;
+  /** Draw only the points, for sparse series where a line between neighbours would mislead. */
+  pointsOnly?: boolean;
   xDomain?: [number, number];
   xTickFormatter?: (value: number) => string;
   xTicks?: number[];
@@ -139,6 +141,7 @@ export function TrafficQuality({
   tooltipLabel,
   tooltipLabelFormatter,
   showPoints = false,
+  pointsOnly = false,
   xDomain = [1, 28],
   xTickFormatter = formatDefaultWeek,
   xTicks = defaultWeeklyTicks,
@@ -214,10 +217,14 @@ export function TrafficQuality({
             />
             <Line
               dataKey="actualQuality"
-              dot={showPoints ? { r: 2.5, fill: "var(--color-actualQuality)", strokeWidth: 0 } : false}
+              dot={
+                showPoints || pointsOnly
+                  ? { r: pointsOnly ? 4 : 2.5, fill: "var(--color-actualQuality)", strokeWidth: 0 }
+                  : false
+              }
               activeDot={{ r: 4 }}
               stroke="var(--color-actualQuality)"
-              strokeWidth={2.5}
+              strokeWidth={pointsOnly ? 0 : 2.5}
               type="linear"
             />
           </ComposedChart>

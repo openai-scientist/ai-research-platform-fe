@@ -24,8 +24,6 @@ const kpis: Record<OverviewSection, readonly [string, string][]> = {
     ["request_rate", "Request rate"],
     ["error_rate", "Error rate"],
     ["p95_latency", "P95 latency"],
-    ["queue_depth", "Queue depth"],
-    ["service_uptime", "Service uptime"],
   ],
   governance: [
     ["decisions_evaluated", "Decisions evaluated"],
@@ -97,7 +95,7 @@ export function liveBreakdown(data: AdminOverviewData | undefined, key: string):
   return breakdown?.available
     ? breakdown.items.map((item) => ({
         label: item.label,
-        value: item.value,
+        value: Math.round(item.value * 100) / 100,
         markerClassName: "size-2 rounded-full bg-primary",
       }))
     : [];

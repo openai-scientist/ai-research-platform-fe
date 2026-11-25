@@ -1,5 +1,5 @@
 import { cn } from "cn";
-import { CircleCheck, CircleDashed, CircleX, Clock3, LoaderCircle, TriangleAlert } from "lucide-react";
+import { CircleCheck, CircleDashed, CircleSlash, CircleX, Clock3, LoaderCircle, TriangleAlert } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 
@@ -9,6 +9,7 @@ const tones = {
   active: { icon: LoaderCircle, className: "bg-primary/10 text-primary" },
   error: { icon: CircleX, className: "bg-destructive/10 text-destructive" },
   warning: { icon: TriangleAlert, className: "bg-amber-500/10 text-amber-800 dark:text-amber-300" },
+  stopped: { icon: CircleSlash, className: "bg-orange-500/10 text-orange-700 dark:text-orange-400" },
   neutral: { icon: CircleDashed, className: "bg-muted text-muted-foreground" },
 };
 
@@ -24,9 +25,14 @@ const statusTones: Record<string, keyof typeof tones> = {
   awaiting_review: "attention",
   needs_review: "attention",
   pending: "attention",
+  queued: "attention",
+  paused: "attention",
   invited: "attention",
   expired: "error",
   failed: "error",
+  stopped: "stopped",
+  cancelled: "stopped",
+  canceled: "stopped",
   suspended: "error",
   unavailable: "error",
   budget_exceeded: "warning",
@@ -35,13 +41,13 @@ const statusTones: Record<string, keyof typeof tones> = {
   warning: "warning",
 };
 
-export function ManagementStatusBadge({ status }: { status: string }) {
+export function ManagementStatusBadge({ status, count }: { status: string; count?: number }) {
   const normalized = status.toLowerCase().replaceAll(" ", "_");
   const { icon: Icon, className } = tones[statusTones[normalized] ?? "neutral"];
   return (
     <Badge variant="outline" className={cn("gap-1 border-transparent capitalize", className)}>
       <Icon />
-      {status.replaceAll("_", " ")}
+      {count === undefined ? status.replaceAll("_", " ") : `${status.replaceAll("_", " ")}: ${count}`}
     </Badge>
   );
 }

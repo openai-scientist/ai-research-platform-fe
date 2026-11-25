@@ -25,6 +25,7 @@ export const workspaceKeys = {
   preferenceLists: (id: string) => ["projects", "detail", id, "notification-preferences"] as const,
   activity: (id: string) => ["projects", "detail", id, "activity"] as const,
   spending: (id: string) => ["projects", "detail", id, "spending"] as const,
+  platformLimits: (id: string) => ["projects", "detail", id, "platform-limits"] as const,
   usage: (id: string, month?: string) => ["projects", "detail", id, "spending", "usage", month] as const,
   preferences: (id: string, userId: string) => ["projects", "detail", id, "notification-preferences", userId] as const,
 };
@@ -62,8 +63,10 @@ export const adminKeys = {
   usageLists: () => ["admin", "usage"] as const,
   users: (params?: UserListParams) => ["admin", "users", params] as const,
   audit: (params?: AuditListParams) => ["admin", "audit", params] as const,
-  usage: (params?: TimeRangeParams) => ["admin", "usage", params] as const,
+  usage: (params?: TimeRangeParams & { q?: string }) => ["admin", "usage", params] as const,
   models: () => ["admin", "models"] as const,
+  providerMetrics: () => ["admin", "provider-metrics"] as const,
+  settings: () => ["admin", "settings"] as const,
   integrations: () => ["admin", "integrations"] as const,
 };
 export const writingBankKeys = {

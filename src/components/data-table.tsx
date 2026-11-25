@@ -2,6 +2,7 @@
 
 import { type ReactNode, useId, useState } from "react";
 
+import { cn } from "cn";
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Columns2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -44,6 +45,8 @@ export function DataTable<T>({
   toolbar,
   pending = false,
   failed = false,
+  selectable = true,
+  framed = false,
   pagination,
 }: {
   columns: readonly DataTableColumn<T>[];
@@ -52,11 +55,14 @@ export function DataTable<T>({
   toolbar?: ReactNode;
   pending?: boolean;
   failed?: boolean;
+  selectable?: boolean;
+  framed?: boolean;
   pagination?: DataTablePagination;
 }) {
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const visible = columns.filter((column) => !hidden.has(column.id));
+  const columnCount = visible.length + Number(selectable);
   const selectedCount = rows.filter((row) => selected.has(getRowId(row))).length;
   const busy = [pending, failed, pagination?.busy].some(Boolean);
   const allSelected = rows.length > 0 && selectedCount === rows.length;
@@ -109,18 +115,28 @@ export function DataTable<T>({
           </DropdownMenu>
         </div>
       </div>
-      <div className="min-w-0">
+      <div
+        className={cn(
+          "min-w-0",
+          framed &&
+            "overflow-hidden rounded-xl border bg-card [&_thead]:bg-muted/40 [&_th:first-child]:pl-4 [&_td:first-child]:pl-4 [&_th:last-child]:pr-4 [&_td:last-child]:pr-4",
+        )}
+      >
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-12">
-                <Checkbox
-                  aria-label="Select all rows on this page"
-                  disabled={busy || !rows.length}
-                  checked={allSelected ? true : partiallySelected}
-                  onCheckedChange={(checked) => setSelected(checked === true ? new Set(rows.map(getRowId)) : new Set())}
-                />
-              </TableHead>
+              {selectable && (
+                <TableHead className="w-12">
+                  <Checkbox
+                    aria-label="Select all rows on this page"
+                    disabled={busy || !rows.length}
+                    checked={allSelected ? true : partiallySelected}
+                    onCheckedChange={(checked) =>
+                      setSelected(checked === true ? new Set(rows.map(getRowId)) : new Set())
+                    }
+                  />
+                </TableHead>
+              )}
               {visible.map((column) => (
                 <TableHead key={column.id} className={column.align === "right" ? "text-right" : undefined}>
                   {column.label}
@@ -131,7 +147,7 @@ export function DataTable<T>({
           <TableBody>
             {pending && (
               <TableRow>
-                <TableCell colSpan={visible.length + 1}>
+                <TableCell colSpan={columnCount}>
                   <div role="status" aria-label="Loading records" className="flex flex-col gap-3 py-4">
                     {[0, 1, 2].map((i) => (
                       <Skeleton key={i} className="h-8 w-full" />
@@ -144,15 +160,20 @@ export function DataTable<T>({
               !failed &&
               rows.length > 0 &&
               rows.map((row, index) => (
-                <TableRow key={getRowId(row)} data-state={selected.has(getRowId(row)) ? "selected" : undefined}>
-                  <TableCell>
-                    <Checkbox
-                      aria-label={`Select row ${index + 1}`}
-                      disabled={busy}
-                      checked={selected.has(getRowId(row))}
-                      onCheckedChange={(checked) => selectRow(getRowId(row), checked === true)}
-                    />
-                  </TableCell>
+                <TableRow
+                  key={getRowId(row)}
+                  data-state={selectable && selected.has(getRowId(row)) ? "selected" : undefined}
+                >
+                  {selectable && (
+                    <TableCell>
+                      <Checkbox
+                        aria-label={`Select row ${index + 1}`}
+                        disabled={busy}
+                        checked={selected.has(getRowId(row))}
+                        onCheckedChange={(checked) => selectRow(getRowId(row), checked === true)}
+                      />
+                    </TableCell>
+                  )}
                   {visible.map((column) => (
                     <TableCell
                       key={column.id}
@@ -165,7 +186,7 @@ export function DataTable<T>({
               ))}
             {!pending && !failed && rows.length === 0 && (
               <TableRow>
-                <TableCell colSpan={visible.length + 1} className="h-24 text-center">
+                <TableCell colSpan={columnCount} className="h-24 text-center">
                   No results.
                 </TableCell>
               </TableRow>
@@ -174,7 +195,7 @@ export function DataTable<T>({
         </Table>
       </div>
       <DataTableFooter
-        selectedCount={selectedCount}
+        selectedCount={selectable ? selectedCount : undefined}
         total={pagination?.total ?? rows.length}
         pagination={pagination}
         onResetSelection={() => setSelected(new Set())}

@@ -1,5 +1,5 @@
 import type { PlatformRole } from "@/lib/auth/types";
-import type { ApiResult } from "@/types/api";
+import { ApiError, type ApiResult } from "@/types/api";
 import type { RunStatus, UserStatus } from "@/types/enums";
 
 import apiService from "../core";
@@ -39,9 +39,71 @@ export interface ProjectUsageItem {
   archived: boolean;
   run_count: number;
   runs_by_status: Partial<Record<RunStatus, number>>;
-  cost_usd: string;
-  budget_usd: string;
+  /** Tokens (input and output) the counted runs used. */
+  tokens_used: number;
+  /** The sum of the counted runs' token budgets. */
+  token_budget: number;
   last_run_at: string | null;
+  /** The active Project Managers, the owner first. Absent from a backend that does not send them yet. */
+  managers?: ProjectManagerRef[];
+}
+
+/** Who runs a project: operational metadata an admin may see. */
+export interface ProjectManagerRef {
+  user_id: string;
+  display_name: string;
+  avatar_url: string | null;
+}
+
+/** `q` searches project names; `from` and `to` choose which runs are counted. */
+export interface ProjectUsageParams extends TimeRangeParams {
+  q?: string;
+}
+
+/** What the PI is consulted about; the backend keeps one step limit per kind. */
+export const CONSULTATION_KINDS = ["charter", "stage_outcome", "failure", "close"] as const;
+export type ConsultationKind = (typeof CONSULTATION_KINDS)[number];
+
+/**
+ * The platform's behaviour settings (`PlatformSettings` in the management service). Token fields count input and
+ * output tokens. A save sends the whole object: the backend refuses unknown keys.
+ */
+export interface PlatformSettings {
+  max_auto_revisions: number;
+  max_iterations: number;
+  max_rounds: number;
+  run_default_token_budget: number;
+  run_max_token_budget: number;
+  allowed_signup_domains: string[];
+  max_active_runs_per_user: number;
+  max_active_runs_total: number;
+  user_monthly_token_limit: number;
+  platform_monthly_token_limit: number;
+  credits_per_million_tokens?: number;
+  release_share_max_days: number;
+  oversight_llm_timeout_seconds: number;
+  oversight_contact_email: string | null;
+  oversight_evalue_alpha: number;
+  oversight_pi_steps_by_kind: Record<ConsultationKind, number>;
+  oversight_pi_proposal_steps: number;
+  project_brief_chars: number;
+  project_lesson_min_runs: number;
+  max_active_runs_per_engine: number;
+  engine_run_retention_days: number;
+  sweep_engine_concurrency: number;
+  sweep_pass_seconds: number;
+  stage_finish_grace_seconds: number;
+}
+
+/** The JSON schema of the settings and the defaults the backend fills in. */
+export interface PlatformSettingsSchema {
+  schema: Record<string, unknown>;
+  defaults: PlatformSettings;
+}
+
+/** What "sign out everywhere" did: how many sessions of the user it ended. */
+export interface SessionsRevoked {
+  sessions: number;
 }
 
 export interface UserListParams extends ListParams {
@@ -91,6 +153,29 @@ export type ModelRole = "stage" | "review";
 
 /** `null` for a role that has no model yet. */
 export type ModelProfiles = Record<ModelRole, ModelProfile | null>;
+
+interface ProviderRequestBucket {
+  start: string;
+  requests: number;
+}
+
+export interface ProviderRequestBreakdown {
+  label: string;
+  requests: number;
+}
+
+export interface ProviderMetrics {
+  observed_from: string | null;
+  through: string;
+  requests_today: number | null;
+  average_latency_ms: number | null;
+  failure_rate: number | null;
+  reliability: (ProviderRequestBucket & { successful_requests: number })[];
+  recent_requests: ProviderRequestBucket[];
+  by_provider: ProviderRequestBreakdown[];
+  by_model: ProviderRequestBreakdown[];
+  by_capability: ProviderRequestBreakdown[];
+}
 
 export interface SaveModelRequest {
   provider: "openai_compatible";
@@ -158,6 +243,13 @@ export const fetchAdmin = {
     );
     return response.data;
   },
+  /** Ends every session of a user. It does not suspend the account: they can sign in again. */
+  revokeUserSessions: async (userId: string): Promise<ApiResult<SessionsRevoked>> => {
+    const response = await apiService.post<ApiResult<SessionsRevoked>>(
+      `/admin/users/${encodeURIComponent(userId)}/sessions/revoke`,
+    );
+    return response.data;
+  },
   getAudit: async (params?: AuditListParams, signal?: AbortSignal): Promise<AuditListResponse> => {
     const response = await apiService.get<AuditListResponse>("/audit", params, { signal });
     return response.data;
@@ -165,6 +257,17 @@ export const fetchAdmin = {
   getModels: async (signal?: AbortSignal): Promise<ApiResult<ModelProfiles>> => {
     const response = await apiService.get<ApiResult<ModelProfiles>>("/admin/models", undefined, { signal });
     return response.data;
+  },
+  getProviderMetrics: async (signal?: AbortSignal): Promise<ProviderMetrics | null> => {
+    try {
+      const response = await apiService.get<ApiResult<ProviderMetrics>>("/admin/providers/metrics", undefined, {
+        signal,
+      });
+      return response.data.data;
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) return null;
+      throw error;
+    }
   },
   saveModel: async (role: ModelRole, data: SaveModelRequest): Promise<ApiResult<ModelProfile>> => {
     const response = await apiService.put<ApiResult<ModelProfile>>(`/admin/models/${role}`, data);
@@ -193,7 +296,22 @@ export const fetchAdmin = {
     );
     return response.data;
   },
-  getProjectUsage: async (params?: TimeRangeParams, signal?: AbortSignal): Promise<ProjectUsageListResponse> => {
+  getSettings: async (signal?: AbortSignal): Promise<ApiResult<PlatformSettings>> => {
+    const response = await apiService.get<ApiResult<PlatformSettings>>("/admin/settings", undefined, { signal });
+    return response.data;
+  },
+  getSettingsSchema: async (signal?: AbortSignal): Promise<ApiResult<PlatformSettingsSchema>> => {
+    const response = await apiService.get<ApiResult<PlatformSettingsSchema>>("/admin/settings/schema", undefined, {
+      signal,
+    });
+    return response.data;
+  },
+  /** Publishes a new settings version. Takes the whole object; the saved one comes back. */
+  saveSettings: async (data: PlatformSettings): Promise<ApiResult<PlatformSettings>> => {
+    const response = await apiService.put<ApiResult<PlatformSettings>>("/admin/settings", data);
+    return response.data;
+  },
+  getProjectUsage: async (params?: ProjectUsageParams, signal?: AbortSignal): Promise<ProjectUsageListResponse> => {
     const response = await apiService.get<ProjectUsageListResponse>("/admin/usage/projects", params, { signal });
     return response.data;
   },

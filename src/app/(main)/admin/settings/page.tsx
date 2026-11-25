@@ -1,12 +1,5 @@
-import type { Metadata } from "next";
-
-import { AdminSettings } from "../_components/settings-page";
-
-export const metadata: Metadata = {
-  title: "Settings · OpenAI Scientist",
-  description: "Manage OpenAI Scientist platform-wide settings and policies.",
-};
+import { redirect } from "next/navigation";
 
 export default function Page() {
-  return <AdminSettings />;
+  redirect("/admin");
 }

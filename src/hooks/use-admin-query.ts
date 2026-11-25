@@ -9,6 +9,7 @@ import {
   fetchAdmin,
   type ProjectUsageItem,
   type ProjectUsageListResponse,
+  type ProjectUsageParams,
   type UserAdminItem,
   type UserListParams,
   type UserListResponse,
@@ -64,7 +65,7 @@ export function useUsersQuery(params?: UserListParams, options?: ApiQueryOptions
 export function useAuditQuery(params?: AuditListParams, options?: ApiQueryOptions<AuditListResponse>) {
   return useApiQuery(adminKeys.audit(params), (signal) => fetchAdmin.getAudit(params, signal), options);
 }
-export function useProjectUsageQuery(params?: TimeRangeParams, options?: ApiQueryOptions<ProjectUsageListResponse>) {
+export function useProjectUsageQuery(params?: ProjectUsageParams, options?: ApiQueryOptions<ProjectUsageListResponse>) {
   return useApiQuery(adminKeys.usage(params), (signal) => fetchAdmin.getProjectUsage(params, signal), options);
 }
 export function useUpdateUserStatusMutation() {
@@ -72,6 +73,9 @@ export function useUpdateUserStatusMutation() {
     (data: { userId: string; status: UserStatus }) => fetchAdmin.updateUserStatus(data.userId, { status: data.status }),
     [adminKeys.all, authKeys.me, projectKeys.all],
   );
+}
+export function useRevokeUserSessionsMutation() {
+  return useApiMutation((userId: string) => fetchAdmin.revokeUserSessions(userId));
 }
 export function useUpdatePlatformRoleMutation() {
   return useApiMutation(

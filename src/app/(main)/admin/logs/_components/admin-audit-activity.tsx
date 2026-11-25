@@ -15,7 +15,15 @@ import { UserStatus } from "@/types/enums";
 
 import { formatTimestamp } from "../../_components/admin-api-utils";
 import { AuditDetails } from "./audit-details";
-import { auditTitle, auditTransition, readableValue } from "./audit-presentation";
+import { auditActivityTone, auditTitle, auditTransition, readableValue } from "./audit-presentation";
+
+const activityBadgeClasses = {
+  success: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+  info: "bg-blue-500/10 text-blue-700 dark:text-blue-400",
+  warning: "bg-amber-500/10 text-amber-800 dark:text-amber-300",
+  destructive: undefined,
+  neutral: "text-muted-foreground",
+} satisfies Record<ReturnType<typeof auditActivityTone>, string | undefined>;
 
 export function AuditChange({ item }: { item: AuditItem }) {
   const change = auditTransition(item);
@@ -86,6 +94,8 @@ export function AdminAuditActivity({
     <DataTable
       rows={rows}
       getRowId={(item) => item.id}
+      framed
+      selectable={false}
       pending={pending}
       failed={failed}
       toolbar={toolbar}
@@ -95,12 +105,20 @@ export function AdminAuditActivity({
           id: "activity",
           label: "Activity",
           hideable: false,
-          cell: (item) => (
-            <div className="flex flex-col gap-2">
-              <span className="font-medium">{auditTitle(item)}</span>
-              <AuditChange item={item} />
-            </div>
-          ),
+          cell: (item) => {
+            const tone = auditActivityTone(item);
+            return (
+              <div className="flex flex-col items-start gap-2">
+                <Badge
+                  variant={tone === "destructive" ? "destructive" : "secondary"}
+                  className={activityBadgeClasses[tone]}
+                >
+                  {auditTitle(item)}
+                </Badge>
+                <AuditChange item={item} />
+              </div>
+            );
+          },
         },
         {
           id: "actor",

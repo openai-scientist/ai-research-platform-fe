@@ -1,3 +1,4 @@
+import { cn } from "cn";
 import { ArrowDownRight, ArrowUpRight, Ellipsis } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -31,7 +32,12 @@ const defaultItems: AnalyticsKpiItem[] = [
 export function AnalyticsKpiStrip({ items = defaultItems }: { readonly items?: readonly AnalyticsKpiItem[] }) {
   return (
     <div className="overflow-hidden rounded-xl bg-card shadow-xs ring-1 ring-foreground/10">
-      <div className="grid divide-y *:data-[slot=card]:rounded-none *:data-[slot=card]:ring-0 md:grid-cols-2 md:divide-x md:divide-y-0 xl:grid-cols-5">
+      <div
+        className={cn(
+          "grid divide-y *:data-[slot=card]:rounded-none *:data-[slot=card]:ring-0 md:divide-x md:divide-y-0",
+          items.length === 3 ? "md:grid-cols-3" : "md:grid-cols-2 xl:grid-cols-5",
+        )}
+      >
         {items.map((item) => {
           const TrendIcon = item.direction === "up" ? ArrowUpRight : ArrowDownRight;
           const trendClassName =

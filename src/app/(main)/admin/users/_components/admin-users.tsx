@@ -3,8 +3,7 @@
 import { useEffect, useState } from "react";
 
 import type { PaginationState } from "@tanstack/react-table";
-import { format } from "date-fns";
-import { Download, Plus, UserCheck, UserPlus, Users as UsersIcon, UserX } from "lucide-react";
+import { Plus } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -13,11 +12,13 @@ import { PlatformRole, UserStatus } from "@/types/enums";
 
 import type { UserRow } from "../../../dashboard/users/_components/data";
 import { Users } from "../../../dashboard/users/_components/users";
-import { AdminPageHeader, MetricCard } from "../../_components/admin-primitives";
+import { formatJoinedDate } from "../../_components/admin-api-utils";
+import { AdminPageHeader } from "../../_components/admin-primitives";
 import { useAdminAccess } from "../../_components/use-admin-access";
 import { AdminUserActions } from "./admin-user-actions";
 import { CreateUserDialog } from "./create-user-dialog";
 import { EditUserDialog } from "./edit-user-dialog";
+import { UserStats } from "./user-stats";
 
 // Labels for the backend platform_role.
 const PLATFORM_ROLE_LABELS: Record<PlatformRole, string> = {
@@ -77,7 +78,7 @@ export function AdminUsers() {
     id: user.id,
     avatar_url: user.avatar_url,
     email: user.email,
-    joinedDate: format(new Date(user.created_at), "dd MMM yyyy, h:mm a"),
+    joinedDate: formatJoinedDate(user.created_at),
     lastActive: 0,
     name: user.display_name ?? user.email,
     role: user.platform_role ? PLATFORM_ROLE_LABELS[user.platform_role] : NO_PLATFORM_ROLE_LABEL,
@@ -116,27 +117,14 @@ export function AdminUsers() {
         title="Users"
         description="Manage the system accounts used by the OpenAI Scientist platform."
         actions={
-          <>
-            {/* Export is not backed by an API yet. */}
-            <Button variant="outline">
-              <Download data-icon="inline-start" />
-              Export
-            </Button>
-            <Button disabled={!enabled} onClick={() => setCreateOpen(true)}>
-              <Plus data-icon="inline-start" />
-              Add User
-            </Button>
-          </>
+          <Button disabled={!enabled} onClick={() => setCreateOpen(true)}>
+            <Plus data-icon="inline-start" />
+            Add User
+          </Button>
         }
       />
 
-      {/* Placeholder values until the backend provides user statistics. */}
-      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
-        <MetricCard label="Total users" value="—" icon={UsersIcon} />
-        <MetricCard label="Active users" value="—" icon={UserCheck} />
-        <MetricCard label="Suspended users" value="—" icon={UserX} />
-        <MetricCard label="New this month" value="—" icon={UserPlus} />
-      </div>
+      <UserStats enabled={enabled} />
 
       <Users
         server={{
@@ -172,6 +160,7 @@ export function AdminUsers() {
         roleOptions={ROLE_OPTIONS}
         showPrimaryActions={false}
         showViewControls={false}
+        showSelection={false}
         statusOptions={STATUS_OPTIONS}
         teamOptions={NO_OPTIONS}
         title="All users"
