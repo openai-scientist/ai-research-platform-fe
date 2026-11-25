@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "cn";
-import { BadgeCheck, Bell, Check, CreditCard, LogOut } from "lucide-react";
+import { BadgeCheck, Bell, Check, LogOut } from "lucide-react";
 
 import { AccountSecurityDialog } from "@/components/auth/account-security-dialog";
 import { useAccountMenu } from "@/components/auth/use-account-menu";
@@ -101,10 +101,6 @@ export function AccountSwitcher({
             <DropdownMenuItem onSelect={() => setSecurityOpen(true)}>
               <BadgeCheck />
               Account
-            </DropdownMenuItem>
-            <DropdownMenuItem>
-              <CreditCard />
-              Billing
             </DropdownMenuItem>
             <DropdownMenuItem>
               <Bell />

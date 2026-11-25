@@ -17,7 +17,8 @@ import {
   CommandList,
   CommandSeparator,
 } from "@/components/ui/command";
-import type { NavMainItem } from "@/navigation/sidebar/sidebar-items";
+import { adminSidebarItems } from "@/navigation/sidebar/admin-sidebar-items";
+import type { NavGroup, NavMainItem } from "@/navigation/sidebar/sidebar-items";
 import { sidebarItems } from "@/navigation/sidebar/sidebar-items";
 
 type SearchItem = {
@@ -30,44 +31,43 @@ type SearchItem = {
   newTab?: boolean;
 };
 
-const sidebarGroupLabels = new Set(sidebarItems.flatMap((group) => (group.label ? [group.label] : [])));
-
-function getSubItemGroup(groupLabel: string | undefined, itemTitle: string) {
-  return sidebarGroupLabels.has(itemTitle) ? (groupLabel ?? "Other") : itemTitle;
+function getSubItemGroup(groupLabels: Set<string>, groupLabel: string | undefined, itemTitle: string) {
+  return groupLabels.has(itemTitle) ? (groupLabel ?? "Other") : itemTitle;
 }
 
-const searchItems: SearchItem[] = sidebarItems.flatMap((group) =>
-  group.items.flatMap((item) => {
-    if (item.subItems) {
-      return item.subItems.map((sub) => ({
-        id: sub.id,
-        group: getSubItemGroup(group.label, item.title),
-        label: sub.title,
-        url: sub.url,
-        icon: item.icon,
-        disabled: sub.disabled,
-        newTab: sub.newTab,
-      }));
-    }
-    return [
-      {
-        id: item.id,
-        group: group.label ?? "Other",
-        label: item.title,
-        url: item.url,
-        icon: item.icon,
-        disabled: item.disabled,
-        newTab: item.newTab,
-      },
-    ];
-  }),
-);
+function buildSearchItems(groups: NavGroup[]): SearchItem[] {
+  const groupLabels = new Set(groups.flatMap((group) => (group.label ? [group.label] : [])));
+  return groups.flatMap((group) =>
+    group.items.flatMap((item) => {
+      if (item.subItems) {
+        return item.subItems.map((sub) => ({
+          id: sub.id,
+          group: getSubItemGroup(groupLabels, group.label, item.title),
+          label: sub.title,
+          url: sub.url,
+          icon: item.icon,
+          disabled: sub.disabled,
+          newTab: sub.newTab,
+        }));
+      }
+      return [
+        {
+          id: item.id,
+          group: group.label ?? "Other",
+          label: item.title,
+          url: item.url,
+          icon: item.icon,
+          disabled: item.disabled,
+          newTab: item.newTab,
+        },
+      ];
+    }),
+  );
+}
 
 function getAvailableItems(items: SearchItem[]) {
   return items.filter((item) => !item.disabled && !item.url.includes("coming-soon"));
 }
-
-const recommendations = getAvailableItems(searchItems);
 
 function groupBy(items: SearchItem[]) {
   const groups = [...new Set(items.map((item) => item.group))];
@@ -77,7 +77,14 @@ function groupBy(items: SearchItem[]) {
   }));
 }
 
-export function SearchDialog() {
+/** Searches the pages of the admin sidebar, or the template demos by default. */
+export function SearchDialog({ mode = "template" }: { readonly mode?: "admin" | "template" }) {
+  const placeholder = mode === "admin" ? "Search pages…" : "Search dashboards, users, and more…";
+  const searchItems = React.useMemo(
+    () => buildSearchItems(mode === "admin" ? adminSidebarItems : sidebarItems),
+    [mode],
+  );
+  const recommendations = React.useMemo(() => getAvailableItems(searchItems), [searchItems]);
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
   const router = useRouter();
@@ -145,7 +152,7 @@ export function SearchDialog() {
       </Button>
       <CommandDialog open={open} onOpenChange={handleOpenChange}>
         <Command>
-          <CommandInput placeholder="Search dashboards, users, and more…" value={query} onValueChange={setQuery} />
+          <CommandInput placeholder={placeholder} value={query} onValueChange={setQuery} />
           <CommandList>
             <CommandEmpty>No results found.</CommandEmpty>
             {query ? renderGroups(searchItems) : renderGroups(recommendations)}
