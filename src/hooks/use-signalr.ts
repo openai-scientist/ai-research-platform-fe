@@ -25,6 +25,30 @@ interface NotificationStreamState {
   status: NotificationConnectionStatus;
 }
 
+const TOASTED_IDS_LIMIT = 200;
+const toastedIdsKey = (userId: string) => `notification-toasted:${userId}`;
+
+function loadToastedIds(userId: string): Set<string> {
+  try {
+    const parsed: unknown = JSON.parse(window.localStorage.getItem(toastedIdsKey(userId)) ?? "[]");
+    return new Set(Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === "string") : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function saveToastedIds(userId: string, ids: Set<string>) {
+  try {
+    const key = toastedIdsKey(userId);
+    // Merge with other tabs' writes so parallel tabs do not re-toast each other's notifications.
+    const stored: unknown = JSON.parse(window.localStorage.getItem(key) ?? "[]");
+    if (Array.isArray(stored)) for (const id of stored) if (typeof id === "string") ids.add(id);
+    window.localStorage.setItem(key, JSON.stringify([...ids].slice(-TOASTED_IDS_LIMIT)));
+  } catch {
+    // Storage can be blocked; in-session dedupe still applies.
+  }
+}
+
 /** Existing realtime hook; the current backend transport is SSE, not a SignalR Hub. */
 export function useSignalR() {
   const queryClient = useQueryClient();
@@ -40,6 +64,10 @@ export function useSignalR() {
     if (!userId) return;
     let active = true;
     const seenNotificationIds = new Set<string>();
+    const toastedIds = loadToastedIds(userId);
+    let hasBaseline = false;
+    let baseline = 0;
+    let persistToasted = false;
     const toastIds = new Set<string>();
     // The run each toast is about, to take it down once that run is opened.
     const runOfToast = new Map<string, { run: string; finish(): void }>();
@@ -98,14 +126,27 @@ export function useSignalR() {
       onSnapshot: (snapshot) => {
         if (!active) return;
         const newNotifications: NotificationItem[] = [];
-        // Show every unread kind, including the first snapshot. Retain IDs across
-        // reconnects and read updates so the same notification only toasts once.
+        // The first snapshot is backlog: it never toasts. Later ones toast only unread items that are newer than
+        // that backlog and were never toasted before, in this session or an earlier one (persisted per user).
+        const isBacklog = !hasBaseline;
         for (const notification of snapshot.items) {
           if (seenNotificationIds.has(notification.id)) continue;
           seenNotificationIds.add(notification.id);
           newNotifications.push(notification);
-          if (notification.read_at !== null) continue;
+          const createdAt = Date.parse(notification.created_at);
+          if (isBacklog) {
+            if (createdAt > baseline) baseline = createdAt;
+            continue;
+          }
+          if (notification.read_at !== null || !(createdAt > baseline) || toastedIds.has(notification.id)) continue;
+          toastedIds.add(notification.id);
+          persistToasted = true;
           pendingNotifications.push(notification);
+        }
+        hasBaseline = true;
+        if (persistToasted) {
+          persistToasted = false;
+          saveToastedIds(userId, toastedIds);
         }
         const filters = newNotifications.flatMap(getNotificationQueryFilters);
         if (filters.length > 0) {
@@ -123,6 +164,21 @@ export function useSignalR() {
         // Do not toast queued items that were read or removed in another tab.
         const unreadIds = new Set(snapshot.items.filter((item) => item.read_at === null).map((item) => item.id));
         pendingNotifications = pendingNotifications.filter((item) => unreadIds.has(item.id));
+        // A burst arriving together becomes one summary toast instead of a stack of look-alike toasts.
+        const studio = useRunStudio.getState();
+        const onScreenRuns = [studio.openRunId, studio.writingRunId];
+        const burst = pendingNotifications.filter((item) => !(item.run_id && onScreenRuns.includes(item.run_id)));
+        if (burst.length > 1) {
+          pendingNotifications = [];
+          toast.info(`${burst.length} new notifications`, {
+            id: "notification:burst",
+            position: "bottom-right",
+            className: "notification-toast transition-none! select-none",
+            classNames: { description: "text-muted-foreground!" },
+            description: "Open the bell to review them.",
+            duration: 12000,
+          });
+        }
         showPendingNotifications();
         setState({ sessionKey, snapshot, status: "connected" });
         toast.dismiss("notification-stream");
