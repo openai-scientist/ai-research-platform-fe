@@ -1,4 +1,4 @@
-import { Database, FileText, LayoutDashboard, Plug, Settings, Users, Workflow } from "lucide-react";
+import { Database, LayoutDashboard, Plug, Settings, Users, Workflow } from "lucide-react";
 
 import { ProjectRole } from "@/types/enums";
 
@@ -44,7 +44,6 @@ export function getProjectSidebarItems(projectId: string, role: ProjectRole | nu
           icon: Plug,
           activeMatch: "prefix",
         },
-        { id: "project-files", title: "Documents", url: `${baseUrl}/files`, icon: FileText },
       ],
     },
     {

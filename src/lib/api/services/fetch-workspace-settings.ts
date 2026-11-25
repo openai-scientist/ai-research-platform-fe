@@ -62,6 +62,19 @@ export interface SpendingUsage {
     tokens: number | null;
   }[];
 }
+/** The Platform's limits that hold this project's runs, in tokens (input and output). Read-only, for any member. */
+export interface PlatformLimits {
+  /** The Platform settings version these values come from; 0 while the Platform runs on its defaults. */
+  version: number;
+  /** The budget a new run starts with when it names none. */
+  run_default_token_budget: number;
+  /** The most a run may have; a project setting above it is cut to it. */
+  run_max_token_budget: number;
+  /** Runs in progress one user may have at once. */
+  max_active_runs_per_user: number;
+  /** Tokens one user's runs may use in a calendar month (UTC), over all projects. */
+  user_monthly_token_limit: number;
+}
 export type NotificationEventKey = "review" | "finished" | "comments" | "members" | "budget" | "integrations";
 export type NotificationChannels = { in_app: boolean; email: boolean };
 type Capability = { supported: boolean; reason_code: string | null };
@@ -97,6 +110,14 @@ export const fetchWorkspaceSettings = {
     const response = await apiService.get<ApiResult<SpendingUsage>>(
       `${projectPath(projectId)}/spending/usage`,
       { month },
+      { signal },
+    );
+    return response.data;
+  },
+  platformLimits: async (projectId: string, signal?: AbortSignal) => {
+    const response = await apiService.get<ApiResult<PlatformLimits>>(
+      `${projectPath(projectId)}/platform-limits`,
+      undefined,
       { signal },
     );
     return response.data;

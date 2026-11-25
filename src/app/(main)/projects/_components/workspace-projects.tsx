@@ -4,13 +4,14 @@ import { useEffect, useState } from "react";
 
 import { useRouter } from "next/navigation";
 
-import { useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQueryClient } from "@tanstack/react-query";
 import { Mail } from "lucide-react";
 
 import type { FileManagerFile } from "@/app/(main)/dashboard/file-manager/_components/data";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useCurrentUserQuery } from "@/hooks/use-auth-query";
 import { useInvitationsQuery } from "@/hooks/use-invitations-query";
 import { useInfiniteProjects } from "@/hooks/use-projects-query";
 import { invitationKeys } from "@/lib/api/query-keys";
@@ -18,12 +19,12 @@ import type { ProjectItem } from "@/lib/api/services/fetch-project";
 import { PROJECT_STATUS_LABELS } from "@/lib/projects/project-status";
 import { getInitials } from "@/lib/utils";
 
-import { AdminProjects, projectActions } from "../../admin/_components/admin-projects";
 import { CreateProjectDialog } from "./create-project-dialog";
 import { ProjectInvitations } from "./project-invitations";
+import { ProjectsBrowser, projectActions, projectShowOptions, projectSortOptions } from "./projects-browser";
 import { ProjectsSkeleton } from "./projects-skeleton";
 
-function toProjectFile(project: ProjectItem): FileManagerFile {
+function toProjectFile(project: ProjectItem, userId: string | undefined): FileManagerFile {
   return {
     actionLabels: projectActions,
     badgeLabel: PROJECT_STATUS_LABELS[project.status],
@@ -36,7 +37,7 @@ function toProjectFile(project: ProjectItem): FileManagerFile {
     name: project.name,
     owner: "Project workspace",
     ownerInitials: getInitials(project.name),
-    shared: false,
+    shared: userId !== undefined && project.owner_user_id !== userId,
     size: PROJECT_STATUS_LABELS[project.status],
     starred: false,
   };
@@ -57,7 +58,32 @@ export function WorkspaceProjects({
     if (initialInvitationsOpen) setInvitationsOpen(true);
   }, [initialInvitationsOpen]);
   const [createOpen, setCreateOpen] = useState(false);
-  const query = useInfiniteProjects({ include_archived: true });
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [status, setStatus] = useState("all");
+  const [show, setShow] = useState("all");
+  const [sort, setSort] = useState("activity");
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => window.clearTimeout(timer);
+  }, [search]);
+  const user = useCurrentUserQuery();
+  const userId = user.data?.user.id;
+  const query = useInfiniteProjects(
+    {
+      include_archived: true,
+      ...(debouncedSearch ? { q: debouncedSearch } : {}),
+      ...(status === "all" ? {} : { status: status as ProjectItem["status"] }),
+    },
+    { placeholderData: keepPreviousData },
+  );
+  const filtersActive = debouncedSearch !== "" || status !== "all" || show !== "all";
+  // The API lists newest first and has no sort or sharing filter, so those apply to the loaded projects.
+  const visible = query.projects
+    .filter((project) => show !== "shared" || (userId !== undefined && project.owner_user_id !== userId))
+    .sort((a, b) =>
+      sort === "name" ? a.name.localeCompare(b.name) : Date.parse(b.updated_at) - Date.parse(a.updated_at),
+    );
   const invitations = useInvitationsQuery({ limit: 1, offset: 0 });
   const count = invitations.data?.meta.pagination?.total;
   function changeInvitationsOpen(open: boolean) {
@@ -77,10 +103,17 @@ export function WorkspaceProjects({
       {query.isPending ? (
         <ProjectsSkeleton />
       ) : (
-        <AdminProjects
+        <ProjectsBrowser
           canCreateProject={canCreate}
           onCreateProject={() => setCreateOpen(true)}
-          projects={query.projects.map(toProjectFile)}
+          filtersActive={filtersActive}
+          projects={visible.map((project) => toProjectFile(project, userId))}
+          toolbarControls={{
+            search: { value: search, onChange: setSearch },
+            show: { value: show, onChange: setShow, options: projectShowOptions },
+            type: { value: status, onChange: setStatus },
+            sort: { value: sort, onChange: setSort, options: projectSortOptions },
+          }}
           secondaryAction={
             <Button
               variant="outline"

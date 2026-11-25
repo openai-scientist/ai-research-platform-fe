@@ -19,7 +19,8 @@ import { ProjectRole, ProjectStatus } from "@/types/enums";
 import { MembersSection } from "./members-section";
 import { ProjectEmailSettings } from "./project-email-settings";
 import { SettingsIntegrations } from "./project-integrations/settings-integrations";
-import { SettingsApiProvider, useProjectSettings } from "./settings-api";
+import { SettingsApiProvider, useProjectSettings, wireField } from "./settings-api";
+import { fieldSupported, openTab, tabVisible } from "./settings-capabilities";
 import { SettingsAccess, SettingsData, SettingsLiterature, SettingsModels, SettingsReview } from "./settings-extra";
 import { ChoiceRow, useDraft } from "./settings-kit";
 import { SettingsDangerZone, StatusRow } from "./settings-lifecycle";
@@ -32,6 +33,7 @@ import {
   TagInput,
   useUnsavedWarning,
 } from "./settings-panel";
+import { FieldSupportProvider } from "./settings-support";
 import { SettingsRuns } from "./settings-system";
 import { WorkspaceActivity } from "./workspace-activity";
 import { WorkspaceSpending } from "./workspace-spending";
@@ -233,12 +235,10 @@ function GeneralTab({ project, readOnly }: { project: ProjectItem; readOnly: boo
           </SettingsRow>
         </SettingsGroup>
       </form>
-      <p className="text-muted-foreground text-xs">
-        Workspace preferences are saved but not applied to project access, scheduling or report formatting yet.
-      </p>
       <SettingsGroup title="Workspace">
         <ChoiceRow
           id="settings-visibility"
+          field="visibility"
           label="Visibility"
           value={prefs.values.visibility}
           onChange={prefs.set("visibility")}
@@ -251,6 +251,7 @@ function GeneralTab({ project, readOnly }: { project: ProjectItem; readOnly: boo
         />
         <ChoiceRow
           id="settings-timezone"
+          field="timezone"
           label="Time zone"
           hint="For schedules, digests and dates in exports."
           value={prefs.values.timezone}
@@ -261,6 +262,7 @@ function GeneralTab({ project, readOnly }: { project: ProjectItem; readOnly: boo
         />
         <ChoiceRow
           id="settings-language"
+          field="language"
           label="Language"
           hint="For dates and numbers in reports."
           value={prefs.values.language}
@@ -366,7 +368,17 @@ function SettingsContent({ workspace }: { workspace: WorkspaceProps }) {
   const { project, snapshot } = useProjectSettings();
   const archived = project.status === ProjectStatus.Archived;
   const requested = useSearchParams().get("tab");
-  const tab: Tab = TABS.find((item) => item.id === requested)?.id ?? "general";
+  // A tab made only of settings the Platform does not apply yet is left out, and its link opens General.
+  const groups = GROUPS.map((group) => ({
+    ...group,
+    tabs: group.tabs.filter((item) => tabVisible(snapshot.capabilities, item.id)),
+  })).filter((group) => group.tabs.length > 0);
+  const tab: Tab =
+    openTab(
+      snapshot.capabilities,
+      requested,
+      TABS.map((item) => item.id),
+    ) ?? "general";
   const row = useRef<HTMLUListElement>(null);
   // Keep the open tab in view in the phone's scrolling row.
   useEffect(() => {
@@ -384,14 +396,16 @@ function SettingsContent({ workspace }: { workspace: WorkspaceProps }) {
       <div className="grid gap-6 lg:grid-cols-[11rem_minmax(0,1fr)] lg:gap-10">
         <nav aria-label="Settings" className="min-w-0">
           <ul ref={row} className="-mx-4 flex gap-1 overflow-x-auto px-4 pb-1 [scrollbar-width:none] lg:hidden">
-            {TABS.map((item) => (
-              <li key={item.id}>
-                <TabLink id={item.id} label={item.label} active={tab === item.id} />
-              </li>
-            ))}
+            {groups
+              .flatMap((group) => group.tabs)
+              .map((item) => (
+                <li key={item.id}>
+                  <TabLink id={item.id} label={item.label} active={tab === item.id} />
+                </li>
+              ))}
           </ul>
           <div className="sticky top-[calc(var(--dashboard-header-height)+1.5rem)] hidden flex-col gap-5 lg:flex">
-            {GROUPS.map((group) => (
+            {groups.map((group) => (
               <div
                 key={group.label || "danger"}
                 className={cn("flex flex-col gap-0.5", !group.label && "border-t pt-5")}
@@ -417,7 +431,13 @@ function SettingsContent({ workspace }: { workspace: WorkspaceProps }) {
           className="@container/settings fade-in-0 flex min-w-0 max-w-5xl animate-in flex-col gap-6 duration-200 motion-reduce:animate-none"
         >
           {archived && <ArchivedNotice />}
-          {tab === "general" && <GeneralTab project={project} readOnly={archived} />}
+          {tab === "general" && (
+            <FieldSupportProvider
+              value={(field) => fieldSupported(snapshot.capabilities, "general", wireField("general", field))}
+            >
+              <GeneralTab project={project} readOnly={archived} />
+            </FieldSupportProvider>
+          )}
           {tab === "access" && (
             <MembersSection
               {...workspace}

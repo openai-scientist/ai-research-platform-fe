@@ -2,11 +2,13 @@
 
 import { type ReactNode, useState } from "react";
 
-import { Download, FolderOpen, FolderPlus, Grid2X2, List } from "lucide-react";
+import { FolderOpen, FolderPlus, Grid2X2, List } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { PROJECT_STATUS_LABELS } from "@/lib/projects/project-status";
+import { ProjectStatus } from "@/types/enums";
 
 import type { FileManagerFile, FileManagerView } from "../../dashboard/file-manager/_components/data";
 import { FileGridView } from "../../dashboard/file-manager/_components/file-grid-view";
@@ -14,146 +16,31 @@ import { FileListView } from "../../dashboard/file-manager/_components/file-list
 import {
   type FileManagerShowLabels,
   FileManagerToolbar,
+  type FileManagerToolbarControls,
   type FileManagerTypeOption,
 } from "../../dashboard/file-manager/_components/file-manager-toolbar";
-import { RecentProjects } from "../../projects/_components/recent-projects";
+import { RecentProjects } from "./recent-projects";
 
 export const projectActions = {
   archive: "Archive project",
-  export: "Export snapshot",
   share: "Copy project link",
   star: "Add to favorites",
   unstar: "Remove from favorites",
 };
 
-const defaultProjects: FileManagerFile[] = [
-  {
-    actionLabels: projectActions,
-    badgeLabel: "Active",
-    icon: "project",
-    id: "protein-folding",
-    kind: "document",
-    kindLabel: "Active",
-    modifiedAt: "4 min ago",
-    name: "Protein Folding Study",
-    owner: "Maya Chen",
-    ownerInitials: "MC",
-    shared: true,
-    size: "46 runs",
-    starred: true,
-  },
-  {
-    actionLabels: projectActions,
-    badgeLabel: "Active",
-    icon: "project",
-    id: "clinical-trial-signals",
-    kind: "document",
-    kindLabel: "Active",
-    modifiedAt: "2 hr ago",
-    name: "Clinical Trial Signals",
-    owner: "Ava Patel",
-    ownerInitials: "AP",
-    shared: true,
-    size: "73 runs",
-    starred: true,
-  },
-  {
-    actionLabels: projectActions,
-    badgeLabel: "Active",
-    icon: "project",
-    id: "climate-risk",
-    kind: "document",
-    kindLabel: "Active",
-    modifiedAt: "42 min ago",
-    name: "Climate Risk Model",
-    owner: "Noah Williams",
-    ownerInitials: "NW",
-    shared: true,
-    size: "28 runs",
-    starred: false,
-  },
-  {
-    actionLabels: projectActions,
-    badgeLabel: "Active",
-    icon: "project",
-    id: "materials-discovery",
-    kind: "document",
-    kindLabel: "Active",
-    modifiedAt: "Yesterday",
-    name: "Materials Discovery",
-    owner: "Liam Garcia",
-    ownerInitials: "LG",
-    shared: false,
-    size: "19 runs",
-    starred: false,
-  },
-  {
-    actionLabels: projectActions,
-    badgeLabel: "Review",
-    icon: "project",
-    id: "evidence-benchmark",
-    kind: "document",
-    kindLabel: "Review",
-    modifiedAt: "18 min ago",
-    name: "Evidence Benchmark",
-    owner: "Maya Chen",
-    ownerInitials: "MC",
-    shared: true,
-    size: "31 runs",
-    starred: true,
-  },
-  {
-    actionLabels: projectActions,
-    badgeLabel: "Review",
-    icon: "project",
-    id: "retrieval-quality",
-    kind: "document",
-    kindLabel: "Review",
-    modifiedAt: "3 hr ago",
-    name: "Retrieval Quality",
-    owner: "Noah Williams",
-    ownerInitials: "NW",
-    shared: true,
-    size: "22 runs",
-    starred: false,
-  },
-  {
-    actionLabels: projectActions,
-    badgeLabel: "Archived",
-    icon: "project",
-    id: "legacy-providers",
-    kind: "document",
-    kindLabel: "Archived",
-    modifiedAt: "12 Sep 2026",
-    name: "Legacy Provider Comparison",
-    owner: "Ava Patel",
-    ownerInitials: "AP",
-    shared: false,
-    size: "16 runs",
-    starred: false,
-  },
-  {
-    actionLabels: projectActions,
-    badgeLabel: "Archived",
-    icon: "project",
-    id: "dataset-validation",
-    kind: "document",
-    kindLabel: "Archived",
-    modifiedAt: "08 Sep 2026",
-    name: "Dataset Validation",
-    owner: "Liam Garcia",
-    ownerInitials: "LG",
-    shared: false,
-    size: "12 runs",
-    starred: false,
-  },
+export const projectStatusOptions: FileManagerTypeOption[] = [
+  { label: "All statuses", value: "all" },
+  ...Object.values(ProjectStatus).map((status) => ({ label: PROJECT_STATUS_LABELS[status], value: status })),
 ];
 
-const projectTypeOptions: FileManagerTypeOption[] = [
-  { label: "All statuses", value: "all" },
-  { label: "Active", value: "active" },
-  { label: "In review", value: "review" },
-  { label: "Archived", value: "archived" },
+export const projectShowOptions: FileManagerTypeOption[] = [
+  { label: "All projects", value: "all" },
+  { label: "Shared with me", value: "shared" },
+];
+
+export const projectSortOptions: FileManagerTypeOption[] = [
+  { label: "Last activity", value: "activity" },
+  { label: "Name", value: "name" },
 ];
 
 const projectFilterLabels: FileManagerShowLabels = {
@@ -173,12 +60,7 @@ function ProjectActions({
 }) {
   return (
     <div className="flex items-center gap-2">
-      {secondaryAction ?? (
-        <Button variant="outline">
-          <Download data-icon="inline-start" />
-          Export
-        </Button>
-      )}
+      {secondaryAction}
       {canCreateProject && (
         <Button onClick={onCreateProject}>
           <FolderPlus data-icon="inline-start" />
@@ -189,19 +71,24 @@ function ProjectActions({
   );
 }
 
-export function AdminProjects({
+export function ProjectsBrowser({
   activeView: initialView = "grid",
   canCreateProject = true,
   embedded = false,
+  filtersActive = false,
+  toolbarControls,
   onCreateProject,
-  projects = defaultProjects,
+  projects,
   secondaryAction,
 }: {
   readonly activeView?: FileManagerView;
   readonly canCreateProject?: boolean;
   readonly embedded?: boolean;
+  /** True while a search or filter narrows the list, so an empty result is not "no projects yet". */
+  readonly filtersActive?: boolean;
+  readonly toolbarControls?: FileManagerToolbarControls;
   readonly onCreateProject?: () => void;
-  readonly projects?: FileManagerFile[];
+  readonly projects: FileManagerFile[];
   readonly secondaryAction?: ReactNode;
 }) {
   const [activeView, setActiveView] = useState<FileManagerView>(initialView);
@@ -232,17 +119,18 @@ export function AdminProjects({
         </div>
       )}
 
-      {projects.length > 0 && (
+      {(projects.length > 0 || filtersActive) && (
         <FileManagerToolbar
+          controls={toolbarControls}
           filterLabels={projectFilterLabels}
           itemLabel="projects"
           placeholder="Search projects..."
           typeLabel="Project status"
-          typeOptions={projectTypeOptions}
+          typeOptions={projectStatusOptions}
         />
       )}
 
-      {projects.length > 0 && <RecentProjects projects={projects} />}
+      {projects.length > 0 && !filtersActive && <RecentProjects projects={projects} />}
 
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between gap-4">
@@ -278,11 +166,13 @@ export function AdminProjects({
               <EmptyMedia variant="icon">
                 <FolderOpen aria-hidden="true" />
               </EmptyMedia>
-              <EmptyTitle>No projects yet</EmptyTitle>
+              <EmptyTitle>{filtersActive ? "No matching projects" : "No projects yet"}</EmptyTitle>
               <EmptyDescription>
-                {canCreateProject
-                  ? "Create a research project to get started, or accept an invitation to join a workspace."
-                  : "You haven't joined any projects. Check your invitations or ask a project manager to invite you."}
+                {filtersActive
+                  ? "No project matches the search and filters. Change them to see more."
+                  : canCreateProject
+                    ? "Create a research project to get started, or accept an invitation to join a workspace."
+                    : "You haven't joined any projects. Check your invitations or ask a project manager to invite you."}
               </EmptyDescription>
             </EmptyHeader>
           </Empty>

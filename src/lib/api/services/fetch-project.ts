@@ -34,6 +34,8 @@ export type UpdateProjectRequest = Partial<CreateProjectRequest>;
 
 export interface ProjectListParams extends ListParams {
   include_archived?: boolean;
+  q?: string;
+  status?: ProjectItem["status"];
 }
 
 export type ProjectListResponse = ApiResult<ProjectItem[]>;

@@ -29,10 +29,15 @@ const FIELD_NAMES: Record<string, Record<string, string>> = {
   },
   runs: { tokenBudget: "token_budget", stageLimit: "stage_limit", pauseOnFailure: "pause_on_failure" },
   literature: { perRound: "per_round" },
-  review: { selfApproval: "self_approval" },
+  review: { selfApproval: "self_approval", beforeLock: "before_lock" },
   data: { sameName: "same_name" },
   spending: { tokenLimit: "token_limit", warnAt: "warn_at", atLimit: "at_limit", billingEmail: "billing_email" },
 };
+
+/** The name the API gives a form field. */
+export function wireField(section: string, field: string) {
+  return FIELD_NAMES[section]?.[field] ?? field;
+}
 
 export function settingsFormValues(section: string, values: SettingValues): SettingValues {
   const names = FIELD_NAMES[section] ?? {};

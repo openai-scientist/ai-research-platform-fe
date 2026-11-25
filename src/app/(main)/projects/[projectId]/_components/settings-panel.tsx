@@ -8,6 +8,8 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 
+import { useFieldShown } from "./settings-support";
+
 /** Warns before leaving the page while a form has changes that aren't saved. */
 export function useUnsavedWarning(dirty: boolean) {
   useEffect(() => {
@@ -40,7 +42,10 @@ export function SettingsGroup({
 }) {
   const headingId = useId();
   return (
-    <section aria-labelledby={title ? headingId : undefined} className="flex min-w-0 flex-col gap-2.5">
+    <section
+      aria-labelledby={title ? headingId : undefined}
+      className="flex min-w-0 flex-col gap-2.5 has-[>div:empty]:hidden"
+    >
       {title && (
         <h3 id={headingId} className="px-1 font-medium text-muted-foreground text-sm">
           {title}
@@ -58,6 +63,7 @@ export function SettingsRow({
   hint,
   children,
   inline,
+  field,
 }: {
   label: string;
   htmlFor?: string;
@@ -65,8 +71,12 @@ export function SettingsRow({
   children: ReactNode;
   /** Keep a small control, like a switch or a button, on the label's line even on phones. */
   inline?: boolean;
+  /** The settings field it edits: the row is left out while the Platform does not apply that field. */
+  field?: string;
 }) {
+  const shown = useFieldShown(field);
   const Label = htmlFor ? "label" : "p";
+  if (!shown) return null;
   return (
     <div
       className={cn(

@@ -64,6 +64,7 @@ export function SettingsAccess({
       <SettingsGroup title="Invitations">
         <ChoiceRow
           id="access-inviters"
+          field="inviters"
           label="Who can invite"
           value={v.inviters}
           onChange={set("inviters")}
@@ -76,6 +77,7 @@ export function SettingsAccess({
         />
         <ChoiceRow
           id="access-role"
+          field="defaultRole"
           label="Default role"
           hint="Picked first in the invite form."
           value={v.defaultRole}
@@ -85,6 +87,7 @@ export function SettingsAccess({
         />
         <ChoiceRow
           id="access-expiry"
+          field="expiry"
           label="Invitations expire after"
           hint={
             access.context?.invitation
@@ -97,6 +100,7 @@ export function SettingsAccess({
           options={["3", "7", "14", "30"].map((days) => ({ value: days, label: `${days} days` }))}
         />
         <SettingsRow
+          field="domains"
           label="Allowed email domains"
           htmlFor="access-domains"
           hint="Leave empty to invite anyone with an account."
@@ -107,6 +111,7 @@ export function SettingsAccess({
       <SettingsGroup title="Invite link">
         <SwitchRow
           id="access-link"
+          field="link"
           label="Join with a link"
           hint="Saved policy only. The backend does not issue invite links yet."
           checked={v.link}
@@ -116,6 +121,7 @@ export function SettingsAccess({
         {v.link && (
           <SwitchRow
             id="access-approval"
+            field="approval"
             label="Approve each request"
             hint="Saved policy only; join requests are not implemented by the backend yet."
             checked={v.approval}
@@ -127,6 +133,7 @@ export function SettingsAccess({
       <SettingsGroup title="Reviewers">
         <SwitchRow
           id="access-reviewer-data"
+          field="reviewersSeeData"
           label="Reviewers can open datasets"
           hint="Off: reviewers see results and papers, not the raw data."
           checked={v.reviewersSeeData}
@@ -170,6 +177,7 @@ export function SettingsModels({ readOnly }: { readOnly: boolean }) {
       <SettingsGroup title="Models">
         <ChoiceRow
           id="models-stage"
+          field="stage"
           label="Research model"
           hint="Reads papers, writes hypotheses and code."
           value={v.stage}
@@ -180,6 +188,7 @@ export function SettingsModels({ readOnly }: { readOnly: boolean }) {
         />
         <ChoiceRow
           id="models-review"
+          field="review"
           label="Review model"
           hint="Checks each stage's work before it moves on."
           value={v.review}
@@ -190,6 +199,7 @@ export function SettingsModels({ readOnly }: { readOnly: boolean }) {
         />
         <ChoiceRow
           id="models-fallback"
+          field="fallback"
           label="Fallback"
           hint="Used when the chosen model is unavailable."
           value={v.fallback}
@@ -202,6 +212,7 @@ export function SettingsModels({ readOnly }: { readOnly: boolean }) {
       <SettingsGroup title="Behaviour">
         <ChoiceRow
           id="models-effort"
+          field="effort"
           label="Reasoning effort"
           hint="More effort is slower and costs more."
           value={v.effort}
@@ -215,6 +226,7 @@ export function SettingsModels({ readOnly }: { readOnly: boolean }) {
         />
         <ChoiceRow
           id="models-style"
+          field="style"
           label="Hypothesis style"
           value={v.style}
           onChange={set("style")}
@@ -274,6 +286,7 @@ export function SettingsLiterature({ readOnly }: { readOnly: boolean }) {
           <SwitchRow
             key={source.key}
             id={`literature-${source.key}`}
+            field={source.key}
             label={source.name}
             hint={source.line}
             checked={v[source.key]}
@@ -285,6 +298,7 @@ export function SettingsLiterature({ readOnly }: { readOnly: boolean }) {
       <SettingsGroup title="Filters">
         <ChoiceRow
           id="literature-years"
+          field="years"
           label="Published within"
           value={v.years}
           onChange={set("years")}
@@ -298,20 +312,27 @@ export function SettingsLiterature({ readOnly }: { readOnly: boolean }) {
         />
         <SwitchRow
           id="literature-preprints"
+          field="preprints"
           label="Include preprints"
           hint="Papers not yet peer reviewed."
           checked={v.preprints}
           onChange={set("preprints")}
           disabled={readOnly}
         />
-        <SettingsRow label="Paper languages" htmlFor="literature-languages">
+        <SettingsRow field="languages" label="Paper languages" htmlFor="literature-languages">
           <TagInput id="literature-languages" value={v.languages} onChange={set("languages")} disabled={readOnly} />
         </SettingsRow>
-        <SettingsRow label="Leave out" htmlFor="literature-exclude" hint="Venues, authors or keywords to skip.">
+        <SettingsRow
+          field="exclude"
+          label="Leave out"
+          htmlFor="literature-exclude"
+          hint="Venues, authors or keywords to skip."
+        >
           <TagInput id="literature-exclude" value={v.exclude} onChange={set("exclude")} disabled={readOnly} />
         </SettingsRow>
         <NumberRow
           id="literature-per-round"
+          field="perRound"
           label="Papers screened per round"
           value={v.perRound}
           onChange={set("perRound")}
@@ -329,6 +350,7 @@ export function SettingsReview({ readOnly }: { readOnly: boolean }) {
     approvals: "1",
     approvers: "reviewers",
     selfApproval: false,
+    beforeLock: false,
     format: "latex",
     citation: "apa",
     language: "en",
@@ -349,6 +371,7 @@ export function SettingsReview({ readOnly }: { readOnly: boolean }) {
       <SettingsGroup title="Approvals">
         <ChoiceRow
           id="review-approvals"
+          field="approvals"
           label="Approvals to publish"
           hint="How many people sign off before a paper is final."
           value={v.approvals}
@@ -361,6 +384,7 @@ export function SettingsReview({ readOnly }: { readOnly: boolean }) {
         />
         <ChoiceRow
           id="review-approvers"
+          field="approvers"
           label="Who can approve"
           value={v.approvers}
           onChange={set("approvers")}
@@ -373,7 +397,17 @@ export function SettingsReview({ readOnly }: { readOnly: boolean }) {
           ]}
         />
         <SwitchRow
+          id="review-before-lock"
+          field="beforeLock"
+          label="Independent review before the plan is locked"
+          hint="On: an approved independent review of the run is needed before its plan can be locked."
+          checked={v.beforeLock}
+          onChange={set("beforeLock")}
+          disabled={readOnly}
+        />
+        <SwitchRow
           id="review-self"
+          field="selfApproval"
           label="Approve your own runs"
           hint="Off: someone other than the person who started the run has to approve it."
           checked={v.selfApproval}
@@ -384,6 +418,7 @@ export function SettingsReview({ readOnly }: { readOnly: boolean }) {
       <SettingsGroup title="Paper">
         <ChoiceRow
           id="review-format"
+          field="format"
           label="Format"
           value={v.format}
           onChange={set("format")}
@@ -396,6 +431,7 @@ export function SettingsReview({ readOnly }: { readOnly: boolean }) {
         />
         <ChoiceRow
           id="review-citation"
+          field="citation"
           label="Citation style"
           value={v.citation}
           onChange={set("citation")}
@@ -410,6 +446,7 @@ export function SettingsReview({ readOnly }: { readOnly: boolean }) {
         />
         <ChoiceRow
           id="review-language"
+          field="language"
           label="Language"
           value={v.language}
           onChange={set("language")}
@@ -424,6 +461,7 @@ export function SettingsReview({ readOnly }: { readOnly: boolean }) {
         />
         <SwitchRow
           id="review-appendix"
+          field="appendix"
           label="Code appendix"
           hint="Attach the analysis code to the paper."
           checked={v.appendix}
@@ -432,6 +470,7 @@ export function SettingsReview({ readOnly }: { readOnly: boolean }) {
         />
         <SwitchRow
           id="review-watermark"
+          field="watermark"
           label="Mark drafts"
           hint="Adds a “Draft” watermark until the paper is approved."
           checked={v.watermark}
@@ -472,6 +511,7 @@ export function SettingsData({ readOnly }: { readOnly: boolean }) {
       <SettingsGroup title="Datasets">
         <ChoiceRow
           id="data-pinning"
+          field="pinning"
           label="Runs read"
           value={v.pinning}
           onChange={set("pinning")}
@@ -484,6 +524,7 @@ export function SettingsData({ readOnly }: { readOnly: boolean }) {
         />
         <ChoiceRow
           id="data-same-name"
+          field="sameName"
           label="Uploading a name that exists"
           value={v.sameName}
           onChange={set("sameName")}
@@ -494,7 +535,7 @@ export function SettingsData({ readOnly }: { readOnly: boolean }) {
             { value: "copy", label: "Create a separate dataset" },
           ]}
         />
-        <SettingsRow label="Allowed file types">
+        <SettingsRow field="types" label="Allowed file types">
           <div className="flex flex-wrap gap-x-5 gap-y-2 sm:pt-1.5">
             {FILE_TYPES.map((type) => (
               <label key={type} htmlFor={`data-type-${type}`} className="flex items-center gap-2 text-sm">
@@ -516,6 +557,7 @@ export function SettingsData({ readOnly }: { readOnly: boolean }) {
       <SettingsGroup title="Privacy">
         <SwitchRow
           id="data-pii"
+          field="pii"
           label="Detect personal data"
           hint="Flags names, emails, phone numbers and IDs in new uploads."
           checked={v.pii}
@@ -524,6 +566,7 @@ export function SettingsData({ readOnly }: { readOnly: boolean }) {
         />
         <SwitchRow
           id="data-mask"
+          field="mask"
           label="Mask it in previews"
           checked={v.mask}
           onChange={set("mask")}
@@ -533,6 +576,7 @@ export function SettingsData({ readOnly }: { readOnly: boolean }) {
       <SettingsGroup title="Retention">
         <ChoiceRow
           id="data-artifacts"
+          field="artifacts"
           label="Keep run files"
           hint="Logs, code and intermediate results."
           value={v.artifacts}
@@ -547,6 +591,7 @@ export function SettingsData({ readOnly }: { readOnly: boolean }) {
         />
         <ChoiceRow
           id="data-trash"
+          field="trash"
           label="Keep deleted items"
           hint="Before they're gone for good."
           value={v.trash}
@@ -556,6 +601,7 @@ export function SettingsData({ readOnly }: { readOnly: boolean }) {
         />
         <ChoiceRow
           id="data-region"
+          field="region"
           label="Storage region"
           value={v.region}
           onChange={set("region")}

@@ -10,8 +10,10 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectVa
 import { Switch } from "@/components/ui/switch";
 import type { SettingValues } from "@/lib/api/services/fetch-project-settings";
 
-import { settingsFormValues, useProjectSettings } from "./settings-api";
+import { settingsFormValues, useProjectSettings, wireField } from "./settings-api";
+import { fieldSupported } from "./settings-capabilities";
 import { SaveBar, SettingsHeading, SettingsRow, useUnsavedWarning } from "./settings-panel";
+import { FieldSupportProvider } from "./settings-support";
 
 /** Form edits remain local until the server acknowledges the save. */
 export function useDraft<T extends Record<string, unknown>>(id: string, initial: T) {
@@ -84,19 +86,10 @@ export function DraftTab({
   hideHeading?: boolean;
 }) {
   const settings = useProjectSettings();
-  const inactive = Object.entries(settings.snapshot.capabilities).some(
-    ([key, capability]) => key.startsWith(`${id}.`) && !capability.supported,
-  );
+  const supported = (field: string) => fieldSupported(settings.snapshot.capabilities, id, wireField(id, field));
   return (
     <div className="flex flex-col gap-6">
       {!hideHeading && <SettingsHeading title={title} action={action} />}
-      {inactive && (
-        <p className="text-muted-foreground text-xs">
-          {id === "access"
-            ? "Invite links and join approvals are saved preferences and are not available yet. Other supported access policies apply to this project."
-            : "Some preferences in this section are saved to your project but are not applied yet."}
-        </p>
-      )}
       <form
         id={`settings-${id}`}
         aria-label={title}
@@ -110,7 +103,7 @@ export function DraftTab({
         }}
       >
         <fieldset disabled={settings.pending} className="flex min-w-0 flex-col gap-6">
-          {children}
+          <FieldSupportProvider value={supported}>{children}</FieldSupportProvider>
         </fieldset>
       </form>
       <SaveBar dirty={dirty} pending={settings.pending} form={`settings-${id}`} onDiscard={onDiscard} />
@@ -122,6 +115,7 @@ export type Option = { value: string; label: string; disabled?: boolean };
 
 export function ChoiceRow({
   id,
+  field,
   label,
   hint,
   value,
@@ -131,6 +125,8 @@ export function ChoiceRow({
   wide,
 }: {
   id: string;
+  /** The settings field it edits: left out while the Platform does not apply it. */
+  field?: string;
   label: string;
   hint?: ReactNode;
   value: string;
@@ -140,7 +136,7 @@ export function ChoiceRow({
   wide?: boolean;
 }) {
   return (
-    <SettingsRow label={label} htmlFor={id} hint={hint}>
+    <SettingsRow field={field} label={label} htmlFor={id} hint={hint}>
       <Select value={value} onValueChange={onChange} disabled={disabled}>
         <SelectTrigger id={id} className={wide ? "w-full max-w-80" : "w-full max-w-56"}>
           <SelectValue />
@@ -161,6 +157,7 @@ export function ChoiceRow({
 
 export function SwitchRow({
   id,
+  field,
   label,
   hint,
   checked,
@@ -168,6 +165,8 @@ export function SwitchRow({
   disabled,
 }: {
   id: string;
+  /** The settings field it edits: left out while the Platform does not apply it. */
+  field?: string;
   label: string;
   hint?: ReactNode;
   checked: boolean;
@@ -175,7 +174,7 @@ export function SwitchRow({
   disabled?: boolean;
 }) {
   return (
-    <SettingsRow label={label} htmlFor={id} hint={hint} inline>
+    <SettingsRow field={field} label={label} htmlFor={id} hint={hint} inline>
       <Switch id={id} checked={checked} onCheckedChange={onChange} disabled={disabled} />
     </SettingsRow>
   );
@@ -183,6 +182,7 @@ export function SwitchRow({
 
 export function TextRow({
   id,
+  field,
   label,
   hint,
   value,
@@ -192,6 +192,8 @@ export function TextRow({
   disabled,
 }: {
   id: string;
+  /** The settings field it edits: left out while the Platform does not apply it. */
+  field?: string;
   label: string;
   hint?: ReactNode;
   value: string;
@@ -201,7 +203,7 @@ export function TextRow({
   disabled?: boolean;
 }) {
   return (
-    <SettingsRow label={label} htmlFor={id} hint={hint}>
+    <SettingsRow field={field} label={label} htmlFor={id} hint={hint}>
       <Input
         id={id}
         type={type}
@@ -218,6 +220,7 @@ export function TextRow({
 /** A number with a unit after it, such as "3 runs" or "60 minutes". */
 export function NumberRow({
   id,
+  field,
   label,
   hint,
   value,
@@ -225,8 +228,12 @@ export function NumberRow({
   unit,
   prefix,
   disabled,
+  invalid,
+  onBlur,
 }: {
   id: string;
+  /** The settings field it edits: left out while the Platform does not apply it. */
+  field?: string;
   label: string;
   hint?: ReactNode;
   value: string;
@@ -234,9 +241,11 @@ export function NumberRow({
   unit?: string;
   prefix?: string;
   disabled?: boolean;
+  invalid?: boolean;
+  onBlur?: () => void;
 }) {
   return (
-    <SettingsRow label={label} htmlFor={id} hint={hint}>
+    <SettingsRow field={field} label={label} htmlFor={id} hint={hint}>
       <div className="flex items-center gap-2.5">
         <div className="relative w-full sm:w-32">
           {prefix && (
@@ -249,6 +258,8 @@ export function NumberRow({
             inputMode="decimal"
             value={value}
             disabled={disabled}
+            aria-invalid={invalid ? true : undefined}
+            onBlur={onBlur}
             onChange={(event) => onChange(event.target.value.replace(/[^\d.]/g, ""))}
             className={prefix ? "pl-6 tabular-nums" : "tabular-nums"}
           />

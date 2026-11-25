@@ -22,6 +22,11 @@ export default async function Page({ params }: { params: Promise<{ projectId: st
     notFound();
   }
 
+  // Documents are hidden until a run can attach them; old links open the project.
+  if (section === "files") {
+    redirect(`/projects/${project.id}`);
+  }
+
   if (config.managerOnly && !getProjectAccess(project.my_role, project.status).canAccessSettings) {
     redirect(`/projects/${project.id}`);
   }

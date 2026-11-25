@@ -32,7 +32,8 @@ export interface FileManagerFolder {
 export interface FileManagerFile {
   actionLabels?: {
     archive: string;
-    export: string;
+    /** Left out where nothing exports, so the item is not shown. */
+    export?: string;
     share: string;
     star: string;
     unstar: string;

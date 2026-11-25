@@ -4,6 +4,7 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectVa
 import { Switch } from "@/components/ui/switch";
 import type { ReviewMode } from "@/lib/run-stream/contract";
 
+import { formatTokens, usePlatformLimits } from "./platform-limits";
 import { MODES } from "./run-studio/run-meta";
 import { useProjectSettings } from "./settings-api";
 import { ChoiceRow, DraftTab, NumberRow, SwitchRow, TextRow, useDraft } from "./settings-kit";
@@ -61,6 +62,8 @@ const STARTER_OPTIONS = [
 
 /** What a new research run starts with, how far it may go, and who may start one. */
 export function SettingsRuns({ readOnly }: { readOnly: boolean }) {
+  const { project } = useProjectSettings();
+  const limits = usePlatformLimits(project.id);
   const draft = useDraft("runs", {
     mode: "copilot",
     tokenBudget: "30000000",
@@ -73,6 +76,8 @@ export function SettingsRuns({ readOnly }: { readOnly: boolean }) {
     pauseOnFailure: true,
   });
   const { values: v, set } = draft;
+  // The Platform cuts a budget above its maximum at admission, so the person is told before saving.
+  const overMax = limits !== null && Number(v.tokenBudget) > limits.run_max_token_budget;
 
   return (
     <DraftTab
@@ -84,10 +89,19 @@ export function SettingsRuns({ readOnly }: { readOnly: boolean }) {
       onSave={draft.save}
       validate={() => {
         if (!(Number(v.tokenBudget) > 0)) return "Enter a token budget above 0 for each run.";
+        if (limits && overMax) {
+          return `The platform allows up to ${formatTokens(limits.run_max_token_budget)} per run. Enter a lower budget.`;
+        }
       }}
     >
+      <p className="-mt-3 text-muted-foreground text-sm">Research and review models are set by your platform admin.</p>
       <SettingsGroup title="Defaults for new runs">
-        <SettingsRow label="Review mode" htmlFor="runs-mode" hint="How often a run stops for your decision.">
+        <SettingsRow
+          field="mode"
+          label="Review mode"
+          htmlFor="runs-mode"
+          hint="How often a run stops for your decision."
+        >
           <DescribedSelect
             id="runs-mode"
             value={v.mode}
@@ -98,15 +112,22 @@ export function SettingsRuns({ readOnly }: { readOnly: boolean }) {
         </SettingsRow>
         <NumberRow
           id="runs-budget"
+          field="tokenBudget"
           label="Budget per run"
-          hint="A run stops once it has used this many tokens."
+          hint={
+            limits
+              ? `A run stops once it has used this many tokens. Platform maximum: ${formatTokens(limits.run_max_token_budget)} per run. Platform default: ${formatTokens(limits.run_default_token_budget)}.`
+              : "A run stops once it has used this many tokens."
+          }
           unit="tokens"
           value={String(v.tokenBudget)}
           onChange={set("tokenBudget")}
           disabled={readOnly}
+          invalid={overMax}
         />
         <ChoiceRow
           id="runs-rounds"
+          field="rounds"
           label="Research rounds"
           hint="Each round tests hypotheses and refines them."
           value={v.rounds}
@@ -117,15 +138,20 @@ export function SettingsRuns({ readOnly }: { readOnly: boolean }) {
             label: `Up to ${count} ${count === "1" ? "round" : "rounds"}`,
           }))}
         />
-        <SettingsRow label="Research fields" htmlFor="runs-fields" hint="Suggested when a run starts.">
+        <SettingsRow field="fields" label="Research fields" htmlFor="runs-fields" hint="Suggested when a run starts.">
           <TagInput id="runs-fields" value={v.fields} onChange={set("fields")} disabled={readOnly} />
         </SettingsRow>
       </SettingsGroup>
       <SettingsGroup title="Limits">
         <ChoiceRow
           id="runs-concurrent"
+          field="concurrent"
           label="Runs at the same time"
-          hint="Extra runs wait in a queue."
+          hint={
+            limits
+              ? `Extra runs wait in a queue. The platform allows each person ${limits.max_active_runs_per_user} active ${limits.max_active_runs_per_user === 1 ? "run" : "runs"} at once.`
+              : "Extra runs wait in a queue."
+          }
           value={v.concurrent}
           onChange={set("concurrent")}
           disabled={readOnly}
@@ -133,6 +159,7 @@ export function SettingsRuns({ readOnly }: { readOnly: boolean }) {
         />
         <ChoiceRow
           id="runs-stage-limit"
+          field="stageLimit"
           label="Time limit per stage"
           value={v.stageLimit}
           onChange={set("stageLimit")}
@@ -148,6 +175,7 @@ export function SettingsRuns({ readOnly }: { readOnly: boolean }) {
       <SettingsGroup title="When something fails">
         <SwitchRow
           id="runs-retry"
+          field="retry"
           label="Retry a failed stage once"
           hint="Covers brief outages of a model or a data source."
           checked={v.retry}
@@ -156,6 +184,7 @@ export function SettingsRuns({ readOnly }: { readOnly: boolean }) {
         />
         <SwitchRow
           id="runs-pause"
+          field="pauseOnFailure"
           label="Pause instead of stopping"
           hint="Keep the run so it can be resumed after you've looked."
           checked={v.pauseOnFailure}
@@ -164,7 +193,7 @@ export function SettingsRuns({ readOnly }: { readOnly: boolean }) {
         />
       </SettingsGroup>
       <SettingsGroup title="Access">
-        <SettingsRow label="Who can start runs" htmlFor="runs-starters">
+        <SettingsRow field="starters" label="Who can start runs" htmlFor="runs-starters">
           <DescribedSelect
             id="runs-starters"
             value={v.starters}
@@ -180,7 +209,8 @@ export function SettingsRuns({ readOnly }: { readOnly: boolean }) {
 
 /** A monthly ceiling on what the project's runs may spend, with an early warning. */
 export function SettingsSpending({ readOnly }: { readOnly: boolean }) {
-  const { snapshot } = useProjectSettings();
+  const { snapshot, project } = useProjectSettings();
+  const limits = usePlatformLimits(project.id);
   const unsupported = (field: string) => readOnly || !snapshot.capabilities[`spending.${field}`]?.supported;
   const draft = useDraft("spending", {
     capped: false,
@@ -207,6 +237,7 @@ export function SettingsSpending({ readOnly }: { readOnly: boolean }) {
       <SettingsGroup title="Monthly limit">
         <SwitchRow
           id="spending-cap"
+          field="capped"
           label="Limit monthly spending"
           hint="A soft limit on recorded model tokens. Resets on the 1st in the project's timezone; work already dispatched may still incur costs."
           checked={v.capped}
@@ -217,14 +248,21 @@ export function SettingsSpending({ readOnly }: { readOnly: boolean }) {
           <>
             <NumberRow
               id="spending-limit"
+              field="tokenLimit"
               label="Limit"
               unit="tokens per month"
+              hint={
+                limits
+                  ? `The platform also limits each person to ${formatTokens(limits.user_monthly_token_limit)} a month across all projects.`
+                  : undefined
+              }
               value={String(v.tokenLimit)}
               onChange={set("tokenLimit")}
               disabled={unsupported("token_limit")}
             />
             <ChoiceRow
               id="spending-warn"
+              field="warnAt"
               label="Warn at"
               value={v.warnAt}
               onChange={set("warnAt")}
@@ -236,6 +274,7 @@ export function SettingsSpending({ readOnly }: { readOnly: boolean }) {
             />
             <ChoiceRow
               id="spending-at-limit"
+              field="atLimit"
               label="At the limit"
               value={v.atLimit}
               onChange={set("atLimit")}
@@ -260,6 +299,7 @@ export function SettingsSpending({ readOnly }: { readOnly: boolean }) {
       <SettingsGroup title="Billing">
         <TextRow
           id="spending-email"
+          field="billingEmail"
           label="Billing contact"
           hint="Billing email delivery is not available yet. Budget alerts are sent in-app to active Project Managers."
           type="email"

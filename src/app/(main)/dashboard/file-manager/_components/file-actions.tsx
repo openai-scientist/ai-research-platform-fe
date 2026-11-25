@@ -39,10 +39,12 @@ export function FileActions({ file, onToggleStar }: FileActionsProps) {
             <Star />
             {file.starred ? labels.unstar : labels.star}
           </DropdownMenuItem>
-          <DropdownMenuItem>
-            <Download />
-            {labels.export}
-          </DropdownMenuItem>
+          {labels.export && (
+            <DropdownMenuItem>
+              <Download />
+              {labels.export}
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem>
             <Share2 />
             {labels.share}
