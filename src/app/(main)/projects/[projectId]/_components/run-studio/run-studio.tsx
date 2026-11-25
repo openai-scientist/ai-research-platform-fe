@@ -33,8 +33,11 @@ import {
   STOP_INFO,
   stopsFor,
 } from "./run-meta";
+import type { Readiness } from "./run-readiness";
+import { focusReadinessPanel, RunReadinessPanel } from "./run-readiness-panel";
 import { compactNumber, RunStats } from "./run-stats";
 import { CaseDetailsInput, IntentInput, StartRunDialog, TopicInput, useTopicDraft } from "./start-run-dialog";
+import { useRunReadiness } from "./use-run-readiness";
 import { WritingRunRow } from "./writing/live/entry";
 import { openWritingRun } from "./writing/live/open";
 import { isDraftRun, isWritingRun } from "./writing/live/run";
@@ -67,11 +70,14 @@ function TopicComposer({
   mode,
   onModeChange,
   canWrite,
+  readiness,
   onStart,
 }: {
   mode: ReviewMode;
   onModeChange(mode: ReviewMode): void;
   canWrite: boolean;
+  /** What a run needs; Start stays disabled while an item blocks it. */
+  readiness: Readiness;
   /** Settles once the run has started or was refused. */
   onStart(mode: ReviewMode, input: RunInput, from: HTMLElement | null): Promise<void>;
 }) {
@@ -131,6 +137,7 @@ function TopicComposer({
           <p className="text-muted-foreground text-xs leading-relaxed">{MODES[mode].line}</p>
         </RunPath>
       </div>
+      <RunReadinessPanel readiness={readiness} className="rounded-none border-x-0 border-b-0" />
       <div className="flex flex-wrap items-center justify-between gap-3 border-t bg-muted/40 px-5 py-3.5 md:px-6">
         <span className="flex items-center gap-2 text-muted-foreground text-sm">
           <Flag className="size-3.5 fill-amber-500/30 text-amber-600 dark:text-amber-400" />
@@ -138,7 +145,7 @@ function TopicComposer({
         </span>
         <span className="flex flex-wrap items-center gap-2.5 max-sm:w-full max-sm:justify-between">
           <span className="xl:hidden">{modes}</span>
-          <Button ref={button} disabled={!canWrite || starting} onClick={start}>
+          <Button ref={button} disabled={!canWrite || starting || !readiness.canStart} onClick={start}>
             <Play />
             {starting ? "Starting…" : "Start research run"}
           </Button>
@@ -468,6 +475,7 @@ function PastRuns({ projectId, hide }: { projectId: string; hide?: string }) {
 /** The research runs tab: the next run or the one in progress, then earlier runs. */
 export function RunStudio({ projectId, canWrite }: { projectId: string; canWrite: boolean }) {
   const session = useProjectRun(projectId);
+  const readiness = useRunReadiness(projectId);
   const startRun = useRunStudio((s) => s.startRun);
   const openWorkspace = useRunStudio((s) => s.openWorkspace);
   const queryClient = useQueryClient();
@@ -484,6 +492,15 @@ export function RunStudio({ projectId, canWrite }: { projectId: string; canWrite
     if (hasSession) setDialog(true);
     else document.getElementById("composer-topic")?.focus();
   }, [canStart, hasSession]);
+
+  // From the start dialog: close it, then bring the panel that lists what is missing into view.
+  const focusTimer = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(focusTimer.current), []);
+  const seeMissing = () => {
+    setDialog(false);
+    window.clearTimeout(focusTimer.current);
+    focusTimer.current = window.setTimeout(focusReadinessPanel, 350);
+  };
 
   // The dialog stays open until the run has started, so a refused start can be fixed and tried again.
   const start = async (chosen: ReviewMode, input: RunInput) => {
@@ -512,6 +529,7 @@ export function RunStudio({ projectId, canWrite }: { projectId: string; canWrite
               </Button>
             )}
           </div>
+          {finished && canWrite && <RunReadinessPanel readiness={readiness} />}
           <div data-live-run>
             <LiveRunCard session={session} onOpen={(el) => openWorkspace(session.runId, el)} />
           </div>
@@ -522,6 +540,7 @@ export function RunStudio({ projectId, canWrite }: { projectId: string; canWrite
           mode={mode}
           onModeChange={setMode}
           canWrite={canWrite}
+          readiness={readiness}
           onStart={async (chosen, input, el) => {
             from.current = el;
             await start(chosen, input);
@@ -531,7 +550,14 @@ export function RunStudio({ projectId, canWrite }: { projectId: string; canWrite
       {!session && <RunStats />}
       {SHOW_WRITING_PREVIEW && <WritingRunRow projectId={projectId} canWrite={canWrite} />}
       <PastRuns projectId={projectId} hide={session?.runId} />
-      <StartRunDialog open={dialog} onOpenChange={setDialog} defaultMode={mode} onStart={start} />
+      <StartRunDialog
+        open={dialog}
+        onOpenChange={setDialog}
+        defaultMode={mode}
+        readiness={readiness}
+        onSeeMissing={seeMissing}
+        onStart={start}
+      />
     </div>
   );
 }

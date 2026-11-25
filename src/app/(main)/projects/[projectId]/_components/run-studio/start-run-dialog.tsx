@@ -40,6 +40,7 @@ import { SHOW_DATA_STAGE, SHOW_REVIEW_MODE } from "@/lib/run-stream/features";
 import { DATASET } from "@/lib/run-stream/mock/scenario";
 
 import { MODES, PIPELINE, RUN_MODES, STAGE_SHORT, STOP_INFO, stopsFor } from "./run-meta";
+import type { Readiness } from "./run-readiness";
 
 const STEPS = [
   "Your question",
@@ -556,11 +557,17 @@ export function StartRunDialog({
   open,
   onOpenChange,
   defaultMode,
+  readiness,
+  onSeeMissing,
   onStart,
 }: {
   open: boolean;
   onOpenChange(open: boolean): void;
   defaultMode: ReviewMode;
+  /** What a run needs; Start stays disabled while an item blocks it. */
+  readiness: Readiness;
+  /** Closes the dialog and brings the readiness panel on the page into view. */
+  onSeeMissing(): void;
   /** The dialog shows the start as pending until this settles. */
   onStart(mode: ReviewMode, input: RunInput): void | Promise<void>;
 }) {
@@ -569,6 +576,7 @@ export function StartRunDialog({
   const [mode, setMode] = useState<ReviewMode>(defaultMode);
   const draft = useTopicDraft("run");
   const [starting, setStarting] = useState(false);
+  const blockers = readiness.rows.filter((row) => row.status === "blocked").length;
   const start = async () => {
     const input = draft.input();
     if (!input) return;
@@ -729,6 +737,14 @@ export function StartRunDialog({
             </motion.div>
           </AnimatePresence>
         </div>
+        {!readiness.canStart && !readiness.checking && (
+          <p className="flex flex-wrap items-center gap-x-2 border-t px-5.5 py-2.5 text-sm" role="status">
+            {blockers} {blockers === 1 ? "thing" : "things"} to fix before you can start
+            <Button variant="link" size="sm" className="h-auto p-0" onClick={onSeeMissing}>
+              See what's missing
+            </Button>
+          </p>
+        )}
         <DialogFooter className="m-0 flex-row items-center gap-2.5 border-t bg-muted/40 px-5.5 py-3.5 sm:justify-between">
           <Button variant="outline" onClick={() => (step === 0 ? onOpenChange(false) : move(step - 1))}>
             {step === 0 ? "Cancel" : "Back"}
@@ -742,7 +758,7 @@ export function StartRunDialog({
               <ArrowRight />
             </Button>
           ) : (
-            <Button onClick={start} disabled={starting}>
+            <Button onClick={start} disabled={starting || !readiness.canStart}>
               <Play />
               {starting ? "Starting…" : "Start research run"}
             </Button>
